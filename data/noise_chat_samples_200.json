@@ -1,0 +1,1625 @@
+[
+  {
+    "noise_id": "noise_greeting_001",
+    "type": "日常问候",
+    "content": [
+      "早上好呀各位",
+      "今天天气好热啊"
+    ]
+  },
+  {
+    "noise_id": "noise_food_002",
+    "type": "餐饮讨论",
+    "content": [
+      "中午大家吃什么呀",
+      "有没有好吃的外卖推荐",
+      "我想点个麻辣烫"
+    ]
+  },
+  {
+    "noise_id": "noise_express_003",
+    "type": "快递通知",
+    "content": [
+      "谁的快递放在前台了",
+      "有个顺丰快递没人取"
+    ]
+  },
+  {
+    "noise_id": "noise_meeting_004",
+    "type": "会议通知",
+    "content": [
+      "2号会议室现在被占了",
+      "我们的会改到3号会议室开"
+    ]
+  },
+  {
+    "noise_id": "noise_milk_tea_005",
+    "type": "拼单闲聊",
+    "content": [
+      "有没有人拼奶茶呀",
+      "凑单满减",
+      "我点一杯三分糖少冰的"
+    ]
+  },
+  {
+    "noise_id": "noise_bug_tucao_006",
+    "type": "工作吐槽",
+    "content": [
+      "这个bug好坑啊",
+      "找了半天终于找到原因了",
+      "太无语了"
+    ]
+  },
+  {
+    "noise_id": "noise_holiday_007",
+    "type": "放假讨论",
+    "content": [
+      "下周端午放假3天",
+      "你们有什么安排吗",
+      "我打算回家待几天"
+    ]
+  },
+  {
+    "noise_id": "noise_tool_008",
+    "type": "工具询问",
+    "content": [
+      "谁有视频压缩工具吗",
+      "我需要压缩一个大视频"
+    ]
+  },
+  {
+    "noise_id": "noise_printer_009",
+    "type": "办公问题",
+    "content": [
+      "打印机怎么又坏了",
+      "谁知道怎么修吗",
+      "我有份文件要打印"
+    ]
+  },
+  {
+    "noise_id": "noise_traffic_010",
+    "type": "出行讨论",
+    "content": [
+      "今天地铁好挤啊",
+      "我迟到了10分钟",
+      "早知道早点出门了"
+    ]
+  },
+  {
+    "noise_id": "noise_team_building_011",
+    "type": "团建讨论",
+    "content": [
+      "这周团建大家想去哪",
+      "是去烧烤还是爬山",
+      "我都行听大家的"
+    ]
+  },
+  {
+    "noise_id": "noise_leave_012",
+    "type": "请假通知",
+    "content": [
+      "我下午要去医院做个检查",
+      "有事给我发消息",
+      "我看到会回复的"
+    ]
+  },
+  {
+    "noise_id": "noise_weather_013",
+    "type": "天气讨论",
+    "content": [
+      "看天气预报明天要下雨",
+      "大家记得带伞啊"
+    ]
+  },
+  {
+    "noise_id": "noise_phone_014",
+    "type": "找人询问",
+    "content": [
+      "谁看到张三了吗",
+      "找他有个事情问一下"
+    ]
+  },
+  {
+    "noise_id": "noise_wifi_015",
+    "type": "网络问题",
+    "content": [
+      "今天公司wifi好卡啊",
+      "网页都打不开",
+      "有没有人一样的情况"
+    ]
+  },
+  {
+    "noise_id": "noise_drink_016",
+    "type": "福利通知",
+    "content": [
+      "前台有新来的饮料",
+      "大家可以去拿哦"
+    ]
+  },
+  {
+    "noise_id": "noise_stock_017",
+    "type": "闲聊讨论",
+    "content": [
+      "今天股票又跌了",
+      "我的基金亏麻了"
+    ]
+  },
+  {
+    "noise_id": "noise_game_018",
+    "type": "娱乐讨论",
+    "content": [
+      "昨晚那个新出的游戏玩了吗",
+      "画质好棒啊",
+      "就是有点吃配置"
+    ]
+  },
+  {
+    "noise_id": "noise_movie_019",
+    "type": "娱乐讨论",
+    "content": [
+      "最近有什么好看的电影推荐吗",
+      "周末想去看电影"
+    ]
+  },
+  {
+    "noise_id": "noise_pet_020",
+    "type": "生活闲聊",
+    "content": [
+      "我家猫昨天又拆家了",
+      "把沙发抓坏了",
+      "气得我想揍它"
+    ]
+  },
+  {
+    "noise_id": "noise_snack_021",
+    "type": "零食分享",
+    "content": [
+      "我带了老家的特产",
+      "放在茶水间了，大家可以去尝尝"
+    ]
+  },
+  {
+    "noise_id": "noise_parking_022",
+    "type": "出行问题",
+    "content": [
+      "楼下停车场今天怎么这么多车",
+      "找了半天没找到车位"
+    ]
+  },
+  {
+    "noise_id": "noise_umbrella_023",
+    "type": "物品询问",
+    "content": [
+      "谁有多的伞吗",
+      "我今天忘带伞了，下班借我用下"
+    ]
+  },
+  {
+    "noise_id": "noise_canteen_024",
+    "type": "餐饮讨论",
+    "content": [
+      "今天食堂的菜好难吃啊",
+      "下次不去食堂吃了"
+    ]
+  },
+  {
+    "noise_id": "noise_courier_025",
+    "type": "快递询问",
+    "content": [
+      "最近快递怎么这么慢",
+      "我买的东西3天了还没到"
+    ]
+  },
+  {
+    "noise_id": "noise_software_026",
+    "type": "工具讨论",
+    "content": [
+      "这个新的设计软件好难用啊",
+      "还是旧版本顺手"
+    ]
+  },
+  {
+    "noise_id": "noise_meeting_time_027",
+    "type": "会议调整",
+    "content": [
+      "下午的会改到3点了",
+      "大家注意时间不要迟到"
+    ]
+  },
+  {
+    "noise_id": "noise_aircon_028",
+    "type": "办公问题",
+    "content": [
+      "空调能不能开高点啊",
+      "我快冻死了"
+    ]
+  },
+  {
+    "noise_id": "noise_exam_029",
+    "type": "生活闲聊",
+    "content": [
+      "我下周要考驾照科目二",
+      "好紧张啊，希望能一次过"
+    ]
+  },
+  {
+    "noise_id": "noise_house_030",
+    "type": "生活闲聊",
+    "content": [
+      "最近房租又涨了",
+      "工资涨得还没房租快"
+    ]
+  },
+  {
+    "noise_id": "noise_flower_031",
+    "type": "闲聊",
+    "content": [
+      "前台的花开得好好看啊",
+      "谁买的呀"
+    ]
+  },
+  {
+    "noise_id": "noise_phone_charge_032",
+    "type": "物品询问",
+    "content": [
+      "谁有Type-C的充电线啊",
+      "我手机快没电了借我用下"
+    ]
+  },
+  {
+    "noise_id": "noise_weekend_033",
+    "type": "周末讨论",
+    "content": [
+      "周末终于不用上班了",
+      "我要在家睡两天"
+    ]
+  },
+  {
+    "noise_id": "noise_book_034",
+    "type": "书籍讨论",
+    "content": [
+      "最近有什么好看的书推荐吗",
+      "想找点书看看"
+    ]
+  },
+  {
+    "noise_id": "noise_music_035",
+    "type": "音乐讨论",
+    "content": [
+      "最近新出的那个专辑好好听啊",
+      "我循环听了一天"
+    ]
+  },
+  {
+    "noise_id": "noise_sport_036",
+    "type": "运动讨论",
+    "content": [
+      "有没有人下班一起去打球啊",
+      "好久没运动了"
+    ]
+  },
+  {
+    "noise_id": "noise_sleep_037",
+    "type": "生活闲聊",
+    "content": [
+      "昨晚失眠了",
+      "3点才睡着，今天好困"
+    ]
+  },
+  {
+    "noise_id": "noise_hairstyle_038",
+    "type": "生活闲聊",
+    "content": [
+      "我昨天去剪头发了",
+      "剪得好丑啊，我哭了"
+    ]
+  },
+  {
+    "noise_id": "noise_shopping_039",
+    "type": "购物讨论",
+    "content": [
+      "618大家都买什么了",
+      "我囤了好多日用品"
+    ]
+  },
+  {
+    "noise_id": "noise_travel_040",
+    "type": "旅游讨论",
+    "content": [
+      "国庆打算去云南玩",
+      "有没有攻略推荐呀"
+    ]
+  },
+  {
+    "noise_id": "noise_photo_041",
+    "type": "闲聊",
+    "content": [
+      "昨天出去玩拍了好多照片",
+      "等下整理下发群里"
+    ]
+  },
+  {
+    "noise_id": "noise_bag_042",
+    "type": "物品询问",
+    "content": [
+      "有没有人看到我的黑色双肩包",
+      "我昨天好像落公司了"
+    ]
+  },
+  {
+    "noise_id": "noise_tea_043",
+    "type": "茶水间闲聊",
+    "content": [
+      "茶水间新到的茶叶不错",
+      "大家可以去泡来喝"
+    ]
+  },
+  {
+    "noise_id": "noise_lift_044",
+    "type": "办公问题",
+    "content": [
+      "左边的电梯又坏了",
+      "等了10分钟还没下来"
+    ]
+  },
+  {
+    "noise_id": "noise_birthday_045",
+    "type": "庆祝通知",
+    "content": [
+      "今天是李四生日哦",
+      "下班我们一起去给他庆祝吧"
+    ]
+  },
+  {
+    "noise_id": "noise_plant_046",
+    "type": "闲聊",
+    "content": [
+      "我桌上的绿萝快死了",
+      "有没有人知道怎么养"
+    ]
+  },
+  {
+    "noise_id": "noise_delivery_047",
+    "type": "外卖通知",
+    "content": [
+      "外卖到了，我放前台了",
+      "点了的同学自己去拿哦"
+    ]
+  },
+  {
+    "noise_id": "noise_clock_048",
+    "type": "工作提醒",
+    "content": [
+      "大家记得下班打卡哦",
+      "不然又要扣工资了"
+    ]
+  },
+  {
+    "noise_id": "noise_vpn_049",
+    "type": "网络问题",
+    "content": [
+      "今天VPN怎么连不上啊",
+      "有没有人知道怎么回事"
+    ]
+  },
+  {
+    "noise_id": "noise_glass_050",
+    "type": "物品询问",
+    "content": [
+      "谁看到我放在茶水间的玻璃杯了",
+      "找不到了"
+    ]
+  },
+  {
+    "noise_id": "noise_ice_cream_051",
+    "type": "福利通知",
+    "content": [
+      "老板请大家吃冰淇淋",
+      "都到前台来拿吧"
+    ]
+  },
+  {
+    "noise_id": "noise_fitness_052",
+    "type": "健身讨论",
+    "content": [
+      "最近在健身减肥",
+      "已经瘦了5斤了，开心"
+    ]
+  },
+  {
+    "noise_id": "noise_present_053",
+    "type": "闲聊",
+    "content": [
+      "客户送了我们好多伴手礼",
+      "等下每人发一份"
+    ]
+  },
+  {
+    "noise_id": "noise_concert_054",
+    "type": "娱乐讨论",
+    "content": [
+      "我抢到周杰伦演唱会门票了",
+      "太开心了！"
+    ]
+  },
+  {
+    "noise_id": "noise_car_055",
+    "type": "车相关讨论",
+    "content": [
+      "我最近打算买车",
+      "大家有没有推荐的车型"
+    ]
+  },
+  {
+    "noise_id": "noise_child_056",
+    "type": "生活闲聊",
+    "content": [
+      "我家孩子这次考试考了满分",
+      "太给我争气了"
+    ]
+  },
+  {
+    "noise_id": "noise_plant_057",
+    "type": "闲聊",
+    "content": [
+      "楼下的樱花都开了",
+      "好漂亮啊，中午去拍照"
+    ]
+  },
+  {
+    "noise_id": "noise_battery_058",
+    "type": "物品询问",
+    "content": [
+      "谁有5号电池吗",
+      "我鼠标没电了"
+    ]
+  },
+  {
+    "noise_id": "noise_mouse_059",
+    "type": "办公问题",
+    "content": [
+      "我鼠标好像坏了",
+      "老是飘来飘去的"
+    ]
+  },
+  {
+    "noise_id": "noise_keyboard_060",
+    "type": "办公讨论",
+    "content": [
+      "这个机械键盘手感真好",
+      "打字声音也不大"
+    ]
+  },
+  {
+    "noise_id": "noise_notebook_061",
+    "type": "物品询问",
+    "content": [
+      "谁有多余的笔记本吗",
+      "我笔记本用完了"
+    ]
+  },
+  {
+    "noise_id": "noise_pen_062",
+    "type": "物品询问",
+    "content": [
+      "借我支笔用下",
+      "我笔找不到了"
+    ]
+  },
+  {
+    "noise_id": "noise_stapler_063",
+    "type": "物品询问",
+    "content": [
+      "谁有订书机啊",
+      "我要订下文件"
+    ]
+  },
+  {
+    "noise_id": "noise_scissors_064",
+    "type": "物品询问",
+    "content": [
+      "剪刀借我用下可以吗",
+      "我拆个快递"
+    ]
+  },
+  {
+    "noise_id": "noise_tape_065",
+    "type": "物品询问",
+    "content": [
+      "有没有透明胶带啊",
+      "我要粘个东西"
+    ]
+  },
+  {
+    "noise_id": "noise_calculator_066",
+    "type": "物品询问",
+    "content": [
+      "谁有计算器借我用下",
+      "算个东西"
+    ]
+  },
+  {
+    "noise_id": "noise_earphone_067",
+    "type": "物品询问",
+    "content": [
+      "我耳机忘带了",
+      "谁有多余的耳机借我用下"
+    ]
+  },
+  {
+    "noise_id": "noise_power_bank_068",
+    "type": "物品询问",
+    "content": [
+      "谁有充电宝啊",
+      "我手机没电了，充一会"
+    ]
+  },
+  {
+    "noise_id": "noise_cloud_disk_069",
+    "type": "工具讨论",
+    "content": [
+      "这个云盘上传速度好慢啊",
+      "传个文件传了半小时"
+    ]
+  },
+  {
+    "noise_id": "noise_file_transfer_070",
+    "type": "工具问题",
+    "content": [
+      "这个文件怎么传不动啊",
+      "有没有其他办法传"
+    ]
+  },
+  {
+    "noise_id": "noise_password_071",
+    "type": "账号问题",
+    "content": [
+      "我密码又忘了",
+      "谁知道怎么重置吗"
+    ]
+  },
+  {
+    "noise_id": "noise_system_update_072",
+    "type": "系统问题",
+    "content": [
+      "电脑又自动更新了",
+      "好多软件都打不开了"
+    ]
+  },
+  {
+    "noise_id": "noise_browser_073",
+    "type": "浏览器问题",
+    "content": [
+      "这个浏览器怎么老是崩溃啊",
+      "有没有好用的浏览器推荐"
+    ]
+  },
+  {
+    "noise_id": "noise_tab_074",
+    "type": "工作吐槽",
+    "content": [
+      "我浏览器开了20多个标签页",
+      "卡得要死"
+    ]
+  },
+  {
+    "noise_id": "noise_trash_075",
+    "type": "办公提醒",
+    "content": [
+      "垃圾桶快满了",
+      "谁倒一下谢谢"
+    ]
+  },
+  {
+    "noise_id": "noise_water_076",
+    "type": "办公提醒",
+    "content": [
+      "饮水机没水了",
+      "谁叫下送水的"
+    ]
+  },
+  {
+    "noise_id": "noise_tissue_077",
+    "type": "物品询问",
+    "content": [
+      "谁有纸巾啊借我用下",
+      "我纸巾用完了"
+    ]
+  },
+  {
+    "noise_id": "noise_mask_078",
+    "type": "物品询问",
+    "content": [
+      "谁有多的口罩啊",
+      "我忘带了，给我一个谢谢"
+    ]
+  },
+  {
+    "noise_id": "noise_sunglasses_079",
+    "type": "物品询问",
+    "content": [
+      "有没有人看到我的墨镜",
+      "昨天放公司了找不到了"
+    ]
+  },
+  {
+    "noise_id": "noise_coat_080",
+    "type": "物品询问",
+    "content": [
+      "谁拿错我的外套了",
+      "我黑色的外套不见了"
+    ]
+  },
+  {
+    "noise_id": "noise_umbrella_lost_081",
+    "type": "物品询问",
+    "content": [
+      "我放在门口的伞不见了",
+      "谁拿错了麻烦说一声"
+    ]
+  },
+  {
+    "noise_id": "noise_lunch_box_082",
+    "type": "物品询问",
+    "content": [
+      "我放在冰箱里的饭盒谁看到了",
+      "我中午要吃饭找不到了"
+    ]
+  },
+  {
+    "noise_id": "noise_cup_083",
+    "type": "物品询问",
+    "content": [
+      "我放在茶水间的保温杯不见了",
+      "有没有人看到呀"
+    ]
+  },
+  {
+    "noise_id": "noise_fruit_084",
+    "type": "分享通知",
+    "content": [
+      "我带了点水果",
+      "放在茶水间大家来吃啊"
+    ]
+  },
+  {
+    "noise_id": "noise_cake_085",
+    "type": "分享通知",
+    "content": [
+      "今天我生日",
+      "我买了蛋糕放在前台，大家来吃啊"
+    ]
+  },
+  {
+    "noise_id": "noise_express_arrive_086",
+    "type": "快递通知",
+    "content": [
+      "快递员在楼下了",
+      "有快递的可以下去拿了"
+    ]
+  },
+  {
+    "noise_id": "noise_takeaway_087",
+    "type": "外卖讨论",
+    "content": [
+      "今天外卖送了快1小时了",
+      "还没到，饿死我了"
+    ]
+  },
+  {
+    "noise_id": "noise_restaurant_088",
+    "type": "餐饮讨论",
+    "content": [
+      "附近新开了一家火锅店",
+      "有没有人想去尝尝"
+    ]
+  },
+  {
+    "noise_id": "noise_drink_089",
+    "type": "拼单讨论",
+    "content": [
+      "有没有人喝瑞幸",
+      "拼个单29减10"
+    ]
+  },
+  {
+    "noise_id": "noise_ele_me_090",
+    "type": "外卖讨论",
+    "content": [
+      "今天饿了么红包好大啊",
+      "减了15块钱"
+    ]
+  },
+  {
+    "noise_id": "noise_air_ticket_091",
+    "type": "出行讨论",
+    "content": [
+      "最近机票好便宜啊",
+      "飞上海才200块钱"
+    ]
+  },
+  {
+    "noise_id": "noise_train_ticket_092",
+    "type": "出行讨论",
+    "content": [
+      "五一的火车票太难抢了",
+      "我抢了好几天都没抢到"
+    ]
+  },
+  {
+    "noise_id": "noise_hotel_093",
+    "type": "出行讨论",
+    "content": [
+      "旅游旺季酒店好贵啊",
+      "平时200的房间现在卖500"
+    ]
+  },
+  {
+    "noise_id": "noise_rain_094",
+    "type": "天气闲聊",
+    "content": [
+      "下大雨了",
+      "我没带伞怎么回家啊"
+    ]
+  },
+  {
+    "noise_id": "noise_snow_095",
+    "type": "天气闲聊",
+    "content": [
+      "下雪啦下雪啦",
+      "今年冬天第一次下雪"
+    ]
+  },
+  {
+    "noise_id": "noise_hot_096",
+    "type": "天气闲聊",
+    "content": [
+      "今天气温38度",
+      "快热死了，空调能不能再开低点"
+    ]
+  },
+  {
+    "noise_id": "noise_cold_097",
+    "type": "天气闲聊",
+    "content": [
+      "今天好冷啊",
+      "我都穿羽绒服了"
+    ]
+  },
+  {
+    "noise_id": "noise_sun_098",
+    "type": "天气闲聊",
+    "content": [
+      "今天太阳好大啊",
+      "晒得眼睛都睁不开"
+    ]
+  },
+  {
+    "noise_id": "noise_wind_099",
+    "type": "天气闲聊",
+    "content": [
+      "今天风好大啊",
+      "我都被吹得快走不动了"
+    ]
+  },
+  {
+    "noise_id": "noise_fog_100",
+    "type": "天气闲聊",
+    "content": [
+      "今天雾好大啊",
+      "能见度不到100米，大家开车注意安全"
+    ]
+  },
+  {
+    "noise_id": "noise_greeting_101",
+    "type": "日常问候",
+    "content": [
+      "下午好呀",
+      "刚睡醒有点懵"
+    ]
+  },
+  {
+    "noise_id": "noise_food_102",
+    "type": "餐饮讨论",
+    "content": [
+      "晚上大家想吃什么",
+      "要不要一起去吃烤鱼",
+      "听说那家很好吃"
+    ]
+  },
+  {
+    "noise_id": "noise_express_103",
+    "type": "快递通知",
+    "content": [
+      "有个京东快递放前台了",
+      "谁的快来拿"
+    ]
+  },
+  {
+    "noise_id": "noise_meeting_104",
+    "type": "会议通知",
+    "content": [
+      "明天上午10点有个周会",
+      "大家记得参加"
+    ]
+  },
+  {
+    "noise_id": "noise_coffee_105",
+    "type": "拼单闲聊",
+    "content": [
+      "有没有人拼咖啡",
+      "第二杯半价",
+      "我点美式"
+    ]
+  },
+  {
+    "noise_id": "noise_workload_106",
+    "type": "工作吐槽",
+    "content": [
+      "今天工作量好大啊",
+      "感觉要加班到很晚",
+      "好累啊"
+    ]
+  },
+  {
+    "noise_id": "noise_weekend_plan_107",
+    "type": "周末讨论",
+    "content": [
+      "这周末大家有什么安排",
+      "要不要一起去看展览"
+    ]
+  },
+  {
+    "noise_id": "noise_tool_108",
+    "type": "工具询问",
+    "content": [
+      "谁有PS的安装包",
+      "我需要安装一下"
+    ]
+  },
+  {
+    "noise_id": "noise_scanner_109",
+    "type": "办公问题",
+    "content": [
+      "扫描仪怎么用啊",
+      "谁能教我一下",
+      "我有份文件要扫描"
+    ]
+  },
+  {
+    "noise_id": "noise_bike_110",
+    "type": "出行讨论",
+    "content": [
+      "今天骑共享单车上班",
+      "路上好多人",
+      "骑了半小时才到"
+    ]
+  },
+  {
+    "noise_id": "noise_team_dinner_111",
+    "type": "团建讨论",
+    "content": [
+      "下周三部门聚餐",
+      "大家想吃什么菜系",
+      "川菜还是粤菜"
+    ]
+  },
+  {
+    "noise_id": "noise_leave_tomorrow_112",
+    "type": "请假通知",
+    "content": [
+      "我明天有事请假一天",
+      "工作都交接好了",
+      "有急事给我打电话"
+    ]
+  },
+  {
+    "noise_id": "noise_weather_113",
+    "type": "天气讨论",
+    "content": [
+      "这周末天气好像不错",
+      "适合出去走走"
+    ]
+  },
+  {
+    "noise_id": "noise_find_lisi_114",
+    "type": "找人询问",
+    "content": [
+      "李四去哪了",
+      "找他有事"
+    ]
+  },
+  {
+    "noise_id": "noise_network_115",
+    "type": "网络问题",
+    "content": [
+      "公司网络又慢又卡",
+      "加载个页面半天",
+      "谁知道IT在哪"
+    ]
+  },
+  {
+    "noise_id": "noise_snack_116",
+    "type": "福利通知",
+    "content": [
+      "前台有新到的零食",
+      "大家可以去拿"
+    ]
+  },
+  {
+    "noise_id": "noise_finance_117",
+    "type": "闲聊讨论",
+    "content": [
+      "最近理财收益怎么样",
+      "我亏了不少"
+    ]
+  },
+  {
+    "noise_id": "noise_anime_118",
+    "type": "娱乐讨论",
+    "content": [
+      "最近有什么好看的动漫",
+      "推荐一下",
+      "我剧荒了"
+    ]
+  },
+  {
+    "noise_id": "noise_tv_119",
+    "type": "娱乐讨论",
+    "content": [
+      "最近有什么好看的电视剧",
+      "想找个下饭剧"
+    ]
+  },
+  {
+    "noise_id": "noise_dog_120",
+    "type": "生活闲聊",
+    "content": [
+      "我家狗最近学会握手了",
+      "太聪明了",
+      "教了好久终于会了"
+    ]
+  },
+  {
+    "noise_id": "noise_cookie_121",
+    "type": "零食分享",
+    "content": [
+      "我昨天自己做了饼干",
+      "带了一些来公司，大家尝尝"
+    ]
+  },
+  {
+    "noise_id": "noise_bike_parking_122",
+    "type": "出行问题",
+    "content": [
+      "楼下共享单车停车位满了",
+      "找了好久才找到地方停车"
+    ]
+  },
+  {
+    "noise_id": "noise_raincoat_123",
+    "type": "物品询问",
+    "content": [
+      "谁有多的雨衣吗",
+      "今天可能要下雨"
+    ]
+  },
+  {
+    "noise_id": "noise_canteen_new_124",
+    "type": "餐饮讨论",
+    "content": [
+      "今天食堂出新菜了",
+      "看起来还不错，中午去试试"
+    ]
+  },
+  {
+    "noise_id": "noise_express_delivery_125",
+    "type": "快递询问",
+    "content": [
+      "大家一般用什么快递寄东西",
+      "哪家便宜又快"
+    ]
+  },
+  {
+    "noise_id": "noise_ide_126",
+    "type": "工具讨论",
+    "content": [
+      "这个IDE更新后好难用",
+      "还是旧版本习惯"
+    ]
+  },
+  {
+    "noise_id": "noise_meeting_cancel_127",
+    "type": "会议调整",
+    "content": [
+      "下午的会取消了",
+      "太好了，可以早点下班"
+    ]
+  },
+  {
+    "noise_id": "noise_heater_128",
+    "type": "办公问题",
+    "content": [
+      "空调能不能开低点",
+      "我快热死了"
+    ]
+  },
+  {
+    "noise_id": "noise_exam_3_129",
+    "type": "生活闲聊",
+    "content": [
+      "我下周要考科目三",
+      "好紧张，希望能一次过"
+    ]
+  },
+  {
+    "noise_id": "noise_house_rent_130",
+    "type": "生活闲聊",
+    "content": [
+      "最近想换房子",
+      "大家有没有推荐的小区"
+    ]
+  },
+  {
+    "noise_id": "noise_decoration_131",
+    "type": "闲聊",
+    "content": [
+      "前台的新装饰好好看",
+      "谁布置的"
+    ]
+  },
+  {
+    "noise_id": "noise_lightning_132",
+    "type": "物品询问",
+    "content": [
+      "谁有苹果的充电线",
+      "我手机没电了"
+    ]
+  },
+  {
+    "noise_id": "noise_weekend_activity_133",
+    "type": "周末讨论",
+    "content": [
+      "周末想在家好好休息",
+      "哪也不想去"
+    ]
+  },
+  {
+    "noise_id": "noise_book_134",
+    "type": "书籍讨论",
+    "content": [
+      "最近在看什么书",
+      "推荐一下"
+    ]
+  },
+  {
+    "noise_id": "noise_concert_135",
+    "type": "音乐讨论",
+    "content": [
+      "最近想去看演唱会",
+      "有没有一起的"
+    ]
+  },
+  {
+    "noise_id": "noise_yoga_136",
+    "type": "运动讨论",
+    "content": [
+      "最近在练瑜伽",
+      "感觉身体好多了",
+      "有没有一起的"
+    ]
+  },
+  {
+    "noise_id": "noise_dream_137",
+    "type": "生活闲聊",
+    "content": [
+      "昨晚做了个奇怪的梦",
+      "今天一天都在想"
+    ]
+  },
+  {
+    "noise_id": "noise_nails_138",
+    "type": "生活闲聊",
+    "content": [
+      "我昨天去做指甲了",
+      "大家看看好看吗"
+    ]
+  },
+  {
+    "noise_id": "noise_double_11_139",
+    "type": "购物讨论",
+    "content": [
+      "双十一大家都买了什么",
+      "我买了好多东西"
+    ]
+  },
+  {
+    "noise_id": "noise_travel_sanya_140",
+    "type": "旅游讨论",
+    "content": [
+      "年假打算去三亚玩",
+      "有没有攻略推荐"
+    ]
+  },
+  {
+    "noise_id": "noise_photo_share_141",
+    "type": "闲聊",
+    "content": [
+      "上周出去玩拍了好多好看的照片",
+      "等下分享给大家"
+    ]
+  },
+  {
+    "noise_id": "noise_wallet_142",
+    "type": "物品询问",
+    "content": [
+      "有没有人看到我的钱包",
+      "我好像落公司了"
+    ]
+  },
+  {
+    "noise_id": "noise_coffee_machine_143",
+    "type": "茶水间闲聊",
+    "content": [
+      "茶水间的咖啡机坏了",
+      "谁知道什么时候修好"
+    ]
+  },
+  {
+    "noise_id": "noise_right_lift_144",
+    "type": "办公问题",
+    "content": [
+      "右边的电梯怎么这么慢",
+      "等了好久"
+    ]
+  },
+  {
+    "noise_id": "noise_anniversary_145",
+    "type": "庆祝通知",
+    "content": [
+      "今天是我和对象的周年纪念日",
+      "好开心"
+    ]
+  },
+  {
+    "noise_id": "noise_flower_pot_146",
+    "type": "闲聊",
+    "content": [
+      "我桌上的多肉开花了",
+      "好可爱"
+    ]
+  },
+  {
+    "noise_id": "noise_food_delivery_147",
+    "type": "外卖通知",
+    "content": [
+      "外卖到了前台",
+      "大家快去拿"
+    ]
+  },
+  {
+    "noise_id": "noise_clock_in_148",
+    "type": "工作提醒",
+    "content": [
+      "大家记得上班打卡",
+      "不然要算迟到了"
+    ]
+  },
+  {
+    "noise_id": "noise_wifi_password_149",
+    "type": "网络问题",
+    "content": [
+      "谁知道访客WiFi密码",
+      "我有个朋友来公司"
+    ]
+  },
+  {
+    "noise_id": "noise_mug_150",
+    "type": "物品询问",
+    "content": [
+      "谁看到我放在茶水间的马克杯了",
+      "找不到了"
+    ]
+  },
+  {
+    "noise_id": "noise_pizza_151",
+    "type": "福利通知",
+    "content": [
+      "老板请大家吃披萨",
+      "快来前台拿"
+    ]
+  },
+  {
+    "noise_id": "noise_running_152",
+    "type": "健身讨论",
+    "content": [
+      "最近在跑步",
+      "每天跑5公里",
+      "感觉身体好多了"
+    ]
+  },
+  {
+    "noise_id": "noise_gift_153",
+    "type": "闲聊",
+    "content": [
+      "供应商送了好多礼品",
+      "等下每人一份"
+    ]
+  },
+  {
+    "noise_id": "noise_festival_154",
+    "type": "娱乐讨论",
+    "content": [
+      "我抢到音乐节门票了",
+      "太开心了"
+    ]
+  },
+  {
+    "noise_id": "noise_electric_car_155",
+    "type": "车相关讨论",
+    "content": [
+      "我最近想买电动车",
+      "大家有没有推荐的品牌"
+    ]
+  },
+  {
+    "noise_id": "noise_baby_156",
+    "type": "生活闲聊",
+    "content": [
+      "我家宝宝今天会走路了",
+      "太激动了"
+    ]
+  },
+  {
+    "noise_id": "noise_autumn_leaves_157",
+    "type": "闲聊",
+    "content": [
+      "楼下的树叶都黄了",
+      "好漂亮，秋天来了"
+    ]
+  },
+  {
+    "noise_id": "noise_charger_158",
+    "type": "物品询问",
+    "content": [
+      "谁有笔记本电脑的充电器",
+      "我电脑没电了"
+    ]
+  },
+  {
+    "noise_id": "noise_monitor_159",
+    "type": "办公问题",
+    "content": [
+      "我显示器好像坏了",
+      "老是闪屏"
+    ]
+  },
+  {
+    "noise_id": "noise_headset_160",
+    "type": "办公讨论",
+    "content": [
+      "这个降噪耳机真好用",
+      "戴上后世界都安静了"
+    ]
+  },
+  {
+    "noise_id": "noise_sticky_note_161",
+    "type": "物品询问",
+    "content": [
+      "谁有便利贴",
+      "我用完了"
+    ]
+  },
+  {
+    "noise_id": "noise_highlighter_162",
+    "type": "物品询问",
+    "content": [
+      "借我荧光笔用一下",
+      "画个重点"
+    ]
+  },
+  {
+    "noise_id": "noise_paper_clip_163",
+    "type": "物品询问",
+    "content": [
+      "谁有回形针",
+      "夹一下文件"
+    ]
+  },
+  {
+    "noise_id": "noise_envelope_164",
+    "type": "物品询问",
+    "content": [
+      "谁有信封",
+      "我要寄个东西"
+    ]
+  },
+  {
+    "noise_id": "noise_glue_165",
+    "type": "物品询问",
+    "content": [
+      "有没有胶水",
+      "粘个东西"
+    ]
+  },
+  {
+    "noise_id": "noise_ruler_166",
+    "type": "物品询问",
+    "content": [
+      "谁有尺子借我用下",
+      "量个东西"
+    ]
+  },
+  {
+    "noise_id": "noise_speaker_167",
+    "type": "物品询问",
+    "content": [
+      "我音箱忘带了",
+      "谁有多余的借我用下"
+    ]
+  },
+  {
+    "noise_id": "noise_usb_hub_168",
+    "type": "物品询问",
+    "content": [
+      "谁有USB扩展坞",
+      "我接口不够用了"
+    ]
+  },
+  {
+    "noise_id": "noise_ftp_169",
+    "type": "工具讨论",
+    "content": [
+      "这个FTP工具好难用",
+      "有没有其他推荐"
+    ]
+  },
+  {
+    "noise_id": "noise_email_170",
+    "type": "工具问题",
+    "content": [
+      "邮箱怎么收不到邮件",
+      "谁知道怎么回事"
+    ]
+  },
+  {
+    "noise_id": "noise_two_factor_171",
+    "type": "账号问题",
+    "content": [
+      "我两步验证的手机坏了",
+      "谁知道怎么解绑"
+    ]
+  },
+  {
+    "noise_id": "noise_software_install_172",
+    "type": "系统问题",
+    "content": [
+      "软件怎么安装失败",
+      "试了好几次都不行"
+    ]
+  },
+  {
+    "noise_id": "noise_extension_173",
+    "type": "浏览器问题",
+    "content": [
+      "这个浏览器插件怎么用",
+      "有没有人教我"
+    ]
+  },
+  {
+    "noise_id": "noise_meeting_back_174",
+    "type": "工作吐槽",
+    "content": [
+      "今天开了一天的会",
+      "好累啊，什么都没干"
+    ]
+  },
+  {
+    "noise_id": "noise_recycle_175",
+    "type": "办公提醒",
+    "content": [
+      "回收箱满了",
+      "谁倒一下"
+    ]
+  },
+  {
+    "noise_id": "noise_coffee_bean_176",
+    "type": "办公提醒",
+    "content": [
+      "咖啡豆用完了",
+      "谁叫供应商送一下"
+    ]
+  },
+  {
+    "noise_id": "noise_wipes_177",
+    "type": "物品询问",
+    "content": [
+      "谁有湿纸巾借我用下",
+      "擦一下桌子"
+    ]
+  },
+  {
+    "noise_id": "noise_hand_sanitizer_178",
+    "type": "物品询问",
+    "content": [
+      "谁有免洗洗手液",
+      "给我一点谢谢"
+    ]
+  },
+  {
+    "noise_id": "noise_cap_179",
+    "type": "物品询问",
+    "content": [
+      "有没有人看到我的帽子",
+      "昨天放公司了"
+    ]
+  },
+  {
+    "noise_id": "noise_scarf_180",
+    "type": "物品询问",
+    "content": [
+      "谁拿错我的围巾了",
+      "我的围巾不见了"
+    ]
+  },
+  {
+    "noise_id": "noise_gloves_181",
+    "type": "物品询问",
+    "content": [
+      "我放在抽屉里的手套不见了",
+      "谁看到了"
+    ]
+  },
+  {
+    "noise_id": "noise_bento_182",
+    "type": "物品询问",
+    "content": [
+      "我放在冰箱里的便当谁看到了",
+      "找不到了"
+    ]
+  },
+  {
+    "noise_id": "noise_tea_bag_183",
+    "type": "物品询问",
+    "content": [
+      "我放在茶水间的茶包不见了",
+      "有没有人看到"
+    ]
+  },
+  {
+    "noise_id": "noise_chocolate_184",
+    "type": "分享通知",
+    "content": [
+      "我带了巧克力",
+      "放在茶水间大家来吃"
+    ]
+  },
+  {
+    "noise_id": "noise_donut_185",
+    "type": "分享通知",
+    "content": [
+      "今天我升职了",
+      "我买了甜甜圈放在前台，大家来吃"
+    ]
+  },
+  {
+    "noise_id": "noise_package_186",
+    "type": "快递通知",
+    "content": [
+      "快递在楼下丰巢了",
+      "取件码发群里了"
+    ]
+  },
+  {
+    "noise_id": "noise_delivery_time_187",
+    "type": "外卖讨论",
+    "content": [
+      "今天外卖好快啊",
+      "20分钟就到了"
+    ]
+  },
+  {
+    "noise_id": "noise_bbq_188",
+    "type": "餐饮讨论",
+    "content": [
+      "附近新开了一家烧烤店",
+      "要不要一起去尝尝"
+    ]
+  },
+  {
+    "noise_id": "noise_bubble_tea_189",
+    "type": "拼单讨论",
+    "content": [
+      "有没有人喝一点点",
+      "拼个单30减5"
+    ]
+  },
+  {
+    "noise_id": "noise_meituan_190",
+    "type": "外卖讨论",
+    "content": [
+      "今天美团红包好大",
+      "减了20块"
+    ]
+  },
+  {
+    "noise_id": "noise_bus_191",
+    "type": "出行讨论",
+    "content": [
+      "最近公交票价降价了",
+      "好便宜"
+    ]
+  },
+  {
+    "noise_id": "noise_subway_192",
+    "type": "出行讨论",
+    "content": [
+      "早高峰地铁人太多了",
+      "挤都挤不上去"
+    ]
+  },
+  {
+    "noise_id": "noise_hostel_193",
+    "type": "出行讨论",
+    "content": [
+      "旅游旺季青旅好便宜",
+      "有没有人一起住"
+    ]
+  },
+  {
+    "noise_id": "noise_hail_194",
+    "type": "天气闲聊",
+    "content": [
+      "下冰雹了",
+      "好吓人啊"
+    ]
+  },
+  {
+    "noise_id": "noise_thunder_195",
+    "type": "天气闲聊",
+    "content": [
+      "打雷了",
+      "好可怕"
+    ]
+  },
+  {
+    "noise_id": "noise_cool_196",
+    "type": "天气闲聊",
+    "content": [
+      "今天好凉快啊",
+      "终于不热了"
+    ]
+  },
+  {
+    "noise_id": "noise_warm_197",
+    "type": "天气闲聊",
+    "content": [
+      "今天好暖和啊",
+      "适合出去走走"
+    ]
+  },
+  {
+    "noise_id": "noise_cloudy_198",
+    "type": "天气闲聊",
+    "content": [
+      "今天阴天",
+      "感觉有点压抑"
+    ]
+  },
+  {
+    "noise_id": "noise_light_wind_199",
+    "type": "天气闲聊",
+    "content": [
+      "今天微风",
+      "好舒服啊"
+    ]
+  },
+  {
+    "noise_id": "noise_sandstorm_200",
+    "type": "天气闲聊",
+    "content": [
+      "今天沙尘暴",
+      "大家出门记得戴口罩"
+    ]
+  }
+]

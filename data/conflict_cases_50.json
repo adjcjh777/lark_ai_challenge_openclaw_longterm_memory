@@ -1,0 +1,1201 @@
+[
+  {
+    "case_id": "conflict_multi_deploy_001",
+    "type": "multi_conflict_update",
+    "subject": "生产部署参数",
+    "version_count": 3,
+    "events": [
+      "生产部署必须加 --canary --region cn-shanghai，全量发布",
+      "不对，生产部署region改成 ap-shanghai，灰度比例10%",
+      "最新规则：生产部署灰度比例调整为30%，region保持ap-shanghai，必须加--force-tag校验"
+    ],
+    "modify_points": [
+      "初始版本：region=cn-shanghai，全量发布",
+      "第一次修改：region改为ap-shanghai，灰度10%",
+      "第二次修改：灰度比例改为30%，新增--force-tag参数校验"
+    ],
+    "query": "生产部署完整参数要求",
+    "expected_active_value": "生产部署灰度比例调整为30%，region保持ap-shanghai，必须加--force-tag校验",
+    "forbidden_values": [
+      "生产部署必须加 --canary --region cn-shanghai，全量发布",
+      "不对，生产部署region改成 ap-shanghai，灰度比例10%"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_weekly_report_002",
+    "type": "multi_conflict_update",
+    "subject": "周报提交规则",
+    "version_count": 4,
+    "events": [
+      "周报每周五下午6点前发邮件给经理A",
+      "不对，周报改成每周五下午5点前发飞书给经理A",
+      "调整：周报接收人改成经理B，提交时间还是周五下午5点",
+      "最新规则：周报提交时间改成每周四下午6点，接收人是经理B，提交到飞书文档"
+    ],
+    "modify_points": [
+      "初始版本：周五6点发邮件给A",
+      "第一次修改：周五5点发飞书给A",
+      "第二次修改：接收人改为B，时间不变",
+      "第三次修改：时间改为周四6点，提交到飞书文档"
+    ],
+    "query": "周报提交规则",
+    "expected_active_value": "周报提交时间改成每周四下午6点，接收人是经理B，提交到飞书文档",
+    "forbidden_values": [
+      "周报每周五下午6点前发邮件给经理A",
+      "不对，周报改成每周五下午5点前发飞书给经理A",
+      "调整：周报接收人改成经理B，提交时间还是周五下午5点"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_meeting_time_003",
+    "type": "multi_conflict_update",
+    "subject": "每周站会时间",
+    "version_count": 2,
+    "events": [
+      "每周站会时间是周一上午10点",
+      "不对，站会改成每周二下午2点"
+    ],
+    "modify_points": [
+      "初始：周一上午10点",
+      "修改：周二下午2点"
+    ],
+    "query": "每周站会时间",
+    "expected_active_value": "不对，站会改成每周二下午2点",
+    "forbidden_values": [
+      "每周站会时间是周一上午10点"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_backend_framework_004",
+    "type": "multi_conflict_update",
+    "subject": "后端技术栈",
+    "version_count": 5,
+    "events": [
+      "后端框架用Flask + MySQL",
+      "不对，后端框架改成FastAPI + MySQL",
+      "更新：数据库改成PostgreSQL，框架保持FastAPI",
+      "调整：新增Redis作为缓存层，数据库PostgreSQL，框架FastAPI",
+      "最终确定：后端技术栈为FastAPI + PostgreSQL + Redis + RabbitMQ消息队列"
+    ],
+    "modify_points": [
+      "v1：Flask + MySQL",
+      "v2：FastAPI + MySQL",
+      "v3：FastAPI + PostgreSQL",
+      "v4：FastAPI + PostgreSQL + Redis",
+      "v5：FastAPI + PostgreSQL + Redis + RabbitMQ"
+    ],
+    "query": "后端完整技术栈",
+    "expected_active_value": "最终确定：后端技术栈为FastAPI + PostgreSQL + Redis + RabbitMQ消息队列",
+    "forbidden_values": [
+      "后端框架用Flask + MySQL",
+      "不对，后端框架改成FastAPI + MySQL",
+      "更新：数据库改成PostgreSQL，框架保持FastAPI",
+      "调整：新增Redis作为缓存层，数据库PostgreSQL，框架FastAPI"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_deadline_005",
+    "type": "multi_conflict_update",
+    "subject": "初赛提交截止时间",
+    "version_count": 3,
+    "events": [
+      "初赛提交截止时间是4月27日中午12点",
+      "通知：初赛截止时间延迟到4月28日中午12点",
+      "最新通知：初赛截止时间调整为4月28日下午6点，延迟6小时"
+    ],
+    "modify_points": [
+      "v1：4月27日12点",
+      "v2：4月28日12点",
+      "v3：4月28日18点"
+    ],
+    "query": "初赛提交截止时间",
+    "expected_active_value": "最新通知：初赛截止时间调整为4月28日下午6点，延迟6小时",
+    "forbidden_values": [
+      "初赛提交截止时间是4月27日中午12点",
+      "通知：初赛截止时间延迟到4月28日中午12点"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_db_operation_006",
+    "type": "multi_conflict_update",
+    "subject": "生产数据库操作规则",
+    "version_count": 4,
+    "events": [
+      "生产数据库可以直接执行修改操作",
+      "不对，生产数据库修改必须经过DBA审批",
+      "补充：生产数据库DDL操作必须在凌晨2点-4点执行，提前24小时提交审批",
+      "最新规则：生产数据库DML操作超过100行也需要提交DBA审批，执行时间凌晨低峰期"
+    ],
+    "modify_points": [
+      "v1：允许直接修改",
+      "v2：所有修改需要DBA审批",
+      "v3：DDL在凌晨2-4点执行，提前24小时审批",
+      "v4：DML超过100行也需要审批，凌晨执行"
+    ],
+    "query": "生产数据库操作规则",
+    "expected_active_value": "最新规则：生产数据库DML操作超过100行也需要提交DBA审批，执行时间凌晨低峰期",
+    "forbidden_values": [
+      "生产数据库可以直接执行修改操作",
+      "不对，生产数据库修改必须经过DBA审批",
+      "补充：生产数据库DDL操作必须在凌晨2点-4点执行，提前24小时提交审批"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_owner_007",
+    "type": "multi_conflict_update",
+    "subject": "飞书Bot模块负责人",
+    "version_count": 3,
+    "events": [
+      "飞书Bot模块由张三负责开发",
+      "调整：飞书Bot模块改由李四负责",
+      "最新安排：飞书Bot模块由张三和李四共同负责，张三负责核心逻辑，李四负责飞书对接"
+    ],
+    "modify_points": [
+      "v1：张三负责",
+      "v2：李四负责",
+      "v3：两人共同负责，分工明确"
+    ],
+    "query": "飞书Bot模块谁负责",
+    "expected_active_value": "最新安排：飞书Bot模块由张三和李四共同负责，张三负责核心逻辑，李四负责飞书对接",
+    "forbidden_values": [
+      "飞书Bot模块由张三负责开发",
+      "调整：飞书Bot模块改由李四负责"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_term_008",
+    "type": "multi_conflict_update",
+    "subject": "MEL术语定义",
+    "version_count": 2,
+    "events": [
+      "MEL是Memory Engine Layer的缩写",
+      "不对，MEL最新定义是Memory Execution Layer，指记忆执行层"
+    ],
+    "modify_points": [
+      "v1：Memory Engine Layer",
+      "v2：Memory Execution Layer"
+    ],
+    "query": "MEL是什么意思",
+    "expected_active_value": "不对，MEL最新定义是Memory Execution Layer，指记忆执行层",
+    "forbidden_values": [
+      "MEL是Memory Engine Layer的缩写"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_risk_009",
+    "type": "multi_conflict_update",
+    "subject": "敏感信息处理规则",
+    "version_count": 3,
+    "events": [
+      "用户敏感信息可以打印在日志里方便排查问题",
+      "不对，用户敏感信息禁止打印在日志中",
+      "补充：用户敏感信息不仅不能打印日志，也不能存储在未加密的数据库中，传输必须加密"
+    ],
+    "modify_points": [
+      "v1：允许打印日志",
+      "v2：禁止打印日志",
+      "v3：禁止明文存储，传输加密"
+    ],
+    "query": "用户敏感信息处理规则",
+    "expected_active_value": "补充：用户敏感信息不仅不能打印日志，也不能存储在未加密的数据库中，传输必须加密",
+    "forbidden_values": [
+      "用户敏感信息可以打印在日志里方便排查问题",
+      "不对，用户敏感信息禁止打印在日志中"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_workflow_010",
+    "type": "multi_conflict_update",
+    "subject": "上线流程",
+    "version_count": 4,
+    "events": [
+      "功能开发完成直接可以上线",
+      "不对，上线前必须经过测试环境测试",
+      "更新：上线前必须经过测试、CR、产品验收三个环节",
+      "最终流程：上线必须经过测试→CR→产品验收→灰度发布→全量发布五个环节，每个环节有审批"
+    ],
+    "modify_points": [
+      "v1：开发完直接上线",
+      "v2：需要测试环境测试",
+      "v3：需要测试+CR+产品验收",
+      "v4：五环节+审批流程"
+    ],
+    "query": "完整上线流程",
+    "expected_active_value": "最终流程：上线必须经过测试→CR→产品验收→灰度发布→全量发布五个环节，每个环节有审批",
+    "forbidden_values": [
+      "功能开发完成直接可以上线",
+      "不对，上线前必须经过测试环境测试",
+      "更新：上线前必须经过测试、CR、产品验收三个环节"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_preference_011",
+    "type": "multi_conflict_update",
+    "subject": "会议纪要提交方式",
+    "version_count": 3,
+    "events": [
+      "会议纪要直接发群里就行",
+      "不对，会议纪要必须发飞书文档共享",
+      "最新要求：会议纪要写完后发飞书文档，同时把链接发到群里@所有参会人"
+    ],
+    "modify_points": [
+      "v1：直接发群",
+      "v2：发飞书文档",
+      "v3：发飞书文档+群里@参会人"
+    ],
+    "query": "会议纪要怎么提交",
+    "expected_active_value": "最新要求：会议纪要写完后发飞书文档，同时把链接发到群里@所有参会人",
+    "forbidden_values": [
+      "会议纪要直接发群里就行",
+      "不对，会议纪要必须发飞书文档共享"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_deploy_strategy_012",
+    "type": "multi_conflict_update",
+    "subject": "灰度发布策略",
+    "version_count": 5,
+    "events": [
+      "灰度发布直接全量发布就行",
+      "不对，灰度先10%流量跑1小时",
+      "调整：灰度10%跑1小时→30%跑2小时→50%跑3小时→全量",
+      "补充：灰度过程中如果错误率超过1%立即回滚",
+      "最终灰度策略：10% 1h→30% 2h→50% 3h→100%，错误率>1%自动回滚，支持手动暂停"
+    ],
+    "modify_points": [
+      "v1：直接全量",
+      "v2：10% 1小时",
+      "v3：三阶段灰度",
+      "v4：错误率超过1%回滚",
+      "v5：完整策略+自动回滚+手动暂停"
+    ],
+    "query": "灰度发布策略",
+    "expected_active_value": "最终灰度策略：10% 1h→30% 2h→50% 3h→100%，错误率>1%自动回滚，支持手动暂停",
+    "forbidden_values": [
+      "灰度发布直接全量发布就行",
+      "不对，灰度先10%流量跑1小时",
+      "调整：灰度10%跑1小时→30%跑2小时→50%跑3小时→全量",
+      "补充：灰度过程中如果错误率超过1%立即回滚"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_bug_fix_013",
+    "type": "multi_conflict_update",
+    "subject": "线上bug处理流程",
+    "version_count": 3,
+    "events": [
+      "线上bug发现后慢慢修就行",
+      "不对，线上bug必须15分钟内响应，1小时内修复",
+      "最新规则：P0级bug15分钟响应30分钟修复，P1级1小时响应2小时修复，P2级当天修复"
+    ],
+    "modify_points": [
+      "v1：无时间要求",
+      "v2：15分钟响应1小时修复",
+      "v3：分优先级处理"
+    ],
+    "query": "线上bug处理规则",
+    "expected_active_value": "最新规则：P0级bug15分钟响应30分钟修复，P1级1小时响应2小时修复，P2级当天修复",
+    "forbidden_values": [
+      "线上bug发现后慢慢修就行",
+      "不对，线上bug必须15分钟内响应，1小时内修复"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_interface_docs_014",
+    "type": "multi_conflict_update",
+    "subject": "接口文档维护方式",
+    "version_count": 4,
+    "events": [
+      "接口文档写在代码注释里就行",
+      "不对，接口文档统一维护在Swagger",
+      "调整：接口文档改成维护在APIFox，自动同步Swagger",
+      "最新要求：接口文档必须在APIFox维护，每次更新后要通知前端和测试团队"
+    ],
+    "modify_points": [
+      "v1：代码注释",
+      "v2：Swagger",
+      "v3：APIFox同步Swagger",
+      "v4：APIFox维护+通知相关人员"
+    ],
+    "query": "接口文档在哪里维护",
+    "expected_active_value": "最新要求：接口文档必须在APIFox维护，每次更新后要通知前端和测试团队",
+    "forbidden_values": [
+      "接口文档写在代码注释里就行",
+      "不对，接口文档统一维护在Swagger",
+      "调整：接口文档改成维护在APIFox，自动同步Swagger"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_test_env_015",
+    "type": "multi_conflict_update",
+    "subject": "测试环境重启规则",
+    "version_count": 3,
+    "events": [
+      "测试环境可以随便重启",
+      "不对，测试环境重启必须提前通知开发人员",
+      "最新规则：测试环境重启必须提前1小时在群里通知，并且避开测试高峰期上午10点-12点，下午2点-4点"
+    ],
+    "modify_points": [
+      "v1：随便重启",
+      "v2：提前通知开发",
+      "v3：提前1小时通知，避开测试高峰"
+    ],
+    "query": "测试环境可以重启吗",
+    "expected_active_value": "最新规则：测试环境重启必须提前1小时在群里通知，并且避开测试高峰期上午10点-12点，下午2点-4点",
+    "forbidden_values": [
+      "测试环境可以随便重启",
+      "不对，测试环境重启必须提前通知开发人员"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_git_commit_016",
+    "type": "multi_conflict_update",
+    "subject": "Git提交规范",
+    "version_count": 4,
+    "events": [
+      "Git commit随便写就行",
+      "不对，Git commit必须写清楚改了什么内容",
+      "调整：Git commit必须遵循Angular规范，feat/fix/docs等前缀",
+      "最新规范：Git commit不仅要遵循Angular规范，还要关联对应的任务ID，格式为：<type>(<scope>): <description> #<task-id>"
+    ],
+    "modify_points": [
+      "v1：无规范",
+      "v2：写清楚改动内容",
+      "v3：Angular规范前缀",
+      "v4：+任务ID关联"
+    ],
+    "query": "Git提交规范是什么",
+    "expected_active_value": "最新规范：Git commit不仅要遵循Angular规范，还要关联对应的任务ID，格式为：<type>(<scope>): <description> #<task-id>",
+    "forbidden_values": [
+      "Git commit随便写就行",
+      "不对，Git commit必须写清楚改了什么内容",
+      "调整：Git commit必须遵循Angular规范，feat/fix/docs等前缀"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_database_backup_017",
+    "type": "multi_conflict_update",
+    "subject": "数据库备份规则",
+    "version_count": 3,
+    "events": [
+      "数据库不需要备份",
+      "不对，数据库每天备份一次就行",
+      "最新规则：生产数据库每小时增量备份，每天全量备份，备份保留30天，跨机房存储"
+    ],
+    "modify_points": [
+      "v1：不需要备份",
+      "v2：每天备份一次",
+      "v3：每小时增量+每天全量+保留30天+跨机房"
+    ],
+    "query": "数据库备份规则",
+    "expected_active_value": "最新规则：生产数据库每小时增量备份，每天全量备份，备份保留30天，跨机房存储",
+    "forbidden_values": [
+      "数据库不需要备份",
+      "不对，数据库每天备份一次就行"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_access_control_018",
+    "type": "multi_conflict_update",
+    "subject": "生产环境访问权限",
+    "version_count": 5,
+    "events": [
+      "所有开发都可以直接登录生产环境",
+      "不对，只有运维人员可以登录生产环境",
+      "调整：开发人员需要登录生产环境必须提交审批",
+      "补充：生产环境登录必须用跳板机，开启操作审计，会话录像",
+      "最终规则：生产环境只有运维可直接登录，开发需审批走跳板机，所有操作审计录像，权限有效期最多24小时"
+    ],
+    "modify_points": [
+      "v1：所有开发可登录",
+      "v2：只有运维可登录",
+      "v3：开发需审批",
+      "v4：跳板机+审计+录像",
+      "v5：权限有效期24小时"
+    ],
+    "query": "生产环境登录规则",
+    "expected_active_value": "最终规则：生产环境只有运维可直接登录，开发需审批走跳板机，所有操作审计录像，权限有效期最多24小时",
+    "forbidden_values": [
+      "所有开发都可以直接登录生产环境",
+      "不对，只有运维人员可以登录生产环境",
+      "调整：开发人员需要登录生产环境必须提交审批",
+      "补充：生产环境登录必须用跳板机，开启操作审计，会话录像"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_api_response_019",
+    "type": "multi_conflict_update",
+    "subject": "接口响应时间要求",
+    "version_count": 3,
+    "events": [
+      "接口响应时间没有要求，能返回就行",
+      "不对，接口响应时间必须控制在500ms以内",
+      "最新要求：核心接口响应时间必须控制在200ms以内，非核心接口不能超过500ms，超时必须降级"
+    ],
+    "modify_points": [
+      "v1：无要求",
+      "v2：500ms以内",
+      "v3：核心接口200ms，超时降级"
+    ],
+    "query": "接口响应时间要求",
+    "expected_active_value": "最新要求：核心接口响应时间必须控制在200ms以内，非核心接口不能超过500ms，超时必须降级",
+    "forbidden_values": [
+      "接口响应时间没有要求，能返回就行",
+      "不对，接口响应时间必须控制在500ms以内"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_frontend_stack_020",
+    "type": "multi_conflict_update",
+    "subject": "前端技术栈",
+    "version_count": 4,
+    "events": [
+      "前端用Vue 2开发",
+      "不对，前端改成用React 17",
+      "调整：前端技术栈改成React 18 + TypeScript",
+      "最终确定：前端用React 18 + TypeScript + Vite + Ant Design组件库，状态管理用Zustand"
+    ],
+    "modify_points": [
+      "v1：Vue 2",
+      "v2：React 17",
+      "v3：React 18 + TS",
+      "v4：+Vite + AntD + Zustand"
+    ],
+    "query": "前端技术栈是什么",
+    "expected_active_value": "最终确定：前端用React 18 + TypeScript + Vite + Ant Design组件库，状态管理用Zustand",
+    "forbidden_values": [
+      "前端用Vue 2开发",
+      "不对，前端改成用React 17",
+      "调整：前端技术栈改成React 18 + TypeScript"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_security_scan_021",
+    "type": "multi_conflict_update",
+    "subject": "代码安全扫描规则",
+    "version_count": 3,
+    "events": [
+      "代码不需要安全扫描直接合并",
+      "不对，代码合并前必须经过安全扫描",
+      "最新规则：代码不仅要经过安全扫描，还要经过依赖漏洞扫描，发现高危漏洞必须修复才能合并"
+    ],
+    "modify_points": [
+      "v1：不需要扫描",
+      "v2：需要安全扫描",
+      "v3：+依赖漏洞扫描，高危漏洞必须修复"
+    ],
+    "query": "代码合并前安全要求",
+    "expected_active_value": "最新规则：代码不仅要经过安全扫描，还要经过依赖漏洞扫描，发现高危漏洞必须修复才能合并",
+    "forbidden_values": [
+      "代码不需要安全扫描直接合并",
+      "不对，代码合并前必须经过安全扫描"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_log_retention_022",
+    "type": "multi_conflict_update",
+    "subject": "日志保留时间规则",
+    "version_count": 4,
+    "events": [
+      "日志保留7天就行",
+      "不对，日志需要保留30天",
+      "调整：访问日志保留30天，错误日志保留90天",
+      "最新规则：访问日志30天，错误日志90天，审计日志保留180天，所有日志归档后存储到对象存储"
+    ],
+    "modify_points": [
+      "v1：保留7天",
+      "v2：保留30天",
+      "v3：访问30天，错误90天",
+      "v4：审计日志180天，归档对象存储"
+    ],
+    "query": "日志保留时间规则",
+    "expected_active_value": "最新规则：访问日志30天，错误日志90天，审计日志保留180天，所有日志归档后存储到对象存储",
+    "forbidden_values": [
+      "日志保留7天就行",
+      "不对，日志需要保留30天",
+      "调整：访问日志保留30天，错误日志保留90天"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_alert_rule_023",
+    "type": "multi_conflict_update",
+    "subject": "监控告警规则",
+    "version_count": 5,
+    "events": [
+      "不需要监控告警",
+      "不对，错误率超过5%要告警",
+      "调整：错误率>1%告警，响应时间>1s告警，可用率<99.9%告警",
+      "补充：告警要分等级，P0告警打电话通知，P1发飞书，P2发邮件",
+      "最终规则：错误率>1%/响应时间>1s/可用率<99.9%触发告警，P0打电话，P1飞书，P2邮件，告警沉默时间5分钟"
+    ],
+    "modify_points": [
+      "v1：无告警",
+      "v2：错误率>5%告警",
+      "v3：多指标告警",
+      "v4：分级通知",
+      "v5：+告警沉默5分钟"
+    ],
+    "query": "监控告警规则",
+    "expected_active_value": "最终规则：错误率>1%/响应时间>1s/可用率<99.9%触发告警，P0打电话，P1飞书，P2邮件，告警沉默时间5分钟",
+    "forbidden_values": [
+      "不需要监控告警",
+      "不对，错误率超过5%要告警",
+      "调整：错误率>1%告警，响应时间>1s告警，可用率<99.9%告警",
+      "补充：告警要分等级，P0告警打电话通知，P1发飞书，P2发邮件"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_design_draft_024",
+    "type": "multi_conflict_update",
+    "subject": "产品设计稿交付规则",
+    "version_count": 3,
+    "events": [
+      "设计稿直接发图片就行",
+      "不对，设计稿必须用Figma共享链接",
+      "最新要求：设计稿不仅要发Figma链接，还要标注切图规格、字体大小、颜色值，附上交互说明文档"
+    ],
+    "modify_points": [
+      "v1：发图片",
+      "v2：Figma链接",
+      "v3：+标注+交互说明"
+    ],
+    "query": "设计稿怎么交付",
+    "expected_active_value": "最新要求：设计稿不仅要发Figma链接，还要标注切图规格、字体大小、颜色值，附上交互说明文档",
+    "forbidden_values": [
+      "设计稿直接发图片就行",
+      "不对，设计稿必须用Figma共享链接"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_code_review_025",
+    "type": "multi_conflict_update",
+    "subject": "代码CR规则",
+    "version_count": 4,
+    "events": [
+      "代码不需要CR直接合并",
+      "不对，代码合并前需要至少1人CR",
+      "调整：核心模块代码需要至少2人CR才能合并",
+      "最新规则：所有代码需要至少1人CR，核心模块2人CR，CR不通过必须修改后重新提CR，CR通过后24小时内合并"
+    ],
+    "modify_points": [
+      "v1：不需要CR",
+      "v2：至少1人CR",
+      "v3：核心模块2人CR",
+      "v4：CR通过后24小时合并"
+    ],
+    "query": "代码CR规则",
+    "expected_active_value": "最新规则：所有代码需要至少1人CR，核心模块2人CR，CR不通过必须修改后重新提CR，CR通过后24小时内合并",
+    "forbidden_values": [
+      "代码不需要CR直接合并",
+      "不对，代码合并前需要至少1人CR",
+      "调整：核心模块代码需要至少2人CR才能合并"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_env_config_026",
+    "type": "multi_conflict_update",
+    "subject": "环境变量配置规则",
+    "version_count": 3,
+    "events": [
+      "环境变量直接写在代码里就行",
+      "不对，环境变量要写在.env文件里",
+      "最新规则：环境变量不能写在代码和.env文件里，生产环境必须配置在K8s Secret或者云服务商的密钥管理服务中，本地开发用.env.local不提交Git"
+    ],
+    "modify_points": [
+      "v1：写在代码里",
+      "v2：写在.env文件",
+      "v3：生产用密钥管理服务，本地.env.local不提交"
+    ],
+    "query": "环境变量怎么配置",
+    "expected_active_value": "最新规则：环境变量不能写在代码和.env文件里，生产环境必须配置在K8s Secret或者云服务商的密钥管理服务中，本地开发用.env.local不提交Git",
+    "forbidden_values": [
+      "环境变量直接写在代码里就行",
+      "不对，环境变量要写在.env文件里"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_test_case_027",
+    "type": "multi_conflict_update",
+    "subject": "测试用例覆盖率要求",
+    "version_count": 4,
+    "events": [
+      "不需要写测试用例",
+      "不对，单元测试覆盖率至少30%",
+      "调整：单元测试覆盖率至少60%，核心模块80%",
+      "最新要求：单元测试覆盖率≥70%，核心模块≥90%，集成测试覆盖率≥80%，上线前测试通过率100%"
+    ],
+    "modify_points": [
+      "v1：不需要测试",
+      "v2：覆盖率30%",
+      "v3：60%/核心80%",
+      "v4：70%/核心90%/集成80%/通过率100%"
+    ],
+    "query": "测试用例覆盖率要求",
+    "expected_active_value": "最新要求：单元测试覆盖率≥70%，核心模块≥90%，集成测试覆盖率≥80%，上线前测试通过率100%",
+    "forbidden_values": [
+      "不需要写测试用例",
+      "不对，单元测试覆盖率至少30%",
+      "调整：单元测试覆盖率至少60%，核心模块80%"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_file_upload_028",
+    "type": "multi_conflict_update",
+    "subject": "文件上传大小限制",
+    "version_count": 3,
+    "events": [
+      "文件上传大小没有限制",
+      "不对，文件上传最大限制10MB",
+      "最新规则：普通文件上传最大10MB，图片最大2MB，视频最大50MB，超过限制必须走分片上传"
+    ],
+    "modify_points": [
+      "v1：无限制",
+      "v2：10MB限制",
+      "v3：分类型限制，大文件分片上传"
+    ],
+    "query": "文件上传大小限制",
+    "expected_active_value": "最新规则：普通文件上传最大10MB，图片最大2MB，视频最大50MB，超过限制必须走分片上传",
+    "forbidden_values": [
+      "文件上传大小没有限制",
+      "不对，文件上传最大限制10MB"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_demand_process_029",
+    "type": "multi_conflict_update",
+    "subject": "需求迭代流程",
+    "version_count": 5,
+    "events": [
+      "想到需求直接开发就行",
+      "不对，需求要先提需求文档再开发",
+      "调整：需求要先写PRD→产品评审→技术评审→排期→开发",
+      "补充：需求评审通过后不能随意变更，变更必须走需求变更流程",
+      "最终流程：需求提出→PRD编写→产品评审→技术评审→排期→开发→测试→上线→复盘，变更走单独流程"
+    ],
+    "modify_points": [
+      "v1：直接开发",
+      "v2：先提需求文档",
+      "v3：五阶段流程",
+      "v4：变更走流程",
+      "v5：完整8阶段流程"
+    ],
+    "query": "需求迭代完整流程",
+    "expected_active_value": "最终流程：需求提出→PRD编写→产品评审→技术评审→排期→开发→测试→上线→复盘，变更走单独流程",
+    "forbidden_values": [
+      "想到需求直接开发就行",
+      "不对，需求要先提需求文档再开发",
+      "调整：需求要先写PRD→产品评审→技术评审→排期→开发",
+      "补充：需求评审通过后不能随意变更，变更必须走需求变更流程"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_cache_strategy_030",
+    "type": "multi_conflict_update",
+    "subject": "Redis缓存过期策略",
+    "version_count": 3,
+    "events": [
+      "缓存不需要设置过期时间",
+      "不对，缓存过期时间统一设置1小时",
+      "最新规则：热点数据过期时间24小时，普通数据1小时，临时数据5分钟，缓存更新采用先更数据库再删缓存策略，避免缓存不一致"
+    ],
+    "modify_points": [
+      "v1：无过期时间",
+      "v2：统一1小时",
+      "v3：分类型设置，先更库再删缓存"
+    ],
+    "query": "Redis缓存策略",
+    "expected_active_value": "最新规则：热点数据过期时间24小时，普通数据1小时，临时数据5分钟，缓存更新采用先更数据库再删缓存策略，避免缓存不一致",
+    "forbidden_values": [
+      "缓存不需要设置过期时间",
+      "不对，缓存过期时间统一设置1小时"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_email_notice_031",
+    "type": "multi_conflict_update",
+    "subject": "上线通知规则",
+    "version_count": 4,
+    "events": [
+      "上线不需要通知任何人",
+      "不对，上线要通知开发和测试团队",
+      "调整：上线要通知开发、测试、产品、运维所有相关团队",
+      "最新规则：上线前1小时发通知，上线成功后发通知，上线失败也要发通知说明原因和恢复时间，抄送所有相关人员和领导"
+    ],
+    "modify_points": [
+      "v1：不通知",
+      "v2：通知开发测试",
+      "v3：通知所有相关团队",
+      "v4：上线前后都通知，失败要说明原因"
+    ],
+    "query": "上线通知规则",
+    "expected_active_value": "最新规则：上线前1小时发通知，上线成功后发通知，上线失败也要发通知说明原因和恢复时间，抄送所有相关人员和领导",
+    "forbidden_values": [
+      "上线不需要通知任何人",
+      "不对，上线要通知开发和测试团队",
+      "调整：上线要通知开发、测试、产品、运维所有相关团队"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_ssl_cert_032",
+    "type": "multi_conflict_update",
+    "subject": "SSL证书更新规则",
+    "version_count": 3,
+    "events": [
+      "SSL证书过期了再更新就行",
+      "不对，SSL证书要提前1个月更新",
+      "最新规则：SSL证书提前3个月自动检测，提前1个月更新，更新后要在所有环境验证通过，避免证书过期导致服务不可用"
+    ],
+    "modify_points": [
+      "v1：过期再更新",
+      "v2：提前1个月更新",
+      "v3：提前3个月检测，提前1个月更新，全环境验证"
+    ],
+    "query": "SSL证书更新规则",
+    "expected_active_value": "最新规则：SSL证书提前3个月自动检测，提前1个月更新，更新后要在所有环境验证通过，避免证书过期导致服务不可用",
+    "forbidden_values": [
+      "SSL证书过期了再更新就行",
+      "不对，SSL证书要提前1个月更新"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_bug_report_033",
+    "type": "multi_conflict_update",
+    "subject": "Bug提交规则",
+    "version_count": 4,
+    "events": [
+      "Bug直接在群里发就行",
+      "不对，Bug要提交到飞书任务",
+      "调整：Bug提交要标注优先级、重现步骤、截图、环境信息",
+      "最新规则：P0级Bug除了提交任务，还要@对应负责人，15分钟内响应，Bug修复后要标注根因和解决方案"
+    ],
+    "modify_points": [
+      "v1：群里发",
+      "v2：提交飞书任务",
+      "v3：标注优先级、步骤、截图",
+      "v4：P0@负责人，修复后写根因"
+    ],
+    "query": "Bug提交规则",
+    "expected_active_value": "最新规则：P0级Bug除了提交任务，还要@对应负责人，15分钟内响应，Bug修复后要标注根因和解决方案",
+    "forbidden_values": [
+      "Bug直接在群里发就行",
+      "不对，Bug要提交到飞书任务",
+      "调整：Bug提交要标注优先级、重现步骤、截图、环境信息"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_static_resource_034",
+    "type": "multi_conflict_update",
+    "subject": "静态资源部署规则",
+    "version_count": 5,
+    "events": [
+      "静态资源和后端代码一起部署就行",
+      "不对，静态资源要部署到单独的静态服务器",
+      "调整：静态资源要部署到CDN，开启缓存",
+      "补充：静态资源文件名要加哈希值，避免缓存问题",
+      "最终规则：静态资源上传到对象存储→CDN加速，文件名带哈希值，缓存时间7天，变更后自动刷新CDN缓存"
+    ],
+    "modify_points": [
+      "v1：和后端一起部署",
+      "v2：单独静态服务器",
+      "v3：CDN部署+缓存",
+      "v4：文件名加哈希",
+      "v5：对象存储+CDN+自动刷新"
+    ],
+    "query": "静态资源部署规则",
+    "expected_active_value": "最终规则：静态资源上传到对象存储→CDN加速，文件名带哈希值，缓存时间7天，变更后自动刷新CDN缓存",
+    "forbidden_values": [
+      "静态资源和后端代码一起部署就行",
+      "不对，静态资源要部署到单独的静态服务器",
+      "调整：静态资源要部署到CDN，开启缓存",
+      "补充：静态资源文件名要加哈希值，避免缓存问题"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_database_index_035",
+    "type": "multi_conflict_update",
+    "subject": "数据库索引规则",
+    "version_count": 3,
+    "events": [
+      "表不需要加索引，能查就行",
+      "不对，查询字段都要加索引",
+      "最新规则：索引要按需添加，单表索引不超过5个，联合索引要遵循最左匹配原则，上线前要做SQL性能分析，避免慢查询"
+    ],
+    "modify_points": [
+      "v1：不需要索引",
+      "v2：查询字段都加索引",
+      "v3：按需添加，不超过5个，最左匹配，SQL性能分析"
+    ],
+    "query": "数据库索引设计规则",
+    "expected_active_value": "最新规则：索引要按需添加，单表索引不超过5个，联合索引要遵循最左匹配原则，上线前要做SQL性能分析，避免慢查询",
+    "forbidden_values": [
+      "表不需要加索引，能查就行",
+      "不对，查询字段都要加索引"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_branch_manage_036",
+    "type": "multi_conflict_update",
+    "subject": "Git分支管理规则",
+    "version_count": 4,
+    "events": [
+      "所有代码直接提交到main分支就行",
+      "不对，开发要在dev分支，上线合并到main",
+      "调整：采用GitFlow工作流，feature开发→develop→release→main→hotfix",
+      "最新规则：每个需求单独开feature分支，命名规则feature/xxx，修复bug开fix/xxx分支，合并后删除分支，main分支只能从release或hotfix合并"
+    ],
+    "modify_points": [
+      "v1：直接提交main",
+      "v2：dev开发，合并main",
+      "v3：GitFlow工作流",
+      "v4：分支命名规范，合并后删除"
+    ],
+    "query": "Git分支管理规则",
+    "expected_active_value": "最新规则：每个需求单独开feature分支，命名规则feature/xxx，修复bug开fix/xxx分支，合并后删除分支，main分支只能从release或hotfix合并",
+    "forbidden_values": [
+      "所有代码直接提交到main分支就行",
+      "不对，开发要在dev分支，上线合并到main",
+      "调整：采用GitFlow工作流，feature开发→develop→release→main→hotfix"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_rate_limit_037",
+    "type": "multi_conflict_update",
+    "subject": "接口限流规则",
+    "version_count": 3,
+    "events": [
+      "接口不需要限流",
+      "不对，接口限流设置为1000次/秒",
+      "最新规则：核心接口限流1000次/秒，非核心接口500次/秒，超过限流返回429错误，限流维度按用户+接口，避免单个用户刷接口"
+    ],
+    "modify_points": [
+      "v1：不限流",
+      "v2：1000次/秒",
+      "v3：分接口限流，按用户+接口维度"
+    ],
+    "query": "接口限流规则",
+    "expected_active_value": "最新规则：核心接口限流1000次/秒，非核心接口500次/秒，超过限流返回429错误，限流维度按用户+接口，避免单个用户刷接口",
+    "forbidden_values": [
+      "接口不需要限流",
+      "不对，接口限流设置为1000次/秒"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_data_archive_038",
+    "type": "multi_conflict_update",
+    "subject": "历史数据归档规则",
+    "version_count": 4,
+    "events": [
+      "历史数据不需要归档，一直存在库里",
+      "不对，超过1年的历史数据要归档",
+      "调整：超过6个月的历史数据要归档到冷存储",
+      "最新规则：超过3个月的热数据归档到冷存储，超过1年的冷数据归档到对象存储，归档数据支持查询，不支持修改"
+    ],
+    "modify_points": [
+      "v1：不归档",
+      "v2：超过1年归档",
+      "v3：超过6个月归档冷存储",
+      "v4：3个月热→冷，1年冷→对象存储"
+    ],
+    "query": "历史数据归档规则",
+    "expected_active_value": "最新规则：超过3个月的热数据归档到冷存储，超过1年的冷数据归档到对象存储，归档数据支持查询，不支持修改",
+    "forbidden_values": [
+      "历史数据不需要归档，一直存在库里",
+      "不对，超过1年的历史数据要归档",
+      "调整：超过6个月的历史数据要归档到冷存储"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_password_policy_039",
+    "type": "multi_conflict_update",
+    "subject": "系统密码策略",
+    "version_count": 5,
+    "events": [
+      "密码随便设置就行",
+      "不对，密码长度至少8位",
+      "调整：密码必须包含大小写字母、数字、特殊符号，长度至少8位",
+      "补充：密码30天必须修改一次，不能和最近5次密码重复",
+      "最终规则：密码≥8位，包含大小写+数字+特殊符号，30天修改，不能和最近5次重复，连续输错5次锁定账号30分钟"
+    ],
+    "modify_points": [
+      "v1：无要求",
+      "v2：≥8位",
+      "v3：包含大小写、数字、特殊符号",
+      "v4：30天修改，不重复最近5次",
+      "v5：输错5次锁定30分钟"
+    ],
+    "query": "系统密码策略",
+    "expected_active_value": "最终规则：密码≥8位，包含大小写+数字+特殊符号，30天修改，不能和最近5次重复，连续输错5次锁定账号30分钟",
+    "forbidden_values": [
+      "密码随便设置就行",
+      "不对，密码长度至少8位",
+      "调整：密码必须包含大小写字母、数字、特殊符号，长度至少8位",
+      "补充：密码30天必须修改一次，不能和最近5次密码重复"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_downtime_window_040",
+    "type": "multi_conflict_update",
+    "subject": "计划内停机维护时间窗口",
+    "version_count": 3,
+    "events": [
+      "任何时间都可以停机维护",
+      "不对，停机维护只能在凌晨进行",
+      "最新规则：计划内停机维护只能在每周六凌晨0点-4点进行，提前3天发通知给所有用户，停机时间不能超过2小时，影响范围要提前说明"
+    ],
+    "modify_points": [
+      "v1：随时可以停机",
+      "v2：凌晨进行",
+      "v3：每周六0-4点，提前3天通知，不超过2小时"
+    ],
+    "query": "停机维护时间窗口",
+    "expected_active_value": "最新规则：计划内停机维护只能在每周六凌晨0点-4点进行，提前3天发通知给所有用户，停机时间不能超过2小时，影响范围要提前说明",
+    "forbidden_values": [
+      "任何时间都可以停机维护",
+      "不对，停机维护只能在凌晨进行"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_api_version_041",
+    "type": "multi_conflict_update",
+    "subject": "接口版本管理规则",
+    "version_count": 4,
+    "events": [
+      "接口不需要版本管理，直接改就行",
+      "不对，接口修改要加版本号，放在URL里",
+      "调整：接口版本号放在请求头里，旧版本至少保留3个版本",
+      "最新规则：接口版本号放在请求头X-API-Version，旧版本保留6个月，废弃接口提前1个月通知调用方，到期后下线"
+    ],
+    "modify_points": [
+      "v1：不需要版本",
+      "v2：URL加版本号",
+      "v3：请求头加版本，保留3个版本",
+      "v4：保留6个月，提前1个月通知下线"
+    ],
+    "query": "接口版本管理规则",
+    "expected_active_value": "最新规则：接口版本号放在请求头X-API-Version，旧版本保留6个月，废弃接口提前1个月通知调用方，到期后下线",
+    "forbidden_values": [
+      "接口不需要版本管理，直接改就行",
+      "不对，接口修改要加版本号，放在URL里",
+      "调整：接口版本号放在请求头里，旧版本至少保留3个版本"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_log_level_042",
+    "type": "multi_conflict_update",
+    "subject": "日志级别配置规则",
+    "version_count": 3,
+    "events": [
+      "所有环境都开DEBUG日志就行",
+      "不对，生产环境要关闭DEBUG日志，只开INFO级别",
+      "最新规则：开发环境DEBUG级别，测试环境INFO级别，生产环境WARN+ERROR级别，错误日志要包含完整堆栈信息，方便排查问题"
+    ],
+    "modify_points": [
+      "v1：全环境DEBUG",
+      "v2：生产INFO级别",
+      "v3：分环境配置，生产只开WARN+ERROR"
+    ],
+    "query": "日志级别配置规则",
+    "expected_active_value": "最新规则：开发环境DEBUG级别，测试环境INFO级别，生产环境WARN+ERROR级别，错误日志要包含完整堆栈信息，方便排查问题",
+    "forbidden_values": [
+      "所有环境都开DEBUG日志就行",
+      "不对，生产环境要关闭DEBUG日志，只开INFO级别"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_container_resource_043",
+    "type": "multi_conflict_update",
+    "subject": "容器资源限制规则",
+    "version_count": 4,
+    "events": [
+      "容器不需要资源限制，能跑就行",
+      "不对，容器要设置CPU和内存限制，避免占用太多资源",
+      "调整：CPU限制最多4核，内存最多8GB， requests和limit比例不超过1:2",
+      "最新规则：CPU requests=limit，内存requests=limit，避免OOM和资源抢占，核心服务预留充足资源，配置HPA自动扩缩容"
+    ],
+    "modify_points": [
+      "v1：无限制",
+      "v2：设置CPU内存限制",
+      "v3：4核8GB，requests:limit≤1:2",
+      "v4：requests=limit，HPA自动扩缩容"
+    ],
+    "query": "容器资源配置规则",
+    "expected_active_value": "最新规则：CPU requests=limit，内存requests=limit，避免OOM和资源抢占，核心服务预留充足资源，配置HPA自动扩缩容",
+    "forbidden_values": [
+      "容器不需要资源限制，能跑就行",
+      "不对，容器要设置CPU和内存限制，避免占用太多资源",
+      "调整：CPU限制最多4核，内存最多8GB， requests和limit比例不超过1:2"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_cors_policy_044",
+    "type": "multi_conflict_update",
+    "subject": "CORS跨域策略",
+    "version_count": 3,
+    "events": [
+      "CORS设置为*，允许所有域名访问",
+      "不对，CORS只允许生产域名访问",
+      "最新规则：开发环境允许本地域名访问，测试环境允许测试域名，生产环境只允许正式业务域名，不允许*，配置严格的Allow-Origin，开启凭证支持"
+    ],
+    "modify_points": [
+      "v1：允许所有域名",
+      "v2：只允许生产域名",
+      "v3：分环境配置，生产不允许*"
+    ],
+    "query": "CORS跨域策略",
+    "expected_active_value": "最新规则：开发环境允许本地域名访问，测试环境允许测试域名，生产环境只允许正式业务域名，不允许*，配置严格的Allow-Origin，开启凭证支持",
+    "forbidden_values": [
+      "CORS设置为*，允许所有域名访问",
+      "不对，CORS只允许生产域名访问"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_disaster_recovery_045",
+    "type": "multi_conflict_update",
+    "subject": "容灾恢复要求",
+    "version_count": 5,
+    "events": [
+      "不需要容灾，挂了再修就行",
+      "不对，需要做数据备份，能恢复就行",
+      "调整：RPO≤1小时，RTO≤4小时",
+      "补充：多可用区部署，单可用区挂了自动切换",
+      "最终容灾要求：RPO≤5分钟，RTO≤30分钟，跨区域容灾，数据多副本存储，每年至少做2次容灾演练"
+    ],
+    "modify_points": [
+      "v1：无容灾",
+      "v2：数据备份可恢复",
+      "v3：RPO≤1h，RTO≤4h",
+      "v4：多可用区自动切换",
+      "v5：RPO≤5m，RTO≤30m，跨区域容灾，每年2次演练"
+    ],
+    "query": "容灾恢复要求",
+    "expected_active_value": "最终容灾要求：RPO≤5分钟，RTO≤30分钟，跨区域容灾，数据多副本存储，每年至少做2次容灾演练",
+    "forbidden_values": [
+      "不需要容灾，挂了再修就行",
+      "不对，需要做数据备份，能恢复就行",
+      "调整：RPO≤1小时，RTO≤4小时",
+      "补充：多可用区部署，单可用区挂了自动切换"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_test_env_reset_046",
+    "type": "multi_conflict_update",
+    "subject": "测试环境重置规则",
+    "version_count": 3,
+    "events": [
+      "测试环境不需要重置，一直用就行",
+      "不对，测试环境每周重置一次数据",
+      "最新规则：测试环境每天凌晨自动重置数据，重置前要通知所有使用人员，避免影响测试进度，重置后恢复到基础数据状态"
+    ],
+    "modify_points": [
+      "v1：不重置",
+      "v2：每周重置一次",
+      "v3：每天凌晨自动重置，提前通知"
+    ],
+    "query": "测试环境重置规则",
+    "expected_active_value": "最新规则：测试环境每天凌晨自动重置数据，重置前要通知所有使用人员，避免影响测试进度，重置后恢复到基础数据状态",
+    "forbidden_values": [
+      "测试环境不需要重置，一直用就行",
+      "不对，测试环境每周重置一次数据"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_api_doc_update_047",
+    "type": "multi_conflict_update",
+    "subject": "接口文档更新规则",
+    "version_count": 4,
+    "events": [
+      "接口改了不需要更新文档",
+      "不对，接口修改后要更新文档",
+      "调整：接口修改后24小时内要更新文档",
+      "最新规则：接口修改必须同步更新文档，更新后要通知前端和测试团队，文档要包含完整的参数说明、返回值、错误码、示例"
+    ],
+    "modify_points": [
+      "v1：不需要更新",
+      "v2：修改后要更新",
+      "v3：24小时内更新",
+      "v4：同步更新+通知+完整说明"
+    ],
+    "query": "接口文档更新规则",
+    "expected_active_value": "最新规则：接口修改必须同步更新文档，更新后要通知前端和测试团队，文档要包含完整的参数说明、返回值、错误码、示例",
+    "forbidden_values": [
+      "接口改了不需要更新文档",
+      "不对，接口修改后要更新文档",
+      "调整：接口修改后24小时内要更新文档"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_secret_key_048",
+    "type": "multi_conflict_update",
+    "subject": "密钥定期更新规则",
+    "version_count": 3,
+    "events": [
+      "密钥不需要更新，一直用就行",
+      "不对，密钥每年更新一次",
+      "最新规则：访问密钥每90天更新一次，数据库密码每180天更新一次，更新后旧密钥保留7天过渡期，期间新旧密钥都可用，过渡期后旧密钥失效"
+    ],
+    "modify_points": [
+      "v1：不更新",
+      "v2：每年更新一次",
+      "v3：访问密钥90天，数据库密码180天，7天过渡期"
+    ],
+    "query": "密钥更新规则",
+    "expected_active_value": "最新规则：访问密钥每90天更新一次，数据库密码每180天更新一次，更新后旧密钥保留7天过渡期，期间新旧密钥都可用，过渡期后旧密钥失效",
+    "forbidden_values": [
+      "密钥不需要更新，一直用就行",
+      "不对，密钥每年更新一次"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_business_monitor_049",
+    "type": "multi_conflict_update",
+    "subject": "业务监控指标要求",
+    "version_count": 4,
+    "events": [
+      "不需要业务监控，系统可用就行",
+      "不对，要监控接口成功率",
+      "调整：要监控接口成功率、响应时间、QPS、错误率",
+      "最新规则：核心业务指标要监控：订单成功率、支付成功率、消息到达率、用户注册转化率，指标异常立即触发告警，每天出业务日报"
+    ],
+    "modify_points": [
+      "v1：无业务监控",
+      "v2：监控接口成功率",
+      "v3：监控四个技术指标",
+      "v4：监控核心业务指标，每天出日报"
+    ],
+    "query": "业务监控要求",
+    "expected_active_value": "最新规则：核心业务指标要监控：订单成功率、支付成功率、消息到达率、用户注册转化率，指标异常立即触发告警，每天出业务日报",
+    "forbidden_values": [
+      "不需要业务监控，系统可用就行",
+      "不对，要监控接口成功率",
+      "调整：要监控接口成功率、响应时间、QPS、错误率"
+    ]
+  },
+  {
+    "case_id": "conflict_multi_code_spec_050",
+    "type": "multi_conflict_update",
+    "subject": "代码规范检查规则",
+    "version_count": 5,
+    "events": [
+      "代码不需要规范检查，能跑就行",
+      "不对，代码要遵循ESLint/PEP8规范",
+      "调整：代码提交前要自动运行规范检查，不通过不能提交",
+      "补充：还要运行代码复杂度检查，圈复杂度超过10的函数必须重构",
+      "最终规则：代码提交前自动运行规范检查+类型检查+复杂度检查+安全扫描，所有检查通过才能提交，代码风格统一，不允许有警告"
+    ],
+    "modify_points": [
+      "v1：无检查",
+      "v2：遵循语言规范",
+      "v3：提交前自动检查",
+      "v4：圈复杂度≤10",
+      "v5：四类检查都通过才能提交，无警告"
+    ],
+    "query": "代码提交前检查规则",
+    "expected_active_value": "最终规则：代码提交前自动运行规范检查+类型检查+复杂度检查+安全扫描，所有检查通过才能提交，代码风格统一，不允许有警告",
+    "forbidden_values": [
+      "代码不需要规范检查，能跑就行",
+      "不对，代码要遵循ESLint/PEP8规范",
+      "调整：代码提交前要自动运行规范检查，不通过不能提交",
+      "补充：还要运行代码复杂度检查，圈复杂度超过10的函数必须重构"
+    ]
+  }
+]
