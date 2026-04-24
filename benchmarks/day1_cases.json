@@ -1,0 +1,102 @@
+[
+  {
+    "case_id": "deploy_param_001",
+    "type": "recall",
+    "events": [
+      "生产部署必须加 --canary --region cn-shanghai，不允许直接全量发布。"
+    ],
+    "noise_count": 100,
+    "query": "生产部署参数是什么",
+    "expected_active_value": "--canary --region cn-shanghai"
+  },
+  {
+    "case_id": "conflict_weekly_recipient_001",
+    "type": "conflict_update",
+    "events": [
+      "以后周报统一发给 A。",
+      "不对，以后周报统一发给 B。"
+    ],
+    "query": "周报发给谁",
+    "expected_active_value": "B",
+    "forbidden_value": "A"
+  },
+  {
+    "case_id": "backend_framework_001",
+    "type": "recall",
+    "events": [
+      "后端框架最终采用 FastAPI，不用 NestJS，原因是团队 Python 栈成熟。"
+    ],
+    "query": "后端框架选型是什么",
+    "expected_active_value": "FastAPI",
+    "forbidden_value": "Spring"
+  },
+  {
+    "case_id": "conflict_backend_framework_001",
+    "type": "conflict_update",
+    "events": [
+      "后端框架最终采用 Flask。",
+      "不对，后端框架最终改成 FastAPI。"
+    ],
+    "query": "后端框架",
+    "expected_active_value": "FastAPI",
+    "forbidden_value": "Flask"
+  },
+  {
+    "case_id": "storage_decision_001",
+    "type": "recall",
+    "events": [
+      "数据存储采用 SQLite + Bitable 双层结构。"
+    ],
+    "query": "数据库和存储方案",
+    "expected_active_value": "SQLite + Bitable"
+  },
+  {
+    "case_id": "feishu_permission_001",
+    "type": "recall",
+    "events": [
+      "飞书 Bot 权限必须先申请 group_at_msg、p2p_msg 和 send_as_bot。"
+    ],
+    "query": "飞书机器人权限",
+    "expected_active_value": "send_as_bot"
+  },
+  {
+    "case_id": "benchmark_owner_001",
+    "type": "recall",
+    "events": [
+      "Benchmark 由队友维护，主线开发不要被测试集阻塞。"
+    ],
+    "query": "Benchmark 谁维护",
+    "expected_active_value": "队友"
+  },
+  {
+    "case_id": "deadline_report_001",
+    "type": "recall",
+    "events": [
+      "评测报告周日 20:00 前完成。"
+    ],
+    "query": "评测报告截止时间",
+    "expected_active_value": "周日 20:00"
+  },
+  {
+    "case_id": "conflict_deploy_region_001",
+    "type": "conflict_update",
+    "events": [
+      "生产部署必须加 --canary --region cn-shanghai。",
+      "不对，生产部署 region 改成 ap-shanghai。"
+    ],
+    "query": "生产部署 region",
+    "expected_active_value": "ap-shanghai",
+    "forbidden_value": "cn-shanghai"
+  },
+  {
+    "case_id": "preference_weekly_doc_001",
+    "type": "recall",
+    "events": [
+      "周报优先发飞书文档，不要只发聊天消息。"
+    ],
+    "noise_count": 50,
+    "query": "周报应该怎么发",
+    "expected_active_value": "飞书文档",
+    "forbidden_value": "邮件"
+  }
+]

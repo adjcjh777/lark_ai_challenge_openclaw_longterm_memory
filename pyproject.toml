@@ -1,0 +1,16 @@
+[project]
+name = "feishu-memory-engine"
+version = "0.1.0"
+description = "Day 1 local memory engine for the Feishu AI challenge"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+memory = "memory_engine.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["memory_engine*"]

@@ -13,3 +13,4 @@ data/*.sqlite
 data/*.sqlite3
 reports/*.csv
 reports/*.json
+AGENTS.md
