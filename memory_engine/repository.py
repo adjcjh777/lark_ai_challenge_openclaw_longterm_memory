@@ -74,7 +74,13 @@ class MemoryRepository:
 
             if existing["current_value"] == extracted.current_value:
                 self._insert_evidence(existing["id"], existing["active_version_id"], source_type, event_id, extracted.current_value, ts)
-                return self._result("duplicate", existing["id"], existing["active_version_id"], extracted, 1)
+                return self._result(
+                    "duplicate",
+                    existing["id"],
+                    existing["active_version_id"],
+                    extracted,
+                    self._active_version_no(existing["id"]),
+                )
 
             if not is_override_intent(extracted.current_value):
                 return self._result(
@@ -366,4 +372,3 @@ class MemoryRepository:
         }
         result.update(extra)
         return result
-
