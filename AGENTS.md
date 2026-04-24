@@ -6,6 +6,13 @@
 ## 飞书 cli https://open.feishu.cn/document/mcp_open_tools/feishu-cli-let-ai-actually-do-your-work-in-feishu
 ## 飞书 openclaw 官方插件 https://bytedance.larkoffice.com/docx/MFK7dDFLFoVlOGxWCv5cTXKmnMh
 
+# 总控计划入口
+## 比赛总控执行文档是 `docs/competition-master-execution-plan.md`。
+## 后续每个新对话、新阶段任务或每日开发任务，必须先读取并遵循该文档中的当前日期/阶段安排，再结合用户最新指令执行。
+## 当前项目基线：Day 1 本地 Memory Engine 闭环已完成，Day 2 飞书 Bot 最小闭环已完成或可提前验收；后续优先从总控文档的 D3 及之后任务推进。
+## 初赛优先级最高：先保证《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report 三大交付物闭环，再做复赛加分项。
+## 每日任务应按总控文档拆分为：用户白天主线任务、队友晚上补位任务、P0/P1 范围、验收标准和 handoff 文档。
+
 # 执行规则
 ## 本地已经安装了 lark_cli (https://github.com/larksuite/cli), 可以直接使用 `lark-cli` 命令，这是最重要的工具！！！！
 ## 飞书 openclaw 插件 （https://github.com/larksuite/openclaw-lark），如果需要的话可以直接安装并使用！！！！
