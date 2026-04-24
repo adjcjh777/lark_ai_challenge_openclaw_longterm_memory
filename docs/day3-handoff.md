@@ -105,14 +105,18 @@ lark-cli im +chat-messages-list --profile feishu-ai-challenge --as user --chat-i
 
 已在内部真实测试群完成真实收发验证：
 
-- `/help`：Bot 返回命令帮助和 Demo 推荐输入。
-- `/health`：Bot 返回 `/tmp/feishu_d3_real.sqlite`、`project:feishu_ai_challenge`、`dry-run:false`、`reply`。
-- `/remember 生产部署必须加 --canary --region cn-shanghai`：Bot 返回 `类型：已记住`、`版本：v1` 和 `memory_id`。
-- `/recall 生产部署参数`：Bot 返回 v1 当前有效规则。
-- `/remember 不对，生产部署 region 改成 ap-shanghai`：Bot 返回 `类型：记忆更新`、`版本：v2`。
+- `/help`：Bot 先用一句话说明可做什么，再返回命令帮助和 Demo 推荐输入。
+- `/health`：Bot 先说明当前可用，再返回数据库、scope、dry-run 和回复模式。
+- `/remember 生产部署必须加 --canary --region cn-shanghai`：Bot 先说明“已保存为当前有效记忆”，再返回 `类型：已记住`、`版本：v1` 和 `memory_id`。
+- `/recall 生产部署参数`：Bot 先给“当前有效结论”，再返回 v1 结构化字段。
+- `/remember 不对，生产部署 region 改成 ap-shanghai`：Bot 先说明“后续召回会优先使用新版本”，再返回 `类型：记忆更新`、`版本：v2`。
 - `/recall 生产部署 region`：Bot 只返回 active v2 `ap-shanghai`。
-- `/versions <memory_id>`：Bot 返回 v1 `[superseded]`、v2 `[active]`。
-- `/unknown`：Bot 返回 `状态：unknown_command` 并引导 `/help`。
+- `/versions <memory_id>`：Bot 先说明 active 版本是当前有效结论，再返回 v1 `[superseded]`、v2 `[active]`。
+- `/unknown`：Bot 先说明不支持这个命令，再返回 `状态：unknown_command` 并引导 `/help`。
+
+## 安全决策
+
+真实飞书标识已从当前文档中移除。Git 历史中曾出现过运行标识，风险记录和后续 history rewrite 决策见 `docs/day3-security-risk-decision.md`。
 
 ## 本地验证
 

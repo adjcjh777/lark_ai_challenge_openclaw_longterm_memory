@@ -124,6 +124,7 @@ python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay te
 - [Day 2 实现计划](docs/day2-implementation-plan.md)
 - [Day 2 Handoff](docs/day2-handoff.md)
 - [Day 3 Handoff](docs/day3-handoff.md)
+- [Day 3 安全风险决策](docs/day3-security-risk-decision.md)
 - [真实飞书 Demo Runbook](docs/demo-runbook.md)
 - [队友 lark-cli 配置与 Day 2 测试指南](docs/teammate-lark-cli-setup.md)
 - [项目原型图 Mermaid 源码](docs/diagrams/README.md)
