@@ -6,13 +6,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .db import connect, init_db
+from .db import connect, db_path_from_env, init_db
 from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
-from .feishu_events import FeishuTextEvent, text_event_from_payload
+from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
 from .feishu_messages import (
+    format_duplicate_reply,
     format_help,
+    format_health,
+    format_ignored_reply,
     format_recall_reply,
     format_remember_reply,
+    format_unknown_command_reply,
     format_versions_reply,
     parse_command,
 )
@@ -28,10 +32,17 @@ def replay_event(path: str | Path, *, db_path: str | Path | None = None) -> dict
     conn = connect(db_path)
     init_db(conn)
     try:
-        event = text_event_from_payload(payload)
+        event = message_event_from_payload(payload)
         if event is None:
             return {"ok": True, "ignored": True, "reason": "not a text message event"}
-        return handle_text_event(conn, event, DryRunPublisher(), load_feishu_config())
+        return handle_message_event(
+            conn,
+            event,
+            DryRunPublisher(),
+            load_feishu_config(),
+            db_path=db_path,
+            dry_run=True,
+        )
     finally:
         conn.close()
 
@@ -51,11 +62,18 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
                 continue
             try:
                 payload = json.loads(line)
-                event = text_event_from_payload(payload)
+                event = message_event_from_payload(payload)
                 if event is None:
                     result = {"ok": True, "ignored": True, "reason": "not a text message event"}
                 else:
-                    result = handle_text_event(conn, event, publisher, config)
+                    result = handle_message_event(
+                        conn,
+                        event,
+                        publisher,
+                        config,
+                        db_path=db_path,
+                        dry_run=dry_run,
+                    )
             except Exception as exc:
                 result = {"ok": False, "error": str(exc), "raw_line": line}
             print(json.dumps(result, ensure_ascii=False), flush=True)
@@ -68,17 +86,76 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
 
 
 def handle_text_event(conn, event: FeishuTextEvent, publisher, config: FeishuConfig) -> dict[str, Any]:
+    return handle_message_event(
+        conn,
+        FeishuMessageEvent(
+            message_id=event.message_id,
+            chat_id=event.chat_id,
+            chat_type=event.chat_type,
+            sender_id=event.sender_id,
+            sender_type=event.sender_type,
+            message_type=event.message_type,
+            text=event.text,
+            create_time=event.create_time,
+            raw=event.raw,
+        ),
+        publisher,
+        config,
+    )
+
+
+def handle_message_event(
+    conn,
+    event: FeishuMessageEvent,
+    publisher,
+    config: FeishuConfig,
+    *,
+    db_path: str | Path | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
     repo = MemoryRepository(conn)
-    command = parse_command(event.text)
-    if command is None:
-        return {"ok": True, "ignored": True, "reason": "unsupported command", "text": event.text}
+    scope = scope_for_chat(event.chat_id, config)
+
+    if event.ignore_reason == "bot self message":
+        return {
+            "ok": True,
+            "ignored": True,
+            "reason": event.ignore_reason,
+            "message_id": event.message_id,
+            "chat_id": event.chat_id,
+        }
 
     if repo.has_source_event(SOURCE_TYPE, event.message_id):
-        reply = "这条飞书消息已处理过，已跳过重复投递。"
+        reply = format_duplicate_reply()
         publish_result = publisher.publish(event, reply)
         return {"ok": publish_result.get("ok", False), "duplicate": True, "publish": publish_result}
 
-    scope = scope_for_chat(event.chat_id, config)
+    if event.ignore_reason is not None:
+        _record_handled_event(repo, scope, event, f"[{event.ignore_reason}]")
+        reply = format_ignored_reply(event.ignore_reason)
+        publish_result = publisher.publish(event, reply)
+        return {
+            "ok": publish_result.get("ok", False),
+            "ignored": True,
+            "reason": event.ignore_reason,
+            "message_id": event.message_id,
+            "scope": scope,
+            "publish": publish_result,
+        }
+
+    command = parse_command(event.text)
+    if command is None:
+        _record_handled_event(repo, scope, event, event.text)
+        reply = format_unknown_command_reply(None)
+        publish_result = publisher.publish(event, reply)
+        return {
+            "ok": publish_result.get("ok", False),
+            "ignored": True,
+            "reason": "unsupported command",
+            "text": event.text,
+            "publish": publish_result,
+        }
+
     if command.name == "help":
         repo.record_raw_event(
             scope,
@@ -90,6 +167,22 @@ def handle_text_event(conn, event: FeishuTextEvent, publisher, config: FeishuCon
             event_time=event.create_time or None,
         )
         reply = format_help(command.argument)
+    elif command.name == "health":
+        repo.record_raw_event(
+            scope,
+            event.text,
+            source_type=SOURCE_TYPE,
+            source_id=event.message_id,
+            sender_id=event.sender_id,
+            raw_json=event.raw,
+            event_time=event.create_time or None,
+        )
+        reply = format_health(
+            db_path=str(Path(db_path) if db_path else db_path_from_env()),
+            default_scope=scope,
+            dry_run=dry_run,
+            bot_mode=config.bot_mode,
+        )
     elif command.name == "remember":
         result = repo.remember(
             scope,
@@ -123,7 +216,16 @@ def handle_text_event(conn, event: FeishuTextEvent, publisher, config: FeishuCon
         )
         reply = format_versions_reply(command.argument, repo.versions(command.argument))
     else:
-        return {"ok": True, "ignored": True, "reason": "unsupported command", "text": event.text}
+        repo.record_raw_event(
+            scope,
+            event.text,
+            source_type=SOURCE_TYPE,
+            source_id=event.message_id,
+            sender_id=event.sender_id,
+            raw_json=event.raw,
+            event_time=event.create_time or None,
+        )
+        reply = format_unknown_command_reply(command.raw_name)
 
     publish_result = publisher.publish(event, reply)
     return {
@@ -133,6 +235,18 @@ def handle_text_event(conn, event: FeishuTextEvent, publisher, config: FeishuCon
         "command": command.name,
         "publish": publish_result,
     }
+
+
+def _record_handled_event(repo: MemoryRepository, scope: str, event: FeishuMessageEvent, content: str) -> None:
+    repo.record_raw_event(
+        scope,
+        content,
+        source_type=SOURCE_TYPE,
+        source_id=event.message_id,
+        sender_id=event.sender_id,
+        raw_json=event.raw,
+        event_time=event.create_time or None,
+    )
 
 
 def _event_subscribe_command(config: FeishuConfig) -> list[str]:

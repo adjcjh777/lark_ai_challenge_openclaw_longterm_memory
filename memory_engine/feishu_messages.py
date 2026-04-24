@@ -8,20 +8,25 @@ from typing import Any
 class FeishuCommand:
     name: str
     argument: str
+    raw_name: str | None = None
 
 
 def parse_command(text: str) -> FeishuCommand | None:
     stripped = text.strip()
+    if not stripped:
+        return FeishuCommand(name="empty", argument="")
     if not stripped.startswith("/"):
-        return None
+        return FeishuCommand(name="unknown", argument=stripped, raw_name=stripped.split()[0])
     head, _, tail = stripped.partition(" ")
     name = head[1:].strip().lower()
     argument = tail.strip()
-    if name not in {"remember", "recall", "versions"}:
-        return None
+    if name not in {"remember", "recall", "versions", "help", "health"}:
+        return FeishuCommand(name="unknown", argument=argument, raw_name=name or head)
+    if name in {"help", "health"}:
+        return FeishuCommand(name=name, argument=argument, raw_name=name)
     if name in {"remember", "recall", "versions"} and not argument:
-        return FeishuCommand(name="help", argument=name)
-    return FeishuCommand(name=name, argument=argument)
+        return FeishuCommand(name="help", argument=name, raw_name=name)
+    return FeishuCommand(name=name, argument=argument, raw_name=name)
 
 
 def format_remember_reply(result: dict[str, Any]) -> str:
@@ -32,20 +37,27 @@ def format_remember_reply(result: dict[str, Any]) -> str:
     if action == "superseded":
         return "\n".join(
             [
-                "已更新记忆",
+                "类型：记忆更新",
                 f"主题：{subject}",
-                f"类型：{memory_type}",
-                f"新版本：{result.get('version')}",
-                "旧版本已标记为 superseded",
+                "状态：active",
+                f"版本：v{result.get('version')}",
+                "来源：当前飞书消息",
+                f"记忆类型：{memory_type}",
+                "处理结果：旧版本已标记为 superseded，新版本已生效。",
                 f"memory_id：{result.get('memory_id')}",
             ]
         )
     if action == "needs_manual_review":
         return "\n".join(
             [
-                "检测到同主题不同内容，但没有明确覆盖意图。",
-                "请用“不对/改成/以后统一”等表达确认覆盖。",
+                "类型：待确认记忆",
                 f"主题：{subject}",
+                "状态：needs_manual_review",
+                f"版本：v{result.get('version')}",
+                "来源：当前飞书消息",
+                f"记忆类型：{memory_type}",
+                "处理结果：检测到同主题不同内容，但没有明确覆盖意图。",
+                "下一步：请用“不对/改成/以后统一”等表达确认覆盖。",
                 f"memory_id：{result.get('memory_id')}",
             ]
         )
@@ -55,26 +67,40 @@ def format_remember_reply(result: dict[str, Any]) -> str:
         prefix = "已记住"
     return "\n".join(
         [
-            prefix,
+            f"类型：{prefix}",
             f"主题：{subject}",
-            f"类型：{memory_type}",
             "状态：active",
-            f"版本：{result.get('version')}",
+            f"版本：v{result.get('version')}",
+            "来源：当前飞书消息",
+            f"记忆类型：{memory_type}",
             f"memory_id：{result.get('memory_id')}",
-            "来源：当前消息",
         ]
     )
 
 
 def format_recall_reply(result: dict[str, Any] | None) -> str:
     if result is None:
-        return "未找到相关 active 记忆。\n可以用 /remember 先写入一条。"
+        return "\n".join(
+            [
+                "类型：记忆召回",
+                "主题：未命中",
+                "状态：not_found",
+                "版本：-",
+                "来源：Memory Engine",
+                "处理结果：未找到相关 active 记忆。",
+                "下一步：可以用 /remember 先写入一条。",
+            ]
+        )
     source = result.get("source") or {}
     return "\n".join(
         [
-            f"命中记忆：{result.get('subject')}",
+            "类型：记忆召回",
+            f"主题：{result.get('subject')}",
+            f"状态：{result.get('status')}",
+            f"版本：v{result.get('version')}",
+            f"来源：{source.get('source_type') or 'unknown'} / {source.get('source_id') or '-'}",
+            f"记忆类型：{result.get('type')}",
             f"当前有效规则：{result.get('answer')}",
-            f"版本：{result.get('version')}",
             f"memory_id：{result.get('memory_id')}",
             f"证据：{source.get('quote')}",
         ]
@@ -83,8 +109,25 @@ def format_recall_reply(result: dict[str, Any] | None) -> str:
 
 def format_versions_reply(memory_id: str, versions: list[dict[str, Any]]) -> str:
     if not versions:
-        return f"未找到版本链：{memory_id}"
-    lines = [f"版本链：{memory_id}"]
+        return "\n".join(
+            [
+                "类型：版本链",
+                f"主题：{memory_id}",
+                "状态：not_found",
+                "版本：-",
+                "来源：Memory Engine",
+                "处理结果：未找到版本链。",
+            ]
+        )
+    active = next((version for version in versions if version.get("status") == "active"), versions[-1])
+    lines = [
+        "类型：版本链",
+        f"主题：{memory_id}",
+        f"状态：{active.get('status')}",
+        f"版本：v{active.get('version_no')}",
+        "来源：Memory Engine",
+        f"版本数量：{len(versions)}",
+    ]
     for version in versions:
         lines.append(f"v{version.get('version_no')} [{version.get('status')}] {version.get('value')}")
     return "\n".join(lines)
@@ -92,8 +135,100 @@ def format_versions_reply(memory_id: str, versions: list[dict[str, Any]]) -> str
 
 def format_help(command_name: str) -> str:
     examples = {
-        "remember": "/remember 生产部署必须加 --canary --region cn-shanghai",
-        "recall": "/recall 生产部署参数",
-        "versions": "/versions mem_xxx",
+        "remember": "缺少要记住的内容。\n示例：/remember 生产部署必须加 --canary --region cn-shanghai",
+        "recall": "缺少召回查询。\n示例：/recall 生产部署参数",
+        "versions": "缺少 memory_id。\n示例：/versions mem_xxx",
     }
-    return f"命令缺少内容。\n示例：{examples.get(command_name, '/recall 生产部署参数')}"
+    if command_name in examples:
+        return "\n".join(
+            [
+                "类型：命令帮助",
+                f"主题：/{command_name}",
+                "状态：invalid_args",
+                "版本：-",
+                "来源：Memory Engine",
+                examples[command_name],
+            ]
+        )
+    return "\n".join(
+        [
+            "类型：命令帮助",
+            "主题：Feishu Memory Engine",
+            "状态：ok",
+            "版本：-",
+            "来源：Memory Engine",
+            "可用命令：",
+            "/remember <内容>  记住一条决策、流程或偏好",
+            "/recall <问题>    召回当前有效记忆",
+            "/versions <memory_id>  查看版本链",
+            "/health           查看运行状态",
+            "/help             查看本帮助",
+            "Demo 推荐输入：",
+            "/remember 生产部署必须加 --canary --region cn-shanghai",
+            "/recall 生产部署参数",
+            "/remember 不对，生产部署 region 改成 ap-shanghai",
+            "/recall 生产部署 region",
+        ]
+    )
+
+
+def format_health(*, db_path: str, default_scope: str, dry_run: bool, bot_mode: str) -> str:
+    return "\n".join(
+        [
+            "类型：健康检查",
+            "主题：Feishu Memory Engine Bot",
+            "状态：ok",
+            "版本：Day 3",
+            "来源：Memory Engine",
+            f"数据库：{db_path}",
+            f"默认 scope：{default_scope}",
+            f"dry-run：{str(dry_run).lower()}",
+            f"回复模式：{bot_mode}",
+        ]
+    )
+
+
+def format_ignored_reply(reason: str) -> str:
+    reason_text = {
+        "empty text message": "收到空消息，未写入记忆。",
+    }.get(reason, reason)
+    if reason.startswith("non-text message:"):
+        reason_text = "暂时只支持文本消息，请用 /help 查看可用命令。"
+    return "\n".join(
+        [
+            "类型：消息处理",
+            "主题：输入消息",
+            "状态：ignored",
+            "版本：-",
+            "来源：当前飞书消息",
+            f"处理结果：{reason_text}",
+        ]
+    )
+
+
+def format_duplicate_reply() -> str:
+    return "\n".join(
+        [
+            "类型：消息处理",
+            "主题：重复投递",
+            "状态：duplicate",
+            "版本：-",
+            "来源：当前飞书消息",
+            "处理结果：这条飞书消息已处理过，已跳过重复写入。",
+        ]
+    )
+
+
+def format_unknown_command_reply(raw_name: str | None) -> str:
+    command = f"/{raw_name}" if raw_name and not raw_name.startswith("/") else (raw_name or "当前输入")
+    return "\n".join(
+        [
+            "类型：命令处理",
+            f"主题：{command}",
+            "状态：unknown_command",
+            "版本：-",
+            "来源：当前飞书消息",
+            "处理结果：暂不支持这个命令。",
+            "下一步：发送 /help 查看可用命令和 Demo 推荐输入。",
+        ]
+    )

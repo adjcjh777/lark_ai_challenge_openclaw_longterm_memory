@@ -91,6 +91,30 @@ Demo 输入：
 /recall 生产部署 region
 ```
 
+## Day 3 真实 Bot 稳定化
+
+Day 3 增加稳定中文回复格式和 Demo 命令：
+
+- `/help`：展示可用命令、参数示例和 Demo 推荐输入。
+- `/health`：展示数据库路径、默认 scope、dry-run 状态和回复模式。
+- `/remember`、`/recall`、`/versions` 回复统一包含：类型、主题、状态、版本、来源。
+- 非文本、空消息、机器人自发消息、重复消息、未知命令都有明确处理。
+
+真实测试群：
+
+- 群名：`Feishu Memory Engine 测试群`
+- `chat_id`：`oc_c3b604942669f512f93c2e6f5c7427d3`
+- 群聊中请使用 `@Feishu Memory Engine bot /help` 这类 @Bot 命令；单聊可省略 @。
+
+本地 Day 3 验证：
+
+```bash
+python3 -m unittest discover -s tests
+rm -f /tmp/feishu_d3_replay.sqlite
+python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_text_help_event.json
+python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_text_health_event.json
+```
+
 ## 文档
 
 - [比赛总控执行文档](docs/competition-master-execution-plan.md)
@@ -99,5 +123,7 @@ Demo 输入：
 - [Day 1 Handoff](docs/day1-handoff.md)
 - [Day 2 实现计划](docs/day2-implementation-plan.md)
 - [Day 2 Handoff](docs/day2-handoff.md)
+- [Day 3 Handoff](docs/day3-handoff.md)
+- [真实飞书 Demo Runbook](docs/demo-runbook.md)
 - [队友 lark-cli 配置与 Day 2 测试指南](docs/teammate-lark-cli-setup.md)
 - [项目原型图 Mermaid 源码](docs/diagrams/README.md)

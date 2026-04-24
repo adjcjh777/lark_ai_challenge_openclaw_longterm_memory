@@ -1,0 +1,22 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1"
+  },
+  "event": {
+    "sender": {
+      "sender_id": {
+        "open_id": "ou_test"
+      },
+      "sender_type": "user"
+    },
+    "message": {
+      "message_id": "om_test_update_001",
+      "chat_id": "oc_test",
+      "chat_type": "group",
+      "message_type": "text",
+      "content": "{\"text\":\"/remember 不对，生产部署 region 改成 ap-shanghai\"}",
+      "create_time": "1777000002000"
+    }
+  }
+}

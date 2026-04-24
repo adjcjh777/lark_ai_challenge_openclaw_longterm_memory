@@ -12,12 +12,48 @@ class FeishuTextEvent:
     chat_id: str
     chat_type: str
     sender_id: str
+    sender_type: str
+    message_type: str
     text: str
     create_time: int
     raw: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class FeishuMessageEvent:
+    message_id: str
+    chat_id: str
+    chat_type: str
+    sender_id: str
+    sender_type: str
+    message_type: str
+    text: str
+    create_time: int
+    raw: dict[str, Any]
+    ignore_reason: str | None = None
+
+    def as_text_event(self) -> FeishuTextEvent:
+        return FeishuTextEvent(
+            message_id=self.message_id,
+            chat_id=self.chat_id,
+            chat_type=self.chat_type,
+            sender_id=self.sender_id,
+            sender_type=self.sender_type,
+            message_type=self.message_type,
+            text=self.text,
+            create_time=self.create_time,
+            raw=self.raw,
+        )
+
+
 def text_event_from_payload(payload: dict[str, Any]) -> FeishuTextEvent | None:
+    event = message_event_from_payload(payload)
+    if event is None or event.ignore_reason is not None:
+        return None
+    return event.as_text_event()
+
+
+def message_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEvent | None:
     payload = _unwrap_payload(payload)
     event_type = _event_type(payload)
     if event_type and event_type != "im.message.receive_v1":
@@ -28,15 +64,11 @@ def text_event_from_payload(payload: dict[str, Any]) -> FeishuTextEvent | None:
         message = payload
     message_type = _string(message.get("message_type"))
     has_text = bool(message.get("content") or payload.get("content") or payload.get("text"))
-    if message_type and message_type != "text":
-        return None
     if not message_type and not has_text:
         return None
 
     sender = _sender(payload)
     sender_type = _string(sender.get("sender_type") or payload.get("sender_type"))
-    if sender_type == "bot":
-        return None
 
     message_id = _string(message.get("message_id") or payload.get("message_id"))
     chat_id = _string(message.get("chat_id") or payload.get("chat_id"))
@@ -45,17 +77,25 @@ def text_event_from_payload(payload: dict[str, Any]) -> FeishuTextEvent | None:
 
     text = _content_text(message.get("content") or payload.get("content") or payload.get("text"))
     text = _strip_mentions(text, message.get("mentions") or payload.get("mentions") or [])
-    if not text:
-        return None
+    ignore_reason = None
+    if sender_type == "bot":
+        ignore_reason = "bot self message"
+    elif message_type and message_type != "text":
+        ignore_reason = f"non-text message: {message_type}"
+    elif not text:
+        ignore_reason = "empty text message"
 
-    return FeishuTextEvent(
+    return FeishuMessageEvent(
         message_id=message_id,
         chat_id=chat_id,
         chat_type=_string(message.get("chat_type") or payload.get("chat_type") or "unknown"),
         sender_id=_sender_id(sender, payload),
+        sender_type=sender_type or "unknown",
+        message_type=message_type or "text",
         text=text,
         create_time=_int(message.get("create_time") or payload.get("create_time")),
         raw=payload,
+        ignore_reason=ignore_reason,
     )
 
 
