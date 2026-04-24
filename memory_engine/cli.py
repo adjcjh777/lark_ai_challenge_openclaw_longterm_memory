@@ -6,6 +6,7 @@ import sys
 
 from .benchmark import run_benchmark
 from .db import connect, db_path_from_env, init_db
+from .feishu_runtime import listen, replay_event
 from .models import DEFAULT_SCOPE
 from .repository import MemoryRepository
 
@@ -49,6 +50,15 @@ def main(argv: list[str] | None = None) -> None:
         print_json(result)
         return
 
+    if args.command == "feishu" and args.feishu_command == "replay":
+        result = replay_event(args.event_path, db_path=args.db_path)
+        print_json(result)
+        return
+
+    if args.command == "feishu" and args.feishu_command == "listen":
+        listen(db_path=args.db_path, dry_run=args.dry_run)
+        return
+
     parser.print_help()
 
 
@@ -76,6 +86,13 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command")
     run_parser = benchmark_subparsers.add_parser("run", help="Run benchmark cases")
     run_parser.add_argument("cases_path")
+
+    feishu_parser = subparsers.add_parser("feishu", help="Feishu bot commands")
+    feishu_subparsers = feishu_parser.add_subparsers(dest="feishu_command")
+    replay_parser = feishu_subparsers.add_parser("replay", help="Replay a Feishu message event fixture")
+    replay_parser.add_argument("event_path")
+    listen_parser = feishu_subparsers.add_parser("listen", help="Listen for Feishu events with lark-cli")
+    listen_parser.add_argument("--dry-run", action="store_true", help="Print replies without sending them to Feishu")
 
     return parser
 

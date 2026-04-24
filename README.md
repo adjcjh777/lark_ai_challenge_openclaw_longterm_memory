@@ -35,9 +35,9 @@ python3 -m pip install -e .
 memory benchmark run benchmarks/day1_cases.json
 ```
 
-## Day 2 飞书准备项
+## Day 2 飞书 Bot 最小闭环
 
-本机已安装 `lark-cli`，应优先作为 Day 2 飞书能力入口：
+本机已安装 `lark-cli`，Day 2 的真实事件监听和消息回复优先使用 `lark-cli`：
 
 ```bash
 lark-cli --version
@@ -52,9 +52,43 @@ Day 2 最小 Bot 权限：
 环境变量：
 
 ```bash
-FEISHU_APP_ID=cli_xxx
-FEISHU_APP_SECRET=xxx
 MEMORY_DB_PATH=data/memory.sqlite
+MEMORY_DEFAULT_SCOPE=project:feishu_ai_challenge
+FEISHU_BOT_MODE=reply
+```
+
+如果使用指定 lark-cli profile，可额外设置：
+
+```bash
+LARK_CLI_PROFILE=your_profile
+```
+
+本地 replay 不需要飞书凭证：
+
+```bash
+python3 -m memory_engine feishu replay tests/fixtures/feishu_text_remember_event.json
+python3 -m memory_engine feishu replay tests/fixtures/feishu_text_recall_event.json
+```
+
+真实长连接监听使用 `lark-cli event +subscribe`：
+
+```bash
+python3 -m memory_engine feishu listen
+```
+
+调试时不真实回复飞书：
+
+```bash
+python3 -m memory_engine feishu listen --dry-run
+```
+
+Demo 输入：
+
+```text
+/remember 生产部署必须加 --canary --region cn-shanghai
+/recall 生产部署参数
+/remember 不对，生产部署 region 改成 ap-shanghai
+/recall 生产部署 region
 ```
 
 ## 文档
@@ -63,4 +97,5 @@ MEMORY_DB_PATH=data/memory.sqlite
 - [Day 1 执行文档](docs/day1-execution-plan.md)
 - [Day 1 Handoff](docs/day1-handoff.md)
 - [Day 2 实现计划](docs/day2-implementation-plan.md)
+- [Day 2 Handoff](docs/day2-handoff.md)
 - [项目原型图 Mermaid 源码](docs/diagrams/README.md)

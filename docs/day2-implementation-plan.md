@@ -82,6 +82,12 @@ dependencies = [
 - 如果 Day 2 不想加依赖，可先做 `lark-cli` 调用发送消息，但事件接收仍然缺少稳定入口。
 - 因此 P0 推荐接受 `lark-oapi` 作为唯一新增依赖。
 
+实现备注：
+
+- 2026-04-24 执行时改为优先使用本机 `lark-cli` 完成长连接事件订阅和 Bot 回复。
+- 当前实现不新增 `lark-oapi` 依赖；`feishu listen` 内部调用 `lark-cli event +subscribe`，回复调用 `lark-cli im +messages-reply` / `+messages-send`。
+- 原 `lark-oapi` 路线保留为备用方案，仅在 `lark-cli` 无法覆盖运行时能力时再考虑。
+
 ### 3.2 新增模块
 
 建议文件：
@@ -470,4 +476,3 @@ Tested: python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 Tested: python3 -m memory_engine feishu replay tests/fixtures/feishu_text_remember_event.json
 Not-tested: production deployment
 ```
-

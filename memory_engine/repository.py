@@ -171,6 +171,57 @@ class MemoryRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def has_source_event(self, source_type: str, source_id: str) -> bool:
+        row = self.conn.execute(
+            """
+            SELECT 1
+            FROM raw_events
+            WHERE source_type = ?
+              AND source_id = ?
+            LIMIT 1
+            """,
+            (source_type, source_id),
+        ).fetchone()
+        return row is not None
+
+    def record_raw_event(
+        self,
+        scope: str,
+        content: str,
+        *,
+        source_type: str,
+        source_id: str,
+        sender_id: str | None = None,
+        raw_json: dict[str, Any] | None = None,
+        event_time: int | None = None,
+    ) -> str:
+        parsed_scope = parse_scope(scope)
+        ts = now_ms()
+        event_id = new_id("evt")
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO raw_events (
+                  id, source_type, source_id, scope_type, scope_id, sender_id,
+                  event_time, content, raw_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    source_type,
+                    source_id,
+                    parsed_scope.scope_type,
+                    parsed_scope.scope_id,
+                    sender_id,
+                    event_time or ts,
+                    content,
+                    json.dumps(raw_json, ensure_ascii=False) if raw_json is not None else None,
+                    ts,
+                ),
+            )
+        return event_id
+
     def add_noise_event(self, scope: str, content: str, *, source_type: str = "benchmark_noise") -> None:
         parsed_scope = parse_scope(scope)
         ts = now_ms()

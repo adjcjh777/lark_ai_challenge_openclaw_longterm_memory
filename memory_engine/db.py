@@ -75,6 +75,9 @@ CREATE TABLE IF NOT EXISTS memory_evidence (
 CREATE INDEX IF NOT EXISTS idx_raw_events_scope_time
   ON raw_events(scope_type, scope_id, event_time);
 
+CREATE INDEX IF NOT EXISTS idx_raw_events_source
+  ON raw_events(source_type, source_id);
+
 CREATE INDEX IF NOT EXISTS idx_memories_scope_status
   ON memories(scope_type, scope_id, status);
 
@@ -102,4 +105,3 @@ def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
-
