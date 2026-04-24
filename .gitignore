@@ -1,0 +1,15 @@
+.omx/
+.env
+.env.*
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+.DS_Store
+*.log
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+reports/*.csv
+reports/*.json
