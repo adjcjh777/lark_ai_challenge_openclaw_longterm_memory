@@ -73,13 +73,13 @@ python3 -m memory_engine feishu replay tests/fixtures/feishu_text_recall_event.j
 真实长连接监听使用 `lark-cli event +subscribe`：
 
 ```bash
-python3 -m memory_engine feishu listen
+scripts/start_feishu_bot.sh
 ```
 
 调试时不真实回复飞书：
 
 ```bash
-python3 -m memory_engine feishu listen --dry-run
+scripts/start_feishu_bot.sh --dry-run
 ```
 
 Demo 输入：
