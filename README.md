@@ -100,10 +100,10 @@ Day 3 增加稳定中文回复格式和 Demo 命令：
 - `/remember`、`/recall`、`/versions` 回复统一包含：类型、主题、状态、版本、来源。
 - 非文本、空消息、机器人自发消息、重复消息、未知命令都有明确处理。
 
-真实测试群：
+真实测试群配置：
 
-- 群名：`Feishu Memory Engine 测试群`
-- `chat_id`：`oc_c3b604942669f512f93c2e6f5c7427d3`
+- 群名：内部测试群，真实名称不提交到公开仓库。
+- `chat_id`：使用本地环境变量 `FEISHU_TEST_CHAT_ID`，真实值不提交。
 - 群聊中请使用 `@Feishu Memory Engine bot /help` 这类 @Bot 命令；单聊可省略 @。
 
 本地 Day 3 验证：

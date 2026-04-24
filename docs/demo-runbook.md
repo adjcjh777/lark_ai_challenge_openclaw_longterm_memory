@@ -12,7 +12,7 @@ scripts/start_feishu_bot.sh
 
 确认测试群：
 
-- 群名：`Feishu Memory Engine 测试群`
+- 群名：内部测试群，真实名称不提交到公开仓库。
 - Bot：`Feishu Memory Engine bot`
 - 默认 scope：`project:feishu_ai_challenge`
 

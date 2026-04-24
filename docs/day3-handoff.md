@@ -22,11 +22,11 @@ P1：
 ## 真实飞书配置
 
 - lark-cli profile：`feishu-ai-challenge`
-- 应用 App ID：`cli_a961a18dbebadcd1`
+- 应用 App ID：使用本地 `FEISHU_APP_ID`，真实值不提交。
 - 机器人显示名：`Feishu Memory Engine bot`
-- 机器人 mention open_id：`ou_09341ad938b76680c036bfea8dc2c62c`
-- 测试群名称：`Feishu Memory Engine 测试群`
-- 测试群 `chat_id`：`oc_c3b604942669f512f93c2e6f5c7427d3`
+- 机器人 mention open_id：使用本地 `FEISHU_BOT_OPEN_ID`，真实值不提交。
+- 测试群名称：内部测试群，真实名称不提交。
+- 测试群 `chat_id`：使用本地 `FEISHU_TEST_CHAT_ID`，真实值不提交。
 - 默认数据库：`data/memory.sqlite`
 - 推荐默认 scope：`project:feishu_ai_challenge`
 - 推荐 Bot 回复模式：`FEISHU_BOT_MODE=reply`
@@ -77,34 +77,41 @@ LARK_CLI_PROFILE=feishu-ai-challenge
 
 ## 真实群 CLI 验证命令
 
-发送 Demo 命令：
+发送 Demo 命令。先在本机 shell 设置真实值，不要写入仓库：
 
 ```bash
-lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id oc_c3b604942669f512f93c2e6f5c7427d3 --content '{"text":"<at user_id=\"ou_09341ad938b76680c036bfea8dc2c62c\">Feishu Memory Engine bot</at> /remember 生产部署必须加 --canary --region cn-shanghai"}' --msg-type text --idempotency-key feishu-memory-d3-remember
-lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id oc_c3b604942669f512f93c2e6f5c7427d3 --content '{"text":"<at user_id=\"ou_09341ad938b76680c036bfea8dc2c62c\">Feishu Memory Engine bot</at> /recall 生产部署参数"}' --msg-type text --idempotency-key feishu-memory-d3-recall-1
-lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id oc_c3b604942669f512f93c2e6f5c7427d3 --content '{"text":"<at user_id=\"ou_09341ad938b76680c036bfea8dc2c62c\">Feishu Memory Engine bot</at> /remember 不对，生产部署 region 改成 ap-shanghai"}' --msg-type text --idempotency-key feishu-memory-d3-update
-lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id oc_c3b604942669f512f93c2e6f5c7427d3 --content '{"text":"<at user_id=\"ou_09341ad938b76680c036bfea8dc2c62c\">Feishu Memory Engine bot</at> /recall 生产部署 region"}' --msg-type text --idempotency-key feishu-memory-d3-recall-2
+export FEISHU_TEST_CHAT_ID="oc_xxx"
+export FEISHU_BOT_OPEN_ID="ou_xxx"
+```
+
+然后发送：
+
+```bash
+lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id "$FEISHU_TEST_CHAT_ID" --content "{\"text\":\"<at user_id=\\\"$FEISHU_BOT_OPEN_ID\\\">Feishu Memory Engine bot</at> /remember 生产部署必须加 --canary --region cn-shanghai\"}" --msg-type text --idempotency-key feishu-memory-d3-remember
+lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id "$FEISHU_TEST_CHAT_ID" --content "{\"text\":\"<at user_id=\\\"$FEISHU_BOT_OPEN_ID\\\">Feishu Memory Engine bot</at> /recall 生产部署参数\"}" --msg-type text --idempotency-key feishu-memory-d3-recall-1
+lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id "$FEISHU_TEST_CHAT_ID" --content "{\"text\":\"<at user_id=\\\"$FEISHU_BOT_OPEN_ID\\\">Feishu Memory Engine bot</at> /remember 不对，生产部署 region 改成 ap-shanghai\"}" --msg-type text --idempotency-key feishu-memory-d3-update
+lark-cli im +messages-send --profile feishu-ai-challenge --as user --chat-id "$FEISHU_TEST_CHAT_ID" --content "{\"text\":\"<at user_id=\\\"$FEISHU_BOT_OPEN_ID\\\">Feishu Memory Engine bot</at> /recall 生产部署 region\"}" --msg-type text --idempotency-key feishu-memory-d3-recall-2
 ```
 
 查看最近群消息：
 
 ```bash
-lark-cli im +chat-messages-list --profile feishu-ai-challenge --as user --chat-id oc_c3b604942669f512f93c2e6f5c7427d3 --page-size 20
+lark-cli im +chat-messages-list --profile feishu-ai-challenge --as user --chat-id "$FEISHU_TEST_CHAT_ID" --page-size 20
 ```
 
 说明：群聊里普通 `/help` 不会触发 `im.message.receive_v1` 的 group_at 事件；需要手动 `@Feishu Memory Engine bot /help`，或在 CLI 中使用上面的 `<at user_id="...">` 形式。
 
 ## 真实群验证结果
 
-已在 `Feishu Memory Engine 测试群` 完成真实收发验证：
+已在内部真实测试群完成真实收发验证：
 
 - `/help`：Bot 返回命令帮助和 Demo 推荐输入。
 - `/health`：Bot 返回 `/tmp/feishu_d3_real.sqlite`、`project:feishu_ai_challenge`、`dry-run:false`、`reply`。
-- `/remember 生产部署必须加 --canary --region cn-shanghai`：Bot 返回 `类型：已记住`、`版本：v1`、`memory_id：mem_085d051049bb47be`。
+- `/remember 生产部署必须加 --canary --region cn-shanghai`：Bot 返回 `类型：已记住`、`版本：v1` 和 `memory_id`。
 - `/recall 生产部署参数`：Bot 返回 v1 当前有效规则。
 - `/remember 不对，生产部署 region 改成 ap-shanghai`：Bot 返回 `类型：记忆更新`、`版本：v2`。
 - `/recall 生产部署 region`：Bot 只返回 active v2 `ap-shanghai`。
-- `/versions mem_085d051049bb47be`：Bot 返回 v1 `[superseded]`、v2 `[active]`。
+- `/versions <memory_id>`：Bot 返回 v1 `[superseded]`、v2 `[active]`。
 - `/unknown`：Bot 返回 `状态：unknown_command` 并引导 `/help`。
 
 ## 本地验证

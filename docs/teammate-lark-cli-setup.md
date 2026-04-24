@@ -15,15 +15,117 @@
   - `im:message:send_as_bot`
 - 队友已被加入测试群，或队友有权限把机器人加入测试群。
 
-队友本机需要拿到：
+队友本机需要拿到这些真实值，但不要提交到仓库：
 
 ```text
-App ID: cli_a961a18dbebadcd1
+App ID: 从本地安全渠道获取，例如 `FEISHU_APP_ID=cli_xxx`，不要提交真实值。
 App Secret: 从飞书开放平台应用后台复制，不能提交到仓库
 Profile name: feishu-ai-challenge
+FEISHU_TEST_CHAT_ID: 真实测试群 chat_id
+FEISHU_BOT_OPEN_ID: 机器人被 @ 时使用的 open_id
 ```
 
-## 2. 拉取仓库
+## 2. 安全获取真实飞书标识
+
+真实飞书标识只保存在本机，不写入 README、handoff、runbook 或代码。推荐写入 `.env.local`，该文件已被 `.gitignore` 忽略。
+
+```bash
+cat > .env.local <<'EOF'
+export FEISHU_APP_ID="cli_xxx"
+export FEISHU_TEST_CHAT_ID="oc_xxx"
+export FEISHU_BOT_OPEN_ID="ou_xxx"
+EOF
+```
+
+每次开新终端后加载：
+
+```bash
+source .env.local
+```
+
+### 2.1 获取 `FEISHU_APP_ID`
+
+方式 A，飞书开放平台后台：
+
+1. 打开飞书开放平台。
+2. 进入本项目自建应用。
+3. 在“凭证与基础信息”或应用概览页复制 `App ID`。
+4. 写入本机 `.env.local`：
+
+```bash
+export FEISHU_APP_ID="cli_xxx"
+```
+
+方式 B，如果本机已经有 profile：
+
+```bash
+lark-cli profile list
+```
+
+在 `feishu-ai-challenge` profile 对应条目里查看 `appId`，只复制到 `.env.local`，不要写入仓库文档。
+
+### 2.2 获取 `FEISHU_TEST_CHAT_ID`
+
+先确保队友已经在测试群里，且应用可见范围包含队友。登录 user 身份：
+
+```bash
+lark-cli --profile feishu-ai-challenge auth login --domain im
+```
+
+按群名关键词搜索可见群：
+
+```bash
+lark-cli im +chat-search \
+  --profile feishu-ai-challenge \
+  --as user \
+  --query "测试群关键词" \
+  --format json
+```
+
+从返回结果中找到目标群，复制它的 `chat_id`，写入 `.env.local`：
+
+```bash
+export FEISHU_TEST_CHAT_ID="oc_xxx"
+```
+
+如果 user 身份搜不到，也可以用 bot 身份查机器人所在群：
+
+```bash
+lark-cli im +chat-search \
+  --profile feishu-ai-challenge \
+  --as bot \
+  --query "测试群关键词" \
+  --format json
+```
+
+### 2.3 获取 `FEISHU_BOT_OPEN_ID`
+
+最稳妥的方法是先在飞书测试群里手动发送一条 @Bot 消息：
+
+```text
+@Feishu Memory Engine bot /help
+```
+
+然后用 CLI 拉最近群消息：
+
+```bash
+lark-cli im +chat-messages-list \
+  --profile feishu-ai-challenge \
+  --as user \
+  --chat-id "$FEISHU_TEST_CHAT_ID" \
+  --page-size 20 \
+  --format json
+```
+
+找到刚才那条 `@Feishu Memory Engine bot /help` 消息，在 `mentions` 数组里复制机器人的 `id`。这个值通常形如 `ou_xxx`，写入 `.env.local`：
+
+```bash
+export FEISHU_BOT_OPEN_ID="ou_xxx"
+```
+
+如果返回消息里没有 `mentions` 字段，说明这条消息不是客户端真正的 @Bot 消息。请在飞书客户端里重新选择机器人完成 @，不要手打纯文本 `@Feishu Memory Engine bot`。
+
+## 3. 拉取仓库
 
 ```bash
 git clone https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory.git
@@ -37,7 +139,7 @@ cd lark_ai_challenge_openclaw_longterm_memory
 git pull
 ```
 
-## 3. 安装或检查 lark-cli
+## 4. 安装或检查 lark-cli
 
 先检查：
 
@@ -57,15 +159,16 @@ npm install -g @larksuite/cli
 lark-cli --version
 ```
 
-## 4. 配置项目 profile
+## 5. 配置项目 profile
 
 不要使用裸 `lark-cli config init --new`，它可能覆盖已有配置。使用 `profile add` 追加项目应用。
 
 ```bash
+source .env.local
 read -s APP_SECRET
 printf '%s' "$APP_SECRET" | lark-cli profile add \
   --name feishu-ai-challenge \
-  --app-id cli_a961a18dbebadcd1 \
+  --app-id "$FEISHU_APP_ID" \
   --app-secret-stdin \
   --brand feishu
 unset APP_SECRET
@@ -94,7 +197,7 @@ lark-cli --profile feishu-ai-challenge doctor
 lark-cli --profile feishu-ai-challenge auth login --domain im
 ```
 
-## 5. 本地业务验证
+## 6. 本地业务验证
 
 先跑不依赖飞书的本地验证：
 
@@ -116,7 +219,7 @@ rm -f "$tmpdb"
 
 看到 `已记住` 和 `命中记忆` 说明本地 handler 正常。
 
-## 6. 启动真实飞书监听
+## 7. 启动真实飞书监听
 
 仓库已提供启动脚本：
 
@@ -147,7 +250,7 @@ scripts/start_feishu_bot.sh
 
 保持这个终端不要关闭。关闭后，Bot 不会继续接收新消息。
 
-## 7. 飞书群内测试
+## 8. 飞书群内测试
 
 群聊里必须 @机器人：
 
@@ -167,7 +270,27 @@ scripts/start_feishu_bot.sh
 /recall 生产部署 region
 ```
 
-## 8. 查看本机测试结果
+如果要用 CLI 主动往测试群发送同样的 @Bot 命令，先加载本机真实标识：
+
+```bash
+source .env.local
+```
+
+再发送：
+
+```bash
+lark-cli im +messages-send \
+  --profile feishu-ai-challenge \
+  --as user \
+  --chat-id "$FEISHU_TEST_CHAT_ID" \
+  --content "{\"text\":\"<at user_id=\\\"$FEISHU_BOT_OPEN_ID\\\">Feishu Memory Engine bot</at> /help\"}" \
+  --msg-type text \
+  --idempotency-key "feishu-memory-help-$(date +%s)"
+```
+
+注意：群聊里的普通 `/help` 不一定触发机器人事件；必须 @Bot。单聊机器人时才可以省略 @。
+
+## 9. 查看本机测试结果
 
 查看当前 active 记忆：
 
@@ -195,7 +318,7 @@ conn.close()
 PY
 ```
 
-## 9. 队友 Day 2 交付物
+## 10. 队友 Day 2 交付物
 
 队友不需要改核心代码。建议产出：
 
@@ -214,7 +337,7 @@ docs/day2-demo-cases.md
 - 20 条 Demo 语料。
 - 5 分钟 Demo 台词。
 
-## 10. 常见问题
+## 11. 常见问题
 
 ### profile 不存在
 
@@ -254,3 +377,11 @@ lark-cli --profile feishu-ai-challenge auth login --domain im
 ### App Secret 泄露
 
 不要把 App Secret 写入 `.env` 后提交，也不要发到群里。若怀疑泄露，到飞书开放平台重置 App Secret，并重新配置 profile。
+
+### 真实标识误提交到 GitHub
+
+如果误把 `oc_xxx`、`ou_xxx`、`cli_xxx` 这类真实值提交到公开仓库：
+
+1. 立即改成环境变量占位符并推送修复提交。
+2. 通知主线负责人评估是否需要清理 Git 历史。
+3. 如果 App Secret 泄露，必须立刻在飞书开放平台重置；App ID、chat_id、open_id 虽不是密钥，也不要公开留存。
