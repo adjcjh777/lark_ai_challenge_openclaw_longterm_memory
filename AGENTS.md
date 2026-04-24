@@ -10,6 +10,17 @@
 ## 本地已经安装了 lark_cli (https://github.com/larksuite/cli), 可以直接使用 `lark-cli` 命令，这是最重要的工具！！！！
 ## 飞书 openclaw 插件 （https://github.com/larksuite/openclaw-lark），如果需要的话可以直接安装并使用！！！！
 
+## 飞书 Bot 测试约定
+### 本项目机器人在飞书里的显示名是 `Feishu Memory Engine bot`。
+### 后续所有群聊测试命令都使用这个名字，例如：
+```text
+@Feishu Memory Engine bot /remember 生产部署必须加 --canary --region cn-shanghai
+@Feishu Memory Engine bot /recall 生产部署参数
+@Feishu Memory Engine bot /remember 不对，生产部署 region 改成 ap-shanghai
+@Feishu Memory Engine bot /recall 生产部署 region
+```
+### 单聊机器人时可以省略 @ 名称，直接发送 `/remember`、`/recall` 或 `/versions`。
+
 ## 版本维护与推送规则
 ### 每完成一个可运行闭环、阶段交付或关键文档更新后，必须执行本地验证、提交并推送到远程仓库。
 ### 提交前必须检查 `git status --short`，确认 `.env`、`.omx/`、数据库文件、缓存文件和临时报告不会进入提交。
