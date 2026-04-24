@@ -93,6 +93,7 @@ Demo 输入：
 
 ## 文档
 
+- [比赛总控执行文档](docs/competition-master-execution-plan.md)
 - [飞书 Memory Engine 调研与项目规划](docs/feishu-memory-engine-research-and-plan.md)
 - [Day 1 执行文档](docs/day1-execution-plan.md)
 - [Day 1 Handoff](docs/day1-handoff.md)
