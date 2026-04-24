@@ -1,0 +1,67 @@
+flowchart LR
+  subgraph T["测试集构造"]
+    T1["关键记忆集 50 条"]
+    T2["干扰对话 1000 条"]
+    T3["矛盾更新 Case 30 组"]
+    T4["CLI 效能 Case 20 组"]
+  end
+
+  subgraph R["评测执行"]
+    R1["批量注入 raw_events"]
+    R2["运行 Extractor"]
+    R3["运行 Conflict / Version Manager"]
+    R4["执行 Recall Queries"]
+    R5["记录 retrieval_logs"]
+  end
+
+  subgraph M["核心指标"]
+    M1["Recall@1 / Recall@3"]
+    M2["MRR"]
+    M3["Current Answer Accuracy"]
+    M4["Stale Leakage Rate"]
+    M5["Evidence Coverage"]
+    M6["Latency p50 / p95"]
+    M7["字符数 / 操作步数 / 时间节省"]
+  end
+
+  subgraph P["证明输出"]
+    P1["Benchmark Report"]
+    P2["Bitable 评测看板"]
+    P3["飞书 Demo 录屏"]
+    P4["白皮书 Prove It 章节"]
+  end
+
+  T1 --> R1
+  T2 --> R1
+  T3 --> R1
+  T4 --> R1
+  R1 --> R2
+  R2 --> R3
+  R3 --> R4
+  R4 --> R5
+
+  R5 --> M1
+  R5 --> M2
+  R5 --> M3
+  R5 --> M4
+  R5 --> M5
+  R5 --> M6
+  R5 --> M7
+
+  M1 --> P1
+  M2 --> P1
+  M3 --> P1
+  M4 --> P1
+  M5 --> P1
+  M6 --> P1
+  M7 --> P1
+
+  P1 --> P2
+  P2 --> P3
+  P3 --> P4
+
+  P4 --> Q{"是否达到验收阈值"}
+  Q -->|"通过"| S["提交比赛交付物"]
+  Q -->|"未通过"| F["分析失败样例并修正抽取 / 冲突 / 召回策略"]
+  F --> R2
+

@@ -1,0 +1,67 @@
+flowchart LR
+  subgraph S1["用户与飞书入口"]
+    U1["飞书群聊"]
+    U2["飞书文档"]
+    U3["OpenClaw / CLI"]
+    U4["H5 记忆管理台"]
+  end
+
+  subgraph S2["采集层"]
+    I1["消息事件 im.message.receive_v1"]
+    I2["文档读取 raw_content"]
+    I3["Bitable 记录变更事件"]
+    I4["CLI remember / recall"]
+  end
+
+  subgraph S3["记忆引擎核心"]
+    E1["Raw Event Store"]
+    E2["Memory Extractor"]
+    E3["Conflict Manager"]
+    E4["Version Manager"]
+    E5["Forgetting Scheduler"]
+    E6["Recall Engine"]
+  end
+
+  subgraph S4["存储与索引"]
+    D1[("SQLite Runtime Store")]
+    D2[("SQLite FTS / Embedding Index")]
+    D3[("Feishu Bitable Memory Ledger")]
+  end
+
+  subgraph S5["输出与证明"]
+    O1["飞书历史决策卡片"]
+    O2["CLI 上下文命令建议"]
+    O3["H5 详情与人工确认"]
+    O4["Benchmark Report"]
+    O5["白皮书与 Demo 脚本"]
+  end
+
+  U1 -->|"/remember / @机器人"| I1
+  U2 -->|"文档链接或订阅事件"| I2
+  U3 -->|"本地命令和 OpenClaw 工具调用"| I4
+  U4 -->|"人工确认和修正"| I3
+
+  I1 -->|"落原始事件"| E1
+  I2 -->|"落文档片段"| E1
+  I3 -->|"同步人工变更"| E1
+  I4 -->|"落 CLI 操作"| E1
+
+  E1 -->|"规则或 LLM 抽取"| E2
+  E2 -->|"候选记忆"| E3
+  E3 -->|"检测旧值与新值冲突"| E4
+  E4 -->|"写 active / superseded 版本"| D1
+  E4 -->|"同步可视化账本"| D3
+  D1 -->|"建立索引"| D2
+  D2 -->|"混合召回"| E6
+  D1 -->|"到期与长期未召回"| E5
+  E5 -->|"遗忘预警"| O1
+
+  E6 -->|"返回证据化答案"| O1
+  E6 -->|"返回命令参数"| O2
+  E6 -->|"返回详情页数据"| O3
+  D1 -->|"批量测试"| O4
+  D3 -->|"评委可见台账"| O4
+  O4 -->|"支撑"| O5
+  O1 -->|"确认 / 重新打开 / 标记过期"| U4
+  O3 -->|"确认后更新"| I3
+

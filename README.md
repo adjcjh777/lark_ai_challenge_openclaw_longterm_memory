@@ -5,3 +5,4 @@
 
 - [飞书 Memory Engine 调研与项目规划](docs/feishu-memory-engine-research-and-plan.md)
 - [Day 1 执行文档](docs/day1-execution-plan.md)
+- [项目原型图 Mermaid 源码](docs/diagrams/README.md)
