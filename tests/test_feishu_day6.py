@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from memory_engine.db import connect, init_db
-from memory_engine.feishu_cards import build_decision_card, build_update_card
+from memory_engine.feishu_cards import build_card_from_text, build_decision_card, build_update_card
 from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import DryRunPublisher
@@ -108,6 +108,8 @@ class FeishuDay6Test(unittest.TestCase):
         self.assertIn("是否被覆盖：否", reply)
         self.assertIn("API_TOKEN=[REDACTED]", reply)
         self.assertNotIn("feishu_abcdefghijklmnopqrstuvwxyz", reply)
+        card = build_card_from_text(reply)
+        self.assertEqual("blue", card["header"]["template"])
 
     def test_ingest_doc_reply_masks_source_and_gives_candidate_actions(self) -> None:
         result = self.handle(f"/ingest_doc {FIXTURE}", "om_d6_ingest")

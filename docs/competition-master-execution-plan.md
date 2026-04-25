@@ -58,7 +58,7 @@ gantt
 
 复赛不再扩大核心叙事，主要增强观感和可信度：
 
-- 飞书卡片更像产品，而不是日志输出。
+- 飞书卡片使用真实 interactive card 作为默认体验，文本 fallback 作为稳定兜底。
 - Bitable 看板更清晰，能展示记忆状态、版本链、评测结果。
 - 增加文档 ingestion、遗忘提醒、OpenClaw/CLI 亮点，但不破坏 P0 稳定性。
 - 准备答辩稿、演示录屏、评委可能追问的技术说明。
@@ -161,7 +161,7 @@ Slash 命令候选决策：
 - 不把“输入 `/` 后弹出候选命令列表”放入 D2。D2 只证明 `im.message.receive_v1 -> 记忆写入/召回 -> Bot 回复` 的后端闭环。
 - 原因：Codex / Claude Code 那种 slash command palette 属于客户端输入辅助；飞书 Bot 收到的是发送后的消息事件，不能通过当前长连接 handler 控制用户正在输入时的候选 UI。
 - D3 先做低成本替代：`/help` 返回可用命令、示例和参数说明。
-- D6/R2 再评估产品化入口：飞书卡片按钮、H5 页面、聊天框加号菜单或消息快捷操作。只有确认飞书开放平台提供可配置的命令入口后，再做接近 command palette 的体验。
+- D6 起将飞书卡片按钮前移为初赛体验增强：真实 interactive card 默认发送，三次明确失败后文本 fallback，timeout 时抑制 fallback；按钮回调先覆盖候选确认、拒绝和查看版本链。H5 页面、聊天框加号菜单或消息快捷操作仍留到复赛评估。
 
 ### D3，2026-04-26：真实飞书 Bot 稳定化与 Demo 口径
 
@@ -248,17 +248,20 @@ P1 加码：
 P0 你的任务：
 
 - 根据 4.29 主题直播信息复核项目范围，更新 `docs/day6-scope-adjustment.md`。
-- 将 Bot 文本回复升级为“历史决策卡片”的结构化文本或飞书卡片 JSON。
+- 将 Bot 文本回复升级为真实飞书 interactive card；文本结构化回复只作为 fallback。
 - 卡片必须包含：结论、理由、状态、版本、来源、是否被覆盖。
+- interactive card 单次发送超时控制在 2 秒内；最多尝试 3 次，三次都明确失败后才调用文本 fallback。
+- 严格避免“双发”：真实 interactive card 成功后不得再发送文本 fallback；timeout 属于发送结果未知，必须抑制文本 fallback；fallback 与 card 复用同一 idempotency key，降低重复消息风险。
 - 检查权限和安全措辞，避免展示敏感 token、secret、完整内部链接。
 - 参考 Hermes `gateway/platforms/feishu.py`，补一份 `docs/day6-hermes-feishu-gateway-notes.md`，只提炼可用机制：@mention gating、消息去重、allowlist、每 chat 串行处理、卡片事件 fallback。
-- 在现有飞书 handler 中只做低风险增强：命令白名单、重复消息提示、卡片失败时回落为纯文本。
+- 在现有飞书 handler 中增强：命令白名单、重复消息提示、interactive card 三次明确失败后回落为纯文本，timeout 时抑制 fallback。
 
 P1 加码：
 
 - 实现低置信候选记忆的人工确认提示。
 - 为矛盾更新生成专门的“旧规则 -> 新规则”卡片。
-- 增加卡片截图或 JSON 源码到文档。
+- 增加卡片截图、JSON 源码和真实 interactive card 发送验证记录到文档。
+- 接入卡片按钮回调：候选确认、候选拒绝、查看版本链；按钮回调失败时仍可手动输入 `/confirm`、`/reject`、`/versions`。
 - 调研并记录飞书是否支持原生 Bot 命令入口或聊天框快捷入口；如果不支持实时 slash 候选，则保留 `/help` + 卡片按钮 + H5/加号菜单作为产品化替代。
 - 增加 memory 内容安全扫描的设计说明，参考 Hermes `tools/memory_tool.py`，先覆盖 prompt injection、secret、不可见字符三类风险。
 
@@ -272,7 +275,8 @@ P1 加码：
 验收标准：
 
 - `docs/day6-scope-adjustment.md` 明确哪些内容进入初赛，哪些延后到复赛。
-- 卡片或结构化回复能支撑 Demo 截图。
+- 真实 interactive card 或结构化文本 fallback 能支撑 Demo 截图。
+- 按钮回调能在测试群完成候选确认、拒绝或查看版本链中的至少一个闭环。
 - `docs/day6-hermes-feishu-gateway-notes.md` 明确哪些 Hermes 机制被吸收、哪些被拒绝。
 
 ### D7，2026-04-30：Benchmark 扩容，抗干扰测试成型
@@ -530,7 +534,7 @@ P1 加码：
 你的任务：
 
 - 根据反馈把复赛任务分成 Must、Should、Could。
-- 选择最多两个产品加分点，建议优先：交互卡片、Bitable 看板、Agent adapter / Hermes-style Memory Provider。
+- 选择最多两个产品加分点；交互卡片已在 D6 前移，R1 建议优先：Bitable 看板、Agent adapter / Hermes-style Memory Provider、卡片视觉打磨。
 - 冻结复赛 Demo 主线，不再换题。
 - 如果初赛评委对 Agent 入口感兴趣，复赛把 `agent_adapters/hermes/` 升级为可运行 provider prototype；否则只保留文档和 CLI skill。
 
@@ -547,10 +551,10 @@ P1 加码：
 
 你的任务：
 
-- 优化飞书卡片或结构化回复。
+- 在 D6 已落地真实 interactive card 与按钮回调的基础上，继续优化视觉密度、按钮文案和失败兜底提示。
 - 增加更清晰的 Bitable 视图。
-- 保留文本 fallback，避免卡片失败影响演示。
-- 如果 D6 确认可行，再实现命令发现入口：机器人菜单、H5 命令面板、聊天框加号入口或消息快捷操作；不追求复刻 Codex/Claude Code 的实时输入候选，除非飞书客户端原生支持。
+- 保留文本 fallback，避免卡片明确失败影响演示；timeout 仍优先抑制 fallback，避免双发。
+- 如果 D6 interactive card 稳定，再实现命令发现入口：机器人菜单、H5 命令面板、聊天框加号入口或消息快捷操作；不追求复刻 Codex/Claude Code 的实时输入候选，除非飞书客户端原生支持。
 - 对照 Hermes Feishu gateway，再补一轮消息安全和体验：allowlist、重复事件提示、卡片事件失败 fallback。
 
 队友任务：
@@ -730,11 +734,11 @@ P1 加码：
 
 ## 9. 当前下一步
 
-从当前仓库状态看，Day 5 文档 ingestion 已完成或提前完成，下一步应直接执行 D6：
+从当前仓库状态看，Day 5 文档 ingestion 已完成或提前完成，D6 已前移真实 interactive card 与按钮回调，下一步应继续推进 D7：
 
-1. 主题直播后范围校准，创建 `docs/day6-scope-adjustment.md`。
-2. 卡片化历史决策和矛盾更新回复。
-3. 参考 Hermes Feishu gateway，创建 `docs/day6-hermes-feishu-gateway-notes.md`。
-4. 设计 memory 内容安全扫描，先覆盖 prompt injection、secret、不可见字符。
+1. 扩容 Benchmark 抗干扰数据集。
+2. 将真实 interactive card 截图和按钮回调录屏纳入 Demo 证据。
+3. 在 D6 安全表达基础上评估是否将 prompt injection、secret、不可见字符扫描前移到写入层。
+4. 直播后再复核 D6 scope，不基于尚未发生的直播预设结论。
 
-如果真实飞书卡片能力或主题直播信息暂时不可用，D6 仍然可以推进结构化文本卡片、Hermes 参考笔记、安全扫描设计和白皮书补强，不阻塞后续 D7 Benchmark 工作。
+如果主题直播信息暂时不可用，D7 Benchmark 不被阻塞；D6 文档中的直播后复核项保留为待补。

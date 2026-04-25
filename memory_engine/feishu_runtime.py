@@ -8,6 +8,7 @@ from typing import Any
 
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
+from .feishu_cards import build_card_from_text
 from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
 from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
 from .feishu_messages import (
@@ -130,13 +131,13 @@ def handle_message_event(
 
     if repo.has_source_event(SOURCE_TYPE, event.message_id):
         reply = format_duplicate_reply()
-        publish_result = publisher.publish(event, reply)
+        publish_result = publisher.publish(event, reply, build_card_from_text(reply))
         return {"ok": publish_result.get("ok", False), "duplicate": True, "publish": publish_result}
 
     if event.ignore_reason is not None:
         _record_handled_event(repo, scope, event, f"[{event.ignore_reason}]")
         reply = format_ignored_reply(event.ignore_reason)
-        publish_result = publisher.publish(event, reply)
+        publish_result = publisher.publish(event, reply, build_card_from_text(reply))
         return {
             "ok": publish_result.get("ok", False),
             "ignored": True,
@@ -150,7 +151,7 @@ def handle_message_event(
     if command is None:
         _record_handled_event(repo, scope, event, event.text)
         reply = format_unknown_command_reply(None)
-        publish_result = publisher.publish(event, reply)
+        publish_result = publisher.publish(event, reply, build_card_from_text(reply))
         return {
             "ok": publish_result.get("ok", False),
             "ignored": True,
@@ -279,7 +280,7 @@ def handle_message_event(
         )
         reply = format_unknown_command_reply(command.raw_name)
 
-    publish_result = publisher.publish(event, reply)
+    publish_result = publisher.publish(event, reply, build_card_from_text(reply))
     return {
         "ok": publish_result.get("ok", False),
         "message_id": event.message_id,
@@ -312,7 +313,7 @@ def _event_subscribe_command(config: FeishuConfig) -> list[str]:
             "--as",
             config.lark_as,
             "--event-types",
-            "im.message.receive_v1",
+            "im.message.receive_v1,card.action.trigger",
             "--quiet",
         ]
     )

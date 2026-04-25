@@ -13,12 +13,11 @@
 - Memory 定义与架构白皮书：突出“企业记忆 = 当前有效结论 + 版本状态 + 来源证据 + 覆盖关系”。
 - 可运行 Demo：继续使用飞书 Bot 的 `/remember`、`/recall`、`/versions`、`/ingest_doc`、`/confirm`、`/reject`。
 - 自证 Benchmark Report：继续保持 Day 1 和 Day 5 的可复现 benchmark，D7 再扩容抗干扰数据集。
-- 飞书交互表达：D6 初赛范围采用结构化文本卡片，字段必须包含结论、理由、状态、版本、来源、是否被覆盖。
+- 飞书交互表达：D6 初赛范围前移为真实 interactive card，字段必须包含结论、理由、状态、版本、来源、是否被覆盖；结构化文本只作为 fallback。
 - 安全边界：回复中不展示敏感 token、secret、完整内部链接；文档 token 和消息 ID 只展示截断形态。
 
 推迟到复赛或直播后再决定的内容：
 
-- 真实飞书交互卡片按钮回调的完整闭环。
 - H5 命令面板、聊天框加号菜单、消息快捷操作等产品化入口。
 - 流式卡片、复杂图表卡片、批量候选确认 UI。
 - 企业级 allowlist 管理台和细粒度管理员配置。
@@ -34,6 +33,18 @@
   - `版本链卡片`
   - `候选确认卡片`
 - 卡片字段包含：结论、理由、状态、版本、来源、是否被覆盖。
+- 已将真实飞书 interactive card 发送设为默认路径：
+  - `FEISHU_CARD_MODE=interactive` 默认开启。
+  - interactive card 单次尝试超时 2 秒，最多尝试 3 次。
+  - 三次 card 尝试都明确失败后才发送文本 fallback。
+  - timeout 属于发送结果未知，会抑制文本 fallback，避免出现 card 实际已到达但又补发文本的双发风险。
+  - card 和 fallback 使用同一 idempotency key，严格降低“双发”风险；只要 card 成功，绝不发送 fallback。
+  - card action 的超长 token 会 hash 成短 idempotency key，避免飞书字段校验失败。
+- 已接入卡片按钮回调：
+  - `/confirm <candidate_id>`
+  - `/reject <candidate_id>`
+  - `/versions <memory_id>`
+  - 回调事件订阅 `card.action.trigger`，内部转成既有命令处理。
 - `unknown_command` 回复展示命令白名单，降低非预期命令误处理风险。
 - 重复消息仍会返回 duplicate 提示，不重复写入。
 - 召回和记忆回复加入敏感信息遮挡：
@@ -44,7 +55,7 @@
   - 文档 token、本地路径和消息 ID 只展示截断形态。
   - 历史版本内容会遮挡 secret/token/内部 URL。
   - 候选确认结果不暴露完整来源标识。
-- 当前生产路径仍默认发送纯文本结构化卡片；这是 D6 的低风险选择。飞书 JSON card 已提供源码样例，后续若启用真实 interactive card，失败时应继续回落到当前纯文本。
+- 当前生产路径默认发送真实 interactive card；文本结构化卡片作为三次明确失败后的兜底路径，不再作为默认体验。
 
 ## P1 加码完成情况
 
@@ -53,6 +64,7 @@
 - `/versions` 回复升级为版本链卡片，逐版本展示 active/superseded/rejected 与是否被覆盖。
 - `/confirm` / `/reject` 回复升级为候选确认卡片，便于 Demo 截图说明人工确认闭环。
 - 新增 `memory_engine/feishu_cards.py`，可生成历史决策卡片和矛盾更新卡片 JSON。
+- `memory_engine/feishu_cards.py` 现在也负责从结构化文本生成真实飞书 card payload，并附加候选确认、拒绝、查看版本链按钮。
 - 已记录命令入口调研结论：后端 Bot 不能实现输入中 slash 候选；初赛保留 `/help` + 结构化卡片，复赛再评估卡片按钮、H5、加号菜单或消息快捷操作。
 - 已记录 memory 内容安全扫描设计，参考 Hermes `tools/memory_tool.py` 的 prompt injection、secret/exfil、不可见字符三类风险。
 
@@ -63,7 +75,7 @@
 可提前落地的替代方案：
 
 - `/help`：作为最低风险命令发现入口，已经可用。
-- 卡片按钮：适合候选确认、拒绝、查看版本链；需要接入 interactive card action callback，放到复赛或直播后确认。
+- 卡片按钮：已前移到 D6，覆盖候选确认、拒绝、查看版本链。后续再评估更复杂的菜单和 H5 入口。
 - H5 命令面板：适合批量管理 memory、查看证据链；初赛非必须。
 - 聊天框加号菜单或消息快捷操作：可能成为产品化入口，但需要在开放平台后台确认可配置项和审核要求。
 
@@ -71,7 +83,7 @@
 
 - 飞书卡片概述：https://open.feishu.cn/document/uAjLw4CM/ukzMukzMukzM/feishu-cards/feishu-card-overview
 - 飞书客户端 H5 能力：https://open.feishu.cn/document/client-docs/h5/
-- 飞书 CLI 消息发送能力：`lark-cli im +messages-send --help` 显示 `--msg-type` 支持 `interactive`，但本项目 D6 不默认启用真实卡片发送。
+- 飞书 CLI 消息发送能力：`lark-cli im +messages-send --help` 显示 `--msg-type` 支持 `interactive`；本项目 D6 已默认启用真实卡片发送。
 
 ## Memory 内容安全扫描设计
 
@@ -316,4 +328,4 @@ memory_id：mem_demo_day6
 - 是否有新的初赛硬性要求。
 - 评分是否更偏 Demo、白皮书、Benchmark 或飞书生态集成。
 - 卡片标题和字段名是否需要改成更贴近评委语言。
-- 是否值得把真实 interactive card 作为初赛展示项，而不是只保留 JSON 样例。
+- 是否需要在真实 interactive card 基础上继续增加 H5、菜单入口或更复杂的卡片视觉。
