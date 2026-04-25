@@ -55,6 +55,7 @@ Day 2 最小 Bot 权限：
 MEMORY_DB_PATH=data/memory.sqlite
 MEMORY_DEFAULT_SCOPE=project:feishu_ai_challenge
 FEISHU_BOT_MODE=reply
+FEISHU_LOG_DIR=logs/feishu-bot
 ```
 
 如果使用指定 lark-cli profile，可额外设置：
@@ -75,6 +76,8 @@ python3 -m memory_engine feishu replay tests/fixtures/feishu_text_recall_event.j
 ```bash
 scripts/start_feishu_bot.sh
 ```
+
+监听日志会写入 `logs/feishu-bot/feishu-listen-<timestamp>.ndjson`，每条记录都包含 `ts` 时间戳，便于排查真实群消息、卡片按钮回调和发送 fallback。
 
 调试时不真实回复飞书：
 
@@ -115,16 +118,66 @@ python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay te
 python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_text_health_event.json
 ```
 
+## Day 4 Bitable 记忆台账
+
+Day 4 增加 SQLite 到飞书多维表格的最小同步脚本。默认是本地 dry-run，不需要 Bitable 权限，也不会影响本地 `remember` / `recall` 核心能力。
+
+查看表结构：
+
+```bash
+python3 -m memory_engine bitable schema
+```
+
+预览同步内容和将要执行的 `lark-cli` 命令：
+
+```bash
+python3 -m memory_engine bitable sync --benchmark-cases benchmarks/day1_cases.json
+```
+
+生成 Day 4 评委看板样例数据：
+
+```bash
+python3 scripts/seed_day4_demo_data.py --scope project:day4_demo
+python3 -m memory_engine bitable sync --scope project:day4_demo --benchmark-cases benchmarks/day1_cases.json
+```
+
+有 Base 权限后写入真实 Bitable：
+
+```bash
+export BITABLE_BASE_TOKEN="app_xxx"
+export BITABLE_LEDGER_TABLE="Memory Ledger"
+export BITABLE_VERSIONS_TABLE="Memory Versions"
+export BITABLE_BENCHMARK_TABLE="Benchmark Results"
+export LARK_CLI_PROFILE="feishu-ai-challenge"
+export LARK_CLI_AS="user"
+
+python3 -m memory_engine bitable sync --write --benchmark-cases benchmarks/day1_cases.json
+```
+
+建表命令预览：
+
+```bash
+python3 -m memory_engine bitable setup-commands --base-token "$BITABLE_BASE_TOKEN" --profile feishu-ai-challenge --as-identity user
+```
+
+视图建议见 [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)。
+
 ## 文档
 
 - [比赛总控执行文档](docs/competition-master-execution-plan.md)
 - [飞书 Memory Engine 调研与项目规划](docs/feishu-memory-engine-research-and-plan.md)
+- [Hermes Agent 参考笔记](docs/hermes-agent-reference-notes.md)
 - [Day 1 执行文档](docs/day1-execution-plan.md)
 - [Day 1 Handoff](docs/day1-handoff.md)
 - [Day 2 实现计划](docs/day2-implementation-plan.md)
 - [Day 2 Handoff](docs/day2-handoff.md)
+- [Day 3 实现计划](docs/day3-implementation-plan.md)
 - [Day 3 Handoff](docs/day3-handoff.md)
+- [Day 4 实现计划](docs/day4-implementation-plan.md)
+- [Day 4 Handoff](docs/day4-handoff.md)
 - [Day 3 安全风险决策](docs/day3-security-risk-decision.md)
+- [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)
+- [Day 4 Bitable Demo 讲解词](docs/day4-bitable-demo-talk-track.md)
 - [真实飞书 Demo Runbook](docs/demo-runbook.md)
 - [队友 lark-cli 配置与 Day 2 测试指南](docs/teammate-lark-cli-setup.md)
 - [项目原型图 Mermaid 源码](docs/diagrams/README.md)

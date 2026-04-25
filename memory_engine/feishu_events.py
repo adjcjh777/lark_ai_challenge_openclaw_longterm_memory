@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -56,6 +57,8 @@ def text_event_from_payload(payload: dict[str, Any]) -> FeishuTextEvent | None:
 def message_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEvent | None:
     payload = _unwrap_payload(payload)
     event_type = _event_type(payload)
+    if event_type == "card.action.trigger":
+        return _card_action_event_from_payload(payload)
     if event_type and event_type != "im.message.receive_v1":
         return None
 
@@ -97,6 +100,54 @@ def message_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEvent | 
         raw=payload,
         ignore_reason=ignore_reason,
     )
+
+
+def _card_action_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEvent | None:
+    event = payload.get("event") if isinstance(payload.get("event"), dict) else payload
+    action = event.get("action") if isinstance(event.get("action"), dict) else {}
+    value = action.get("value") if isinstance(action.get("value"), dict) else {}
+    command = _command_from_card_value(value)
+    if not command:
+        return None
+
+    context = event.get("context") if isinstance(event.get("context"), dict) else {}
+    operator = event.get("operator") if isinstance(event.get("operator"), dict) else {}
+    chat_id = _string(
+        context.get("open_chat_id")
+        or context.get("chat_id")
+        or event.get("open_chat_id")
+        or event.get("chat_id")
+    )
+    if not chat_id:
+        return None
+
+    token = _string(event.get("token") or action.get("action_id") or action.get("name"))
+    if not token:
+        token = hashlib.sha1(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
+    sender_id = _string(operator.get("open_id") or operator.get("operator_id") or event.get("operator_id"))
+    return FeishuMessageEvent(
+        message_id=f"card_action_{token}",
+        chat_id=chat_id,
+        chat_type="group",
+        sender_id=sender_id or "card_operator",
+        sender_type="user",
+        message_type="card_action",
+        text=command,
+        create_time=_int(event.get("create_time") or payload.get("create_time")),
+        raw=payload,
+        ignore_reason=None,
+    )
+
+
+def _command_from_card_value(value: dict[str, Any]) -> str:
+    action = _string(value.get("memory_engine_action") or value.get("command") or value.get("action"))
+    if action in {"confirm", "reject"}:
+        candidate_id = _string(value.get("candidate_id") or value.get("memory_id"))
+        return f"/{action} {candidate_id}" if candidate_id else ""
+    if action == "versions":
+        memory_id = _string(value.get("memory_id"))
+        return f"/versions {memory_id}" if memory_id else ""
+    return ""
 
 
 def _unwrap_payload(payload: dict[str, Any]) -> dict[str, Any]:

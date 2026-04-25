@@ -1,0 +1,56 @@
+[
+  {
+    "case_id": "day5_architecture_doc_001",
+    "document": "docs/demo-docs/day5-architecture-decisions.md",
+    "expected_candidate_min": 5,
+    "limit": 12,
+    "expected_quotes": [
+      "生产部署必须加 --canary --region cn-shanghai",
+      "后端框架最终采用 FastAPI",
+      "数据存储采用 SQLite + Bitable 双层结构",
+      "Benchmark 报告必须展示 Recall@1",
+      "飞书 Bot 权限未确认时必须使用 replay 和 dry-run"
+    ],
+    "forbidden_quotes": [
+      "会议室空调温度偏低",
+      "投影仪第一次没有自动连接",
+      "录屏前需要关闭无关通知",
+      "白板上画了三种颜色的箭头",
+      "文档标题先保持现状",
+      "复盘材料附上关键截图"
+    ],
+    "recalls": [
+      {
+        "confirm_quote": "生产部署必须加 --canary --region cn-shanghai",
+        "query": "生产部署参数",
+        "expected": "--canary --region cn-shanghai"
+      }
+    ]
+  },
+  {
+    "case_id": "day5_weekly_meeting_doc_001",
+    "document": "docs/demo-docs/day5-weekly-meeting-notes.md",
+    "expected_candidate_min": 5,
+    "limit": 12,
+    "expected_quotes": [
+      "评测报告周日 20:00 前完成",
+      "OpenClaw 演示由队友晚上补位",
+      "周报优先发飞书文档",
+      "真实 Bot 权限未就绪时，统一改用本地 replay",
+      "Day6 历史决策卡片必须展示结论"
+    ],
+    "forbidden_quotes": [
+      "本周站会人数比上周多一人",
+      "麦克风输入音量偏低",
+      "桌面壁纸需要保持简洁",
+      "这句话是干扰项"
+    ],
+    "recalls": [
+      {
+        "confirm_quote": "评测报告周日 20:00 前完成",
+        "query": "评测报告截止时间",
+        "expected": "周日 20:00"
+      }
+    ]
+  }
+]
