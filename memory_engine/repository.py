@@ -494,7 +494,17 @@ class MemoryRepository:
                 existing["id"],
             ),
         )
-        return self._result("superseded", existing["id"], new_version_id, extracted, new_version_no, superseded_version_id=old_version_id)
+        return self._result(
+            "superseded",
+            existing["id"],
+            new_version_id,
+            extracted,
+            new_version_no,
+            superseded_version_id=old_version_id,
+            superseded_value=existing["current_value"],
+            superseded_status="superseded",
+            superseded_version=new_version_no - 1,
+        )
 
     def _insert_version(
         self,

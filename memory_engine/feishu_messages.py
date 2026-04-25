@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
+
+
+SUPPORTED_COMMANDS = frozenset(
+    {"remember", "recall", "versions", "help", "health", "ingest_doc", "confirm", "reject"}
+)
 
 
 @dataclass(frozen=True)
@@ -20,7 +26,7 @@ def parse_command(text: str) -> FeishuCommand | None:
     head, _, tail = stripped.partition(" ")
     name = head[1:].strip().lower()
     argument = tail.strip()
-    if name not in {"remember", "recall", "versions", "help", "health", "ingest_doc", "confirm", "reject"}:
+    if name not in SUPPORTED_COMMANDS:
         return FeishuCommand(name="unknown", argument=argument, raw_name=name or head)
     if name in {"help", "health"}:
         return FeishuCommand(name=name, argument=argument, raw_name=name)
@@ -34,15 +40,24 @@ def format_remember_reply(result: dict[str, Any]) -> str:
     memory = result.get("memory") or {}
     subject = memory.get("subject")
     memory_type = memory.get("type")
+    reason = _reason(memory.get("reason"))
     if action == "superseded":
+        old_rule = _redact_sensitive_text(result.get("superseded_value") or "-")
+        new_rule = _redact_sensitive_text(memory.get("current_value") or "-")
         return _reply(
-            "已更新这条记忆，后续召回会优先使用新版本。",
+            "矛盾更新卡片：旧规则已被新规则覆盖。",
             [
                 "类型：记忆更新",
+                "卡片：矛盾更新卡片",
+                f"结论：{new_rule}",
+                f"理由：{reason}",
                 f"主题：{subject}",
                 "状态：active",
                 f"版本：v{result.get('version')}",
                 "来源：当前飞书消息",
+                "是否被覆盖：否（这是当前有效版本）",
+                f"旧规则 -> 新规则：{old_rule} -> {new_rule}",
+                f"旧版本状态：{result.get('superseded_status')}",
                 f"记忆类型：{memory_type}",
                 "处理结果：旧版本已标记为 superseded，新版本已生效。",
                 f"memory_id：{result.get('memory_id')}",
@@ -50,13 +65,17 @@ def format_remember_reply(result: dict[str, Any]) -> str:
         )
     if action == "needs_manual_review":
         return _reply(
-            "我发现同一主题出现了不同说法，需要你明确是否覆盖旧记忆。",
+            "待确认记忆卡片：同一主题出现不同说法，需要人工确认。",
             [
                 "类型：待确认记忆",
+                "卡片：人工确认提示",
+                f"结论：{_redact_sensitive_text(memory.get('current_value') or '-')}",
+                f"理由：{reason}",
                 f"主题：{subject}",
                 "状态：needs_manual_review",
                 f"版本：v{result.get('version')}",
                 "来源：当前飞书消息",
+                "是否被覆盖：否（尚未确认覆盖）",
                 f"记忆类型：{memory_type}",
                 "处理结果：检测到同主题不同内容，但没有明确覆盖意图。",
                 "下一步：请用“不对/改成/以后统一”等表达确认覆盖。",
@@ -68,13 +87,17 @@ def format_remember_reply(result: dict[str, Any]) -> str:
     else:
         prefix = "已记住"
     return _reply(
-        "已保存为当前有效记忆，后续可以直接召回。",
+        "记忆确认卡片：已保存为当前有效企业记忆。",
         [
             f"类型：{prefix}",
+            "卡片：记忆确认卡片",
+            f"结论：{_redact_sensitive_text(memory.get('current_value') or '-')}",
+            f"理由：{reason}",
             f"主题：{subject}",
             "状态：active",
             f"版本：v{result.get('version')}",
             "来源：当前飞书消息",
+            "是否被覆盖：否",
             f"记忆类型：{memory_type}",
             f"memory_id：{result.get('memory_id')}",
         ],
@@ -84,33 +107,41 @@ def format_remember_reply(result: dict[str, Any]) -> str:
 def format_recall_reply(result: dict[str, Any] | None) -> str:
     if result is None:
         return _reply(
-            "暂时没找到当前有效记忆。",
+            "历史决策卡片：暂时没找到当前有效记忆。",
             [
                 "类型：记忆召回",
+                "卡片：历史决策卡片",
+                "结论：未命中",
+                "理由：当前 scope 内没有匹配的 active 记忆",
                 "主题：未命中",
                 "状态：not_found",
                 "版本：-",
                 "来源：Memory Engine",
+                "是否被覆盖：-",
                 "处理结果：未找到相关 active 记忆。",
                 "下一步：可以用 /remember 先写入一条。",
             ],
         )
     source = result.get("source") or {}
-    source_label = f"{source.get('source_type') or 'unknown'} / {source.get('source_id') or '-'}"
-    if source.get("document_title"):
-        source_label = f"文档《{source.get('document_title')}》/ {source.get('document_token') or source.get('source_id') or '-'}"
+    source_label = _source_label(source)
+    answer = _redact_sensitive_text(result.get("answer") or "-")
+    quote = _redact_sensitive_text(source.get("quote") or "-")
     return _reply(
-        f"当前有效结论：{result.get('answer')}",
+        f"历史决策卡片：当前有效结论是 {answer}",
         [
             "类型：记忆召回",
+            "卡片：历史决策卡片",
+            f"结论：{answer}",
+            "理由：按主题匹配 active 记忆，并返回最新有效版本",
             f"主题：{result.get('subject')}",
             f"状态：{result.get('status')}",
             f"版本：v{result.get('version')}",
             f"来源：{source_label}",
+            "是否被覆盖：否（当前 active 版本）",
             f"记忆类型：{result.get('type')}",
-            f"当前有效规则：{result.get('answer')}",
+            f"当前有效规则：{answer}",
             f"memory_id：{result.get('memory_id')}",
-            f"证据：{source.get('quote')}",
+            f"证据：{quote}",
         ],
     )
 
@@ -156,8 +187,17 @@ def format_ingest_doc_reply(result: dict[str, Any]) -> str:
     ]
     for candidate in candidates[:8]:
         memory = candidate.get("memory") or {}
-        lines.append(f"{candidate.get('memory_id')} [{candidate.get('status')}] {memory.get('subject')}：{candidate.get('quote') or memory.get('current_value')}")
+        confidence = float(memory.get("confidence") or 0)
+        review_hint = "，需人工确认" if confidence < 0.7 else ""
+        candidate_text = _redact_sensitive_text(candidate.get("quote") or memory.get("current_value") or "")
+        lines.append(
+            f"{candidate.get('memory_id')} [{candidate.get('status')}] "
+            f"{memory.get('subject')}：{candidate_text}（confidence={confidence:.2f}{review_hint}）"
+        )
     lines.append("下一步：用 /confirm <candidate_id> 激活，或 /reject <candidate_id> 拒绝。")
+    low_confidence_count = sum(1 for candidate in candidates if float((candidate.get("memory") or {}).get("confidence") or 0) < 0.7)
+    if low_confidence_count:
+        lines.append(f"人工确认提示：{low_confidence_count} 条候选置信度低于 0.70，Demo 时建议先确认再召回。")
     return _reply("已从文档抽取候选记忆，等待人工确认。", lines)
 
 
@@ -293,7 +333,8 @@ def format_unknown_command_reply(raw_name: str | None) -> str:
             "状态：unknown_command",
             "版本：-",
             "来源：当前飞书消息",
-            "处理结果：暂不支持这个命令。",
+            f"命令白名单：{', '.join(f'/{name}' for name in sorted(SUPPORTED_COMMANDS))}",
+            "处理结果：暂不支持这个命令，已按白名单拦截。",
             "下一步：发送 /help 查看可用命令和 Demo 推荐输入。",
         ],
     )
@@ -301,3 +342,43 @@ def format_unknown_command_reply(raw_name: str | None) -> str:
 
 def _reply(headline: str, fields: list[str]) -> str:
     return "\n".join([headline, "", *fields])
+
+
+def _reason(value: Any) -> str:
+    text = str(value or "").strip()
+    return text or "来自当前指令和证据链"
+
+
+def _source_label(source: dict[str, Any]) -> str:
+    source_type = source.get("source_type") or "unknown"
+    if source.get("document_title"):
+        token = source.get("document_token") or source.get("source_id") or "-"
+        return f"文档《{source.get('document_title')}》/ {_mask_identifier(str(token))}"
+    source_id = source.get("source_id") or "-"
+    return f"{source_type} / {_mask_identifier(str(source_id))}"
+
+
+def _mask_identifier(value: str) -> str:
+    value = value.strip()
+    if not value or value == "-":
+        return "-"
+    if "/" in value:
+        value = value.rsplit("/", 1)[-1] or value
+    if len(value) <= 10:
+        return value
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _redact_sensitive_text(value: str) -> str:
+    text = str(value)
+    text = _SECRET_ASSIGNMENT_RE.sub(r"\1=[REDACTED]", text)
+    text = _TOKEN_LIKE_RE.sub("[REDACTED_TOKEN]", text)
+    text = _INTERNAL_URL_RE.sub("[REDACTED_URL]", text)
+    return text
+
+
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API_KEY)[A-Z0-9_]*)\s*=\s*[^\s，。；;]+"
+)
+_TOKEN_LIKE_RE = re.compile(r"\b(?:lark|feishu|sk|pat|ghp)_[A-Za-z0-9_=-]{12,}\b")
+_INTERNAL_URL_RE = re.compile(r"https?://(?:[^\s/]+\.)?(?:internal|corp|bytedance)\.[^\s，。；;]+")
