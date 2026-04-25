@@ -160,6 +160,7 @@ python3 -m memory_engine bitable setup-commands --base-token "$BITABLE_BASE_TOKE
 - [Day 1 Handoff](docs/day1-handoff.md)
 - [Day 2 实现计划](docs/day2-implementation-plan.md)
 - [Day 2 Handoff](docs/day2-handoff.md)
+- [Day 3 实现计划](docs/day3-implementation-plan.md)
 - [Day 3 Handoff](docs/day3-handoff.md)
 - [Day 4 实现计划](docs/day4-implementation-plan.md)
 - [Day 4 Handoff](docs/day4-handoff.md)
