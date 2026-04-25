@@ -321,9 +321,9 @@ class MemoryRepository:
         if row is None:
             return None
         if row["status"] == "active":
-            return {"action": "already_active", "memory_id": memory_id, "status": "active"}
+            return self._candidate_action_result("already_active", row)
         if row["status"] != "candidate":
-            return {"action": "not_confirmable", "memory_id": memory_id, "status": row["status"]}
+            return self._candidate_action_result("not_confirmable", row)
 
         ts = now_ms()
         with self.conn:
@@ -340,14 +340,14 @@ class MemoryRepository:
                 "UPDATE memory_versions SET status = 'active' WHERE id = ?",
                 (row["active_version_id"],),
             )
-        return {"action": "confirmed", "memory_id": memory_id, "status": "active"}
+        return self._candidate_action_result("confirmed", self._memory_by_id(memory_id))
 
     def reject_candidate(self, memory_id: str) -> dict[str, Any] | None:
         row = self.conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
         if row is None:
             return None
         if row["status"] != "candidate":
-            return {"action": "not_rejectable", "memory_id": memory_id, "status": row["status"]}
+            return self._candidate_action_result("not_rejectable", row)
 
         ts = now_ms()
         with self.conn:
@@ -364,7 +364,7 @@ class MemoryRepository:
                 "UPDATE memory_versions SET status = 'rejected' WHERE id = ?",
                 (row["active_version_id"],),
             )
-        return {"action": "rejected", "memory_id": memory_id, "status": "rejected"}
+        return self._candidate_action_result("rejected", self._memory_by_id(memory_id))
 
     def add_noise_event(self, scope: str, content: str, *, source_type: str = "benchmark_noise") -> None:
         parsed_scope = parse_scope(scope)
@@ -403,6 +403,22 @@ class MemoryRepository:
             """,
             (scope_type, scope_id, memory_type, normalized_subject),
         ).fetchone()
+
+    def _memory_by_id(self, memory_id: str) -> sqlite3.Row:
+        row = self.conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"memory not found after update: {memory_id}")
+        return row
+
+    def _candidate_action_result(self, action: str, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "action": action,
+            "memory_id": row["id"],
+            "status": row["status"],
+            "subject": row["subject"],
+            "current_value": row["current_value"],
+            "active_version_id": row["active_version_id"],
+        }
 
     def _insert_new_memory(
         self,

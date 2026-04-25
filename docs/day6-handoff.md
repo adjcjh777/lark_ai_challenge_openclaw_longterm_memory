@@ -34,8 +34,10 @@ P1：
   - 记忆确认、召回、矛盾更新、待确认记忆统一输出卡片字段。
   - 召回回复输出 `卡片：历史决策卡片`。
   - 矛盾更新回复输出 `卡片：矛盾更新卡片` 和 `旧规则 -> 新规则`。
-  - ingestion 候选展示 confidence，低于 `0.70` 时提示人工确认。
-  - 对 secret/token/内部 URL 做回复层遮挡。
+  - `/versions` 回复输出 `卡片：版本链卡片`，逐版本展示是否被覆盖。
+  - ingestion 候选展示 confidence，低于 `0.70` 时提示人工确认，并给出 `/confirm <candidate_id>` / `/reject <candidate_id>` 建议动作。
+  - `/confirm` / `/reject` 回复输出 `卡片：候选确认卡片`。
+  - 对 secret/token/内部 URL 做回复层遮挡；文档 token、本地路径和消息 ID 在展示层只保留截断形态。
 - 扩展 `memory_engine/repository.py`：
   - supersede 结果返回旧规则内容、旧版本号和旧版本状态，供矛盾更新卡片展示。
 - 新增 `memory_engine/feishu_cards.py`：
@@ -81,8 +83,45 @@ P1：
 
 - `/recall` 返回历史决策卡片字段。
 - 第二次 `/remember` 返回矛盾更新卡片，显示旧规则到新规则。
+- `/versions <memory_id>` 返回版本链卡片，展示 active/superseded 和是否被覆盖。
+- `/ingest_doc` 返回人工确认队列，候选行直接给出确认/拒绝命令。
 - `/unknown` 返回命令白名单。
 - 如果输入包含 `API_TOKEN=...`，回复中会显示为 `[REDACTED]`。
+
+## 真实飞书测试群检查清单
+
+前置：
+
+```bash
+export LARK_CLI_PROFILE=feishu-ai-challenge
+export MEMORY_DB_PATH=data/memory.sqlite
+export MEMORY_DEFAULT_SCOPE=project:feishu_ai_challenge
+export FEISHU_BOT_MODE=reply
+./scripts/start_feishu_bot.sh
+```
+
+群聊测试输入：
+
+```text
+@Feishu Memory Engine bot /health
+@Feishu Memory Engine bot /remember Day6 生产部署必须加 --canary --region cn-shanghai，API_TOKEN=demo_token_placeholder
+@Feishu Memory Engine bot /recall Day6 生产部署参数
+@Feishu Memory Engine bot /remember 不对，Day6 生产部署 region 改成 ap-shanghai
+@Feishu Memory Engine bot /recall Day6 生产部署 region
+@Feishu Memory Engine bot /versions <上一步回复里的 memory_id>
+@Feishu Memory Engine bot /ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md
+@Feishu Memory Engine bot /confirm <候选回复里的 candidate_id>
+@Feishu Memory Engine bot /unknown 生产部署
+```
+
+截图验收点：
+
+- `/recall`：出现 `卡片：历史决策卡片`，字段包含结论、理由、状态、版本、来源、是否被覆盖。
+- 矛盾更新：出现 `卡片：矛盾更新卡片` 和 `旧规则 -> 新规则`。
+- `/versions`：出现 `卡片：版本链卡片`，旧版本显示 `是否被覆盖：是`。
+- `/ingest_doc`：出现 `卡片：人工确认队列`，候选行包含 `/confirm` 和 `/reject`。
+- 安全遮挡：`API_TOKEN=...` 在回复中显示为 `API_TOKEN=[REDACTED]`，不出现完整 token。
+- 未知命令：出现 `命令白名单`。
 
 ## 命令入口结论
 
@@ -114,7 +153,25 @@ python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.js
 
 全量单测：
 
-- `17 tests OK`
+- `20 tests OK`
+
+Day6 专项：
+
+- `python3 -m unittest discover -s tests -p 'test_feishu_day6.py'`：`7 tests OK`
+
+真实飞书测试群：
+
+- 已启动 `./scripts/start_feishu_bot.sh`，使用 `reply` 模式监听测试群 @Bot 消息。
+- 已在测试群发送并收到 Bot 回复：
+  - `/health`：返回健康检查。
+  - `/remember ... API_TOKEN=...`：返回待确认记忆卡片，token 被遮挡为 `[REDACTED]`。
+  - `/recall ...`：返回历史决策卡片。
+  - 覆盖更新 `/remember 不对...改成...`：返回矛盾更新卡片，包含 `旧规则 -> 新规则`。
+  - `/versions <memory_id>`：返回版本链卡片，superseded 版本显示 `是否被覆盖：是`。
+  - `/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md`：返回人工确认队列，候选行包含 `/confirm` 和 `/reject` 建议动作。
+  - `/confirm <candidate_id>`：返回候选确认卡片。
+  - `/unknown ...`：返回命令白名单。
+- 真实 `chat_id`、Bot mention `open_id`、消息 ID 不写入仓库；本节只记录验证结论。
 
 Day 1 benchmark：
 
@@ -136,7 +193,7 @@ Day 5 ingestion benchmark：
 ## 队友今晚任务
 
 1. 从评委视角检查卡片字段：是否一眼看出“这是企业记忆，不是聊天摘要”。
-2. 在飞书测试群跑一遍 Demo 推荐输入，并截取 `/recall` 和矛盾更新卡片。
+2. 基于已跑通的飞书测试群消息截取 `/recall`、矛盾更新、版本链、人工确认队列四张图。
 3. 检查 `docs/day6-scope-adjustment.md` 的初赛/复赛边界是否过宽。
 4. 如果直播后有新要求，在本 handoff 后追加“直播后复核”小节。
 
@@ -145,4 +202,4 @@ Day 5 ingestion benchmark：
 - 4 月 29 日主题直播尚未发生，直播要求和评分偏好未复核。
 - 真实飞书 interactive card 未启用；D6 只提供 JSON 源码样例和结构化文本 fallback。
 - 内容安全扫描还未做写入前强拦截；当前只做回复层遮挡和后续设计说明。
-- 未在真实飞书群聊重新跑 Day6 全链路；本轮先完成本地 replay/unit/benchmark 验证。
+- 真实飞书群聊已完成结构化文本卡片链路验证；尚未验证真实 interactive card callback。

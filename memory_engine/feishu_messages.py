@@ -149,50 +149,72 @@ def format_recall_reply(result: dict[str, Any] | None) -> str:
 def format_versions_reply(memory_id: str, versions: list[dict[str, Any]]) -> str:
     if not versions:
         return _reply(
-            "没有找到这条记忆的版本链。",
+            "版本链卡片：没有找到这条记忆的版本链。",
             [
                 "类型：版本链",
+                "卡片：版本链卡片",
+                "结论：未命中",
+                "理由：当前 memory_id 没有对应版本记录",
                 f"主题：{memory_id}",
                 "状态：not_found",
                 "版本：-",
                 "来源：Memory Engine",
+                "是否被覆盖：-",
                 "处理结果：未找到版本链。",
             ],
         )
     active = next((version for version in versions if version.get("status") == "active"), versions[-1])
+    active_value = _redact_sensitive_text(active.get("value") or "-")
     lines = [
         "类型：版本链",
+        "卡片：版本链卡片",
+        f"结论：{active_value}",
+        "理由：展示同一 memory_id 的 active/superseded/rejected 版本链",
         f"主题：{memory_id}",
         f"状态：{active.get('status')}",
         f"版本：v{active.get('version_no')}",
         "来源：Memory Engine",
+        f"是否被覆盖：{_overwritten_label(active.get('status'))}",
         f"版本数量：{len(versions)}",
+        "历史版本：",
     ]
     for version in versions:
-        lines.append(f"v{version.get('version_no')} [{version.get('status')}] {version.get('value')}")
-    return _reply("这是这条记忆的版本链，active 版本是当前有效结论。", lines)
+        status = version.get("status")
+        value = _redact_sensitive_text(version.get("value") or "-")
+        lines.append(
+            f"v{version.get('version_no')} [{status}] "
+            f"是否被覆盖：{_overwritten_label(status)}｜{value}"
+        )
+    return _reply("版本链卡片：active 版本是当前有效企业记忆。", lines)
 
 
 def format_ingest_doc_reply(result: dict[str, Any]) -> str:
     document = result.get("document") or {}
     candidates = result.get("candidates") or []
+    source_label = f"文档《{document.get('title') or '-'}》/ {_mask_identifier(str(document.get('token') or '-'))}"
     lines = [
         "类型：文档 ingestion",
+        "卡片：人工确认队列",
+        "结论：已抽取候选记忆，等待人工确认",
+        "理由：文档 ingestion 先进入 candidate 状态，确认后才成为 active 企业记忆",
         f"主题：{document.get('title') or '-'}",
         "状态：candidate",
         "版本：Day 5",
-        f"来源：文档《{document.get('title') or '-'}》/ {document.get('token') or '-'}",
+        f"来源：{source_label}",
+        "是否被覆盖：否（candidate 尚未进入 active 版本链）",
         f"候选数量：{result.get('candidate_count', 0)}",
         f"重复数量：{result.get('duplicate_count', 0)}",
+        "候选列表：",
     ]
     for candidate in candidates[:8]:
         memory = candidate.get("memory") or {}
         confidence = float(memory.get("confidence") or 0)
         review_hint = "，需人工确认" if confidence < 0.7 else ""
         candidate_text = _redact_sensitive_text(candidate.get("quote") or memory.get("current_value") or "")
+        candidate_id = candidate.get("memory_id")
         lines.append(
-            f"{candidate.get('memory_id')} [{candidate.get('status')}] "
-            f"{memory.get('subject')}：{candidate_text}（confidence={confidence:.2f}{review_hint}）"
+            f"{candidate_id} [{candidate.get('status')}] {memory.get('subject')}："
+            f"{candidate_text}（confidence={confidence:.2f}{review_hint}；建议动作：/confirm {candidate_id} 或 /reject {candidate_id}）"
         )
     lines.append("下一步：用 /confirm <candidate_id> 激活，或 /reject <candidate_id> 拒绝。")
     low_confidence_count = sum(1 for candidate in candidates if float((candidate.get("memory") or {}).get("confidence") or 0) < 0.7)
@@ -204,23 +226,33 @@ def format_ingest_doc_reply(result: dict[str, Any]) -> str:
 def format_candidate_action_reply(result: dict[str, Any] | None, *, action: str, candidate_id: str) -> str:
     if result is None:
         return _reply(
-            "没有找到这条候选记忆。",
+            f"候选记忆{action}卡片：没有找到这条候选记忆。",
             [
                 f"类型：候选记忆{action}",
+                "卡片：候选确认卡片",
+                "结论：未命中",
+                "理由：candidate_id 不存在",
                 f"主题：{candidate_id}",
                 "状态：not_found",
                 "版本：-",
                 "来源：Memory Engine",
+                "是否被覆盖：-",
             ],
         )
+    value = _redact_sensitive_text(result.get("current_value") or "-")
     return _reply(
-        "候选记忆状态已更新。",
+        f"候选记忆{action}卡片：候选状态已更新。",
         [
             f"类型：候选记忆{action}",
-            f"主题：{result.get('memory_id')}",
+            "卡片：候选确认卡片",
+            f"结论：{value}",
+            f"理由：人工执行 /{_candidate_action_command(action)} 后更新 candidate 状态",
+            f"主题：{result.get('subject') or result.get('memory_id')}",
             f"状态：{result.get('status')}",
             "版本：Day 5",
             "来源：Memory Engine",
+            f"是否被覆盖：{_overwritten_label(result.get('status'))}",
+            f"memory_id：{result.get('memory_id')}",
             f"处理结果：{result.get('action')}",
         ],
     )
@@ -375,6 +407,20 @@ def _redact_sensitive_text(value: str) -> str:
     text = _TOKEN_LIKE_RE.sub("[REDACTED_TOKEN]", text)
     text = _INTERNAL_URL_RE.sub("[REDACTED_URL]", text)
     return text
+
+
+def _overwritten_label(status: Any) -> str:
+    if status == "active":
+        return "否（当前 active 版本）"
+    if status == "candidate":
+        return "否（等待人工确认）"
+    if status in {"superseded", "rejected"}:
+        return "是"
+    return "-"
+
+
+def _candidate_action_command(action: str) -> str:
+    return "confirm" if action == "确认" else "reject"
 
 
 _SECRET_ASSIGNMENT_RE = re.compile(

@@ -31,6 +31,8 @@
   - `历史决策卡片`
   - `矛盾更新卡片`
   - `待确认记忆卡片`
+  - `版本链卡片`
+  - `候选确认卡片`
 - 卡片字段包含：结论、理由、状态、版本、来源、是否被覆盖。
 - `unknown_command` 回复展示命令白名单，降低非预期命令误处理风险。
 - 重复消息仍会返回 duplicate 提示，不重复写入。
@@ -38,12 +40,18 @@
   - `*_TOKEN`、`*_SECRET`、`*_PASSWORD`、`*_CREDENTIAL`、`*_API_KEY`
   - `feishu_`、`lark_`、`sk_`、`pat_`、`ghp_` 等长 token 形态
   - `internal`、`corp`、`bytedance` 域名下的完整 URL
+- ingestion、版本链和候选确认回复也纳入同一展示层安全策略：
+  - 文档 token、本地路径和消息 ID 只展示截断形态。
+  - 历史版本内容会遮挡 secret/token/内部 URL。
+  - 候选确认结果不暴露完整来源标识。
 - 当前生产路径仍默认发送纯文本结构化卡片；这是 D6 的低风险选择。飞书 JSON card 已提供源码样例，后续若启用真实 interactive card，失败时应继续回落到当前纯文本。
 
 ## P1 加码完成情况
 
-- 文档 ingestion 回复增加低置信候选提示：`confidence < 0.70` 的候选会标记“需人工确认”。
+- 文档 ingestion 回复增加低置信候选提示：`confidence < 0.70` 的候选会标记“需人工确认”，并逐条给出 `/confirm <candidate_id>` 和 `/reject <candidate_id>`。
 - 矛盾更新回复展示专门的“旧规则 -> 新规则”字段。
+- `/versions` 回复升级为版本链卡片，逐版本展示 active/superseded/rejected 与是否被覆盖。
+- `/confirm` / `/reject` 回复升级为候选确认卡片，便于 Demo 截图说明人工确认闭环。
 - 新增 `memory_engine/feishu_cards.py`，可生成历史决策卡片和矛盾更新卡片 JSON。
 - 已记录命令入口调研结论：后端 Bot 不能实现输入中 slash 候选；初赛保留 `/help` + 结构化卡片，复赛再评估卡片按钮、H5、加号菜单或消息快捷操作。
 - 已记录 memory 内容安全扫描设计，参考 Hermes `tools/memory_tool.py` 的 prompt injection、secret/exfil、不可见字符三类风险。

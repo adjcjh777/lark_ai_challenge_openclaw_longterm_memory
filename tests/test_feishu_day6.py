@@ -13,6 +13,7 @@ from memory_engine.feishu_runtime import handle_message_event
 
 
 CHAT_ID = "oc_day6"
+FIXTURE = "tests/fixtures/day5_doc_ingestion_fixture.md"
 
 
 def payload(message_id: str, text: str) -> dict:
@@ -93,6 +94,53 @@ class FeishuDay6Test(unittest.TestCase):
         self.assertIn("生产部署必须加 --canary --region cn-shanghai", reply)
         self.assertIn("不对，生产部署 region 改成 ap-shanghai", reply)
         self.assertIn("旧版本状态：superseded", reply)
+
+    def test_versions_reply_is_cardized_and_redacted(self) -> None:
+        self.handle("/remember 生产部署必须加 --canary，API_TOKEN=feishu_abcdefghijklmnopqrstuvwxyz", "om_d6_versions_secret")
+        memory_id = self.conn.execute("SELECT id FROM memories WHERE subject = ?", ("生产部署",)).fetchone()["id"]
+
+        result = self.handle(f"/versions {memory_id}", "om_d6_versions")
+        reply = result["publish"]["text"]
+
+        self.assertIn("卡片：版本链卡片", reply)
+        self.assertIn("结论：", reply)
+        self.assertIn("理由：", reply)
+        self.assertIn("是否被覆盖：否", reply)
+        self.assertIn("API_TOKEN=[REDACTED]", reply)
+        self.assertNotIn("feishu_abcdefghijklmnopqrstuvwxyz", reply)
+
+    def test_ingest_doc_reply_masks_source_and_gives_candidate_actions(self) -> None:
+        result = self.handle(f"/ingest_doc {FIXTURE}", "om_d6_ingest")
+        reply = result["publish"]["text"]
+
+        self.assertIn("卡片：人工确认队列", reply)
+        self.assertIn("结论：已抽取候选记忆，等待人工确认", reply)
+        self.assertIn("是否被覆盖：否", reply)
+        self.assertIn("建议动作：/confirm", reply)
+        self.assertIn("或 /reject", reply)
+        self.assertNotIn(str(Path(FIXTURE).resolve()), reply)
+
+    def test_candidate_action_reply_uses_card_fields(self) -> None:
+        self.handle(f"/ingest_doc {FIXTURE}", "om_d6_candidate_ingest")
+        row = self.conn.execute(
+            """
+            SELECT id
+            FROM memories
+            WHERE status = 'candidate'
+            ORDER BY created_at
+            LIMIT 1
+            """
+        ).fetchone()
+        self.assertIsNotNone(row)
+
+        result = self.handle(f"/confirm {row['id']}", "om_d6_candidate_confirm")
+        reply = result["publish"]["text"]
+
+        self.assertIn("卡片：候选确认卡片", reply)
+        self.assertIn("结论：", reply)
+        self.assertIn("理由：", reply)
+        self.assertIn("状态：active", reply)
+        self.assertIn("是否被覆盖：否", reply)
 
     def test_unknown_command_lists_command_whitelist(self) -> None:
         result = self.handle("/deploy now", "om_d6_unknown")
