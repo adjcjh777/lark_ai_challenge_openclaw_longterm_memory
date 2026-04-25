@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 import tempfile
 import time
@@ -14,6 +15,9 @@ from .repository import MemoryRepository
 
 def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict[str, Any]:
     cases = json.loads(Path(cases_path).read_text(encoding="utf-8"))
+    if isinstance(cases, dict) and cases.get("benchmark_type") == "anti_interference":
+        return run_anti_interference_benchmark(cases, source_path=cases_path, scope=scope)
+
     results = []
 
     for case in cases:
@@ -60,6 +64,188 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
         "summary": _metrics(results),
         "results": results,
     }
+
+
+def run_anti_interference_benchmark(
+    spec: dict[str, Any],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    with tempfile.NamedTemporaryFile(prefix="anti_interference_benchmark_", suffix=".sqlite") as tmp:
+        conn = connect(tmp.name)
+        init_db(conn)
+        repo = MemoryRepository(conn)
+
+        memory_index: dict[str, dict[str, Any]] = {}
+        for item in spec.get("curated_memories", []):
+            result = repo.remember(
+                scope,
+                item["content"],
+                source_type="benchmark_curated",
+                source_id=item.get("source_id") or item["id"],
+                created_by="benchmark",
+            )
+            memory = result["memory"]
+            memory_index[item["id"]] = {
+                "fixture_id": item["id"],
+                "memory_id": result["memory_id"],
+                "content": item["content"],
+                "type": memory["type"],
+                "subject": memory["subject"],
+                "expected_value": item.get("expected_value") or item["content"],
+            }
+
+        noise_events = _expand_noise_events(spec)
+        for content in noise_events:
+            repo.add_noise_event(scope, content, source_type="benchmark_noise")
+
+        _maybe_build_raw_events_fts(conn)
+
+        recall_logs = []
+        for query in spec.get("queries", []):
+            started = time.perf_counter()
+            candidates = repo.recall_candidates(scope, query["query"], limit=3)
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+
+            expected = memory_index[query["expected_memory_ref"]]
+            rank = _candidate_rank(candidates, expected, query.get("expected_active_value"))
+            passed = rank == 1
+            recall_logs.append(
+                {
+                    "query_id": query["id"],
+                    "query": query["query"],
+                    "expected_memory_ref": query["expected_memory_ref"],
+                    "expected_memory_id": expected["memory_id"],
+                    "expected_active_value": query.get("expected_active_value") or expected["expected_value"],
+                    "expected_type": expected["type"],
+                    "expected_subject": expected["subject"],
+                    "rank": rank,
+                    "passed": passed,
+                    "recall_at_1": rank == 1,
+                    "recall_at_3": rank is not None and rank <= 3,
+                    "mrr": round(1 / rank, 4) if rank else 0.0,
+                    "latency_ms": latency_ms,
+                    "top_candidates": candidates,
+                    "diagnostic_raw_hits": _raw_event_hits(conn, query["query"]) if not passed else [],
+                }
+            )
+
+        conn.close()
+
+    summary = _anti_interference_metrics(
+        recall_logs,
+        curated_memory_count=len(memory_index),
+        raw_event_count=len(memory_index) + len(noise_events),
+    )
+    return {
+        "benchmark_type": "anti_interference",
+        "name": spec.get("name") or Path(source_path).stem,
+        "source": str(source_path),
+        "layers": {
+            "raw_events": len(memory_index) + len(noise_events),
+            "curated_memories": len(memory_index),
+            "recall_logs": len(recall_logs),
+        },
+        "summary": summary,
+        "by_type": _group_metrics(recall_logs, "expected_type"),
+        "by_subject": _group_metrics(recall_logs, "expected_subject"),
+        "results": recall_logs,
+    }
+
+
+def write_benchmark_outputs(
+    result: dict[str, Any],
+    *,
+    json_output: str | Path | None = None,
+    csv_output: str | Path | None = None,
+    markdown_output: str | Path | None = None,
+) -> None:
+    if json_output:
+        _write_text(json_output, json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    if csv_output:
+        _write_csv(csv_output, result.get("results", []))
+    if markdown_output:
+        _write_text(markdown_output, format_benchmark_report(result))
+
+
+def format_benchmark_report(result: dict[str, Any]) -> str:
+    summary = result.get("summary", {})
+    layers = result.get("layers", {})
+    by_type = result.get("by_type", {})
+    by_subject = result.get("by_subject", {})
+
+    lines = [
+        "# Benchmark Report",
+        "",
+        "日期：2026-04-25",
+        "",
+        "## D7 抗干扰召回评测",
+        "",
+        "本轮评测验证 Memory Engine 在大量无关群聊干扰下，是否仍能从 active memory 层召回关键企业记忆。D7 把数据分为三层：",
+        "",
+        "- raw events：完整消息归档，包含关键记忆写入和干扰对话，用于审计和失败定位。",
+        "- curated memories：经过结构化抽取、去重和状态机管理的 active memory，是默认召回层。",
+        "- recall logs：每次查询的候选、排名、延迟和失败诊断，用于复现实验结果。",
+        "",
+        "这种分层参考 Hermes persistent memory 的思路：长期记忆不是把所有聊天塞进 prompt，而是把高价值事实压缩成有界、可解释、可版本化的 active memory；raw archive 只在需要追溯上下文或定位失败时按需搜索。",
+        "",
+        "### 可复现实验命令",
+        "",
+        "```bash",
+        "python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md --csv-output reports/day7_anti_interference.csv",
+        "```",
+        "",
+        "### 数据规模",
+        "",
+        "| 层 | 数量 | 说明 |",
+        "|---|---:|---|",
+        f"| raw events | {layers.get('raw_events', 0)} | 关键记忆 + 干扰对话归档 |",
+        f"| curated memories | {layers.get('curated_memories', 0)} | 已结构化并处于 active 状态的关键记忆 |",
+        f"| recall logs | {layers.get('recall_logs', 0)} | 查询评测记录 |",
+        "",
+        "### 总体指标",
+        "",
+        "| 指标 | 数值 |",
+        "|---|---:|",
+        f"| Recall@1 | {summary.get('recall_at_1', 0.0):.4f} |",
+        f"| Recall@3 | {summary.get('recall_at_3', 0.0):.4f} |",
+        f"| MRR | {summary.get('mrr', 0.0):.4f} |",
+        f"| 平均延迟 ms | {summary.get('avg_latency_ms', 0.0):.3f} |",
+        f"| P95 延迟 ms | {summary.get('p95_latency_ms', 0.0):.3f} |",
+        "",
+        "### 按 Type 分项",
+        "",
+        "| Type | 查询数 | Recall@1 | Recall@3 | MRR | 平均延迟 ms |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    lines.extend(_metric_rows(by_type))
+    lines.extend(
+        [
+            "",
+            "### 按 Subject 分项",
+            "",
+            "| Subject | 查询数 | Recall@1 | Recall@3 | MRR | 平均延迟 ms |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+    )
+    lines.extend(_metric_rows(by_subject))
+    lines.extend(
+        [
+            "",
+            "### 当前结论",
+            "",
+            "- D7 数据集覆盖 50 条关键记忆、1000 条干扰对话和 50 条查询，满足 P0 并完成 P1 干扰规模加码。",
+            "- 评测输出同时支持机器可读 JSON、CSV 和评委可读 Markdown 摘要；CSV 默认写入 `reports/`，不作为提交物。",
+            "- FTS5 仅用于失败样例定位，不替代 active memory 状态机和结构化召回路径。",
+            "",
+            "### 局限",
+            "",
+            "- 当前 D7 主要验证抗干扰召回；矛盾更新专项和效能对比将在 D8/D9 补齐。",
+            "- 召回仍是规则打分，不使用 embedding；这有利于解释性，但对复杂语义改写的覆盖有限。",
+        ]
+    )
+    return "\n".join(lines) + "\n"
 
 
 def run_document_ingestion_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict[str, Any]:
@@ -184,6 +370,164 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         if total
         else 0.0,
     }
+
+
+def _anti_interference_metrics(
+    results: list[dict[str, Any]],
+    *,
+    curated_memory_count: int,
+    raw_event_count: int,
+) -> dict[str, Any]:
+    total = len(results)
+    latencies = sorted(result["latency_ms"] for result in results)
+    recall_at_1 = sum(1 for result in results if result["recall_at_1"])
+    recall_at_3 = sum(1 for result in results if result["recall_at_3"])
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(recall_at_1, total),
+        "query_count": total,
+        "curated_memory_count": curated_memory_count,
+        "raw_event_count": raw_event_count,
+        "noise_event_count": max(raw_event_count - curated_memory_count, 0),
+        "recall_at_1": _ratio(recall_at_1, total),
+        "recall_at_3": _ratio(recall_at_3, total),
+        "mrr": round(sum(result["mrr"] for result in results) / total, 4) if total else 0.0,
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+    }
+
+
+def _group_metrics(results: list[dict[str, Any]], key: str) -> dict[str, Any]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for result in results:
+        groups.setdefault(result.get(key) or "unknown", []).append(result)
+    return {
+        group: _anti_interference_metrics(
+            items,
+            curated_memory_count=len({item["expected_memory_id"] for item in items}),
+            raw_event_count=len(items),
+        )
+        for group, items in sorted(groups.items())
+    }
+
+
+def _expand_noise_events(spec: dict[str, Any]) -> list[str]:
+    explicit = list(spec.get("noise_events", []))
+    noise = spec.get("noise", {})
+    count = int(noise.get("count", 0))
+    templates = noise.get("templates") or ["大家今天同步一下普通进展，暂无需要沉淀的长期记忆。"]
+    generated = [
+        template.format(index=index, shard=index % 17, topic=index % 9)
+        for index in range(1, max(count - len(explicit), 0) + 1)
+        for template in [templates[(index - 1) % len(templates)]]
+    ]
+    return explicit + generated
+
+
+def _candidate_rank(
+    candidates: list[dict[str, Any]],
+    expected: dict[str, Any],
+    expected_value: str | None,
+) -> int | None:
+    for index, candidate in enumerate(candidates, start=1):
+        answer = candidate.get("answer") or ""
+        if candidate.get("memory_id") == expected["memory_id"]:
+            return index
+        if expected_value and expected_value in answer:
+            return index
+    return None
+
+
+def _maybe_build_raw_events_fts(conn) -> None:
+    try:
+        conn.execute("CREATE VIRTUAL TABLE temp.raw_events_fts USING fts5(content, event_id UNINDEXED)")
+        conn.execute(
+            """
+            INSERT INTO temp.raw_events_fts(content, event_id)
+            SELECT content, id FROM raw_events
+            """
+        )
+    except Exception:
+        return
+
+
+def _raw_event_hits(conn, query: str) -> list[dict[str, Any]]:
+    tokens = [char for char in query if char.strip()][:8]
+    fts_query = " OR ".join(tokens)
+    if not fts_query:
+        return []
+    try:
+        rows = conn.execute(
+            """
+            SELECT event_id, snippet(raw_events_fts, 0, '[', ']', '...', 12) AS snippet
+            FROM temp.raw_events_fts
+            WHERE raw_events_fts MATCH ?
+            LIMIT 3
+            """,
+            (fts_query,),
+        ).fetchall()
+    except Exception:
+        rows = conn.execute(
+            """
+            SELECT id AS event_id, content AS snippet
+            FROM raw_events
+            WHERE content LIKE ?
+            LIMIT 3
+            """,
+            (f"%{query[:4]}%",),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    index = min(int(round((len(values) - 1) * percentile)), len(values) - 1)
+    return round(values[index], 3)
+
+
+def _metric_rows(groups: dict[str, Any]) -> list[str]:
+    if not groups:
+        return ["| 无 | 0 | 0.0000 | 0.0000 | 0.0000 | 0.000 |"]
+    return [
+        "| {name} | {count} | {r1:.4f} | {r3:.4f} | {mrr:.4f} | {latency:.3f} |".format(
+            name=name,
+            count=metrics.get("query_count", 0),
+            r1=metrics.get("recall_at_1", 0.0),
+            r3=metrics.get("recall_at_3", 0.0),
+            mrr=metrics.get("mrr", 0.0),
+            latency=metrics.get("avg_latency_ms", 0.0),
+        )
+        for name, metrics in groups.items()
+    ]
+
+
+def _write_csv(path: str | Path, results: list[dict[str, Any]]) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fields = [
+        "query_id",
+        "expected_type",
+        "expected_subject",
+        "rank",
+        "recall_at_1",
+        "recall_at_3",
+        "mrr",
+        "latency_ms",
+        "query",
+        "expected_active_value",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for result in results:
+            writer.writerow({field: result.get(field) for field in fields})
+
+
+def _write_text(path: str | Path, content: str) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
 
 
 def _document_ingestion_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:

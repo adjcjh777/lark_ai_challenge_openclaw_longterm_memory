@@ -95,6 +95,10 @@ class MemoryRepository:
             return self._supersede_memory(existing, extracted, event_id, source_type, created_by, ts)
 
     def recall(self, scope: str, query: str) -> dict[str, Any] | None:
+        candidates = self.recall_candidates(scope, query, limit=1)
+        return candidates[0] if candidates else None
+
+    def recall_candidates(self, scope: str, query: str, *, limit: int = 3) -> list[dict[str, Any]]:
         parsed_scope = parse_scope(scope)
         query_subject = subject_for_query(query)
         normalized_query_subject = normalize_subject(query_subject)
@@ -114,9 +118,28 @@ class MemoryRepository:
         scored = [(self._score_recall(row, query, normalized_query_subject), row) for row in rows]
         scored = [(score, row) for score, row in scored if score > 0]
         if not scored:
-            return None
+            return []
 
-        _, memory = max(scored, key=lambda item: item[0])
+        ranked = sorted(scored, key=lambda item: (-item[0], item[1]["updated_at"], item[1]["id"]))
+        candidates = []
+        for rank, (score, memory) in enumerate(ranked[:limit], start=1):
+            candidates.append(self._recall_payload(memory, score=score, rank=rank))
+
+        recalled_ids = [candidate["memory_id"] for candidate in candidates]
+        with self.conn:
+            self.conn.executemany(
+                """
+                UPDATE memories
+                SET last_recalled_at = ?,
+                    recall_count = recall_count + 1
+                WHERE id = ?
+                """,
+                [(ts, memory_id) for memory_id in recalled_ids],
+            )
+
+        return candidates
+
+    def _recall_payload(self, memory, *, score: int, rank: int) -> dict[str, Any]:
         version = self.conn.execute(
             "SELECT * FROM memory_versions WHERE id = ?",
             (memory["active_version_id"],),
@@ -142,23 +165,14 @@ class MemoryRepository:
             if isinstance(parsed_raw, dict):
                 raw_metadata = parsed_raw
 
-        with self.conn:
-            self.conn.execute(
-                """
-                UPDATE memories
-                SET last_recalled_at = ?,
-                    recall_count = recall_count + 1
-                WHERE id = ?
-                """,
-                (ts, memory["id"]),
-            )
-
         return {
             "answer": memory["current_value"],
             "memory_id": memory["id"],
             "status": memory["status"],
             "subject": memory["subject"],
             "type": memory["type"],
+            "score": score,
+            "rank": rank,
             "source": {
                 "source_type": evidence["source_type"] if evidence else None,
                 "source_id": evidence["source_id"] if evidence else None,

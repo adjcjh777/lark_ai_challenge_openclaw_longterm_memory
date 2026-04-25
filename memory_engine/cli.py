@@ -6,7 +6,7 @@ import os
 import sys
 
 from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
-from .benchmark import run_benchmark, run_document_ingestion_benchmark
+from .benchmark import run_benchmark, run_document_ingestion_benchmark, write_benchmark_outputs
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
 from .feishu_runtime import listen, replay_event
@@ -83,6 +83,12 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "benchmark" and args.benchmark_command == "run":
         result = run_benchmark(args.cases_path, scope=args.scope)
+        write_benchmark_outputs(
+            result,
+            json_output=args.json_output,
+            csv_output=args.csv_output,
+            markdown_output=args.markdown_output,
+        )
         print_json(result)
         return
 
@@ -171,6 +177,9 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command")
     run_parser = benchmark_subparsers.add_parser("run", help="Run benchmark cases")
     run_parser.add_argument("cases_path")
+    run_parser.add_argument("--json-output", help="Optional path for machine-readable JSON output")
+    run_parser.add_argument("--csv-output", help="Optional path for query-level CSV output")
+    run_parser.add_argument("--markdown-output", help="Optional path for a judge-readable Markdown report")
     ingest_doc_benchmark_parser = benchmark_subparsers.add_parser("ingest-doc", help="Run document ingestion benchmark cases")
     ingest_doc_benchmark_parser.add_argument("cases_path")
 
