@@ -15,6 +15,7 @@ class FeishuConfig:
     card_mode: str = "interactive"
     card_retry_count: int = 3
     card_timeout_seconds: float = 2.0
+    log_dir: str = "logs/feishu-bot"
 
 
 def load_feishu_config() -> FeishuConfig:
@@ -28,6 +29,7 @@ def load_feishu_config() -> FeishuConfig:
         card_mode=os.environ.get("FEISHU_CARD_MODE", "interactive").strip().lower() or "interactive",
         card_retry_count=_positive_int(os.environ.get("FEISHU_CARD_RETRY_COUNT"), default=3),
         card_timeout_seconds=_positive_float(os.environ.get("FEISHU_CARD_TIMEOUT_SECONDS"), default=2.0),
+        log_dir=os.environ.get("FEISHU_LOG_DIR", "logs/feishu-bot").strip() or "logs/feishu-bot",
     )
 
 

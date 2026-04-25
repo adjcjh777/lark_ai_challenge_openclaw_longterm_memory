@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import subprocess
 import sys
@@ -31,6 +32,20 @@ from .repository import MemoryRepository
 SOURCE_TYPE = "feishu_message"
 
 
+class FeishuRunLogger:
+    def __init__(self, log_dir: str | Path):
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.started_at = _timestamp()
+        file_stamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
+        self.path = self.log_dir / f"feishu-listen-{file_stamp}.ndjson"
+
+    def write(self, event: str, **fields: Any) -> None:
+        record = {"ts": _timestamp(), "event": event, **fields}
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+
 def replay_event(path: str | Path, *, db_path: str | Path | None = None) -> dict[str, Any]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     conn = connect(db_path)
@@ -57,6 +72,19 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
     init_db(conn)
     publisher = DryRunPublisher() if dry_run else LarkCliPublisher(config)
     command = _event_subscribe_command(config)
+    run_logger = FeishuRunLogger(config.log_dir)
+    run_logger.write(
+        "listen_start",
+        dry_run=dry_run,
+        db_path=str(db_path or db_path_from_env()),
+        command=_redact_command(command),
+        profile=config.lark_profile,
+        bot_mode=config.bot_mode,
+        card_mode=config.card_mode,
+        card_retry_count=config.card_retry_count,
+        card_timeout_seconds=config.card_timeout_seconds,
+    )
+    print(f"Feishu listener log: {run_logger.path}", file=sys.stderr, flush=True)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=sys.stderr, text=True)
     try:
         assert process.stdout is not None
@@ -64,6 +92,7 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
             line = line.strip()
             if not line:
                 continue
+            run_logger.write("event_received", raw_line=line)
             try:
                 payload = json.loads(line)
                 event = message_event_from_payload(payload)
@@ -80,13 +109,26 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
                     )
             except Exception as exc:
                 result = {"ok": False, "error": str(exc), "raw_line": line}
+                run_logger.write("event_error", error=str(exc), raw_line=line)
+            run_logger.write(
+                "event_result",
+                ok=result.get("ok"),
+                ignored=result.get("ignored", False),
+                command=result.get("command"),
+                message_id=result.get("message_id"),
+                duplicate=result.get("duplicate", False),
+                publish=_publish_log_summary(result.get("publish")),
+                result=result,
+            )
             print(json.dumps(result, ensure_ascii=False), flush=True)
     except KeyboardInterrupt:
+        run_logger.write("listen_stop", reason="keyboard_interrupt")
         process.terminate()
     finally:
         conn.close()
         if process.poll() is None:
             process.terminate()
+        run_logger.write("listen_exit", returncode=process.poll())
 
 
 def handle_text_event(conn, event: FeishuTextEvent, publisher, config: FeishuConfig) -> dict[str, Any]:
@@ -333,3 +375,34 @@ def _event_subscribe_command(config: FeishuConfig) -> list[str]:
         ]
     )
     return command
+
+
+def _timestamp() -> str:
+    return datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+def _publish_log_summary(publish: Any) -> dict[str, Any] | None:
+    if not isinstance(publish, dict):
+        return None
+    return {
+        "ok": publish.get("ok"),
+        "mode": publish.get("mode"),
+        "fallback_used": publish.get("fallback_used"),
+        "fallback_suppressed": publish.get("fallback_suppressed"),
+        "latency_ms": publish.get("latency_ms"),
+        "card_attempts": publish.get("card_attempts"),
+    }
+
+
+def _redact_command(command: list[str]) -> list[str]:
+    redacted: list[str] = []
+    skip_next = False
+    for item in command:
+        if skip_next:
+            redacted.append("[REDACTED]")
+            skip_next = False
+            continue
+        redacted.append(item)
+        if item in {"--app-secret", "--secret", "--token"}:
+            skip_next = True
+    return redacted

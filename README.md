@@ -55,6 +55,7 @@ Day 2 最小 Bot 权限：
 MEMORY_DB_PATH=data/memory.sqlite
 MEMORY_DEFAULT_SCOPE=project:feishu_ai_challenge
 FEISHU_BOT_MODE=reply
+FEISHU_LOG_DIR=logs/feishu-bot
 ```
 
 如果使用指定 lark-cli profile，可额外设置：
@@ -75,6 +76,8 @@ python3 -m memory_engine feishu replay tests/fixtures/feishu_text_recall_event.j
 ```bash
 scripts/start_feishu_bot.sh
 ```
+
+监听日志会写入 `logs/feishu-bot/feishu-listen-<timestamp>.ndjson`，每条记录都包含 `ts` 时间戳，便于排查真实群消息、卡片按钮回调和发送 fallback。
 
 调试时不真实回复飞书：
 

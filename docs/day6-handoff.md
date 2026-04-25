@@ -123,8 +123,11 @@ export FEISHU_BOT_MODE=reply
 export FEISHU_CARD_MODE=interactive
 export FEISHU_CARD_RETRY_COUNT=3
 export FEISHU_CARD_TIMEOUT_SECONDS=2
+export FEISHU_LOG_DIR=logs/feishu-bot
 ./scripts/start_feishu_bot.sh
 ```
+
+监听进程会为每次启动创建一个 `logs/feishu-bot/feishu-listen-<timestamp>.ndjson` 文件。日志记录包含 `listen_start`、`event_received`、`event_result`、`event_error`、`listen_stop` 和 `listen_exit`，每条都有 `ts` 时间戳，便于复盘真实飞书测试群里的卡片点击和 fallback 行为。
 
 群聊测试输入：
 
@@ -205,7 +208,7 @@ python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.js
 
 全量单测：
 
-- `27 tests OK`
+- `28 tests OK`
 
 Day6 专项：
 
@@ -232,7 +235,7 @@ Day 1 benchmark：
 - `conflict_accuracy = 1.0`
 - `evidence_coverage = 1.0`
 - `stale_leakage_rate = 0.0`
-- `avg_latency_ms = 0.692`
+- `avg_latency_ms = 0.798`
 
 Day 5 ingestion benchmark：
 
@@ -242,7 +245,7 @@ Day 5 ingestion benchmark：
 - `avg_quote_coverage = 1.0`
 - `avg_noise_rejection_rate = 1.0`
 - `document_evidence_coverage = 1.0`
-- `avg_ingestion_latency_ms = 5.18`
+- `avg_ingestion_latency_ms = 15.941`
 
 ## 队友今晚任务
 

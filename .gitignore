@@ -9,6 +9,7 @@ dist/
 build/
 .DS_Store
 *.log
+logs/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
