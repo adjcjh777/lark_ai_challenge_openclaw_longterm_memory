@@ -20,14 +20,14 @@
 |---|---|---|
 | `benchmarks/day1_teammate_cases.json` | 30 条 recall case + 10 条 conflict_update case | 可用现有 benchmark runner 运行 |
 | `data/day1_teammate_noise_messages.txt` | 100 条不应沉淀为长期记忆的干扰聊天 | 读起来像工作群杂音 |
-| `docs/memory-definition-and-architecture-whitepaper/version_0.md` | 白皮书目录和初稿骨架 | 覆盖定义、架构、状态机、飞书生态、Benchmark、Demo |
+| 本文件“白皮书一页目录”小节 | D1 白皮书目录草案 | 后续正式白皮书按总控文档落到 `docs/memory-definition-and-architecture-whitepaper.md` |
 | `docs/day1-teammate-completion.md` | 本文件 | 记录 D1 队友任务已闭环 |
 
 ## 交付物要求自查
 
 | 初赛交付物 | D1 队友补位结果 | 是否还要继续 |
 |---|---|---|
-| Memory 定义与架构白皮书 | 已有目录和 v0 初稿，覆盖“为什么不是搜索”和状态机 | 后续 D12 扩成正式稿 |
+| Memory 定义与架构白皮书 | 已整理白皮书一页目录，覆盖“为什么不是搜索”和状态机 | 后续 D12 按 `docs/memory-definition-and-architecture-whitepaper.md` 扩成正式稿 |
 | 可运行 Demo | 已有 5 分钟讲法，能用 CLI 展示 remember / recall / conflict | 后续接飞书截图 |
 | Benchmark Report | 已补 D1 扩展样例和干扰聊天，能支撑早期评测 | 后续 D7-D9 扩指标 |
 | 提交材料 | README 和 handoff 已有入口 | 后续 D13/D14 打包 |
