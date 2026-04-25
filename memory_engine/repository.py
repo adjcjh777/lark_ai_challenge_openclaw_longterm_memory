@@ -123,7 +123,7 @@ class MemoryRepository:
         ).fetchone()
         evidence = self.conn.execute(
             """
-            SELECT e.*, r.source_id
+            SELECT e.*, r.source_id, r.raw_json
             FROM memory_evidence e
             LEFT JOIN raw_events r ON r.id = e.source_event_id
             WHERE e.memory_id = ?
@@ -133,6 +133,14 @@ class MemoryRepository:
             """,
             (memory["id"], memory["active_version_id"]),
         ).fetchone()
+        raw_metadata: dict[str, Any] = {}
+        if evidence and evidence["raw_json"]:
+            try:
+                parsed_raw = json.loads(evidence["raw_json"])
+            except json.JSONDecodeError:
+                parsed_raw = {}
+            if isinstance(parsed_raw, dict):
+                raw_metadata = parsed_raw
 
         with self.conn:
             self.conn.execute(
@@ -155,6 +163,8 @@ class MemoryRepository:
                 "source_type": evidence["source_type"] if evidence else None,
                 "source_id": evidence["source_id"] if evidence else None,
                 "quote": evidence["quote"] if evidence else None,
+                "document_token": raw_metadata.get("document_token"),
+                "document_title": raw_metadata.get("document_title"),
             },
             "version": version["version_no"] if version else None,
         }
@@ -222,6 +232,140 @@ class MemoryRepository:
             )
         return event_id
 
+    def add_candidate(
+        self,
+        scope: str,
+        content: str,
+        *,
+        source_type: str,
+        source_id: str,
+        document_token: str,
+        document_title: str,
+        quote: str,
+        sender_id: str | None = None,
+        created_by: str | None = "document_ingestion",
+    ) -> dict[str, Any]:
+        parsed_scope = parse_scope(scope)
+        extracted = extract_memory(content)
+        ts = now_ms()
+        event_id = new_id("evt")
+
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO raw_events (
+                  id, source_type, source_id, scope_type, scope_id, sender_id,
+                  event_time, content, raw_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    source_type,
+                    source_id,
+                    parsed_scope.scope_type,
+                    parsed_scope.scope_id,
+                    sender_id,
+                    ts,
+                    extracted.current_value,
+                    json.dumps(
+                        {
+                            "document_token": document_token,
+                            "document_title": document_title,
+                            "quote": quote,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    ts,
+                ),
+            )
+
+            existing = self._find_memory(
+                parsed_scope.scope_type,
+                parsed_scope.scope_id,
+                extracted.type,
+                extracted.normalized_subject,
+            )
+            if existing is not None:
+                self._insert_evidence(existing["id"], existing["active_version_id"], source_type, event_id, quote, ts)
+                return self._result(
+                    "duplicate",
+                    existing["id"],
+                    existing["active_version_id"],
+                    extracted,
+                    self._active_version_no(existing["id"]),
+                    status=existing["status"],
+                    document_token=document_token,
+                    document_title=document_title,
+                    quote=quote,
+                )
+
+            return self._insert_new_memory(
+                extracted,
+                parsed_scope,
+                event_id,
+                source_type,
+                created_by,
+                ts,
+                status="candidate",
+                quote=quote,
+                extra={
+                    "document_token": document_token,
+                    "document_title": document_title,
+                    "quote": quote,
+                },
+            )
+
+    def confirm_candidate(self, memory_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
+        if row is None:
+            return None
+        if row["status"] == "active":
+            return {"action": "already_active", "memory_id": memory_id, "status": "active"}
+        if row["status"] != "candidate":
+            return {"action": "not_confirmable", "memory_id": memory_id, "status": row["status"]}
+
+        ts = now_ms()
+        with self.conn:
+            self.conn.execute(
+                """
+                UPDATE memories
+                SET status = 'active',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (ts, memory_id),
+            )
+            self.conn.execute(
+                "UPDATE memory_versions SET status = 'active' WHERE id = ?",
+                (row["active_version_id"],),
+            )
+        return {"action": "confirmed", "memory_id": memory_id, "status": "active"}
+
+    def reject_candidate(self, memory_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
+        if row is None:
+            return None
+        if row["status"] != "candidate":
+            return {"action": "not_rejectable", "memory_id": memory_id, "status": row["status"]}
+
+        ts = now_ms()
+        with self.conn:
+            self.conn.execute(
+                """
+                UPDATE memories
+                SET status = 'rejected',
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (ts, memory_id),
+            )
+            self.conn.execute(
+                "UPDATE memory_versions SET status = 'rejected' WHERE id = ?",
+                (row["active_version_id"],),
+            )
+        return {"action": "rejected", "memory_id": memory_id, "status": "rejected"}
+
     def add_noise_event(self, scope: str, content: str, *, source_type: str = "benchmark_noise") -> None:
         parsed_scope = parse_scope(scope)
         ts = now_ms()
@@ -260,7 +404,19 @@ class MemoryRepository:
             (scope_type, scope_id, memory_type, normalized_subject),
         ).fetchone()
 
-    def _insert_new_memory(self, extracted, parsed_scope, event_id: str, source_type: str, created_by: str | None, ts: int) -> dict[str, Any]:
+    def _insert_new_memory(
+        self,
+        extracted,
+        parsed_scope,
+        event_id: str,
+        source_type: str,
+        created_by: str | None,
+        ts: int,
+        *,
+        status: str = "active",
+        quote: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         memory_id = new_id("mem")
         version_id = new_id("ver")
         self.conn.execute(
@@ -270,7 +426,7 @@ class MemoryRepository:
               current_value, reason, status, confidence, importance,
               source_event_id, active_version_id, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory_id,
@@ -281,6 +437,7 @@ class MemoryRepository:
                 extracted.normalized_subject,
                 extracted.current_value,
                 extracted.reason,
+                status,
                 extracted.confidence,
                 extracted.importance,
                 event_id,
@@ -289,9 +446,9 @@ class MemoryRepository:
                 ts,
             ),
         )
-        self._insert_version(version_id, memory_id, 1, extracted, "active", event_id, created_by, ts, None)
-        self._insert_evidence(memory_id, version_id, source_type, event_id, extracted.current_value, ts)
-        return self._result("created", memory_id, version_id, extracted, 1)
+        self._insert_version(version_id, memory_id, 1, extracted, status, event_id, created_by, ts, None)
+        self._insert_evidence(memory_id, version_id, source_type, event_id, quote or extracted.current_value, ts)
+        return self._result("created", memory_id, version_id, extracted, 1, status=status, **(extra or {}))
 
     def _supersede_memory(self, existing, extracted, event_id: str, source_type: str, created_by: str | None, ts: int) -> dict[str, Any]:
         old_version_id = existing["active_version_id"]

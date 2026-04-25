@@ -8,6 +8,7 @@ import sys
 from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
 from .benchmark import run_benchmark
 from .db import connect, db_path_from_env, init_db
+from .document_ingestion import ingest_document_source
 from .feishu_runtime import listen, replay_event
 from .models import DEFAULT_SCOPE
 from .repository import MemoryRepository
@@ -45,6 +46,39 @@ def main(argv: list[str] | None = None) -> None:
         init_db(conn)
         result = MemoryRepository(conn).versions(args.memory_id)
         print_json({"memory_id": args.memory_id, "versions": result})
+        return
+
+    if args.command == "ingest-doc":
+        conn = connect(args.db_path)
+        init_db(conn)
+        result = ingest_document_source(
+            MemoryRepository(conn),
+            args.url_or_token,
+            scope=args.scope,
+            lark_cli=args.lark_cli,
+            profile=args.profile,
+            as_identity=args.as_identity,
+            limit=args.limit,
+        )
+        print_json(result)
+        return
+
+    if args.command == "confirm":
+        conn = connect(args.db_path)
+        init_db(conn)
+        result = MemoryRepository(conn).confirm_candidate(args.candidate_id)
+        print_json(result or {"action": "not_found", "memory_id": args.candidate_id})
+        if result is None:
+            sys.exit(1)
+        return
+
+    if args.command == "reject":
+        conn = connect(args.db_path)
+        init_db(conn)
+        result = MemoryRepository(conn).reject_candidate(args.candidate_id)
+        print_json(result or {"action": "not_found", "memory_id": args.candidate_id})
+        if result is None:
+            sys.exit(1)
         return
 
     if args.command == "benchmark" and args.benchmark_command == "run":
@@ -112,6 +146,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     versions_parser = subparsers.add_parser("versions", help="List versions for a memory")
     versions_parser.add_argument("memory_id")
+
+    ingest_parser = subparsers.add_parser("ingest-doc", help="Import candidate memories from a Feishu doc token/url or Markdown file")
+    ingest_parser.add_argument("--scope", default=DEFAULT_SCOPE)
+    ingest_parser.add_argument("--limit", type=int, default=12, help="Maximum candidate memories to extract")
+    ingest_parser.add_argument("--lark-cli", default=os.environ.get("LARK_CLI", "lark-cli"), help="lark-cli executable path")
+    ingest_parser.add_argument("--profile", default=os.environ.get("LARK_CLI_PROFILE"), help="Optional lark-cli profile")
+    ingest_parser.add_argument("--as-identity", default=os.environ.get("LARK_CLI_AS"), help="Optional lark-cli identity, for example user or bot")
+    ingest_parser.add_argument("url_or_token")
+
+    confirm_parser = subparsers.add_parser("confirm", help="Promote a candidate memory to active")
+    confirm_parser.add_argument("candidate_id")
+
+    reject_parser = subparsers.add_parser("reject", help="Reject a candidate memory")
+    reject_parser.add_argument("candidate_id")
 
     benchmark_parser = subparsers.add_parser("benchmark", help="Benchmark commands")
     benchmark_parser.add_argument("--scope", default=DEFAULT_SCOPE)

@@ -20,11 +20,11 @@ def parse_command(text: str) -> FeishuCommand | None:
     head, _, tail = stripped.partition(" ")
     name = head[1:].strip().lower()
     argument = tail.strip()
-    if name not in {"remember", "recall", "versions", "help", "health"}:
+    if name not in {"remember", "recall", "versions", "help", "health", "ingest_doc", "confirm", "reject"}:
         return FeishuCommand(name="unknown", argument=argument, raw_name=name or head)
     if name in {"help", "health"}:
         return FeishuCommand(name=name, argument=argument, raw_name=name)
-    if name in {"remember", "recall", "versions"} and not argument:
+    if name in {"remember", "recall", "versions", "ingest_doc", "confirm", "reject"} and not argument:
         return FeishuCommand(name="help", argument=name, raw_name=name)
     return FeishuCommand(name=name, argument=argument, raw_name=name)
 
@@ -96,6 +96,9 @@ def format_recall_reply(result: dict[str, Any] | None) -> str:
             ],
         )
     source = result.get("source") or {}
+    source_label = f"{source.get('source_type') or 'unknown'} / {source.get('source_id') or '-'}"
+    if source.get("document_title"):
+        source_label = f"文档《{source.get('document_title')}》/ {source.get('document_token') or source.get('source_id') or '-'}"
     return _reply(
         f"当前有效结论：{result.get('answer')}",
         [
@@ -103,7 +106,7 @@ def format_recall_reply(result: dict[str, Any] | None) -> str:
             f"主题：{result.get('subject')}",
             f"状态：{result.get('status')}",
             f"版本：v{result.get('version')}",
-            f"来源：{source.get('source_type') or 'unknown'} / {source.get('source_id') or '-'}",
+            f"来源：{source_label}",
             f"记忆类型：{result.get('type')}",
             f"当前有效规则：{result.get('answer')}",
             f"memory_id：{result.get('memory_id')}",
@@ -139,11 +142,58 @@ def format_versions_reply(memory_id: str, versions: list[dict[str, Any]]) -> str
     return _reply("这是这条记忆的版本链，active 版本是当前有效结论。", lines)
 
 
+def format_ingest_doc_reply(result: dict[str, Any]) -> str:
+    document = result.get("document") or {}
+    candidates = result.get("candidates") or []
+    lines = [
+        "类型：文档 ingestion",
+        f"主题：{document.get('title') or '-'}",
+        "状态：candidate",
+        "版本：Day 5",
+        f"来源：文档《{document.get('title') or '-'}》/ {document.get('token') or '-'}",
+        f"候选数量：{result.get('candidate_count', 0)}",
+        f"重复数量：{result.get('duplicate_count', 0)}",
+    ]
+    for candidate in candidates[:8]:
+        memory = candidate.get("memory") or {}
+        lines.append(f"{candidate.get('memory_id')} [{candidate.get('status')}] {memory.get('subject')}：{candidate.get('quote') or memory.get('current_value')}")
+    lines.append("下一步：用 /confirm <candidate_id> 激活，或 /reject <candidate_id> 拒绝。")
+    return _reply("已从文档抽取候选记忆，等待人工确认。", lines)
+
+
+def format_candidate_action_reply(result: dict[str, Any] | None, *, action: str, candidate_id: str) -> str:
+    if result is None:
+        return _reply(
+            "没有找到这条候选记忆。",
+            [
+                f"类型：候选记忆{action}",
+                f"主题：{candidate_id}",
+                "状态：not_found",
+                "版本：-",
+                "来源：Memory Engine",
+            ],
+        )
+    return _reply(
+        "候选记忆状态已更新。",
+        [
+            f"类型：候选记忆{action}",
+            f"主题：{result.get('memory_id')}",
+            f"状态：{result.get('status')}",
+            "版本：Day 5",
+            "来源：Memory Engine",
+            f"处理结果：{result.get('action')}",
+        ],
+    )
+
+
 def format_help(command_name: str) -> str:
     examples = {
         "remember": "缺少要记住的内容。\n示例：/remember 生产部署必须加 --canary --region cn-shanghai",
         "recall": "缺少召回查询。\n示例：/recall 生产部署参数",
         "versions": "缺少 memory_id。\n示例：/versions mem_xxx",
+        "ingest_doc": "缺少文档 URL、token 或本地 Markdown 路径。\n示例：/ingest_doc docs/day5-doc-ingestion-fixture.md",
+        "confirm": "缺少 candidate_id。\n示例：/confirm mem_xxx",
+        "reject": "缺少 candidate_id。\n示例：/reject mem_xxx",
     }
     if command_name in examples:
         return _reply(
@@ -169,6 +219,9 @@ def format_help(command_name: str) -> str:
             "/remember <内容>  记住一条决策、流程或偏好",
             "/recall <问题>    召回当前有效记忆",
             "/versions <memory_id>  查看版本链",
+            "/ingest_doc <url_or_token>  从飞书文档或 Markdown 抽取候选记忆",
+            "/confirm <candidate_id>  确认候选记忆为 active",
+            "/reject <candidate_id>   拒绝候选记忆",
             "/health           查看运行状态",
             "/help             查看本帮助",
             "Demo 推荐输入：",

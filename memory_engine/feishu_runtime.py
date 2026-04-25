@@ -7,13 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from .db import connect, db_path_from_env, init_db
+from .document_ingestion import ingest_document_source
 from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
 from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
 from .feishu_messages import (
     format_duplicate_reply,
+    format_candidate_action_reply,
     format_help,
     format_health,
     format_ignored_reply,
+    format_ingest_doc_reply,
     format_recall_reply,
     format_remember_reply,
     format_unknown_command_reply,
@@ -215,6 +218,55 @@ def handle_message_event(
             event_time=event.create_time or None,
         )
         reply = format_versions_reply(command.argument, repo.versions(command.argument))
+    elif command.name == "ingest_doc":
+        repo.record_raw_event(
+            scope,
+            event.text,
+            source_type=SOURCE_TYPE,
+            source_id=event.message_id,
+            sender_id=event.sender_id,
+            raw_json=event.raw,
+            event_time=event.create_time or None,
+        )
+        result = ingest_document_source(
+            repo,
+            command.argument,
+            scope=scope,
+            lark_cli=config.lark_cli,
+            profile=config.lark_profile,
+            as_identity=config.lark_as,
+        )
+        reply = format_ingest_doc_reply(result)
+    elif command.name == "confirm":
+        repo.record_raw_event(
+            scope,
+            event.text,
+            source_type=SOURCE_TYPE,
+            source_id=event.message_id,
+            sender_id=event.sender_id,
+            raw_json=event.raw,
+            event_time=event.create_time or None,
+        )
+        reply = format_candidate_action_reply(
+            repo.confirm_candidate(command.argument),
+            action="确认",
+            candidate_id=command.argument,
+        )
+    elif command.name == "reject":
+        repo.record_raw_event(
+            scope,
+            event.text,
+            source_type=SOURCE_TYPE,
+            source_id=event.message_id,
+            sender_id=event.sender_id,
+            raw_json=event.raw,
+            event_time=event.create_time or None,
+        )
+        reply = format_candidate_action_reply(
+            repo.reject_candidate(command.argument),
+            action="拒绝",
+            candidate_id=command.argument,
+        )
     else:
         repo.record_raw_event(
             scope,
