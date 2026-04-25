@@ -24,6 +24,16 @@
 ## 飞书 openclaw 插件 （https://github.com/larksuite/openclaw-lark），如果需要的话可以直接安装并使用！！！！
 ## 在执行每次对话前，必须先确认当前日期和阶段任务安排，确保执行内容与总控计划一致。
 
+## 飞书共享任务看板同步规则
+### 项目任务同步看板是 `https://jcneyh7qlo8i.feishu.cn/wiki/DlikwJHLGi2MjdkaC5LcZeIznAe?from=from_copylink`，标题为“飞书挑战赛任务跟进看板”，用于同步程俊豪与赵阳的项目进度和任务指派。
+### 每次开始新阶段、完成当日闭环、更新 handoff、或用户要求同步进度时，必须先读取 `docs/competition-master-execution-plan.md`、当前 D{n} 计划、上一日 handoff 和当前代码状态，再更新该看板。
+### 该链接是 Wiki 包装的 Sheets 页面，且页面内嵌 Bitable block。操作流程必须是：先用 `lark-cli wiki spaces get_node --params '{"token":"DlikwJHLGi2MjdkaC5LcZeIznAe"}'` 解析真实 `obj_token`；再用 `lark-cli api GET /open-apis/sheets/v2/spreadsheets/<spreadsheet_token>/metainfo` 读取 `blockInfo.blockToken`；将 `blockToken` 按 `_` 拆成 `app_token` 和 `table_id`；最后用 `lark-cli base +...` 操作记录。
+### 不要直接用 `lark-cli sheets +read/+write` 修改该看板的数据区；这个页面的数据区是 Bitable block，Sheets 单元格 API 可能返回 `not found sheetId`。
+### 看板字段语义固定：`任务描述` 写清 D{n}、负责人和交付物；`状态` 只用 `待启动`、`进行中`、`已完成`、`延期`、`暂停`；`优先级` 只用 `P0/P1/P2`；`指派给` 必须使用飞书人员字段；`任务截止日期` 使用绝对日期；`备注` 写验收证据、文档路径或剩余风险。
+### 程俊豪任务更新规则：已按代码、文档和验证证据完成的任务，设置 `完成情况-程俊豪=true` 且 `状态=已完成`，这样会进入看板的已完成分组；未完成任务只指派、填截止日期和 P0/P1，不提前勾选。
+### 赵阳任务更新规则：只分配明确、可独立执行的晚上补位任务，设置 `指派给=赵阳`、优先级、截止日期和备注；不要替赵阳勾选 `完成情况-赵阳`。赵阳完成后由他自己打勾。
+### 每次同步后必须用 `lark-cli base +record-list` 读回确认：程俊豪已完成项已勾选且状态为已完成；赵阳新任务未被代勾；任务数量、负责人和截止日期与总控文档/最新 handoff 一致。
+
 ## 飞书 Bot 测试约定
 ### 本项目机器人在飞书里的显示名是 `Feishu Memory Engine bot`。
 ### 后续所有群聊测试命令都使用这个名字，例如：
