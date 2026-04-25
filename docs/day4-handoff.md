@@ -92,6 +92,36 @@ python3 -m memory_engine bitable schema
 python3 -m memory_engine bitable sync --benchmark-cases benchmarks/day1_cases.json
 ```
 
+## 真实 Bitable 写入验证
+
+2026-04-25 已在真实 Base“飞书 ai 挑战赛”完成一次写入验证，Base token 保留在本地环境变量，不写入仓库。
+
+已创建三张表：
+
+- `Memory Ledger`
+- `Memory Versions`
+- `Benchmark Results`
+
+已执行：
+
+```bash
+python3 -m memory_engine bitable sync --write --benchmark-cases benchmarks/day1_cases.json
+```
+
+写入结果：
+
+- `Memory Ledger`：2 行。
+- `Memory Versions`：4 行，包含 `active` 与 `superseded`。
+- `Benchmark Results`：1 行，`case_count = 10`，`case_pass_rate = 1.0`，`conflict_accuracy = 1.0`，`stale_leakage_rate = 0.0`。
+
+验证读取：
+
+```bash
+lark-cli base +record-list --table-id "Memory Ledger" --limit 5
+lark-cli base +record-list --table-id "Memory Versions" --limit 5
+lark-cli base +record-list --table-id "Benchmark Results" --limit 5
+```
+
 ## 队友今晚任务
 
 1. 在飞书多维表格里检查字段命名和展示顺序，优先保证 `memory_id`、`subject`、`current_value`、`status`、`version`、`updated_at` 在前排可见。
@@ -101,6 +131,5 @@ python3 -m memory_engine bitable sync --benchmark-cases benchmarks/day1_cases.js
 
 ## 未验证项
 
-- 当前环境未在真实 Bitable 中执行 `--write` 写入，真实写入取决于 Base token、字段结构、表权限和 lark-cli profile。
 - 当前同步策略是 append-only 批量创建，适合初赛 Demo 和评委看板；如果需要长期生产同步，后续应增加 record_id 映射表或按 `memory_id` 查找后更新。
 - Bitable 视图尚需队友在真实 Base 中人工检查展示顺序。

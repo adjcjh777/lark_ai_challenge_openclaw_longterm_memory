@@ -13,4 +13,5 @@ data/*.sqlite
 data/*.sqlite3
 reports/*.csv
 reports/*.json
+.bitable_sync_*.json
 AGENTS.md

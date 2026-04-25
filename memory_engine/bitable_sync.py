@@ -400,12 +400,13 @@ def _schema_fields(fields: list[str]) -> list[dict[str, str]]:
 
 def _run_with_retry(argv: list[str], body: dict[str, Any], *, retries: int) -> dict[str, Any]:
     display_argv = list(argv)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".json", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", prefix=".bitable_sync_", suffix=".json", dir=".", delete=False) as tmp:
         json.dump(body, tmp, ensure_ascii=False)
-        tmp_path = tmp.name
+        tmp_path = Path(tmp.name)
+        tmp_arg = f"@./{tmp_path.name}"
 
-    run_argv = [f"@{tmp_path}" if part == "<temp-json>" else part for part in argv]
-    display_argv = [f"@{tmp_path}" if part == "<temp-json>" else part for part in display_argv]
+    run_argv = [tmp_arg if part == "<temp-json>" else part for part in argv]
+    display_argv = [tmp_arg if part == "<temp-json>" else part for part in display_argv]
     try:
         for attempt in range(1, retries + 2):
             try:
@@ -443,7 +444,7 @@ def _run_with_retry(argv: list[str], body: dict[str, Any], *, retries: int) -> d
                 "stderr": completed.stderr.strip(),
             }
     finally:
-        Path(tmp_path).unlink(missing_ok=True)
+        tmp_path.unlink(missing_ok=True)
 
 
 def _table_summary(payload: dict[str, Any]) -> dict[str, int]:
