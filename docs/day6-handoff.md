@@ -228,6 +228,10 @@ Day6 专项：
   - 点击 `拒绝候选 1` 后返回“候选记忆拒绝卡片”，卡片回显 `候选序号：候选 1`、`处理结果：rejected`、对应 `memory_id` 和“查看版本链”按钮。
   - 点击“查看版本链”后返回版本链 interactive card，展示同一记忆的 `v1 [rejected]` 状态。
   - 对应本地监听日志 `logs/feishu-bot/feishu-listen-20260425_173255.ndjson` 摘要：`event_received=3`、`event_result=3`、`event_error=0`；3 次卡片发送均成功，耗时约 803-1003ms，`fallback_used=false`；动作包含 `reject` 与 `versions`。
+- 2026-04-25 17:45 重新执行 `/recall Day6 生产部署参数`，真实飞书测试群返回历史决策 interactive card；监听日志显示 `command=recall`、`mode=reply_card`、`latency_ms≈745`、`fallback_used=false`。
+
+![Day6 `/recall` 真实飞书 interactive card 截图](assets/day6/day6-recall-card-20260425-1745.png)
+
 - 真实测试中修复了两个问题：
   - `card_attempts` 循环引用导致监听进程 JSON 序列化失败。
   - card action synthetic message_id 过长导致 idempotency key 超限，飞书返回字段校验失败。
