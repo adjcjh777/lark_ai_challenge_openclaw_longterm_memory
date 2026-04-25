@@ -105,6 +105,59 @@ python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --
 - 评测输出同时支持机器可读 JSON、CSV 和评委可读 Markdown 摘要；CSV 默认写入 `reports/`，不作为提交物。
 - FTS5 仅用于失败样例定位，不替代 active memory 状态机和结构化召回路径。
 
+## D7 企业对话数据质量评估
+
+本轮新增一批更接近真实飞书工作群的企业对话评测数据，用来替代早期偏合成化的 D7 样例，并为 D8 矛盾更新评测提供素材。它现在已经通过数据质量门禁，但还没有接入现有 `memory_engine benchmark run` 的执行链路，因此本节只记录数据集验收结论，不把它写成引擎召回指标。
+
+### 数据文件
+
+| 文件 | 用途 | 规模 |
+|---|---|---:|
+| `datasets/enterprise_dialogues.jsonl` | 真实群聊风格 thread，含消息、memory label、evidence、supersedes | 60 threads / 500 messages / 82 labels |
+| `datasets/noise_messages.txt` | 不应沉淀为长期记忆的干扰消息池 | 1000 条 |
+| `benchmarks/dialogue_memory_cases.json` | 基于企业对话生成的 recall / conflict / temporary noise case | 150 cases |
+| `datasets/feishu_demo_conversation.md` | 评委演示脚本素材 | 201 行 |
+| `scripts/validate_enterprise_data.py` | 数据质量门禁脚本 | 13 类检查 |
+
+### 质量门禁结果
+
+```bash
+python3 scripts/validate_enterprise_data.py
+```
+
+结果：`ALL CHECKS PASSED`。
+
+| 检查项 | 结果 |
+|---|---:|
+| JSONL thread 数 | 60 |
+| 每个 thread 消息数 | 8-12，满足 8-25 |
+| 含 superseded 的冲突 thread | 20 |
+| 含临时/不沉淀语义的 noise thread | 15 |
+| memory type 覆盖 | 10 类全覆盖 |
+| active evidence 有效性 | 通过 |
+| supersedes 引用一致性 | 通过 |
+| noise message 数 | 1000 |
+| project-related noise | 261 |
+| benchmark case 总数 | 150 |
+| recall / conflict / temporary noise | 90 / 40 / 20 |
+| difficulty easy / medium / hard | 43 / 41 / 66 |
+
+### 评估结论
+
+- 这批数据明显优于早期 `day7_anti_interference.json` 的合成样例：thread 有上下文、角色、时间、证据消息和 supersedes 关系，能支撑“企业协作记忆”叙事。
+- 150 条 case 已经覆盖 D7 抗干扰、D8 矛盾更新和临时噪声不沉淀三类能力，其中 40 条 conflict case 超过 D8 至少 30 组的最低要求。
+- 数据中没有真实密钥；出现 `token`、`API key` 等词的位置是在安全规则样例里，内容本身要求用 placeholder 替换。
+
+### 当前限制
+
+直接运行：
+
+```bash
+python3 -m memory_engine benchmark run benchmarks/dialogue_memory_cases.json
+```
+
+会得到 `case_pass_rate = 0.0`。原因不是数据质量失败，而是现有 runner 对 list-of-cases 格式只读取每个 case 的 `events` 字段；新 case 通过 `source_thread_id` 指向 `datasets/enterprise_dialogues.jsonl`，还缺少“先注入对应 thread 的 active/superseded memory labels，再执行 query”的 runner adapter。下一步应新增 `dialogue_memory` benchmark runner，再把这批数据转成真正的引擎指标。
+
 ### 局限
 
 - 当前 D7 主要验证抗干扰召回；矛盾更新专项和效能对比将在 D8/D9 补齐。

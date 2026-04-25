@@ -1,0 +1,1762 @@
+[
+  {
+    "case_id": "dialogue_case_001",
+    "source_thread_id": "thread_001",
+    "type": "temporary_noise",
+    "query": "今天临时加的需求是什么？",
+    "expected_active_value": "",
+    "forbidden_value": "临时需求",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_002",
+    "source_thread_id": "thread_021",
+    "type": "conflict_update",
+    "query": "生产环境日志级别现在用的是什么？",
+    "expected_active_value": "默认 WARN，排查时临时开 INFO",
+    "forbidden_value": "INFO",
+    "evidence_message_ids": [
+      "msg_021_007"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_003",
+    "source_thread_id": "thread_034",
+    "type": "recall",
+    "query": "技术选型原则现在是怎么定的？",
+    "expected_active_value": "优先选成熟方案，新框架必须先 POC 验证",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_034_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_004",
+    "source_thread_id": "thread_053",
+    "type": "recall",
+    "query": "测试数据管理规则现在是怎么定的？",
+    "expected_active_value": "每次测试前重置数据，测试后清理，禁止使用生产数据",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_053_002"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_005",
+    "source_thread_id": "thread_035",
+    "type": "recall",
+    "query": "帮我查一下性能测试通过标准的当前配置。",
+    "expected_active_value": "QPS>500, p99<200ms, error<0.1%",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_035_004"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_006",
+    "source_thread_id": "thread_052",
+    "type": "conflict_update",
+    "query": "慢查询优化阈值现在用的是什么？",
+    "expected_active_value": "普通查询 500ms，核心查询 200ms",
+    "forbidden_value": "500ms",
+    "evidence_message_ids": [
+      "msg_052_004"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_007",
+    "source_thread_id": "thread_027",
+    "type": "recall",
+    "query": "单元测试覆盖率要求现在是怎么定的？",
+    "expected_active_value": "核心模块 80%，其他模块 60%",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_027_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_008",
+    "source_thread_id": "thread_054",
+    "type": "recall",
+    "query": "统一接口返回格式有没有更新过？现在用的是哪个？",
+    "expected_active_value": "{code, message, data}，code 0 表示成功，非 0 是错误",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_054_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_009",
+    "source_thread_id": "thread_029",
+    "type": "recall",
+    "query": "Git 分支命名规范有没有更新过？现在用的是哪个？",
+    "expected_active_value": "feature/xxx、bugfix/xxx、hotfix/xxx",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_029_002"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_010",
+    "source_thread_id": "thread_039",
+    "type": "recall",
+    "query": "上线时间窗口现在是怎么定的？",
+    "expected_active_value": "工作日 10:00-16:00",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_039_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_011",
+    "source_thread_id": "thread_023",
+    "type": "recall",
+    "query": "数据库连接池大小现在是怎么定的？",
+    "expected_active_value": "100",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_023_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_012",
+    "source_thread_id": "thread_021",
+    "type": "recall",
+    "query": "关于生产环境日志级别，最新的规则是什么？",
+    "expected_active_value": "默认 WARN，排查时临时开 INFO",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_021_007"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_013",
+    "source_thread_id": "thread_031",
+    "type": "recall",
+    "query": "帮我查一下接口文档维护规则的当前配置。",
+    "expected_active_value": "Swagger 自动生成参数 + 人工补充业务说明",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_031_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_014",
+    "source_thread_id": "thread_016",
+    "type": "recall",
+    "query": "帮我查一下故障响应 SLA的当前配置。",
+    "expected_active_value": "P0 白天15分钟/夜间30分钟，P1 30分钟，P2 2小时",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_016_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_015",
+    "source_thread_id": "thread_012",
+    "type": "recall",
+    "query": "代码 review 分级标准有没有更新过？现在用的是哪个？",
+    "expected_active_value": "小改动 1 人 approve，大改动（>200行或核心模块）2 人 approve",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_012_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_016",
+    "source_thread_id": "thread_018",
+    "type": "temporary_noise",
+    "query": "今天开会讨论了什么？",
+    "expected_active_value": "",
+    "forbidden_value": "",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_017",
+    "source_thread_id": "thread_020",
+    "type": "recall",
+    "query": "API 限流策略现在是怎么定的？",
+    "expected_active_value": "200 QPS，观察一周后再评估",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_020_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_018",
+    "source_thread_id": "thread_021",
+    "type": "conflict_update",
+    "query": "之前生产环境日志级别用的是不是INFO？现在还是吗？",
+    "expected_active_value": "默认 WARN，排查时临时开 INFO",
+    "forbidden_value": "INFO",
+    "evidence_message_ids": [
+      "msg_021_007"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_019",
+    "source_thread_id": "thread_049",
+    "type": "recall",
+    "query": "帮我查一下Bug 优先级定义的当前配置。",
+    "expected_active_value": "P0 阻塞发布，P1 核心功能不可用，P2 体验问题，P3 优化建议",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_049_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_020",
+    "source_thread_id": "thread_057",
+    "type": "recall",
+    "query": "接口版本废弃流程现在是怎么定的？",
+    "expected_active_value": "提前 30 天通知→标记 deprecated→30 天后下线",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_057_002"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_021",
+    "source_thread_id": "thread_027",
+    "type": "recall",
+    "query": "单元测试覆盖率要求有没有更新过？现在用的是哪个？",
+    "expected_active_value": "核心模块 80%，其他模块 60%",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_027_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_022",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "demo 环境今天临时改了什么配置？",
+    "expected_active_value": "",
+    "forbidden_value": "demo 环境配置",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_023",
+    "source_thread_id": "thread_045",
+    "type": "recall",
+    "query": "关于权限最小化原则，最新的规则是什么？",
+    "expected_active_value": "按需申请，默认拒绝，定期审计",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_045_002"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_024",
+    "source_thread_id": "thread_001",
+    "type": "temporary_noise",
+    "query": "今天午饭吃什么？",
+    "expected_active_value": "",
+    "forbidden_value": "午饭",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_025",
+    "source_thread_id": "thread_046",
+    "type": "recall",
+    "query": "关于Bot 消息模板格式，最新的规则是什么？",
+    "expected_active_value": "[时间][类型] 内容",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_046_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_026",
+    "source_thread_id": "thread_036",
+    "type": "recall",
+    "query": "关于灰度用户选择策略，最新的规则是什么？",
+    "expected_active_value": "按地域分批，先华南后华东",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_036_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_027",
+    "source_thread_id": "thread_037",
+    "type": "conflict_update",
+    "query": "之前告警通知渠道用的是不是飞书机器人+短信？现在还是吗？",
+    "expected_active_value": "飞书机器人+短信，P0 额外加电话通知",
+    "forbidden_value": "飞书机器人+短信",
+    "evidence_message_ids": [
+      "msg_037_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_028",
+    "source_thread_id": "thread_001",
+    "type": "conflict_update",
+    "query": "生产部署参数现在用的是哪个 region？",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "forbidden_value": "--canary --region cn-shanghai",
+    "evidence_message_ids": [
+      "msg_001_011"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_029",
+    "source_thread_id": "thread_002",
+    "type": "recall",
+    "query": "关于灰度发布回滚策略，最新的规则是什么？",
+    "expected_active_value": "灰度比例 10%，回滚阈值：错误率 > 1% 或 p99 > 800ms",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_002_007"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_030",
+    "source_thread_id": "thread_059",
+    "type": "recall",
+    "query": "关于数据保留策略，最新的规则是什么？",
+    "expected_active_value": "业务数据保留 1 年，日志保留 90 天，备份保留 30 天",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_059_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_031",
+    "source_thread_id": "thread_020",
+    "type": "conflict_update",
+    "query": "API 限流策略现在用的是什么？",
+    "expected_active_value": "200 QPS，观察一周后再评估",
+    "forbidden_value": "100 QPS",
+    "evidence_message_ids": [
+      "msg_020_003"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_032",
+    "source_thread_id": "thread_042",
+    "type": "conflict_update",
+    "query": "之前接口超时时间用的是不是3 秒？现在还是吗？",
+    "expected_active_value": "5 秒",
+    "forbidden_value": "3 秒",
+    "evidence_message_ids": [
+      "msg_042_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_033",
+    "source_thread_id": "thread_049",
+    "type": "recall",
+    "query": "Bug 优先级定义现在是怎么定的？",
+    "expected_active_value": "P0 阻塞发布，P1 核心功能不可用，P2 体验问题，P3 优化建议",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_049_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_034",
+    "source_thread_id": "thread_042",
+    "type": "recall",
+    "query": "接口超时时间现在是怎么定的？",
+    "expected_active_value": "5 秒",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_042_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_035",
+    "source_thread_id": "thread_058",
+    "type": "recall",
+    "query": "飞书审批流配置现在是怎么定的？",
+    "expected_active_value": "提交→直属上级",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_058_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_036",
+    "source_thread_id": "thread_009",
+    "type": "recall",
+    "query": "周报发送规则有没有更新过？现在用的是哪个？",
+    "expected_active_value": "每周五 18:00 前，用飞书文档模板",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_009_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_037",
+    "source_thread_id": "thread_017",
+    "type": "recall",
+    "query": "关于测试群消息前缀规范，最新的规则是什么？",
+    "expected_active_value": "[TEST] 前缀为测试消息，[PROD] 前缀为生产相关，日常闲聊不加前缀",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_017_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_038",
+    "source_thread_id": "thread_032",
+    "type": "conflict_update",
+    "query": "之前需求变更流程用的是不是口头确认即可？现在还是吗？",
+    "expected_active_value": "必须书面确认+审批，飞书文档写清变更内容和影响",
+    "forbidden_value": "口头确认即可",
+    "evidence_message_ids": [
+      "msg_032_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_039",
+    "source_thread_id": "thread_020",
+    "type": "recall",
+    "query": "关于API 限流策略，最新的规则是什么？",
+    "expected_active_value": "200 QPS，观察一周后再评估",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_020_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_040",
+    "source_thread_id": "thread_016",
+    "type": "conflict_update",
+    "query": "故障响应 SLA现在用的是什么？",
+    "expected_active_value": "P0 白天15分钟/夜间30分钟，P1 30分钟，P2 2小时",
+    "forbidden_value": "P0 15分钟，P1 30分钟，P2 2小时",
+    "evidence_message_ids": [
+      "msg_016_005"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_041",
+    "source_thread_id": "thread_053",
+    "type": "temporary_noise",
+    "query": "今天数据重置了吗？",
+    "expected_active_value": "",
+    "forbidden_value": "",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_042",
+    "source_thread_id": "thread_001",
+    "type": "temporary_noise",
+    "query": "今天临时开的 debug 端口关了吗？",
+    "expected_active_value": "",
+    "forbidden_value": "debug 端口",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_043",
+    "source_thread_id": "thread_028",
+    "type": "recall",
+    "query": "CI/CD 流水线步骤现在是怎么定的？",
+    "expected_active_value": "lint→test→build→deploy",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_028_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_044",
+    "source_thread_id": "thread_037",
+    "type": "recall",
+    "query": "告警通知渠道现在是怎么定的？",
+    "expected_active_value": "飞书机器人+短信，P0 额外加电话通知",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_037_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_045",
+    "source_thread_id": "thread_005",
+    "type": "recall",
+    "query": "帮我查一下Benchmark 报告口径的当前配置。",
+    "expected_active_value": "top-5 召回率，case 数 150 条",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_005_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_046",
+    "source_thread_id": "thread_048",
+    "type": "recall",
+    "query": "接口联调流程现在是怎么定的？",
+    "expected_active_value": "先对齐接口文档→mock 数据联调→真实环境联调",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_048_002"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_047",
+    "source_thread_id": "thread_006",
+    "type": "temporary_noise",
+    "query": "今天下午的会改到几点了？",
+    "expected_active_value": "",
+    "forbidden_value": "会议时间",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_048",
+    "source_thread_id": "thread_027",
+    "type": "conflict_update",
+    "query": "单元测试覆盖率要求现在用的是什么？",
+    "expected_active_value": "核心模块 80%，其他模块 60%",
+    "forbidden_value": "60%",
+    "evidence_message_ids": [
+      "msg_027_005"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_049",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "今天临时处理的那个 demo 环境问题是怎么解决的？",
+    "expected_active_value": "",
+    "forbidden_value": "缓存 TTL 临时调整",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_050",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "今天临时部署的版本号是多少？",
+    "expected_active_value": "",
+    "forbidden_value": "版本号",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_051",
+    "source_thread_id": "thread_006",
+    "type": "recall",
+    "query": "关于白皮书章节分工，最新的规则是什么？",
+    "expected_active_value": "方晓写1-2章，韩磊写3章，周然写4章，陈岚写5章，deadline下周三",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_006_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_052",
+    "source_thread_id": "thread_036",
+    "type": "conflict_update",
+    "query": "灰度用户选择策略现在用的是什么？",
+    "expected_active_value": "按地域分批，先华南后华东",
+    "forbidden_value": "随机 10% 用户",
+    "evidence_message_ids": [
+      "msg_036_006"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_053",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "今天紧急修复的那个 bug 是什么？",
+    "expected_active_value": "",
+    "forbidden_value": "紧急修复",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_054",
+    "source_thread_id": "thread_016",
+    "type": "conflict_update",
+    "query": "之前故障响应 SLA用的是不是P0 15分钟，P1 30分钟，P2 2小时？现在还是吗？",
+    "expected_active_value": "P0 白天15分钟/夜间30分钟，P1 30分钟，P2 2小时",
+    "forbidden_value": "P0 15分钟，P1 30分钟，P2 2小时",
+    "evidence_message_ids": [
+      "msg_016_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_055",
+    "source_thread_id": "thread_025",
+    "type": "recall",
+    "query": "API 版本号规范有没有更新过？现在用的是哪个？",
+    "expected_active_value": "版本号统一用路径前缀 /v1/ /v2/",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_025_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_056",
+    "source_thread_id": "thread_032",
+    "type": "conflict_update",
+    "query": "需求变更流程现在用的是什么？",
+    "expected_active_value": "必须书面确认+审批，飞书文档写清变更内容和影响",
+    "forbidden_value": "口头确认即可",
+    "evidence_message_ids": [
+      "msg_032_005"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_057",
+    "source_thread_id": "thread_044",
+    "type": "conflict_update",
+    "query": "API 密钥轮换周期现在用的是什么？",
+    "expected_active_value": "60 天，到期前 7 天自动提醒",
+    "forbidden_value": "90 天",
+    "evidence_message_ids": [
+      "msg_044_005"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_058",
+    "source_thread_id": "thread_023",
+    "type": "conflict_update",
+    "query": "之前数据库连接池大小用的是不是50？现在还是吗？",
+    "expected_active_value": "100",
+    "forbidden_value": "50",
+    "evidence_message_ids": [
+      "msg_023_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_059",
+    "source_thread_id": "thread_027",
+    "type": "conflict_update",
+    "query": "之前单元测试覆盖率要求用的是不是60%？现在还是吗？",
+    "expected_active_value": "核心模块 80%，其他模块 60%",
+    "forbidden_value": "60%",
+    "evidence_message_ids": [
+      "msg_027_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_060",
+    "source_thread_id": "thread_003",
+    "type": "recall",
+    "query": "飞书 Bot 最小权限集现在是怎么定的？",
+    "expected_active_value": "im:message:send_as_bot, im:chat:readonly, im:message:readonly",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_003_004"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_061",
+    "source_thread_id": "thread_032",
+    "type": "recall",
+    "query": "关于需求变更流程，最新的规则是什么？",
+    "expected_active_value": "必须书面确认+审批，飞书文档写清变更内容和影响",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_032_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_062",
+    "source_thread_id": "thread_001",
+    "type": "temporary_noise",
+    "query": "刚才说先这样，具体是什么意思？",
+    "expected_active_value": "",
+    "forbidden_value": "",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_063",
+    "source_thread_id": "thread_040",
+    "type": "recall",
+    "query": "回滚操作步骤现在是怎么定的？",
+    "expected_active_value": "1.停止流量 2.回滚版本 3.健康检查+核心接口smoke test 4.恢复流量",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_040_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_064",
+    "source_thread_id": "thread_037",
+    "type": "conflict_update",
+    "query": "告警通知渠道现在用的是什么？",
+    "expected_active_value": "飞书机器人+短信，P0 额外加电话通知",
+    "forbidden_value": "飞书机器人+短信",
+    "evidence_message_ids": [
+      "msg_037_003"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_065",
+    "source_thread_id": "thread_009",
+    "type": "conflict_update",
+    "query": "周报发送规则现在用的是什么？",
+    "expected_active_value": "每周五 18:00 前，用飞书文档模板",
+    "forbidden_value": "每周五 17:00 前，用飞书文档模板",
+    "evidence_message_ids": [
+      "msg_009_003"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_066",
+    "source_thread_id": "thread_052",
+    "type": "recall",
+    "query": "慢查询优化阈值现在是怎么定的？",
+    "expected_active_value": "普通查询 500ms，核心查询 200ms",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_052_004"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_067",
+    "source_thread_id": "thread_004",
+    "type": "recall",
+    "query": "Bitable 同步字段映射现在是怎么定的？",
+    "expected_active_value": "field_code 做 key，保留原始类型，展示层做格式化",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_004_008"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_068",
+    "source_thread_id": "thread_038",
+    "type": "recall",
+    "query": "数据备份策略现在是怎么定的？",
+    "expected_active_value": "每日全量+每小时增量，保留 30 天",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_038_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_069",
+    "source_thread_id": "thread_019",
+    "type": "conflict_update",
+    "query": "发布审批流程现在用的是什么？",
+    "expected_active_value": "常规发布需技术+产品两个审批人，紧急发布一人审批+事后补全",
+    "forbidden_value": "三个审批人",
+    "evidence_message_ids": [
+      "msg_019_006"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_070",
+    "source_thread_id": "thread_008",
+    "type": "recall",
+    "query": "关于recall 响应 SLA，最新的规则是什么？",
+    "expected_active_value": "正式环境 p99 < 2 秒",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_008_008"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_071",
+    "source_thread_id": "thread_032",
+    "type": "recall",
+    "query": "需求变更流程现在是怎么定的？",
+    "expected_active_value": "必须书面确认+审批，飞书文档写清变更内容和影响",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_032_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_072",
+    "source_thread_id": "thread_034",
+    "type": "recall",
+    "query": "技术选型原则有没有更新过？现在用的是哪个？",
+    "expected_active_value": "优先选成熟方案，新框架必须先 POC 验证",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_034_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_073",
+    "source_thread_id": "thread_030",
+    "type": "recall",
+    "query": "Commit message 格式有没有更新过？现在用的是哪个？",
+    "expected_active_value": "type(scope): description，type 用 feat/fix/docs/refactor",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_030_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_074",
+    "source_thread_id": "thread_047",
+    "type": "recall",
+    "query": "帮我查一下知识库文档分类规则的当前配置。",
+    "expected_active_value": "技术文档/产品文档/运维文档/会议记录 四大类",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_047_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_075",
+    "source_thread_id": "thread_042",
+    "type": "recall",
+    "query": "关于接口超时时间，最新的规则是什么？",
+    "expected_active_value": "5 秒",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_042_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_076",
+    "source_thread_id": "thread_050",
+    "type": "recall",
+    "query": "帮我查一下发版通知模板的当前配置。",
+    "expected_active_value": "版本号+变更内容+影响范围+回滚方案",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_050_002"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_077",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "临时 demo 的截图先怎么处理的？",
+    "expected_active_value": "",
+    "forbidden_value": "截图处理",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_078",
+    "source_thread_id": "thread_058",
+    "type": "conflict_update",
+    "query": "之前飞书审批流配置用的是不是提交→直属上级→部门负责人？现在还是吗？",
+    "expected_active_value": "提交→直属上级",
+    "forbidden_value": "提交→直属上级→部门负责人",
+    "evidence_message_ids": [
+      "msg_058_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_079",
+    "source_thread_id": "thread_053",
+    "type": "recall",
+    "query": "关于测试数据管理规则，最新的规则是什么？",
+    "expected_active_value": "每次测试前重置数据，测试后清理，禁止使用生产数据",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_053_002"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_080",
+    "source_thread_id": "thread_009",
+    "type": "conflict_update",
+    "query": "之前周报发送规则用的是不是每周五 17:00 前，用飞书文档模板？现在还是吗？",
+    "expected_active_value": "每周五 18:00 前，用飞书文档模板",
+    "forbidden_value": "每周五 17:00 前，用飞书文档模板",
+    "evidence_message_ids": [
+      "msg_009_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_081",
+    "source_thread_id": "thread_004",
+    "type": "recall",
+    "query": "Bitable 同步字段映射有没有更新过？现在用的是哪个？",
+    "expected_active_value": "field_code 做 key，保留原始类型，展示层做格式化",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_004_008"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_082",
+    "source_thread_id": "thread_019",
+    "type": "recall",
+    "query": "发布审批流程现在是怎么定的？",
+    "expected_active_value": "常规发布需技术+产品两个审批人，紧急发布一人审批+事后补全",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_019_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_083",
+    "source_thread_id": "thread_058",
+    "type": "conflict_update",
+    "query": "飞书审批流配置现在用的是什么？",
+    "expected_active_value": "提交→直属上级",
+    "forbidden_value": "提交→直属上级→部门负责人",
+    "evidence_message_ids": [
+      "msg_058_003"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_084",
+    "source_thread_id": "thread_007",
+    "type": "temporary_noise",
+    "query": "demo 视频录好了吗？",
+    "expected_active_value": "",
+    "forbidden_value": "",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_085",
+    "source_thread_id": "thread_013",
+    "type": "recall",
+    "query": "数据安全边界有没有更新过？现在用的是哪个？",
+    "expected_active_value": "禁止沉淀 PII（手机号、邮箱、token、API key），敏感字段用 placeholder 替换",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_013_004"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_086",
+    "source_thread_id": "thread_036",
+    "type": "conflict_update",
+    "query": "之前灰度用户选择策略用的是不是随机 10% 用户？现在还是吗？",
+    "expected_active_value": "按地域分批，先华南后华东",
+    "forbidden_value": "随机 10% 用户",
+    "evidence_message_ids": [
+      "msg_036_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_087",
+    "source_thread_id": "thread_052",
+    "type": "recall",
+    "query": "帮我查一下慢查询优化阈值的当前配置。",
+    "expected_active_value": "普通查询 500ms，核心查询 200ms",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_052_004"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_088",
+    "source_thread_id": "thread_010",
+    "type": "recall",
+    "query": "关于会议纪要归档规则，最新的规则是什么？",
+    "expected_active_value": "知识库「会议记录」节点，YYYY-MM-DD-主题命名",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_010_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_089",
+    "source_thread_id": "thread_036",
+    "type": "recall",
+    "query": "灰度用户选择策略现在是怎么定的？",
+    "expected_active_value": "按地域分批，先华南后华东",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_036_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_090",
+    "source_thread_id": "thread_015",
+    "type": "conflict_update",
+    "query": "之前遗忘提醒周期用的是不是30 天未被 recall 的记忆，提醒管理员考虑归档？现在还是吗？",
+    "expected_active_value": "90 天未被 recall 的记忆，提醒管理员考虑归档",
+    "forbidden_value": "30 天未被 recall 的记忆，提醒管理员考虑归档",
+    "evidence_message_ids": [
+      "msg_015_007"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_091",
+    "source_thread_id": "thread_001",
+    "type": "conflict_update",
+    "query": "生产部署参数现在用的是哪个 region？",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "forbidden_value": "--canary --region cn-shanghai",
+    "evidence_message_ids": [
+      "msg_001_011"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_092",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "今天临时调整的缓存 TTL 是多少？",
+    "expected_active_value": "",
+    "forbidden_value": "缓存 TTL",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_093",
+    "source_thread_id": "thread_022",
+    "type": "conflict_update",
+    "query": "CPU 告警阈值现在用的是什么？",
+    "expected_active_value": "85% 持续 5 分钟触发告警",
+    "forbidden_value": "80%",
+    "evidence_message_ids": [
+      "msg_022_008"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_094",
+    "source_thread_id": "thread_019",
+    "type": "conflict_update",
+    "query": "之前发布审批流程用的是不是三个审批人？现在还是吗？",
+    "expected_active_value": "常规发布需技术+产品两个审批人，紧急发布一人审批+事后补全",
+    "forbidden_value": "三个审批人",
+    "evidence_message_ids": [
+      "msg_019_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_095",
+    "source_thread_id": "thread_001",
+    "type": "recall",
+    "query": "生产部署参数有没有更新过？现在用的是哪个？",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_001_011"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_096",
+    "source_thread_id": "thread_048",
+    "type": "recall",
+    "query": "关于接口联调流程，最新的规则是什么？",
+    "expected_active_value": "先对齐接口文档→mock 数据联调→真实环境联调",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_048_002"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_097",
+    "source_thread_id": "thread_001",
+    "type": "conflict_update",
+    "query": "生产部署参数现在用的是什么？",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "forbidden_value": "--canary --region cn-shanghai",
+    "evidence_message_ids": [
+      "msg_001_011"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_098",
+    "source_thread_id": "thread_016",
+    "type": "recall",
+    "query": "故障响应 SLA现在是怎么定的？",
+    "expected_active_value": "P0 白天15分钟/夜间30分钟，P1 30分钟，P2 2小时",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_016_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_099",
+    "source_thread_id": "thread_001",
+    "type": "temporary_noise",
+    "query": "今天网络问题解决了吗？",
+    "expected_active_value": "",
+    "forbidden_value": "网络问题",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_100",
+    "source_thread_id": "thread_022",
+    "type": "conflict_update",
+    "query": "之前CPU 告警阈值用的是不是80%？现在还是吗？",
+    "expected_active_value": "85% 持续 5 分钟触发告警",
+    "forbidden_value": "80%",
+    "evidence_message_ids": [
+      "msg_022_008"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_101",
+    "source_thread_id": "thread_020",
+    "type": "conflict_update",
+    "query": "之前API 限流策略用的是不是100 QPS？现在还是吗？",
+    "expected_active_value": "200 QPS，观察一周后再评估",
+    "forbidden_value": "100 QPS",
+    "evidence_message_ids": [
+      "msg_020_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_102",
+    "source_thread_id": "thread_022",
+    "type": "recall",
+    "query": "CPU 告警阈值有没有更新过？现在用的是哪个？",
+    "expected_active_value": "85% 持续 5 分钟触发告警",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_022_008"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_103",
+    "source_thread_id": "thread_021",
+    "type": "recall",
+    "query": "生产环境日志级别现在是怎么定的？",
+    "expected_active_value": "默认 WARN，排查时临时开 INFO",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_021_007"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_104",
+    "source_thread_id": "thread_015",
+    "type": "recall",
+    "query": "遗忘提醒周期现在是怎么定的？",
+    "expected_active_value": "90 天未被 recall 的记忆，提醒管理员考虑归档",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_015_007"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_105",
+    "source_thread_id": "thread_051",
+    "type": "recall",
+    "query": "接口幂等性要求有没有更新过？现在用的是哪个？",
+    "expected_active_value": "写接口必须支持幂等，通过 request_id 去重",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_051_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_106",
+    "source_thread_id": "thread_008",
+    "type": "recall",
+    "query": "recall 响应 SLA现在是怎么定的？",
+    "expected_active_value": "正式环境 p99 < 2 秒",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_008_008"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_107",
+    "source_thread_id": "thread_031",
+    "type": "recall",
+    "query": "接口文档维护规则现在是怎么定的？",
+    "expected_active_value": "Swagger 自动生成参数 + 人工补充业务说明",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_031_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_108",
+    "source_thread_id": "thread_053",
+    "type": "temporary_noise",
+    "query": "今天测试环境部署了什么版本？",
+    "expected_active_value": "",
+    "forbidden_value": "部署版本",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_109",
+    "source_thread_id": "thread_059",
+    "type": "recall",
+    "query": "数据保留策略现在是怎么定的？",
+    "expected_active_value": "业务数据保留 1 年，日志保留 90 天，备份保留 30 天",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_059_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_110",
+    "source_thread_id": "thread_007",
+    "type": "recall",
+    "query": "关于Demo 录屏规格，最新的规则是什么？",
+    "expected_active_value": "OBS 录制，1080p，30fps",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_007_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_111",
+    "source_thread_id": "thread_044",
+    "type": "recall",
+    "query": "API 密钥轮换周期现在是怎么定的？",
+    "expected_active_value": "60 天，到期前 7 天自动提醒",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_044_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_112",
+    "source_thread_id": "thread_014",
+    "type": "recall",
+    "query": "关于Prompt 注入防护规则，最新的规则是什么？",
+    "expected_active_value": "双重防护：输入层检测注入模式并丢弃，输出层校验不泄露内部信息",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_014_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_113",
+    "source_thread_id": "thread_009",
+    "type": "recall",
+    "query": "周报发送规则现在是怎么定的？",
+    "expected_active_value": "每周五 18:00 前，用飞书文档模板",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_009_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_114",
+    "source_thread_id": "thread_033",
+    "type": "recall",
+    "query": "排期估算方法现在是怎么定的？",
+    "expected_active_value": "三点估算法：(乐观+4*最可能+悲观)/6",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_033_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_115",
+    "source_thread_id": "thread_011",
+    "type": "recall",
+    "query": "文档 ingestion 审批流程有没有更新过？现在用的是哪个？",
+    "expected_active_value": "提交→自动通知管理员→24h内无拒绝则自动通过",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_011_004"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_116",
+    "source_thread_id": "thread_039",
+    "type": "recall",
+    "query": "帮我查一下上线时间窗口的当前配置。",
+    "expected_active_value": "工作日 10:00-16:00",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_039_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_117",
+    "source_thread_id": "thread_045",
+    "type": "recall",
+    "query": "权限最小化原则现在是怎么定的？",
+    "expected_active_value": "按需申请，默认拒绝，定期审计",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_045_002"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_118",
+    "source_thread_id": "thread_055",
+    "type": "recall",
+    "query": "服务降级策略现在是怎么定的？",
+    "expected_active_value": "核心功能优先，非核心功能降级返回缓存数据",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_055_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_119",
+    "source_thread_id": "thread_001",
+    "type": "conflict_update",
+    "query": "之前生产部署参数用的是不是--canary --region cn-shanghai？现在还是吗？",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "forbidden_value": "--canary --region cn-shanghai",
+    "evidence_message_ids": [
+      "msg_001_011"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_120",
+    "source_thread_id": "thread_001",
+    "type": "recall",
+    "query": "生产部署参数现在是怎么定的？",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_001_011"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_121",
+    "source_thread_id": "thread_044",
+    "type": "recall",
+    "query": "帮我查一下API 密钥轮换周期的当前配置。",
+    "expected_active_value": "60 天，到期前 7 天自动提醒",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_044_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_122",
+    "source_thread_id": "thread_004",
+    "type": "conflict_update",
+    "query": "之前Bitable 同步字段映射用的是不是field_code 做 key，value 统一转 string？现在还是吗？",
+    "expected_active_value": "field_code 做 key，保留原始类型，展示层做格式化",
+    "forbidden_value": "field_code 做 key，value 统一转 string",
+    "evidence_message_ids": [
+      "msg_004_008"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_123",
+    "source_thread_id": "thread_015",
+    "type": "conflict_update",
+    "query": "遗忘提醒周期现在用的是什么？",
+    "expected_active_value": "90 天未被 recall 的记忆，提醒管理员考虑归档",
+    "forbidden_value": "30 天未被 recall 的记忆，提醒管理员考虑归档",
+    "evidence_message_ids": [
+      "msg_015_007"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_124",
+    "source_thread_id": "thread_026",
+    "type": "recall",
+    "query": "关于业务错误码范围，最新的规则是什么？",
+    "expected_active_value": "1000-1999 业务错误，2000-2999 系统错误，3000-3999 第三方错误",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_026_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_125",
+    "source_thread_id": "thread_042",
+    "type": "conflict_update",
+    "query": "接口超时时间现在用的是什么？",
+    "expected_active_value": "5 秒",
+    "forbidden_value": "3 秒",
+    "evidence_message_ids": [
+      "msg_042_006"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_126",
+    "source_thread_id": "thread_022",
+    "type": "recall",
+    "query": "CPU 告警阈值现在是怎么定的？",
+    "expected_active_value": "85% 持续 5 分钟触发告警",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_022_008"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_127",
+    "source_thread_id": "thread_052",
+    "type": "conflict_update",
+    "query": "之前慢查询优化阈值用的是不是500ms？现在还是吗？",
+    "expected_active_value": "普通查询 500ms，核心查询 200ms",
+    "forbidden_value": "500ms",
+    "evidence_message_ids": [
+      "msg_052_004"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_128",
+    "source_thread_id": "thread_023",
+    "type": "conflict_update",
+    "query": "数据库连接池大小现在用的是什么？",
+    "expected_active_value": "100",
+    "forbidden_value": "50",
+    "evidence_message_ids": [
+      "msg_023_003"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_129",
+    "source_thread_id": "thread_055",
+    "type": "recall",
+    "query": "帮我查一下服务降级策略的当前配置。",
+    "expected_active_value": "核心功能优先，非核心功能降级返回缓存数据",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_055_003"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_130",
+    "source_thread_id": "thread_028",
+    "type": "recall",
+    "query": "CI/CD 流水线步骤有没有更新过？现在用的是哪个？",
+    "expected_active_value": "lint→test→build→deploy",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_028_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_131",
+    "source_thread_id": "thread_044",
+    "type": "conflict_update",
+    "query": "之前API 密钥轮换周期用的是不是90 天？现在还是吗？",
+    "expected_active_value": "60 天，到期前 7 天自动提醒",
+    "forbidden_value": "90 天",
+    "evidence_message_ids": [
+      "msg_044_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_132",
+    "source_thread_id": "thread_008",
+    "type": "temporary_noise",
+    "query": "今天给客户临时开的环境参数是什么？",
+    "expected_active_value": "",
+    "forbidden_value": "临时环境参数",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_133",
+    "source_thread_id": "thread_056",
+    "type": "recall",
+    "query": "代码静态分析工具有没有更新过？现在用的是哪个？",
+    "expected_active_value": "ESLint + Semgrep",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_056_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_134",
+    "source_thread_id": "thread_012",
+    "type": "recall",
+    "query": "代码 review 分级标准现在是怎么定的？",
+    "expected_active_value": "小改动 1 人 approve，大改动（>200行或核心模块）2 人 approve",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_012_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_135",
+    "source_thread_id": "thread_056",
+    "type": "conflict_update",
+    "query": "代码静态分析工具现在用的是什么？",
+    "expected_active_value": "ESLint + Semgrep",
+    "forbidden_value": "ESLint + SonarQube",
+    "evidence_message_ids": [
+      "msg_056_006"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_136",
+    "source_thread_id": "thread_033",
+    "type": "recall",
+    "query": "帮我查一下排期估算方法的当前配置。",
+    "expected_active_value": "三点估算法：(乐观+4*最可能+悲观)/6",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_033_005"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_137",
+    "source_thread_id": "thread_047",
+    "type": "recall",
+    "query": "知识库文档分类规则现在是怎么定的？",
+    "expected_active_value": "技术文档/产品文档/运维文档/会议记录 四大类",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_047_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_138",
+    "source_thread_id": "thread_048",
+    "type": "temporary_noise",
+    "query": "今天联调结果怎么样？",
+    "expected_active_value": "",
+    "forbidden_value": "",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_139",
+    "source_thread_id": "thread_002",
+    "type": "recall",
+    "query": "灰度发布回滚策略现在是怎么定的？",
+    "expected_active_value": "灰度比例 10%，回滚阈值：错误率 > 1% 或 p99 > 800ms",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_002_007"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_140",
+    "source_thread_id": "thread_029",
+    "type": "recall",
+    "query": "Git 分支命名规范现在是怎么定的？",
+    "expected_active_value": "feature/xxx、bugfix/xxx、hotfix/xxx",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_029_002"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_141",
+    "source_thread_id": "thread_051",
+    "type": "recall",
+    "query": "接口幂等性要求现在是怎么定的？",
+    "expected_active_value": "写接口必须支持幂等，通过 request_id 去重",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_051_003"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_142",
+    "source_thread_id": "thread_004",
+    "type": "conflict_update",
+    "query": "Bitable 同步字段映射现在用的是什么？",
+    "expected_active_value": "field_code 做 key，保留原始类型，展示层做格式化",
+    "forbidden_value": "field_code 做 key，value 统一转 string",
+    "evidence_message_ids": [
+      "msg_004_008"
+    ],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_143",
+    "source_thread_id": "thread_026",
+    "type": "recall",
+    "query": "业务错误码范围现在是怎么定的？",
+    "expected_active_value": "1000-1999 业务错误，2000-2999 系统错误，3000-3999 第三方错误",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_026_006"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_144",
+    "source_thread_id": "thread_038",
+    "type": "recall",
+    "query": "数据备份策略有没有更新过？现在用的是哪个？",
+    "expected_active_value": "每日全量+每小时增量，保留 30 天",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_038_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_145",
+    "source_thread_id": "thread_056",
+    "type": "conflict_update",
+    "query": "之前代码静态分析工具用的是不是ESLint + SonarQube？现在还是吗？",
+    "expected_active_value": "ESLint + Semgrep",
+    "forbidden_value": "ESLint + SonarQube",
+    "evidence_message_ids": [
+      "msg_056_006"
+    ],
+    "difficulty": "hard"
+  },
+  {
+    "case_id": "dialogue_case_146",
+    "source_thread_id": "thread_035",
+    "type": "recall",
+    "query": "性能测试通过标准现在是怎么定的？",
+    "expected_active_value": "QPS>500, p99<200ms, error<0.1%",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_035_004"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_147",
+    "source_thread_id": "thread_010",
+    "type": "recall",
+    "query": "会议纪要归档规则现在是怎么定的？",
+    "expected_active_value": "知识库「会议记录」节点，YYYY-MM-DD-主题命名",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_010_005"
+    ],
+    "difficulty": "easy"
+  },
+  {
+    "case_id": "dialogue_case_148",
+    "source_thread_id": "thread_001",
+    "type": "temporary_noise",
+    "query": "刚才说的那个链接是什么？",
+    "expected_active_value": "",
+    "forbidden_value": "链接",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_149",
+    "source_thread_id": "thread_017",
+    "type": "temporary_noise",
+    "query": "测试账号密码是什么来着？",
+    "expected_active_value": "",
+    "forbidden_value": "密码",
+    "evidence_message_ids": [],
+    "difficulty": "medium"
+  },
+  {
+    "case_id": "dialogue_case_150",
+    "source_thread_id": "thread_017",
+    "type": "recall",
+    "query": "测试群消息前缀规范现在是怎么定的？",
+    "expected_active_value": "[TEST] 前缀为测试消息，[PROD] 前缀为生产相关，日常闲聊不加前缀",
+    "forbidden_value": "",
+    "evidence_message_ids": [
+      "msg_017_003"
+    ],
+    "difficulty": "easy"
+  }
+]
