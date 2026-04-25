@@ -13,7 +13,10 @@ logs/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/.test_dbs/
+data/.test_day7_outputs/
 reports/*.csv
 reports/*.json
 .bitable_sync_*.json
+.tmp/
 AGENTS.md

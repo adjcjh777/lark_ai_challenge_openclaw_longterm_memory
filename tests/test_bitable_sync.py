@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 
 from memory_engine.bitable_sync import collect_sync_payload, setup_commands, sync_payload
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
+from temp_utils import WorkspaceTempDir
 
 
 class BitableSyncTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = WorkspaceTempDir("bitable")
         self.db_path = Path(self.temp_dir.name) / "memory.sqlite"
         self.conn = connect(self.db_path)
         init_db(self.conn)

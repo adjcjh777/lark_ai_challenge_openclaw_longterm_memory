@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
 from memory_engine.feishu_runtime import FeishuRunLogger
+from temp_utils import WorkspaceTempDir
 
 
 class FeishuRuntimeLoggingTest(unittest.TestCase):
     def test_run_logger_writes_timestamped_ndjson_records(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with WorkspaceTempDir("feishu_runtime_logging") as temp_dir:
             logger = FeishuRunLogger(Path(temp_dir) / "feishu-bot")
 
             logger.write("listen_start", profile="feishu-ai-challenge")

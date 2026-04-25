@@ -33,6 +33,15 @@
 3. 看召回结果里有没有 `source_type`、`source_id`、`quote`。这三个字段表示“这条记忆从哪里来”。
 4. 用自己的话写一版 5 分钟 Demo 讲法，重点讲：为什么它不是普通搜索。
 
+## 队友任务补齐记录
+
+2026-04-25 已补齐 D1 队友任务，详见 `docs/day1-teammate-completion.md`。
+
+- 30 条记忆测试样例和 10 条矛盾更新 case 已写入 `benchmarks/day1_teammate_cases.json`。
+- 100 条干扰聊天样例已写入 `data/day1_teammate_noise_messages.txt`。
+- 5 分钟 Demo 讲法、白皮书一页目录和回复文案审查建议已写入 `docs/day1-teammate-completion.md`。
+- 可用命令验证：`python3 -m memory_engine benchmark run benchmarks/day1_teammate_cases.json`。
+
 今晚不用做：
 
 - 不用改数据库结构。

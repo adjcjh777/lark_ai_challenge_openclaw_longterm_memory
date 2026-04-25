@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import csv
+from contextlib import contextmanager
 import json
-import tempfile
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +22,8 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
     results = []
 
     for case in cases:
-        with tempfile.NamedTemporaryFile(prefix="memory_benchmark_", suffix=".sqlite") as tmp:
-            conn = connect(tmp.name)
+        with _temporary_benchmark_db_path("memory_benchmark") as db_path:
+            conn = connect(db_path)
             init_db(conn)
             repo = MemoryRepository(conn)
 
@@ -72,8 +73,8 @@ def run_anti_interference_benchmark(
     source_path: str | Path,
     scope: str = DEFAULT_SCOPE,
 ) -> dict[str, Any]:
-    with tempfile.NamedTemporaryFile(prefix="anti_interference_benchmark_", suffix=".sqlite") as tmp:
-        conn = connect(tmp.name)
+    with _temporary_benchmark_db_path("anti_interference_benchmark") as db_path:
+        conn = connect(db_path)
         init_db(conn)
         repo = MemoryRepository(conn)
 
@@ -253,8 +254,8 @@ def run_document_ingestion_benchmark(cases_path: str | Path, *, scope: str = DEF
     results = []
 
     for case in cases:
-        with tempfile.NamedTemporaryFile(prefix="doc_ingestion_benchmark_", suffix=".sqlite") as tmp:
-            conn = connect(tmp.name)
+        with _temporary_benchmark_db_path("doc_ingestion_benchmark") as db_path:
+            conn = connect(db_path)
             init_db(conn)
             repo = MemoryRepository(conn)
 
@@ -559,3 +560,20 @@ def _ratio(numerator: int, denominator: int) -> float:
     if denominator == 0:
         return 1.0
     return round(numerator / denominator, 4)
+
+
+@contextmanager
+def _temporary_benchmark_db_path(prefix: str):
+    root = Path("data")
+    root.mkdir(parents=True, exist_ok=True)
+    stem = f".{prefix}_{uuid.uuid4().hex}"
+    path = root / f"{stem}.sqlite"
+    try:
+        yield path
+    finally:
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            candidate = root / f"{stem}.sqlite{suffix}"
+            try:
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                pass

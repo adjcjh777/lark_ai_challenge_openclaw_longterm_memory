@@ -1,0 +1,295 @@
+[
+  {
+    "case_id": "tm_d1_recall_deploy_canary_001",
+    "type": "recall",
+    "events": ["生产部署必须加 --canary --region cn-shanghai，不允许直接全量发布。"],
+    "noise_count": 20,
+    "query": "生产部署参数是什么",
+    "expected_active_value": "--canary --region cn-shanghai"
+  },
+  {
+    "case_id": "tm_d1_recall_weekly_doc_002",
+    "type": "recall",
+    "events": ["周报优先发飞书文档，不要只发聊天消息。"],
+    "noise_count": 20,
+    "query": "周报应该怎么发",
+    "expected_active_value": "飞书文档"
+  },
+  {
+    "case_id": "tm_d1_recall_backend_fastapi_003",
+    "type": "recall",
+    "events": ["后端框架最终采用 FastAPI，原因是团队 Python 栈成熟。"],
+    "query": "后端框架选型是什么",
+    "expected_active_value": "FastAPI"
+  },
+  {
+    "case_id": "tm_d1_recall_storage_bitable_004",
+    "type": "recall",
+    "events": ["数据存储采用 SQLite + Bitable 双层结构。"],
+    "query": "数据库和存储方案是什么",
+    "expected_active_value": "SQLite + Bitable"
+  },
+  {
+    "case_id": "tm_d1_recall_feishu_permission_005",
+    "type": "recall",
+    "events": ["飞书 Bot 权限必须先申请 group_at_msg、p2p_msg 和 send_as_bot。"],
+    "query": "飞书机器人权限有哪些",
+    "expected_active_value": "send_as_bot"
+  },
+  {
+    "case_id": "tm_d1_recall_benchmark_owner_006",
+    "type": "recall",
+    "events": ["Benchmark 由队友维护，主线开发不要被测试集阻塞。"],
+    "query": "Benchmark 谁维护",
+    "expected_active_value": "队友"
+  },
+  {
+    "case_id": "tm_d1_recall_report_deadline_007",
+    "type": "recall",
+    "events": ["评测报告周日 20:00 前完成。"],
+    "query": "评测报告截止时间",
+    "expected_active_value": "周日 20:00"
+  },
+  {
+    "case_id": "tm_d1_recall_demo_owner_008",
+    "type": "recall",
+    "events": ["Demo 录屏负责人由赵阳维护，主线负责人只确认最终脚本。"],
+    "query": "Demo 录屏负责人是谁",
+    "expected_active_value": "赵阳"
+  },
+  {
+    "case_id": "tm_d1_recall_deploy_rollback_009",
+    "type": "recall",
+    "events": ["生产发布必须保留回滚脚本，错误率超过 1% 立即回滚。"],
+    "query": "生产发布回滚规则",
+    "expected_active_value": "错误率超过 1%"
+  },
+  {
+    "case_id": "tm_d1_recall_weekly_template_010",
+    "type": "recall",
+    "events": ["周报统一使用飞书文档模板，标题写 YYYY-MM-DD 项目周报。"],
+    "query": "周报模板规则",
+    "expected_active_value": "YYYY-MM-DD 项目周报"
+  },
+  {
+    "case_id": "tm_d1_recall_backend_no_nest_011",
+    "type": "recall",
+    "events": ["后端框架不要用 NestJS，最终采用 FastAPI。"],
+    "query": "后端不要用什么框架",
+    "expected_active_value": "NestJS"
+  },
+  {
+    "case_id": "tm_d1_recall_storage_db_path_012",
+    "type": "recall",
+    "events": ["数据库默认路径采用 data/memory.sqlite，本地运行可用 MEMORY_DB_PATH 覆盖。"],
+    "query": "数据库默认路径是什么",
+    "expected_active_value": "data/memory.sqlite"
+  },
+  {
+    "case_id": "tm_d1_recall_feishu_group_at_013",
+    "type": "recall",
+    "events": ["飞书群聊测试必须 @Feishu Memory Engine bot 后再发送命令。"],
+    "query": "飞书群聊怎么测试机器人",
+    "expected_active_value": "@Feishu Memory Engine bot"
+  },
+  {
+    "case_id": "tm_d1_recall_benchmark_day1_target_014",
+    "type": "recall",
+    "events": ["Day1 Benchmark 目标是 case_pass_rate 不低于 80%，evidence_coverage 达到 100%。"],
+    "query": "Day1 Benchmark 目标是什么",
+    "expected_active_value": "evidence_coverage 达到 100%"
+  },
+  {
+    "case_id": "tm_d1_recall_deadline_whitepaper_015",
+    "type": "recall",
+    "events": ["白皮书初稿必须在提交前两天完成，留一天给队友做审阅。"],
+    "query": "白皮书初稿什么时候完成",
+    "expected_active_value": "提交前两天"
+  },
+  {
+    "case_id": "tm_d1_recall_owner_bitable_016",
+    "type": "recall",
+    "events": ["Bitable 截图负责人是赵阳，完成标准是有 Active Ledger 和 Version Chain 两张图。"],
+    "query": "Bitable 截图负责人和完成标准",
+    "expected_active_value": "Active Ledger 和 Version Chain"
+  },
+  {
+    "case_id": "tm_d1_recall_deploy_no_friday_017",
+    "type": "recall",
+    "events": ["生产发布不要安排在周五晚上，除非是 P0 紧急修复。"],
+    "query": "生产发布什么时候不要安排",
+    "expected_active_value": "周五晚上"
+  },
+  {
+    "case_id": "tm_d1_recall_weekly_channel_018",
+    "type": "recall",
+    "events": ["周报优先发到项目管理群，同时把飞书文档链接贴出来。"],
+    "query": "周报发到哪里",
+    "expected_active_value": "项目管理群"
+  },
+  {
+    "case_id": "tm_d1_recall_backend_python_stack_019",
+    "type": "recall",
+    "events": ["后端开发优先使用 Python 标准库和现有模块，不为 Day1 引入新服务。"],
+    "query": "后端 Day1 引入新服务吗",
+    "expected_active_value": "不为 Day1 引入新服务"
+  },
+  {
+    "case_id": "tm_d1_recall_storage_raw_events_020",
+    "type": "recall",
+    "events": ["数据存储必须保留 raw_events，用来做来源审计和重复消息去重。"],
+    "query": "raw_events 用来做什么",
+    "expected_active_value": "来源审计和重复消息去重"
+  },
+  {
+    "case_id": "tm_d1_recall_feishu_profile_021",
+    "type": "recall",
+    "events": ["飞书 CLI 默认 profile 使用 feishu-ai-challenge，真实 token 不写入仓库。"],
+    "query": "飞书 CLI 默认 profile",
+    "expected_active_value": "feishu-ai-challenge"
+  },
+  {
+    "case_id": "tm_d1_recall_benchmark_noise_022",
+    "type": "recall",
+    "events": ["Benchmark 抗干扰样例至少混入 100 条无关聊天，检查系统不会把闲聊当成记忆。"],
+    "noise_count": 30,
+    "query": "Benchmark 抗干扰样例要混入什么",
+    "expected_active_value": "100 条无关聊天"
+  },
+  {
+    "case_id": "tm_d1_recall_deadline_demo_023",
+    "type": "recall",
+    "events": ["Demo 脚本第一版今天晚上完成，明天接飞书 Bot 后再更新截图。"],
+    "query": "Demo 脚本第一版什么时候完成",
+    "expected_active_value": "今天晚上"
+  },
+  {
+    "case_id": "tm_d1_recall_owner_report_024",
+    "type": "recall",
+    "events": ["Benchmark Report 文字审阅由赵阳负责，重点检查评委能不能看懂指标。"],
+    "query": "Benchmark Report 文字审阅谁负责",
+    "expected_active_value": "赵阳"
+  },
+  {
+    "case_id": "tm_d1_recall_deploy_canary_reason_025",
+    "type": "recall",
+    "events": ["生产部署必须走 canary，原因是上次全量发布造成 20 分钟故障。"],
+    "query": "为什么生产部署必须走 canary",
+    "expected_active_value": "20 分钟故障"
+  },
+  {
+    "case_id": "tm_d1_recall_weekly_before_18_026",
+    "type": "recall",
+    "events": ["周报以后每周五 18:00 前提交，用统一飞书文档模板。"],
+    "query": "周报什么时候提交",
+    "expected_active_value": "每周五 18:00 前"
+  },
+  {
+    "case_id": "tm_d1_recall_backend_cli_first_027",
+    "type": "recall",
+    "events": ["后端验证优先走 CLI replay，真实飞书权限没就绪时不阻塞主线。"],
+    "query": "真实飞书权限没就绪时后端怎么验证",
+    "expected_active_value": "CLI replay"
+  },
+  {
+    "case_id": "tm_d1_recall_storage_no_env_028",
+    "type": "recall",
+    "events": ["数据存储不要提交 .env、data/memory.sqlite 或 logs 目录。"],
+    "query": "数据存储哪些文件不要提交",
+    "expected_active_value": "data/memory.sqlite"
+  },
+  {
+    "case_id": "tm_d1_recall_feishu_reply_mode_029",
+    "type": "recall",
+    "events": ["飞书 Bot 默认使用 reply 模式，优先回复原消息，避免群里刷屏。"],
+    "query": "飞书 Bot 默认回复模式是什么",
+    "expected_active_value": "reply"
+  },
+  {
+    "case_id": "tm_d1_recall_benchmark_evidence_030",
+    "type": "recall",
+    "events": ["Benchmark 通过标准必须检查 evidence_present，不能只看答案字符串命中。"],
+    "query": "Benchmark 为什么要检查 evidence_present",
+    "expected_active_value": "不能只看答案字符串命中"
+  },
+  {
+    "case_id": "tm_d1_conflict_deploy_region_031",
+    "type": "conflict_update",
+    "events": ["生产部署必须加 --canary --region cn-shanghai。", "不对，生产部署 region 改成 ap-shanghai。"],
+    "query": "生产部署 region",
+    "expected_active_value": "ap-shanghai",
+    "forbidden_value": "cn-shanghai"
+  },
+  {
+    "case_id": "tm_d1_conflict_weekly_recipient_032",
+    "type": "conflict_update",
+    "events": ["以后周报统一发给 Alice。", "不对，以后周报统一发给 Bob。"],
+    "query": "周报发给谁",
+    "expected_active_value": "Bob",
+    "forbidden_value": "Alice"
+  },
+  {
+    "case_id": "tm_d1_conflict_backend_framework_033",
+    "type": "conflict_update",
+    "events": ["后端框架最终采用 Flask。", "不对，后端框架最终改成 FastAPI。"],
+    "query": "后端框架",
+    "expected_active_value": "FastAPI",
+    "forbidden_value": "Flask"
+  },
+  {
+    "case_id": "tm_d1_conflict_storage_mapping_034",
+    "type": "conflict_update",
+    "events": ["Bitable 字段映射统一把 value 转成 string。", "不对，Bitable 字段映射改成保留原始类型。"],
+    "query": "Bitable 字段映射",
+    "expected_active_value": "保留原始类型",
+    "forbidden_value": "转成 string"
+  },
+  {
+    "case_id": "tm_d1_conflict_feishu_permission_035",
+    "type": "conflict_update",
+    "events": ["飞书 Bot 权限必须先不申请 send_as_bot。", "不对，飞书 Bot 权限必须申请 send_as_bot。"],
+    "query": "飞书 Bot 权限",
+    "expected_active_value": "必须申请 send_as_bot",
+    "forbidden_value": "必须先不申请 send_as_bot"
+  },
+  {
+    "case_id": "tm_d1_conflict_benchmark_metric_036",
+    "type": "conflict_update",
+    "events": ["Benchmark 指标统一看 Recall@3。", "不对，Day1 Benchmark 指标改成先看 case_pass_rate。"],
+    "query": "Day1 Benchmark 指标",
+    "expected_active_value": "case_pass_rate",
+    "forbidden_value": "统一看 Recall@3"
+  },
+  {
+    "case_id": "tm_d1_conflict_deadline_report_037",
+    "type": "conflict_update",
+    "events": ["评测报告周日 18:00 前完成。", "不对，评测报告截止改成周日 20:00。"],
+    "query": "评测报告截止时间",
+    "expected_active_value": "周日 20:00",
+    "forbidden_value": "周日 18:00"
+  },
+  {
+    "case_id": "tm_d1_conflict_owner_demo_038",
+    "type": "conflict_update",
+    "events": ["Demo 录屏负责人是 Alice。", "不对，Demo 录屏负责人改成赵阳。"],
+    "query": "Demo 录屏负责人",
+    "expected_active_value": "赵阳",
+    "forbidden_value": "Alice"
+  },
+  {
+    "case_id": "tm_d1_conflict_deploy_strategy_039",
+    "type": "conflict_update",
+    "events": ["生产发布以后可以直接全量发布。", "不对，生产发布以后统一走 canary，不允许直接全量。"],
+    "query": "生产发布策略",
+    "expected_active_value": "统一走 canary",
+    "forbidden_value": "可以直接全量发布"
+  },
+  {
+    "case_id": "tm_d1_conflict_weekly_channel_040",
+    "type": "conflict_update",
+    "events": ["周报以后发邮件即可。", "不对，周报以后统一发飞书文档链接。"],
+    "query": "周报发送渠道",
+    "expected_active_value": "飞书文档链接",
+    "forbidden_value": "发邮件即可"
+  }
+]
