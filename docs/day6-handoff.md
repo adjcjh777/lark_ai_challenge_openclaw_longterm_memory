@@ -223,6 +223,11 @@ Day6 专项：
   - `/recall ...`：真实 interactive card 首次发送成功，耗时约 1289ms，`fallback_used=false`。
   - card action `versions`：回调路由到 `/versions`，真实 `send_card` 首次发送成功，耗时约 695ms，`fallback_used=false`。
   - card action `confirm`：回调路由到 `/confirm`，候选记忆状态变为 `active`，真实 `send_card` 首次发送成功，耗时约 787ms，`fallback_used=false`。
+- 2026-04-25 17:33-17:34 用户在真实飞书测试群补充截图验证：
+  - `/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md` 返回真实 interactive card，候选列表只展示 candidate 行，并以 `候选 1` / `候选 2` / `候选 3` 标识。
+  - 点击 `拒绝候选 1` 后返回“候选记忆拒绝卡片”，卡片回显 `候选序号：候选 1`、`处理结果：rejected`、对应 `memory_id` 和“查看版本链”按钮。
+  - 点击“查看版本链”后返回版本链 interactive card，展示同一记忆的 `v1 [rejected]` 状态。
+  - 对应本地监听日志 `logs/feishu-bot/feishu-listen-20260425_173255.ndjson` 摘要：`event_received=3`、`event_result=3`、`event_error=0`；3 次卡片发送均成功，耗时约 803-1003ms，`fallback_used=false`；动作包含 `reject` 与 `versions`。
 - 真实测试中修复了两个问题：
   - `card_attempts` 循环引用导致监听进程 JSON 序列化失败。
   - card action synthetic message_id 过长导致 idempotency key 超限，飞书返回字段校验失败。
@@ -250,7 +255,7 @@ Day 5 ingestion benchmark：
 ## 队友今晚任务
 
 1. 从评委视角检查卡片字段：是否一眼看出“这是企业记忆，不是聊天摘要”。
-2. 基于已跑通的飞书测试群消息截取 `/recall`、矛盾更新、版本链、人工确认队列四张图。
+2. 基于已跑通的飞书测试群消息补齐 `/recall`、矛盾更新、版本链、人工确认队列四张图；`拒绝候选 1` 与版本链截图已完成。
 3. 检查 `docs/day6-scope-adjustment.md` 的初赛/复赛边界是否过宽。
 4. 如果直播后有新要求，在本 handoff 后追加“直播后复核”小节。
 
@@ -259,4 +264,4 @@ Day 5 ingestion benchmark：
 - 4 月 29 日主题直播尚未发生，直播要求和评分偏好未复核。
 - 真实飞书 interactive card 已启用为默认路径；文本 fallback 仅在三次 card 明确失败后使用，timeout 时抑制 fallback。
 - 内容安全扫描还未做写入前强拦截；当前只做回复层遮挡和后续设计说明。
-- 真实飞书测试群已验证 interactive card 发送和 `versions` / `confirm` 按钮回调路径；实际人工点击仍建议由截图同学在飞书客户端补一张证据图。
+- 真实飞书测试群已验证 interactive card 发送和 `versions` / `confirm` / `reject` 按钮回调路径；`reject` 和 `versions` 已有飞书客户端截图，后续还建议补 `confirm` 截图。
