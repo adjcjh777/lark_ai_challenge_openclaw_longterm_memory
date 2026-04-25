@@ -2,6 +2,14 @@
 
 日期：2026-04-27
 
+## 给队友先看这个
+
+1. 今天已经完成：本地记忆已经能同步到飞书多维表格，评委可以在表格里看到当前记忆、版本链和评测结果。
+2. 你今晚从这里开始：打开真实 Bitable 看板，先看字段顺序和视图是否清楚。
+3. 你今晚要交付：把需要给评委展示的视图截图整理出来，并把手动调整过的视图写到 `docs/day4-qa-notes.md`。
+4. 做对的标准：评委不用看代码，也能在表格里看懂“这条记忆是什么、当前是否有效、历史版本是什么”。
+5. 遇到问题发我：发 Bitable 截图、你点的视图名称、以及页面提示的错误。
+
 ## 今日目标
 
 D4 目标是完成 Bitable 记忆台账和评委可视化。优先 P0，完成后继续 P1。
@@ -170,10 +178,16 @@ python3 -m memory_engine bitable sync --write --scope project:day4_demo --benchm
 
 ## 队友今晚任务
 
-1. 在飞书多维表格里检查字段展示顺序，优先保证 `memory_id`、`subject`、`current_value`、`status`、`version`、`updated_at` 在前排可见。
-2. 在 Bitable UI 中补齐 OpenAPI 受限的视图配置：`By Version Status` 按 `status` 分组，`Latest Runs` 按 `updated_at` 倒序。
-3. 按 `docs/day4-bitable-demo-talk-track.md` 走一遍评委讲解，标出需要截图的视图。
-4. 人工检查 20 条样例是否覆盖 decision、workflow、preference、deadline、risk；如文案不自然，直接改 seed 脚本后重跑同步。
+1. 打开真实 Bitable 看板，确认 `memory_id`、`subject`、`current_value`、`status`、`version`、`updated_at` 这几个字段在前面，评委不用横向翻太久。
+2. 在 Bitable 页面里手动补齐两个视图：`By Version Status` 按状态分组，`Latest Runs` 按更新时间倒序。
+3. 按 `docs/day4-bitable-demo-talk-track.md` 讲一遍，标出最适合截图的 3-5 个页面。
+4. 人工看 20 条样例是否像真实项目内容；不自然的文案先写到 `docs/day4-qa-notes.md`。
+
+今晚不用做：
+
+- 不用修改 Bitable 同步脚本。
+- 不用重新生成数据库样例，除非当天明确安排。
+- 不用把真实 Base token、表格链接或内部截图提交到仓库。
 
 ## 未验证项
 
