@@ -47,7 +47,7 @@ P1：
   - `build_update_card(...)`
   - `build_card_from_text(...)`
   - 从结构化文本生成真实 interactive message JSON card payload。
-  - 为候选确认、拒绝和查看版本链附加按钮。
+  - 为候选确认、拒绝和查看版本链附加按钮；候选按钮携带候选序号，结果卡片会回显 `候选序号：候选 N`。
 - 扩展 `memory_engine/feishu_publisher.py`：
   - 默认先发送 interactive card。
   - 单次尝试超时 `FEISHU_CARD_TIMEOUT_SECONDS=2` 秒。
@@ -189,7 +189,7 @@ export FEISHU_CARD_TIMEOUT_SECONDS=2
 临时 Demo 策略：
 
 - 按钮旁继续保留 `/confirm <candidate_id>` / `/reject <candidate_id>` 文本命令作为 fallback。
-- 卡片按钮只展示真正 `candidate` 行，最多前三个候选，并使用 `确认候选 1`、`拒绝候选 1` 这类可定位文案，避免评委误点 active 行。
+- 卡片按钮只展示真正 `candidate` 行，最多前三个候选，并使用 `确认候选 1`、`拒绝候选 1` 这类可定位文案，结果卡片回显 `候选序号：候选 1`，避免评委误点 active 行或看不出操作对象。
 - 在后台配置修好前，不把“人工点击按钮成功”作为唯一 Demo 路径；使用手动 `/reject <candidate_id>` 证明业务闭环。
 
 ## 验证结果
@@ -205,7 +205,7 @@ python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.js
 
 全量单测：
 
-- `26 tests OK`
+- `27 tests OK`
 
 Day6 专项：
 
@@ -232,7 +232,7 @@ Day 1 benchmark：
 - `conflict_accuracy = 1.0`
 - `evidence_coverage = 1.0`
 - `stale_leakage_rate = 0.0`
-- `avg_latency_ms = 0.908`
+- `avg_latency_ms = 0.692`
 
 Day 5 ingestion benchmark：
 
@@ -242,7 +242,7 @@ Day 5 ingestion benchmark：
 - `avg_quote_coverage = 1.0`
 - `avg_noise_rejection_rate = 1.0`
 - `document_evidence_coverage = 1.0`
-- `avg_ingestion_latency_ms = 5.976`
+- `avg_ingestion_latency_ms = 5.18`
 
 ## 队友今晚任务
 

@@ -252,6 +252,7 @@ def handle_message_event(
             repo.confirm_candidate(command.argument),
             action="确认",
             candidate_id=command.argument,
+            candidate_label=_candidate_label_from_card_action(event),
         )
     elif command.name == "reject":
         repo.record_raw_event(
@@ -267,6 +268,7 @@ def handle_message_event(
             repo.reject_candidate(command.argument),
             action="拒绝",
             candidate_id=command.argument,
+            candidate_label=_candidate_label_from_card_action(event),
         )
     else:
         repo.record_raw_event(
@@ -300,6 +302,19 @@ def _record_handled_event(repo: MemoryRepository, scope: str, event: FeishuMessa
         raw_json=event.raw,
         event_time=event.create_time or None,
     )
+
+
+def _candidate_label_from_card_action(event: FeishuMessageEvent) -> str | None:
+    if event.message_type != "card_action":
+        return None
+    payload_event = event.raw.get("event") if isinstance(event.raw.get("event"), dict) else event.raw
+    action = payload_event.get("action") if isinstance(payload_event.get("action"), dict) else {}
+    value = action.get("value") if isinstance(action.get("value"), dict) else {}
+    label = str(value.get("candidate_label") or "").strip()
+    if label:
+        return label
+    index = str(value.get("candidate_index") or "").strip()
+    return f"候选 {index}" if index else None
 
 
 def _event_subscribe_command(config: FeishuConfig) -> list[str]:

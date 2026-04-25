@@ -206,17 +206,21 @@ def format_ingest_doc_reply(result: dict[str, Any]) -> str:
         f"重复数量：{result.get('duplicate_count', 0)}",
         "候选列表：",
     ]
+    candidate_index = 0
     for candidate in candidates[:8]:
         memory = candidate.get("memory") or {}
         confidence = float(memory.get("confidence") or 0)
         review_hint = "，需人工确认" if confidence < 0.7 else ""
         candidate_text = _redact_sensitive_text(candidate.get("quote") or memory.get("current_value") or "")
         candidate_id = candidate.get("memory_id")
+        prefix = "已生效"
         action_hint = ""
         if candidate.get("status") == "candidate":
+            candidate_index += 1
+            prefix = f"候选 {candidate_index}"
             action_hint = f"；建议动作：/confirm {candidate_id} 或 /reject {candidate_id}"
         lines.append(
-            f"{candidate_id} [{candidate.get('status')}] {memory.get('subject')}："
+            f"{prefix}：{candidate_id} [{candidate.get('status')}] {memory.get('subject')}："
             f"{candidate_text}（confidence={confidence:.2f}{review_hint}{action_hint}）"
         )
     lines.append("下一步：用 /confirm <candidate_id> 激活，或 /reject <candidate_id> 拒绝。")
@@ -226,38 +230,48 @@ def format_ingest_doc_reply(result: dict[str, Any]) -> str:
     return _reply("已从文档抽取候选记忆，等待人工确认。", lines)
 
 
-def format_candidate_action_reply(result: dict[str, Any] | None, *, action: str, candidate_id: str) -> str:
+def format_candidate_action_reply(
+    result: dict[str, Any] | None,
+    *,
+    action: str,
+    candidate_id: str,
+    candidate_label: str | None = None,
+) -> str:
+    label_line = f"候选序号：{candidate_label}" if candidate_label else None
     if result is None:
-        return _reply(
-            f"候选记忆{action}卡片：没有找到这条候选记忆。",
-            [
-                f"类型：候选记忆{action}",
-                "卡片：候选确认卡片",
-                "结论：未命中",
-                "理由：candidate_id 不存在",
-                f"主题：{candidate_id}",
-                "状态：not_found",
-                "版本：-",
-                "来源：Memory Engine",
-                "是否被覆盖：-",
-            ],
-        )
-    value = _redact_sensitive_text(result.get("current_value") or "-")
-    return _reply(
-        f"候选记忆{action}卡片：候选状态已更新。",
-        [
+        lines = [
             f"类型：候选记忆{action}",
             "卡片：候选确认卡片",
-            f"结论：{value}",
-            f"理由：人工执行 /{_candidate_action_command(action)} 后更新 candidate 状态",
-            f"主题：{result.get('subject') or result.get('memory_id')}",
-            f"状态：{result.get('status')}",
-            "版本：Day 5",
+            "结论：未命中",
+            "理由：candidate_id 不存在",
+            f"主题：{candidate_id}",
+            "状态：not_found",
+            "版本：-",
             "来源：Memory Engine",
-            f"是否被覆盖：{_overwritten_label(result.get('status'))}",
-            f"memory_id：{result.get('memory_id')}",
-            f"处理结果：{result.get('action')}",
-        ],
+            "是否被覆盖：-",
+        ]
+        if label_line:
+            lines.insert(5, label_line)
+        return _reply(f"候选记忆{action}卡片：没有找到这条候选记忆。", lines)
+    value = _redact_sensitive_text(result.get("current_value") or "-")
+    lines = [
+        f"类型：候选记忆{action}",
+        "卡片：候选确认卡片",
+        f"结论：{value}",
+        f"理由：人工执行 /{_candidate_action_command(action)} 后更新 candidate 状态",
+        f"主题：{result.get('subject') or result.get('memory_id')}",
+        f"状态：{result.get('status')}",
+        "版本：Day 5",
+        "来源：Memory Engine",
+        f"是否被覆盖：{_overwritten_label(result.get('status'))}",
+        f"memory_id：{result.get('memory_id')}",
+        f"处理结果：{result.get('action')}",
+    ]
+    if label_line:
+        lines.insert(5, label_line)
+    return _reply(
+        f"候选记忆{action}卡片：{candidate_label + ' ' if candidate_label else ''}候选状态已更新。",
+        lines,
     )
 
 

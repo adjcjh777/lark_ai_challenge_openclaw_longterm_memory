@@ -68,7 +68,15 @@ def text_payload(message_id: str, text: str) -> dict:
     }
 
 
-def card_action_payload(action: str, memory_id: str) -> dict:
+def card_action_payload(action: str, memory_id: str, *, candidate_index: int | None = None) -> dict:
+    value = {
+        "memory_engine_action": action,
+        "memory_id": memory_id,
+        "candidate_id": memory_id,
+    }
+    if candidate_index is not None:
+        value["candidate_index"] = str(candidate_index)
+        value["candidate_label"] = f"候选 {candidate_index}"
     return {
         "schema": "2.0",
         "header": {"event_type": "card.action.trigger"},
@@ -76,13 +84,7 @@ def card_action_payload(action: str, memory_id: str) -> dict:
             "token": "card_token_1",
             "operator": {"open_id": "ou_operator"},
             "context": {"open_chat_id": "oc_test"},
-            "action": {
-                "value": {
-                    "memory_engine_action": action,
-                    "memory_id": memory_id,
-                    "candidate_id": memory_id,
-                }
-            },
+            "action": {"value": value},
         },
     }
 
@@ -188,9 +190,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
                 "版本：Day 5",
                 "来源：Memory Engine",
                 "是否被覆盖：否",
-                "mem_active [active] 生产部署：已确认内容（confidence=0.75）",
-                "mem_candidate1 [candidate] 飞书接入：候选一（confidence=0.75；建议动作：/confirm mem_candidate1 或 /reject mem_candidate1）",
-                "mem_candidate2 [candidate] Benchmark：候选二（confidence=0.75；建议动作：/confirm mem_candidate2 或 /reject mem_candidate2）",
+                "已生效：mem_active [active] 生产部署：已确认内容（confidence=0.75）",
+                "候选 1：mem_candidate1 [candidate] 飞书接入：候选一（confidence=0.75；建议动作：/confirm mem_candidate1 或 /reject mem_candidate1）",
+                "候选 2：mem_candidate2 [candidate] Benchmark：候选二（confidence=0.75；建议动作：/confirm mem_candidate2 或 /reject mem_candidate2）",
             ]
         )
 
@@ -202,6 +204,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertEqual(["确认候选 1", "拒绝候选 1", "确认候选 2", "拒绝候选 2"], labels)
         self.assertNotIn("mem_active", values)
+        self.assertEqual("候选 1", action_blocks[0]["actions"][0]["value"]["candidate_label"])
 
     def test_card_action_event_routes_to_existing_command(self) -> None:
         ingest = message_event_from_payload(text_payload("om_ingest_for_card", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))
@@ -219,6 +222,21 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("send_card", publisher.modes)
         status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (row["id"],)).fetchone()["status"]
         self.assertEqual("active", status)
+
+    def test_card_action_result_preserves_candidate_label(self) -> None:
+        ingest = message_event_from_payload(text_payload("om_ingest_for_card_label", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))
+        self.assertIsNotNone(ingest)
+        handle_message_event(self.conn, ingest, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
+        row = self.conn.execute("SELECT id FROM memories WHERE status = 'candidate' LIMIT 1").fetchone()
+        self.assertIsNotNone(row)
+
+        event = message_event_from_payload(card_action_payload("reject", row["id"], candidate_index=2))
+        self.assertIsNotNone(event)
+        result = handle_message_event(self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
+
+        self.assertEqual("reject", result["command"])
+        field_texts = [field["text"]["content"] for field in result["publish"]["card"]["elements"][0]["fields"]]
+        self.assertTrue(any("候选序号" in text and "候选 2" in text for text in field_texts))
 
 
 if __name__ == "__main__":

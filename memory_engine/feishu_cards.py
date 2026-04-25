@@ -99,7 +99,7 @@ def build_card_from_text(text: str) -> dict[str, Any]:
     template = _template_for(card_name, fields.get("状态"))
     core_labels = ("结论", "理由", "状态", "版本", "来源", "是否被覆盖")
     display_fields = [(label, fields[label]) for label in core_labels if fields.get(label)]
-    for label in ("主题", "记忆类型", "memory_id", "版本数量", "处理结果"):
+    for label in ("主题", "候选序号", "记忆类型", "memory_id", "版本数量", "处理结果"):
         if fields.get(label):
             display_fields.append((label, fields[label]))
 
@@ -192,14 +192,15 @@ def _detail_lines(text: str) -> list[str]:
 def _actions_from_text(text: str) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    candidate_ids: list[str] = []
+    candidates: list[tuple[int, str]] = []
     for line in text.splitlines():
         if "[candidate]" not in line:
             continue
         candidate_id = _last_match(r"/confirm\s+(mem_[A-Za-z0-9_]+)", line)
-        if candidate_id and candidate_id not in candidate_ids:
-            candidate_ids.append(candidate_id)
-    for index, candidate_id in enumerate(candidate_ids[:3], start=1):
+        candidate_index = _candidate_index_from_line(line)
+        if candidate_id and candidate_id not in {candidate[1] for candidate in candidates}:
+            candidates.append((candidate_index or len(candidates) + 1, candidate_id))
+    for index, candidate_id in candidates[:3]:
         for action, label, button_type in (
             ("confirm", f"确认候选 {index}", "primary"),
             ("reject", f"拒绝候选 {index}", "danger"),
@@ -208,7 +209,18 @@ def _actions_from_text(text: str) -> list[dict[str, Any]]:
             if key in seen:
                 continue
             seen.add(key)
-            actions.append(_button(label, button_type, {CARD_ACTION_KEY: action, "candidate_id": candidate_id}))
+            actions.append(
+                _button(
+                    label,
+                    button_type,
+                    {
+                        CARD_ACTION_KEY: action,
+                        "candidate_id": candidate_id,
+                        "candidate_index": str(index),
+                        "candidate_label": f"候选 {index}",
+                    },
+                )
+            )
 
     memory_id = _last_match(r"memory_id：\s*(mem_[A-Za-z0-9_]+)", text)
     if memory_id:
@@ -228,6 +240,11 @@ def _button(label: str, button_type: str, value: dict[str, str]) -> dict[str, An
 def _last_match(pattern: str, text: str) -> str | None:
     matches = re.findall(pattern, text)
     return matches[-1] if matches else None
+
+
+def _candidate_index_from_line(line: str) -> int | None:
+    match = re.match(r"\s*候选\s+(\d+)[：:]", line)
+    return int(match.group(1)) if match else None
 
 
 def _template_for(card_name: str, status: str | None) -> str:
