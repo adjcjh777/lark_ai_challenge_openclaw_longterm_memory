@@ -164,6 +164,7 @@ python3 -m memory_engine bitable setup-commands --base-token "$BITABLE_BASE_TOKE
 
 ## 文档
 
+- [项目总览：我们在做什么](docs/project-overview.md)
 - [比赛总控执行文档](docs/competition-master-execution-plan.md)
 - [飞书 Memory Engine 调研与项目规划](docs/feishu-memory-engine-research-and-plan.md)
 - [Hermes Agent 参考笔记](docs/hermes-agent-reference-notes.md)
