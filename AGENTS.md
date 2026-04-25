@@ -9,13 +9,20 @@
 # 总控计划入口
 ## 比赛总控执行文档是 `docs/competition-master-execution-plan.md`。
 ## 后续每个新对话、新阶段任务或每日开发任务，必须先读取并遵循该文档中的当前日期/阶段安排，再结合用户最新指令执行。
-## 当前项目基线：Day 1 本地 Memory Engine 闭环已完成，Day 2 飞书 Bot 最小闭环已完成或可提前验收；后续优先从总控文档的 D3 及之后任务推进。
+## 当前项目基线：Day 1 本地 Memory Engine、Day 2 飞书 Bot、Day 3 Bot 稳定化、Day 4 Bitable 看板、Day 5 文档 ingestion 已完成或已提前验收；后续优先从总控文档的 D6 及之后任务推进。
 ## 初赛优先级最高：先保证《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report 三大交付物闭环，再做复赛加分项。
-## 每日任务应按总控文档拆分为：用户白天主线任务、队友晚上补位任务、P0/P1 范围、验收标准和 handoff 文档。
+## 每日任务应按总控文档拆分为：用户白天主线任务、队友晚上补位任务、P0/P1 范围、验收标准、implementation-plan文档和 handoff 文档。
+
+# 每日任务上下文读取规则
+## 执行 D{n} 时默认读取：`AGENTS.md`、`docs/competition-master-execution-plan.md` 的 D{n}、`docs/day{n-1}-handoff.md`、存在时的 `docs/day{n}-implementation-plan.md`。
+## 不要默认读取所有旧日期文档。只有当 D{n} 明确依赖更早某天能力时，才按需读取对应 day 的 handoff / implementation-plan。
+## 当前代码库是事实源；历史文档只作为背景、验收标准和风险参考。如果历史文档与代码不一致，以代码和最新 handoff 为准。
+## 相关历史读取示例：D6 改 Bot 卡片时读 D3；D7-D9 做 Benchmark 时读 D1 和相关 benchmark 文档；D11 做 Agent/OpenClaw/Hermes adapter 时读 Hermes 参考笔记和 CLI 相关代码。
 
 # 执行规则
 ## 本地已经安装了 lark_cli (https://github.com/larksuite/cli), 可以直接使用 `lark-cli` 命令，这是最重要的工具！！！！
 ## 飞书 openclaw 插件 （https://github.com/larksuite/openclaw-lark），如果需要的话可以直接安装并使用！！！！
+## 在执行每次对话前，必须先确认当前日期和阶段任务安排，确保执行内容与总控计划一致。
 
 ## 飞书 Bot 测试约定
 ### 本项目机器人在飞书里的显示名是 `Feishu Memory Engine bot`。

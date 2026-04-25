@@ -653,11 +653,18 @@ P1 加码：
 
 ```text
 读取 docs/competition-master-execution-plan.md 中 D{n} 的任务。
+同时读取：
+1. AGENTS.md
+2. docs/day{n-1}-handoff.md
+3. 如果存在，读取 docs/day{n}-implementation-plan.md
+4. 如果 D{n} 依赖更早某天的能力，只读取对应 day 的 handoff / implementation-plan；不要默认读取所有历史文档。
+
 当前目标：优先完成 P0，P0 完成后继续 P1 加码。
+以当前代码库为事实源，历史文档只作为背景、验收标准和风险参考。
 要求：
 1. 先检查 git status 和当前代码结构。
 2. 只改与 D{n} 相关的文件。
-3. 新增或更新 docs/day{n}-handoff.md。
+3. 新增或更新 docs/day{n}-implementation-plan.md 和 docs/day{n}-handoff.md。
 4. 运行必要验证，至少运行仓库 AGENTS.md 指定命令。
 5. 检查不要提交 .env、.omx、数据库、缓存、临时报告。
 6. 如果当天涉及 Hermes 参考，先读取 docs/hermes-agent-reference-notes.md 和 .reference/hermes-agent/ 下对应文件，只吸收机制，不复制源码。
