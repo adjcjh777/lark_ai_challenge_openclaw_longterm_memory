@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
+from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
 from .benchmark import run_benchmark
 from .db import connect, db_path_from_env, init_db
 from .feishu_runtime import listen, replay_event
@@ -50,6 +52,35 @@ def main(argv: list[str] | None = None) -> None:
         print_json(result)
         return
 
+    if args.command == "bitable" and args.bitable_command == "schema":
+        print_json(table_schema_spec())
+        return
+
+    if args.command == "bitable" and args.bitable_command == "setup-commands":
+        target = _bitable_target(args)
+        print_json({"commands": setup_commands(target)})
+        return
+
+    if args.command == "bitable" and args.bitable_command == "sync":
+        conn = connect(args.db_path)
+        init_db(conn)
+        payload = collect_sync_payload(
+            conn,
+            benchmark_json=args.benchmark_json,
+            benchmark_cases=args.benchmark_cases,
+            benchmark_name=args.benchmark_name,
+        )
+        result = sync_payload(
+            payload,
+            _bitable_target(args),
+            dry_run=not args.write,
+            retries=args.retries,
+        )
+        print_json(result)
+        if not result["ok"]:
+            sys.exit(1)
+        return
+
     if args.command == "feishu" and args.feishu_command == "replay":
         result = replay_event(args.event_path, db_path=args.db_path)
         print_json(result)
@@ -87,6 +118,21 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = benchmark_subparsers.add_parser("run", help="Run benchmark cases")
     run_parser.add_argument("cases_path")
 
+    bitable_parser = subparsers.add_parser("bitable", help="Bitable ledger sync commands")
+    bitable_subparsers = bitable_parser.add_subparsers(dest="bitable_command")
+    bitable_subparsers.add_parser("schema", help="Print the Day 4 Bitable table schema")
+
+    setup_parser = bitable_subparsers.add_parser("setup-commands", help="Print lark-cli commands to create Day 4 tables")
+    add_bitable_target_args(setup_parser)
+
+    sync_parser = bitable_subparsers.add_parser("sync", help="Sync local SQLite rows to Bitable")
+    add_bitable_target_args(sync_parser)
+    sync_parser.add_argument("--write", action="store_true", help="Actually write to Bitable. Omit for local dry-run")
+    sync_parser.add_argument("--retries", type=int, default=2, help="Retry count for each lark-cli write batch")
+    sync_parser.add_argument("--benchmark-json", help="Path to an existing benchmark JSON result to sync")
+    sync_parser.add_argument("--benchmark-cases", help="Run benchmark cases and sync the summary row")
+    sync_parser.add_argument("--benchmark-name", help="Display name for the benchmark run")
+
     feishu_parser = subparsers.add_parser("feishu", help="Feishu bot commands")
     feishu_subparsers = feishu_parser.add_subparsers(dest="feishu_command")
     replay_parser = feishu_subparsers.add_parser("replay", help="Replay a Feishu message event fixture")
@@ -95,6 +141,28 @@ def build_parser() -> argparse.ArgumentParser:
     listen_parser.add_argument("--dry-run", action="store_true", help="Print replies without sending them to Feishu")
 
     return parser
+
+
+def add_bitable_target_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--base-token", default=os.environ.get("BITABLE_BASE_TOKEN", "app_xxx"), help="Bitable/Base token. Required for non-dry-run sync")
+    parser.add_argument("--ledger-table", default=os.environ.get("BITABLE_LEDGER_TABLE", "Memory Ledger"), help="Table ID or table name for current memory rows")
+    parser.add_argument("--versions-table", default=os.environ.get("BITABLE_VERSIONS_TABLE", "Memory Versions"), help="Table ID or table name for version rows")
+    parser.add_argument("--benchmark-table", default=os.environ.get("BITABLE_BENCHMARK_TABLE", "Benchmark Results"), help="Table ID or table name for benchmark rows")
+    parser.add_argument("--lark-cli", default=os.environ.get("LARK_CLI", "lark-cli"), help="lark-cli executable path")
+    parser.add_argument("--profile", default=os.environ.get("LARK_CLI_PROFILE"), help="Optional lark-cli profile")
+    parser.add_argument("--as-identity", default=os.environ.get("LARK_CLI_AS"), help="Optional lark-cli identity, for example user or bot")
+
+
+def _bitable_target(args) -> BitableTarget:
+    return BitableTarget(
+        base_token=args.base_token,
+        ledger_table=args.ledger_table,
+        versions_table=args.versions_table,
+        benchmark_table=args.benchmark_table,
+        lark_cli=args.lark_cli,
+        profile=args.profile,
+        as_identity=args.as_identity,
+    )
 
 
 def print_json(payload) -> None:

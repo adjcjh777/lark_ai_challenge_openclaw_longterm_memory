@@ -115,6 +115,43 @@ python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay te
 python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_text_health_event.json
 ```
 
+## Day 4 Bitable 记忆台账
+
+Day 4 增加 SQLite 到飞书多维表格的最小同步脚本。默认是本地 dry-run，不需要 Bitable 权限，也不会影响本地 `remember` / `recall` 核心能力。
+
+查看表结构：
+
+```bash
+python3 -m memory_engine bitable schema
+```
+
+预览同步内容和将要执行的 `lark-cli` 命令：
+
+```bash
+python3 -m memory_engine bitable sync --benchmark-cases benchmarks/day1_cases.json
+```
+
+有 Base 权限后写入真实 Bitable：
+
+```bash
+export BITABLE_BASE_TOKEN="app_xxx"
+export BITABLE_LEDGER_TABLE="Memory Ledger"
+export BITABLE_VERSIONS_TABLE="Memory Versions"
+export BITABLE_BENCHMARK_TABLE="Benchmark Results"
+export LARK_CLI_PROFILE="feishu-ai-challenge"
+export LARK_CLI_AS="user"
+
+python3 -m memory_engine bitable sync --write --benchmark-cases benchmarks/day1_cases.json
+```
+
+建表命令预览：
+
+```bash
+python3 -m memory_engine bitable setup-commands --base-token "$BITABLE_BASE_TOKEN" --profile feishu-ai-challenge --as-identity user
+```
+
+视图建议见 [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)。
+
 ## 文档
 
 - [比赛总控执行文档](docs/competition-master-execution-plan.md)
@@ -124,7 +161,9 @@ python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay te
 - [Day 2 实现计划](docs/day2-implementation-plan.md)
 - [Day 2 Handoff](docs/day2-handoff.md)
 - [Day 3 Handoff](docs/day3-handoff.md)
+- [Day 4 Handoff](docs/day4-handoff.md)
 - [Day 3 安全风险决策](docs/day3-security-risk-decision.md)
+- [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)
 - [真实飞书 Demo Runbook](docs/demo-runbook.md)
 - [队友 lark-cli 配置与 Day 2 测试指南](docs/teammate-lark-cli-setup.md)
 - [项目原型图 Mermaid 源码](docs/diagrams/README.md)
