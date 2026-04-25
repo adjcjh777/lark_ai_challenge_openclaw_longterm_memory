@@ -4,13 +4,44 @@
 适用项目：企业级记忆引擎的构造与应用  
 当前基线：Day 1 本地 Memory Engine、Day 2 飞书 Bot、Day 3 Bot 稳定化、Day 4 Bitable 看板、Day 5 文档 ingestion 已完成或已提前验收。后续从 D6 开始，逐步吸收 Hermes Agent 的 Memory Provider、Skills、Feishu gateway、定时任务和记忆安全机制，但只作为设计参考，不作为初赛运行时依赖。
 
-## 1. 使用方式
+## 1. 每日 Codex 执行包模板
 
-这份文档是后续每天交给 Codex 执行的总控计划。每天开工时，直接把当天条目复制给 Codex，并补一句：
+每天开工可以使用下面模板：
 
 ```text
-读取 docs/competition-master-execution-plan.md 的 D{n}，优先完成 P0，完成后继续做 P1 加码；运行验证，更新当天 handoff，提交并推送。
+读取 docs/competition-master-execution-plan.md 中 D{n} 的任务。
+同时读取：
+1. AGENTS.md
+2. docs/day{n-1}-handoff.md
+3. 如果存在，读取 docs/day{n}-implementation-plan.md
+4. 如果 D{n} 依赖更早某天的能力，只读取对应 day 的 handoff / implementation-plan；不要默认读取所有历史文档。
+
+当前目标：优先完成 P0，P0 完成后继续 P1 加码。
+以当前代码库为事实源，历史文档只作为背景、验收标准和风险参考。
+要求：
+1. 先检查 git status 和当前代码结构。
+2. 只改与 D{n} 相关的文件。
+3. 新增或更新 docs/day{n}-implementation-plan.md 和 docs/day{n}-handoff.md。
+4. 运行必要验证，至少运行仓库 AGENTS.md 指定命令。
+5. 检查不要提交 .env、.omx、数据库、缓存、临时报告。
+6. 如果当天涉及 Hermes 参考，先读取 docs/hermes-agent-reference-notes.md 和 .reference/hermes-agent/ 下对应文件，只吸收机制，不复制源码。
+7. 按 Lore Commit Protocol 提交并 push origin HEAD。
+8. 最后总结完成项、验证结果、剩余风险。
 ```
+
+队友晚上任务模板：
+
+```text
+今晚只做 D{n} 队友任务：
+1. 按 docs/day{n}-handoff.md 的“请测”执行。
+2. 把测试输入、预期输出、实际输出写进 docs/day{n}-qa-notes.md。
+3. 对白皮书或 Benchmark Report 只做内容补强，不改核心代码。
+4. 如果发现阻塞问题，记录复现步骤和截图需求。
+```
+
+## 2. 使用方式
+
+这份文档是后续每天交给 Codex 执行的总控计划。每天开工时，优先复制第 1 节的每日执行包模板，再把当天 D{n} 的任务作为目标范围。
 
 每天收工必须留下四类证据：
 
@@ -19,7 +50,7 @@
 3. 通过的验证命令输出摘要。
 4. 已提交并推送到远程仓库。
 
-## 2. 时间线与阶段目标
+## 3. 时间线与阶段目标
 
 ```mermaid
 gantt
@@ -37,7 +68,7 @@ gantt
     "答辩与演示" :milestone, final, 2026-05-14, 0d
 ```
 
-### 2.1 初赛目标，2026-04-24 至 2026-05-07
+### 3.1 初赛目标，2026-04-24 至 2026-05-07
 
 初赛优先级最高。目标不是做完整企业知识库，而是证明三个命题：
 
@@ -54,7 +85,7 @@ gantt
 | Benchmark Report | 至少包含抗干扰、矛盾更新、效能指标三类测试，给出数据和解释 | `benchmarks/`、`docs/benchmark-report.md` |
 | 提交材料 | README、启动脚本、录屏脚本、答辩摘要 | `README.md`、`docs/submission-checklist.md` |
 
-### 2.2 复赛目标，2026-05-08 至 2026-05-13
+### 3.2 复赛目标，2026-05-08 至 2026-05-13
 
 复赛不再扩大核心叙事，主要增强观感和可信度：
 
@@ -63,7 +94,7 @@ gantt
 - 增加文档 ingestion、遗忘提醒、OpenClaw/CLI 亮点，但不破坏 P0 稳定性。
 - 准备答辩稿、演示录屏、评委可能追问的技术说明。
 
-## 3. 两人分工原则
+## 4. 两人分工原则
 
 你全天负责主链路，队友晚上负责高杠杆补位。
 
@@ -74,7 +105,7 @@ gantt
 
 每晚交接必须可独立执行。你给队友的是“今晚测什么、写什么、产出放哪里”，不是“研究一下”。
 
-### 3.1 Hermes Agent 参考边界
+### 4.1 Hermes Agent 参考边界
 
 本地已拉取 Hermes Agent 源码作为参考：
 
@@ -109,7 +140,7 @@ git clone --depth 1 https://github.com/NousResearch/hermes-agent.git .reference/
 
 参考笔记见 `docs/hermes-agent-reference-notes.md`。
 
-## 4. 初赛每日任务
+## 5. 初赛每日任务
 
 说明：
 
@@ -508,7 +539,7 @@ P1 加码：
 - `git status --short --ignored` 确认敏感和临时文件未提交。
 - 远程仓库 main 分支是可提交状态。
 
-## 5. 复赛与决赛每日任务
+## 6. 复赛与决赛每日任务
 
 复赛任务只在初赛 P0 稳定后执行。不要为了复赛加分破坏初赛 Demo。
 
@@ -650,41 +681,6 @@ P1 加码：
 
 - 记录评委问题。
 - 控制时间和切换材料。
-
-## 6. 每日 Codex 执行包模板
-
-每天开工可以使用下面模板：
-
-```text
-读取 docs/competition-master-execution-plan.md 中 D{n} 的任务。
-同时读取：
-1. AGENTS.md
-2. docs/day{n-1}-handoff.md
-3. 如果存在，读取 docs/day{n}-implementation-plan.md
-4. 如果 D{n} 依赖更早某天的能力，只读取对应 day 的 handoff / implementation-plan；不要默认读取所有历史文档。
-
-当前目标：优先完成 P0，P0 完成后继续 P1 加码。
-以当前代码库为事实源，历史文档只作为背景、验收标准和风险参考。
-要求：
-1. 先检查 git status 和当前代码结构。
-2. 只改与 D{n} 相关的文件。
-3. 新增或更新 docs/day{n}-implementation-plan.md 和 docs/day{n}-handoff.md。
-4. 运行必要验证，至少运行仓库 AGENTS.md 指定命令。
-5. 检查不要提交 .env、.omx、数据库、缓存、临时报告。
-6. 如果当天涉及 Hermes 参考，先读取 docs/hermes-agent-reference-notes.md 和 .reference/hermes-agent/ 下对应文件，只吸收机制，不复制源码。
-7. 按 Lore Commit Protocol 提交并 push origin HEAD。
-8. 最后总结完成项、验证结果、剩余风险。
-```
-
-队友晚上任务模板：
-
-```text
-今晚只做 D{n} 队友任务：
-1. 按 docs/day{n}-handoff.md 的“请测”执行。
-2. 把测试输入、预期输出、实际输出写进 docs/day{n}-qa-notes.md。
-3. 对白皮书或 Benchmark Report 只做内容补强，不改核心代码。
-4. 如果发现阻塞问题，记录复现步骤和截图需求。
-```
 
 ## 7. 交付物完成定义
 
