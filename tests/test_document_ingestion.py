@@ -3,9 +3,11 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
+from memory_engine.benchmark import run_document_ingestion_benchmark
 from memory_engine.db import connect, init_db
-from memory_engine.document_ingestion import extract_candidate_quotes, ingest_document_source
+from memory_engine.document_ingestion import extract_candidate_quotes, fetch_feishu_document_text, ingest_document_source
 from memory_engine.repository import MemoryRepository
 
 
@@ -60,6 +62,48 @@ class DocumentIngestionTest(unittest.TestCase):
         reject = self.repo.reject_candidate(candidate_id)
         self.assertEqual(reject["action"], "rejected")
         self.assertIsNone(self.repo.recall("project:feishu_ai_challenge", "生产部署参数"))
+
+    def test_feishu_fetch_uses_v2_doc_format_and_extracts_content(self) -> None:
+        completed = Mock()
+        completed.stdout = '{"ok":true,"data":{"document":{"content":"# 标题\\n\\n- 决定：生产部署必须加 --canary。"}}}'
+        with patch("memory_engine.document_ingestion.subprocess.run", return_value=completed) as run:
+            text = fetch_feishu_document_text(
+                "doc_token",
+                lark_cli="lark-cli",
+                profile="feishu-ai-challenge",
+                as_identity="user",
+            )
+
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(
+            command,
+            [
+                "lark-cli",
+                "--profile",
+                "feishu-ai-challenge",
+                "--as",
+                "user",
+                "docs",
+                "+fetch",
+                "--api-version",
+                "v2",
+                "--doc",
+                "doc_token",
+                "--doc-format",
+                "markdown",
+            ],
+        )
+        self.assertIn("生产部署必须加", text)
+
+    def test_day5_ingestion_benchmark(self) -> None:
+        result = run_document_ingestion_benchmark("benchmarks/day5_ingestion_cases.json")
+
+        self.assertEqual(result["summary"]["case_count"], 2)
+        self.assertEqual(result["summary"]["case_pass_rate"], 1.0)
+        self.assertEqual(result["summary"]["avg_quote_coverage"], 1.0)
+        self.assertEqual(result["summary"]["avg_noise_rejection_rate"], 1.0)
+        self.assertEqual(result["summary"]["document_evidence_coverage"], 1.0)
 
 
 if __name__ == "__main__":

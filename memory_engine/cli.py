@@ -6,7 +6,7 @@ import os
 import sys
 
 from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
-from .benchmark import run_benchmark
+from .benchmark import run_benchmark, run_document_ingestion_benchmark
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
 from .feishu_runtime import listen, replay_event
@@ -83,6 +83,11 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.command == "benchmark" and args.benchmark_command == "run":
         result = run_benchmark(args.cases_path, scope=args.scope)
+        print_json(result)
+        return
+
+    if args.command == "benchmark" and args.benchmark_command == "ingest-doc":
+        result = run_document_ingestion_benchmark(args.cases_path, scope=args.scope)
         print_json(result)
         return
 
@@ -166,6 +171,8 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command")
     run_parser = benchmark_subparsers.add_parser("run", help="Run benchmark cases")
     run_parser.add_argument("cases_path")
+    ingest_doc_benchmark_parser = benchmark_subparsers.add_parser("ingest-doc", help="Run document ingestion benchmark cases")
+    ingest_doc_benchmark_parser.add_argument("cases_path")
 
     bitable_parser = subparsers.add_parser("bitable", help="Bitable ledger sync commands")
     bitable_subparsers = bitable_parser.add_subparsers(dest="bitable_command")

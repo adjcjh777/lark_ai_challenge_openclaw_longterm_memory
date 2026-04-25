@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from dataclasses import dataclass
@@ -104,9 +105,33 @@ def fetch_feishu_document_text(
         command.extend(["--profile", profile])
     if as_identity:
         command.extend(["--as", as_identity])
-    command.extend(["docs", "+fetch", token])
+    command.extend(
+        [
+            "docs",
+            "+fetch",
+            "--api-version",
+            "v2",
+            "--doc",
+            token,
+            "--doc-format",
+            "markdown",
+        ]
+    )
     completed = subprocess.run(command, check=True, capture_output=True, text=True)
-    return completed.stdout
+    return _content_from_lark_fetch_output(completed.stdout)
+
+
+def _content_from_lark_fetch_output(output: str) -> str:
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        return output
+    data = payload.get("data") if isinstance(payload, dict) else None
+    document = data.get("document") if isinstance(data, dict) else None
+    content = document.get("content") if isinstance(document, dict) else None
+    if isinstance(content, str):
+        return content
+    return output
 
 
 def document_token_from_url(url_or_token: str) -> str:

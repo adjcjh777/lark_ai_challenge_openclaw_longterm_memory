@@ -43,6 +43,13 @@ P1：
 - 新增 fixture：
   - `tests/fixtures/day5_doc_ingestion_fixture.md`
   - 内含 7 条可抽取候选和多条干扰信息。
+- 新增 Demo 文档：
+  - `docs/demo-docs/day5-architecture-decisions.md`
+  - `docs/demo-docs/day5-weekly-meeting-notes.md`
+  - 每份文档包含 5 条可抽取记忆和 15 条干扰信息。
+- 新增 Day5 ingestion benchmark：
+  - `benchmarks/day5_ingestion_cases.json`
+  - `python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.json`
 - 新增测试：
   - `tests/test_document_ingestion.py`
   - `tests/test_feishu_day5.py`
@@ -57,6 +64,12 @@ python3 -m memory_engine --db-path "$tmp_db" ingest-doc --limit 7 tests/fixtures
 python3 -m memory_engine --db-path "$tmp_db" confirm <candidate_id>
 python3 -m memory_engine --db-path "$tmp_db" recall 生产部署参数
 rm -f "$tmp_db"
+```
+
+Day5 ingestion benchmark：
+
+```bash
+python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.json
 ```
 
 飞书 Bot dry-run/replay 可发送：
@@ -76,8 +89,35 @@ rm -f "$tmp_db"
 底层会调用：
 
 ```bash
-lark-cli docs +fetch <token>
+lark-cli docs +fetch --api-version v2 --doc <token> --doc-format markdown
 ```
+
+## 真实飞书文档验证
+
+2026-04-25 已用 `lark-cli docs +create --api-version v2 --as user --doc-format markdown` 创建两份真实飞书文档，并用真实 URL 跑通 `ingest-doc`。为避免把内部文档链接写入公开仓库，handoff 只记录标题和结果，不提交 URL/token。
+
+真实验证结果：
+
+- `Day5 Demo 架构决策文档`：
+  - `source_type = document_feishu`
+  - `candidate_count = 5`
+  - 候选 quote 覆盖：生产部署、后端框架、数据存储、Benchmark、飞书 Bot 权限。
+- `Day5 Demo 项目周会纪要`：
+  - `source_type = document_feishu`
+  - `candidate_count = 5`
+  - 候选 quote 覆盖：评测报告截止、OpenClaw 演示负责人、周报偏好、真实 Bot 权限风险、Day6 决策卡片字段。
+- 真实文档确认 + 召回验证：
+  - 确认 `生产部署必须加 --canary --region cn-shanghai` 候选后，`recall 生产部署参数` 返回 `status = active`。
+  - 召回来源包含 `source_type = document_feishu`、`document_title = Day5 Demo 架构决策文档`、原文 quote。
+
+创建真实文档时遇到一次飞书下游瞬时错误：
+
+```text
+code = 10071
+downstream_code = 233523001
+```
+
+重试后成功。当前结论：真实文档创建/读取链路可用，但演示时建议保留 Markdown fallback。
 
 ## 验证结果
 
@@ -87,6 +127,7 @@ lark-cli docs +fetch <token>
 python3 -m compileall memory_engine scripts
 python3 -m unittest discover -s tests
 python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.json
 ```
 
 专项验证：
@@ -97,6 +138,13 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
   - `source_type = document_markdown`
   - `document_title = Day5 架构决策文档`
   - `quote = 决定：生产部署必须加 --canary --region cn-shanghai。`
+- Day5 ingestion benchmark：
+  - `case_count = 2`
+  - `case_pass_rate = 1.0`
+  - `avg_candidate_count = 5.0`
+  - `avg_quote_coverage = 1.0`
+  - `avg_noise_rejection_rate = 1.0`
+  - `document_evidence_coverage = 1.0`
 
 Day 1 benchmark 仍为：
 
@@ -116,6 +164,6 @@ Day 1 benchmark 仍为：
 
 ## 未验证项
 
-- 尚未用真实飞书文档 token 验证 `lark-cli docs +fetch` 的权限链路。
+- 真实飞书文档 token 已用 CLI 验证通过；尚未在真实飞书群聊中通过 Bot 长连接发送 `/ingest_doc <url>` 做端到端群聊验证。
 - 当前抽取器是启发式规则，适合 Demo 文档和初赛闭环；后续如需复杂文档块结构，应接入更强的解析或人工确认 UI。
 - 候选确认目前按 `candidate_id` 手动执行，尚无批量确认或卡片按钮。
