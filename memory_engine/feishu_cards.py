@@ -192,10 +192,17 @@ def _detail_lines(text: str) -> list[str]:
 def _actions_from_text(text: str) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for candidate_id in re.findall(r"/confirm\s+(mem_[A-Za-z0-9_]+)", text):
+    candidate_ids: list[str] = []
+    for line in text.splitlines():
+        if "[candidate]" not in line:
+            continue
+        candidate_id = _last_match(r"/confirm\s+(mem_[A-Za-z0-9_]+)", line)
+        if candidate_id and candidate_id not in candidate_ids:
+            candidate_ids.append(candidate_id)
+    for index, candidate_id in enumerate(candidate_ids[:3], start=1):
         for action, label, button_type in (
-            ("confirm", "确认", "primary"),
-            ("reject", "拒绝", "danger"),
+            ("confirm", f"确认候选 {index}", "primary"),
+            ("reject", f"拒绝候选 {index}", "danger"),
         ):
             key = (action, candidate_id)
             if key in seen:

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from memory_engine.db import connect, init_db
+from memory_engine.feishu_cards import build_card_from_text
 from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import LarkCliPublisher
@@ -175,6 +176,32 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertLessEqual(len(key), 64)
         self.assertTrue(key.startswith("feishu-memory-"))
+
+    def test_ingest_card_buttons_only_target_candidate_rows(self) -> None:
+        text = "\n".join(
+            [
+                "已从文档抽取候选记忆，等待人工确认。",
+                "卡片：人工确认队列",
+                "结论：已抽取候选记忆，等待人工确认",
+                "理由：文档 ingestion 先进入 candidate 状态，确认后才成为 active 企业记忆",
+                "状态：candidate",
+                "版本：Day 5",
+                "来源：Memory Engine",
+                "是否被覆盖：否",
+                "mem_active [active] 生产部署：已确认内容（confidence=0.75）",
+                "mem_candidate1 [candidate] 飞书接入：候选一（confidence=0.75；建议动作：/confirm mem_candidate1 或 /reject mem_candidate1）",
+                "mem_candidate2 [candidate] Benchmark：候选二（confidence=0.75；建议动作：/confirm mem_candidate2 或 /reject mem_candidate2）",
+            ]
+        )
+
+        card = build_card_from_text(text)
+        action_blocks = [element for element in card["elements"] if element.get("tag") == "action"]
+        self.assertEqual(1, len(action_blocks))
+        labels = [button["text"]["content"] for button in action_blocks[0]["actions"]]
+        values = [button["value"].get("candidate_id") for button in action_blocks[0]["actions"]]
+
+        self.assertEqual(["确认候选 1", "拒绝候选 1", "确认候选 2", "拒绝候选 2"], labels)
+        self.assertNotIn("mem_active", values)
 
     def test_card_action_event_routes_to_existing_command(self) -> None:
         ingest = message_event_from_payload(text_payload("om_ingest_for_card", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))

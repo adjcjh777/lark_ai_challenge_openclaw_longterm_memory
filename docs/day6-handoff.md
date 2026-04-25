@@ -166,6 +166,32 @@ export FEISHU_CARD_TIMEOUT_SECONDS=2
 
 原因：当前 Bot handler 能处理已发送消息和 card action，但不能控制用户输入中的候选面板；H5/加号菜单等产品入口需要开放平台后台配置和审核确认。
 
+## 真实按钮点击问题
+
+2026-04-25 真实飞书客户端点击 `拒绝` 按钮时出现：
+
+```text
+出错了，请稍后重试 code: 200340
+```
+
+判断：
+
+- 真实 Bot listener 当时正在运行，并订阅 `im.message.receive_v1,card.action.trigger`。
+- 点击后测试群没有出现新的 Bot 结果卡片，说明真实点击事件没有进入当前 handler，或飞书没有拿到有效 card action 回调 ACK。
+- 该问题不是 `/reject` 业务命令本身失败；本地 synthetic `card.action.trigger` 已验证能路由到 `/confirm`、`/versions`，`/reject` 同一解析路径。
+
+需要在飞书开发者后台复核：
+
+1. 事件订阅是否包含 `card.action.trigger`，并且已发布/生效。
+2. 机器人能力中是否启用了消息卡片/交互式卡片能力。
+3. 如果当前应用使用 Webhook 模式，消息卡片请求地址必须配置到同一个事件回调地址；如果使用 WebSocket 模式，确认 lark-cli/openclaw 当前连接具备接收 card action 的能力。
+
+临时 Demo 策略：
+
+- 按钮旁继续保留 `/confirm <candidate_id>` / `/reject <candidate_id>` 文本命令作为 fallback。
+- 卡片按钮只展示真正 `candidate` 行，最多前三个候选，并使用 `确认候选 1`、`拒绝候选 1` 这类可定位文案，避免评委误点 active 行。
+- 在后台配置修好前，不把“人工点击按钮成功”作为唯一 Demo 路径；使用手动 `/reject <candidate_id>` 证明业务闭环。
+
 ## 验证结果
 
 已通过：
@@ -179,12 +205,12 @@ python3 -m memory_engine benchmark ingest-doc benchmarks/day5_ingestion_cases.js
 
 全量单测：
 
-- `25 tests OK`
+- `26 tests OK`
 
 Day6 专项：
 
 - `python3 -m unittest discover -s tests -p 'test_feishu_day6.py'`：`7 tests OK`
-- `python3 -m unittest discover -s tests -p 'test_feishu_interactive_cards.py'`：`5 tests OK`
+- `python3 -m unittest discover -s tests -p 'test_feishu_interactive_cards.py'`：`6 tests OK`
 
 真实飞书测试群：
 
@@ -206,7 +232,7 @@ Day 1 benchmark：
 - `conflict_accuracy = 1.0`
 - `evidence_coverage = 1.0`
 - `stale_leakage_rate = 0.0`
-- `avg_latency_ms = 0.552`
+- `avg_latency_ms = 0.908`
 
 Day 5 ingestion benchmark：
 
@@ -216,7 +242,7 @@ Day 5 ingestion benchmark：
 - `avg_quote_coverage = 1.0`
 - `avg_noise_rejection_rate = 1.0`
 - `document_evidence_coverage = 1.0`
-- `avg_ingestion_latency_ms = 4.275`
+- `avg_ingestion_latency_ms = 5.976`
 
 ## 队友今晚任务
 

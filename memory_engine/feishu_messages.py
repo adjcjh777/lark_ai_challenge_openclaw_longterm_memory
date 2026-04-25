@@ -212,9 +212,12 @@ def format_ingest_doc_reply(result: dict[str, Any]) -> str:
         review_hint = "，需人工确认" if confidence < 0.7 else ""
         candidate_text = _redact_sensitive_text(candidate.get("quote") or memory.get("current_value") or "")
         candidate_id = candidate.get("memory_id")
+        action_hint = ""
+        if candidate.get("status") == "candidate":
+            action_hint = f"；建议动作：/confirm {candidate_id} 或 /reject {candidate_id}"
         lines.append(
             f"{candidate_id} [{candidate.get('status')}] {memory.get('subject')}："
-            f"{candidate_text}（confidence={confidence:.2f}{review_hint}；建议动作：/confirm {candidate_id} 或 /reject {candidate_id}）"
+            f"{candidate_text}（confidence={confidence:.2f}{review_hint}{action_hint}）"
         )
     lines.append("下一步：用 /confirm <candidate_id> 激活，或 /reject <candidate_id> 拒绝。")
     low_confidence_count = sum(1 for candidate in candidates if float((candidate.get("memory") or {}).get("confidence") or 0) < 0.7)
