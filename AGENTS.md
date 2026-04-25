@@ -34,6 +34,8 @@
 @Feishu Memory Engine bot /recall 生产部署 region
 ```
 ### 单聊机器人时可以省略 @ 名称，直接发送 `/remember`、`/recall` 或 `/versions`。
+### 启动监听测试程序时默认写入 `logs/feishu-bot/feishu-listen-<timestamp>.ndjson`；每条日志必须包含 `ts` 时间戳，便于复盘真实飞书测试群里的消息、卡片点击、fallback 和异常行为。
+### `logs/` 是本地运行证据目录，已被 `.gitignore` 忽略；不要把真实监听日志、群聊 ID、用户 ID 或 token 提交到仓库。
 
 ## 版本维护与推送规则
 ### 每完成一个可运行闭环、阶段交付或关键文档更新后，必须执行本地验证、提交并推送到远程仓库。
