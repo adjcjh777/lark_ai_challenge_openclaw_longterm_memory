@@ -83,6 +83,19 @@
 - `Pass Rate Review`：显示 `case_pass_rate`、`conflict_accuracy`、`stale_leakage_rate`、`evidence_coverage`。
 - `Latency Review`：按 `avg_latency_ms` 排序，观察性能退化。
 
+## 真实 Base 当前视图状态
+
+2026-04-25 已在真实 Base 创建以下视图：
+
+- `Memory Ledger / Active Ledger`：已设置 `status = active` 筛选。
+- `Memory Ledger / By Type`：已按 `type` 分组。
+- `Memory Ledger / Recently Updated`：已按 `updated_at` 倒序。
+- `Memory Versions / Version Chain`：已按 `memory_id` 分组，并按 `version` 升序。
+- `Memory Versions / By Version Status`：视图已创建；分组接口返回平台限制，需队友在 UI 中手动按 `status` 分组。
+- `Benchmark Results / Latest Runs`：视图已创建并设置核心字段顺序；排序接口返回平台限制，需队友在 UI 中手动按 `updated_at` 倒序。
+
+接口限制记录：部分视图配置调用返回 `OpenAPIUpdateViewSort limited`、`OpenAPIUpdateViewGroup limited` 或 `OpenAPISetVisibleFields limited`，数据写入和视图创建不受影响。
+
 ## 评委讲解词
 
 1. 先看 `Memory Ledger`：这里不是普通聊天记录，而是系统抽象出来的当前有效记忆。

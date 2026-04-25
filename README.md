@@ -131,6 +131,13 @@ python3 -m memory_engine bitable schema
 python3 -m memory_engine bitable sync --benchmark-cases benchmarks/day1_cases.json
 ```
 
+生成 Day 4 评委看板样例数据：
+
+```bash
+python3 scripts/seed_day4_demo_data.py --scope project:day4_demo
+python3 -m memory_engine bitable sync --scope project:day4_demo --benchmark-cases benchmarks/day1_cases.json
+```
+
 有 Base 权限后写入真实 Bitable：
 
 ```bash
@@ -166,6 +173,7 @@ python3 -m memory_engine bitable setup-commands --base-token "$BITABLE_BASE_TOKE
 - [Day 4 Handoff](docs/day4-handoff.md)
 - [Day 3 安全风险决策](docs/day3-security-risk-decision.md)
 - [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)
+- [Day 4 Bitable Demo 讲解词](docs/day4-bitable-demo-talk-track.md)
 - [真实飞书 Demo Runbook](docs/demo-runbook.md)
 - [队友 lark-cli 配置与 Day 2 测试指南](docs/teammate-lark-cli-setup.md)
 - [项目原型图 Mermaid 源码](docs/diagrams/README.md)

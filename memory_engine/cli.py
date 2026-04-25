@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> None:
         init_db(conn)
         payload = collect_sync_payload(
             conn,
+            scope=args.scope,
             benchmark_json=args.benchmark_json,
             benchmark_cases=args.benchmark_cases,
             benchmark_name=args.benchmark_name,
@@ -132,6 +133,7 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument("--benchmark-json", help="Path to an existing benchmark JSON result to sync")
     sync_parser.add_argument("--benchmark-cases", help="Run benchmark cases and sync the summary row")
     sync_parser.add_argument("--benchmark-name", help="Display name for the benchmark run")
+    sync_parser.add_argument("--scope", help="Only sync memories from this scope, for example project:day4_demo")
 
     feishu_parser = subparsers.add_parser("feishu", help="Feishu bot commands")
     feishu_subparsers = feishu_parser.add_subparsers(dest="feishu_command")

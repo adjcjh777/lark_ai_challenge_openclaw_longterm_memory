@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .benchmark import run_benchmark
+from .models import parse_scope
 
 
 LEDGER_FIELDS = [
@@ -78,6 +79,7 @@ class BitableTarget:
 def collect_sync_payload(
     conn,
     *,
+    scope: str | None = None,
     benchmark_json: str | Path | None = None,
     benchmark_cases: str | Path | None = None,
     benchmark_name: str | None = None,
@@ -87,12 +89,12 @@ def collect_sync_payload(
             "ledger": {
                 "table": DEFAULT_TABLES["ledger"],
                 "fields": LEDGER_FIELDS,
-                "rows": ledger_rows(conn),
+                "rows": ledger_rows(conn, scope=scope),
             },
             "versions": {
                 "table": DEFAULT_TABLES["versions"],
                 "fields": VERSION_FIELDS,
-                "rows": version_rows(conn),
+                "rows": version_rows(conn, scope=scope),
             },
             "benchmark": {
                 "table": DEFAULT_TABLES["benchmark"],
@@ -108,9 +110,10 @@ def collect_sync_payload(
     return payload
 
 
-def ledger_rows(conn) -> list[list[Any]]:
+def ledger_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
+    where_sql, params = _scope_filter("m", scope)
     rows = conn.execute(
-        """
+        f"""
         SELECT
           m.id AS memory_id,
           m.scope_type || ':' || m.scope_id AS scope,
@@ -137,8 +140,10 @@ def ledger_rows(conn) -> list[list[Any]]:
           LIMIT 1
         )
         LEFT JOIN raw_events re ON re.id = COALESCE(e.source_event_id, m.source_event_id)
+        {where_sql}
         ORDER BY m.updated_at DESC, m.id
-        """
+        """,
+        params,
     ).fetchall()
     return [
         [
@@ -160,9 +165,10 @@ def ledger_rows(conn) -> list[list[Any]]:
     ]
 
 
-def version_rows(conn) -> list[list[Any]]:
+def version_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
+    where_sql, params = _scope_filter("m", scope)
     rows = conn.execute(
-        """
+        f"""
         SELECT
           mv.id AS version_id,
           mv.memory_id,
@@ -188,8 +194,10 @@ def version_rows(conn) -> list[list[Any]]:
           LIMIT 1
         )
         LEFT JOIN raw_events re ON re.id = COALESCE(e.source_event_id, mv.source_event_id)
+        {where_sql}
         ORDER BY mv.created_at DESC, mv.memory_id, mv.version_no
-        """
+        """,
+        params,
     ).fetchall()
     return [
         [
@@ -478,3 +486,10 @@ def _format_ms(value: int | None) -> str | None:
 
 def _chunks(rows: list[list[Any]], size: int) -> list[list[list[Any]]]:
     return [rows[index : index + size] for index in range(0, len(rows), size)]
+
+
+def _scope_filter(alias: str, scope: str | None) -> tuple[str, tuple[Any, ...]]:
+    if scope is None:
+        return "", ()
+    parsed = parse_scope(scope)
+    return f"WHERE {alias}.scope_type = ? AND {alias}.scope_id = ?", (parsed.scope_type, parsed.scope_id)

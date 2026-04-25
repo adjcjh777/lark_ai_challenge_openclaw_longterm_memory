@@ -74,6 +74,19 @@ class BitableSyncTest(unittest.TestCase):
         self.assertEqual("day1", benchmark["rows"][0][benchmark["fields"].index("benchmark_name")])
         self.assertEqual(3, benchmark["rows"][0][benchmark["fields"].index("case_count")])
 
+    def test_scope_filter_limits_memory_rows(self) -> None:
+        self.repo.remember("project:feishu_ai_challenge", "生产部署必须加 --canary")
+        self.repo.remember("project:other", "周报优先发飞书文档")
+
+        payload = collect_sync_payload(self.conn, scope="project:other")
+        ledger = payload["tables"]["ledger"]
+        versions = payload["tables"]["versions"]
+
+        self.assertEqual(1, len(ledger["rows"]))
+        self.assertEqual("project:other", ledger["rows"][0][ledger["fields"].index("scope")])
+        self.assertEqual(1, len(versions["rows"]))
+        self.assertEqual("project:other", versions["rows"][0][versions["fields"].index("scope")])
+
 
 def setup_target():
     from memory_engine.bitable_sync import BitableTarget

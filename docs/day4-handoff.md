@@ -122,14 +122,60 @@ lark-cli base +record-list --table-id "Memory Versions" --limit 5
 lark-cli base +record-list --table-id "Benchmark Results" --limit 5
 ```
 
+## 样例数据和评委视图增强
+
+2026-04-25 追加完成一轮评委看板增强：
+
+- 新增 `scripts/seed_day4_demo_data.py`。
+- 本地写入 `project:day4_demo` 样例数据：
+  - 20 条 active 记忆。
+  - decision、workflow、preference、deadline、risk 各 4 条。
+  - 3 条覆盖更新样例，形成 active/superseded 版本链。
+- 同步命令新增 `--scope` 过滤，避免只为 Demo 补样例时重复同步其它 scope。
+- 已同步到真实 Bitable：
+  - `Memory Ledger`：追加 20 行。
+  - `Memory Versions`：追加 23 行。
+  - `Benchmark Results`：追加 1 行。
+- 新增评委讲解词：`docs/day4-bitable-demo-talk-track.md`。
+
+样例数据命令：
+
+```bash
+python3 scripts/seed_day4_demo_data.py --scope project:day4_demo
+python3 -m memory_engine bitable sync --scope project:day4_demo --benchmark-cases benchmarks/day1_cases.json
+python3 -m memory_engine bitable sync --write --scope project:day4_demo --benchmark-cases benchmarks/day1_cases.json
+```
+
+已创建真实视图：
+
+- `Memory Ledger / Active Ledger`
+- `Memory Ledger / By Type`
+- `Memory Ledger / Recently Updated`
+- `Memory Versions / Version Chain`
+- `Memory Versions / By Version Status`
+- `Benchmark Results / Latest Runs`
+
+已配置成功：
+
+- `Active Ledger`：筛选 `status = active`。
+- `By Type`：按 `type` 分组。
+- `Recently Updated`：按 `updated_at` 倒序。
+- `Version Chain`：按 `memory_id` 分组，按 `version` 升序。
+- `Latest Runs`：设置核心字段顺序。
+
+平台限制：
+
+- 部分视图配置接口返回 `OpenAPIUpdateViewSort limited`、`OpenAPIUpdateViewGroup limited` 或 `OpenAPISetVisibleFields limited`。
+- 需要队友在真实 Bitable UI 中手动补齐：`By Version Status` 按 `status` 分组，`Latest Runs` 按 `updated_at` 倒序，个别视图字段顺序微调。
+
 ## 队友今晚任务
 
-1. 在飞书多维表格里检查字段命名和展示顺序，优先保证 `memory_id`、`subject`、`current_value`、`status`、`version`、`updated_at` 在前排可见。
-2. 按 `docs/bitable-ledger-views.md` 创建或调整视图。
-3. 输出一份“评委看 Bitable 时的讲解词”，可直接基于 `docs/bitable-ledger-views.md` 的讲解词改写。
-4. 造 20 条不同类型的记忆样例，覆盖 decision、workflow、preference、deadline、risk，并至少包含 3 条覆盖更新。
+1. 在飞书多维表格里检查字段展示顺序，优先保证 `memory_id`、`subject`、`current_value`、`status`、`version`、`updated_at` 在前排可见。
+2. 在 Bitable UI 中补齐 OpenAPI 受限的视图配置：`By Version Status` 按 `status` 分组，`Latest Runs` 按 `updated_at` 倒序。
+3. 按 `docs/day4-bitable-demo-talk-track.md` 走一遍评委讲解，标出需要截图的视图。
+4. 人工检查 20 条样例是否覆盖 decision、workflow、preference、deadline、risk；如文案不自然，直接改 seed 脚本后重跑同步。
 
 ## 未验证项
 
 - 当前同步策略是 append-only 批量创建，适合初赛 Demo 和评委看板；如果需要长期生产同步，后续应增加 record_id 映射表或按 `memory_id` 查找后更新。
-- Bitable 视图尚需队友在真实 Base 中人工检查展示顺序。
+- Bitable 视图已创建，但部分排序、分组和字段顺序受 OpenAPI 限制，尚需队友在真实 Base UI 中人工检查和微调。
