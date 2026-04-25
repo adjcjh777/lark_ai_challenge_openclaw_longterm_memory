@@ -1,4 +1,5 @@
 .omx/
+.reference/
 .env
 .env.*
 __pycache__/
