@@ -109,6 +109,15 @@ python3 scripts/spike_cognee_local.py
 - 直接调用 RightCode `/embeddings` 的 `text-embedding-3-large` 也返回 `PermissionDeniedError: Your request was blocked.`，因此当前 blocker 是 embedding provider 不可用，不是本地 adapter、数据目录或 OpenClaw 版本问题。
 - 后续如继续真实 Cognee 闭环，需要补一个可用的 embedding provider/model；在此之前，MVP 的 `memory.search` 继续走本项目旧 repository fallback，并保持 Cognee 只通过 `CogneeAdapter` 窄边界接入。
 
+## 执行记录：本地 embedding 方案
+
+- 参考 MTEB / C-MTEB 分数和 Ollama 包体后，默认 embedding 从备选 `bge-m3:567m` 调整为 `qwen3-embedding:0.6b-fp16`。
+- 选择原因：`qwen3-embedding:0.6b-fp16` 为 1024 维，官方 Ollama 包体约 1.2GB，适合 16GB Mac mini；Qwen3-Embedding 模型卡列出的 multilingual MTEB 为 64.33、C-MTEB 为 66.33，高于同体量 BGE-M3 的 multilingual MTEB 59.56。
+- `qwen3-embedding:4b-fp16` 虽然质量更高，但官方 Ollama F16 包体约 8GB；考虑 Cognee 批处理和 Windows 队友复现稳定性，暂不作为默认。
+- 已新增 `memory_engine/copilot/embedding-provider.lock` 锁定 provider、model、endpoint、dimensions，并新增 `.env.example`、`scripts/check_embedding_provider.py`、Windows/macOS Ollama setup 脚本和队友文档。
+- 切换 embedding 维度后，旧 `.data/cognee/` 里可能残留 3072 维 LanceDB schema；`scripts/spike_cognee_local.py --reset-local-data` 用于安全删除项目内 `.data/cognee/` 后重建本地 Cognee 数据。
+- 本机已验证 `ollama pull qwen3-embedding:0.6b-fp16`、`python3 scripts/check_embedding_provider.py`、以及 `RightCode gpt-5.3-codex-high + Ollama qwen3-embedding:0.6b-fp16` 的 Cognee 真实 `add -> cognify -> search` 三阶段闭环。
+
 ## 队友晚上补位任务
 
 给队友先看这个：

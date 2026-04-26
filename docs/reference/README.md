@@ -9,10 +9,10 @@
 - `hermes-agent-reference-notes.md`：Hermes Agent 参考机制摘录。
 - `project-overview.md`：旧项目总览和架构说明。
 - `teammate-lark-cli-setup.md`：队友 lark-cli 配置说明。
+- `teammate-windows-cognee-embedding-setup.md`：Windows 队友搭建本地 Ollama embedding 与 Cognee spike 环境的操作说明。
 - `pr2-teammate-fix-notes.md`：历史 PR 修复说明模板。
 
 使用规则：
 
 - OpenClaw-native Copilot 主线以 `docs/feishu-memory-copilot-implementation-plan.md` 为准。
 - 参考文档中的 CLI-first / Bot-first 表述如果与新主控计划冲突，以新主控为准。
-

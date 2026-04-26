@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+LOCK_FILE = ROOT / "memory_engine/copilot/embedding-provider.lock"
+DEFAULT_TEXT = "生产部署参数"
+
+
+def main() -> None:
+    _load_local_env_files()
+
+    parser = argparse.ArgumentParser(description="Check the local embedding provider before running Cognee.")
+    parser.add_argument("--text", default=DEFAULT_TEXT)
+    parser.add_argument("--model", default=os.environ.get("EMBEDDING_MODEL"))
+    parser.add_argument("--endpoint", default=os.environ.get("EMBEDDING_ENDPOINT"))
+    parser.add_argument("--dimensions", type=int, default=_env_int("EMBEDDING_DIMENSIONS"))
+    parser.add_argument("--timeout", type=float, default=60.0)
+    args = parser.parse_args()
+
+    lock = _read_lock()
+    model = args.model or lock.get("litellm_model") or "ollama/qwen3-embedding:0.6b-fp16"
+    endpoint = args.endpoint or lock.get("endpoint") or "http://localhost:11434"
+    expected_dimensions = args.dimensions or int(lock.get("dimensions", "1024"))
+
+    try:
+        result = asyncio.run(
+            asyncio.wait_for(
+                _embed_once(model=model, endpoint=endpoint, text=args.text),
+                timeout=args.timeout,
+            )
+        )
+    except Exception as exc:
+        _print(
+            {
+                "ok": False,
+                "status": "blocked",
+                "model": model,
+                "endpoint": endpoint,
+                "expected_dimensions": expected_dimensions,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "hint": _hint(model),
+            }
+        )
+        sys.exit(1)
+
+    actual_dimensions = len(result)
+    _print(
+        {
+            "ok": actual_dimensions == expected_dimensions,
+            "status": "ready" if actual_dimensions == expected_dimensions else "dimension_mismatch",
+            "model": model,
+            "endpoint": endpoint,
+            "expected_dimensions": expected_dimensions,
+            "actual_dimensions": actual_dimensions,
+            "sample": args.text,
+        }
+    )
+    if actual_dimensions != expected_dimensions:
+        sys.exit(1)
+
+
+async def _embed_once(*, model: str, endpoint: str, text: str) -> list[float]:
+    try:
+        import litellm
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("litellm is not installed; install project dependencies first") from exc
+
+    response = await litellm.aembedding(
+        model=model,
+        input=[text],
+        api_base=endpoint,
+    )
+    embedding = response.data[0]["embedding"]
+    return list(embedding)
+
+
+def _read_lock() -> dict[str, str]:
+    return _read_key_value_file(LOCK_FILE)
+
+
+def _load_local_env_files() -> None:
+    for path in (ROOT / ".env", ROOT / ".env.local"):
+        if not path.exists():
+            continue
+        for key, value in _read_key_value_file(path).items():
+            os.environ.setdefault(key, value)
+
+
+def _read_key_value_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    data: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key.strip()] = value.strip().strip('"').strip("'")
+    return data
+
+
+def _env_int(name: str) -> int | None:
+    value = os.environ.get(name)
+    if not value:
+        return None
+    return int(value)
+
+
+def _hint(model: str) -> str:
+    ollama_model = model.removeprefix("ollama/")
+    return f"Start Ollama and run: ollama pull {ollama_model}"
+
+
+def _print(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

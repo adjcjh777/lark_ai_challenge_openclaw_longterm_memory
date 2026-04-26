@@ -1,0 +1,11 @@
+provider=ollama
+model=qwen3-embedding:0.6b-fp16
+litellm_model=ollama/qwen3-embedding:0.6b-fp16
+endpoint=http://localhost:11434
+dimensions=1024
+context_length=32768
+ollama_package_size=1.2GB
+fallback_model=bge-m3:567m
+fallback_litellm_model=ollama/bge-m3:567m
+fallback_dimensions=1024
+fallback_package_size=1.2GB

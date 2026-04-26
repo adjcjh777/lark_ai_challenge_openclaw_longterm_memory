@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,18 +19,24 @@ from memory_engine.copilot.cognee_adapter import CogneeMemoryAdapter, load_cogne
 DATA_ROOT = Path(".data/cognee/data")
 SYSTEM_ROOT = Path(".data/cognee/system")
 DATABASE_ROOT = SYSTEM_ROOT / "databases"
+EMBEDDING_LOCK_FILE = ROOT / "memory_engine/copilot/embedding-provider.lock"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the 2026-04-27 local Cognee SDK spike.")
     parser.add_argument("--dry-run", action="store_true", help="Validate local paths and adapter wiring without importing Cognee.")
+    parser.add_argument("--reset-local-data", action="store_true", help="Delete .data/cognee before running; use after changing embedding dimensions.")
     parser.add_argument("--scope", default="project:feishu_ai_challenge")
     parser.add_argument("--query", default="生产部署参数")
     args = parser.parse_args()
 
+    if args.reset_local_data and SYSTEM_ROOT.parent.exists():
+        shutil.rmtree(SYSTEM_ROOT.parent)
+
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     SYSTEM_ROOT.mkdir(parents=True, exist_ok=True)
     DATABASE_ROOT.mkdir(parents=True, exist_ok=True)
+    _load_local_env_files()
     _configure_local_cognee_paths()
 
     adapter = CogneeMemoryAdapter()
@@ -92,6 +99,8 @@ def main() -> None:
 
 
 def _configure_local_cognee_paths() -> None:
+    embedding_lock = _read_key_value_file(EMBEDDING_LOCK_FILE)
+
     os.environ.setdefault("DATA_ROOT_DIRECTORY", str(DATA_ROOT.resolve()))
     os.environ.setdefault("SYSTEM_ROOT_DIRECTORY", str(SYSTEM_ROOT.resolve()))
     os.environ.setdefault("DB_PATH", str(DATABASE_ROOT.resolve()))
@@ -103,6 +112,9 @@ def _configure_local_cognee_paths() -> None:
     os.environ.setdefault("GRAPH_FILE_PATH", str((DATABASE_ROOT / "cognee_graph.pkl").resolve()))
     os.environ.setdefault("MONITORING_TOOL", "llmlite")
     os.environ.setdefault("TELEMETRY_DISABLED", "true")
+    os.environ.setdefault("EMBEDDING_MODEL", embedding_lock.get("litellm_model", "ollama/qwen3-embedding:0.6b-fp16"))
+    os.environ.setdefault("EMBEDDING_ENDPOINT", embedding_lock.get("endpoint", "http://localhost:11434"))
+    os.environ.setdefault("EMBEDDING_DIMENSIONS", embedding_lock.get("dimensions", "1024"))
 
 
 def _missing_provider_configuration() -> str | None:
@@ -112,8 +124,33 @@ def _missing_provider_configuration() -> str | None:
         return "missing OPENAI_API_KEY or LLM_API_KEY"
     if provider == "custom" and not os.environ.get("LLM_ENDPOINT"):
         return "LLM_ENDPOINT is required for Cognee custom provider"
+    if not os.environ.get("EMBEDDING_MODEL"):
+        return "EMBEDDING_MODEL is required for Cognee embeddings"
+    if os.environ.get("EMBEDDING_MODEL", "").startswith("ollama/") and not os.environ.get("EMBEDDING_ENDPOINT"):
+        return "EMBEDDING_ENDPOINT is required for local Ollama embeddings"
 
     return None
+
+
+def _load_local_env_files() -> None:
+    for path in (ROOT / ".env", ROOT / ".env.local"):
+        if not path.exists():
+            continue
+        for key, value in _read_key_value_file(path).items():
+            os.environ.setdefault(key, value)
+
+
+def _read_key_value_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
 
 
 async def _run_real_spike(adapter: CogneeMemoryAdapter, scope: str, query: str) -> dict[str, Any]:

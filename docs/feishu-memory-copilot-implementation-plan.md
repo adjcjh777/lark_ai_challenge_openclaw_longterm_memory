@@ -36,7 +36,11 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 
 2026-04-27 本地 spike 采用 `cognee==0.1.20`，并锁定 `httpx==0.27.2` 以避开 Cognee 依赖链中 OpenAI SDK 与 `httpx 0.28.x` 的兼容问题。Cognee 数据目录固定为项目内 `.data/cognee/`，不得提交。
 
-RightCode custom provider 当前用于 LLM 文本模型验证：`gpt-5.3-codex-high` 的最小 chat completion 已验证可返回结果。Cognee 真实闭环仍需要 embedding provider；当前 RightCode `/embeddings` 对 `text-embedding-3-large` 返回 `PermissionDeniedError: Your request was blocked.`，所以真实 `cognify -> search` 暂时阻塞在 embedding 阶段。MVP 继续保持 `memory.search` 的旧 repository fallback，直到补齐可用 embedding provider/model。
+RightCode custom provider 当前用于 LLM 文本模型验证：`gpt-5.3-codex-high` 的最小 chat completion 已验证可返回结果。RightCode 不提供可用 embedding；当前 RightCode `/embeddings` 对 `text-embedding-3-large` 返回 `PermissionDeniedError: Your request was blocked.`，所以 embedding 改为本地 Ollama。
+
+本地 embedding 基线锁定在 `memory_engine/copilot/embedding-provider.lock`：默认 `qwen3-embedding:0.6b-fp16`，LiteLLM 名称 `ollama/qwen3-embedding:0.6b-fp16`，endpoint `http://localhost:11434`，维度 `1024`。选择理由：Qwen3-Embedding 模型卡给出的 multilingual MTEB 为 64.33、C-MTEB 为 66.33，高于同体量 BGE-M3 的 multilingual MTEB 59.56；官方 Ollama 包体约 1.2GB，适合 16GB Mac mini 和 Windows 队友复现。`bge-m3:567m` 只作为备选，`qwen3-embedding:4b-fp16` 虽然质量更高但官方 F16 包体约 8GB，MVP 不作为默认。
+
+2026-04-27 复测结论：清理旧 `.data/cognee/` 里 3072 维向量表后，`LLM_PROVIDER=custom` + RightCode `gpt-5.3-codex-high` + Ollama `qwen3-embedding:0.6b-fp16` 已跑通 Cognee `add -> cognify -> search` 真实闭环。队友复现时优先运行 `scripts/check_embedding_provider.py`，再运行 `scripts/spike_cognee_local.py --reset-local-data`。
 
 ## 1.2 每日任务启动 Prompt
 
