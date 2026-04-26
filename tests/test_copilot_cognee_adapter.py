@@ -84,6 +84,30 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertEqual("生产部署必须加 --canary", args[0]["content"])
         self.assertEqual({"source_type": "unit_test", "source_id": "evt_1"}, args[0]["metadata"])
 
+    def test_remember_candidate_text_falls_back_to_add_when_sdk_lacks_remember(self) -> None:
+        class LegacyCogneeClient:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+
+            def add(self, *args: object, **kwargs: object) -> dict[str, object]:
+                self.calls.append(("add", args, kwargs))
+                return {"ok": True}
+
+        client = LegacyCogneeClient()
+        adapter = CogneeMemoryAdapter(client=client)
+
+        adapter.remember_candidate_text(
+            "project:feishu_ai_challenge",
+            "生产部署必须加 --canary",
+            source_type="unit_test",
+        )
+
+        method, args, kwargs = client.calls[-1]
+        self.assertEqual("add", method)
+        self.assertEqual("生产部署必须加 --canary", args[0]["content"])
+        self.assertEqual({"source_type": "unit_test"}, args[0]["metadata"])
+        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", kwargs["dataset_name"])
+
     def test_adapter_normalizes_search_without_rewriting_status(self) -> None:
         client = FakeCogneeClient()
         adapter = CogneeMemoryAdapter(client=client)

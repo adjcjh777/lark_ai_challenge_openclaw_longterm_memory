@@ -3,7 +3,9 @@ name = "feishu-memory-engine"
 version = "0.1.0"
 description = "Day 1 local memory engine for the Feishu AI challenge"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "cognee==0.1.20",
+]
 
 [project.scripts]
 memory = "memory_engine.cli:main"

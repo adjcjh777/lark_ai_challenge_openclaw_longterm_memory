@@ -70,7 +70,9 @@ class CogneeMemoryAdapter:
         return self.cognify(scope, **kwargs)
 
     def remember_candidate_text(self, scope: str, content: str, **metadata: Any) -> Any:
-        return self.remember(scope, content, metadata=metadata)
+        if self.client is not None and hasattr(self.client, "remember"):
+            return self.remember(scope, content, metadata=metadata)
+        return self.add_raw_event(scope, content, **metadata)
 
     def delete_scope(self, scope: str, *, dry_run: bool = True) -> dict[str, Any]:
         dataset_name = self.dataset_for_scope(scope)
