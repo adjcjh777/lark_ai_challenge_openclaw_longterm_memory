@@ -1,0 +1,1157 @@
+# Feishu Memory Copilot Implementation Plan
+
+日期：2026-04-26  
+适用周期：2026-04-26 至 2026-05-07  
+状态：Implementation planning only，尚未开始代码实现  
+依据文档：`AGENTS.md`、`docs/competition-master-execution-plan.md`、`docs/feishu-memory-copilot-prd.md`、`docs/copilot-product-question-log.md`、当前仓库代码结构
+
+## 1. 执行目标
+
+本轮重构的目标是把项目从 CLI-first memory demo 转成 OpenClaw-native Feishu Memory Copilot：OpenClaw Agent 作为主入口和工具编排层，Memory Copilot Core 作为长期记忆大脑，飞书、lark-cli、Feishu OpenAPI 作为办公数据和动作集成层，Bitable 和 card 作为展示与交互层。
+
+MVP 必须在 2026-04-26 到 2026-05-02 这一周内完成可演示闭环，至少覆盖历史决策召回、候选记忆生成、冲突更新、版本解释、Agent 任务前预取和 heartbeat reminder prototype。
+
+2026-05-03 到 2026-05-07 用于初赛收尾：Benchmark expansion、Demo runbook、README、白皮书、提交材料、录屏/截图、最终验证和 push。初赛优先级仍然是三大交付物闭环：《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report。
+
+当前日期和阶段确认：
+
+- 今天是 2026-04-26。
+- 总控文档原时间线中 2026-04-26 对应 D3，但 PRD 已经把路线调整为从 2026-04-26 起一周完成 Feishu Memory Copilot MVP。
+- 后续执行以 PRD 的 OpenClaw-native Copilot 架构为主线；旧 Day1-Day7 产物只作为参考资产和兜底能力。
+
+## 2. 架构落地原则
+
+1. 先新增 `memory_engine/copilot/`，不直接破坏旧实现。
+2. 旧实现继续作为 reference / fallback，包括 SQLite 经验、benchmark 样例、Feishu Bot / card 经验、Bitable 台账经验、文档 ingestion 经验和 Day1 本地闭环验证经验。
+3. OpenClaw tools schema 先行，先冻结工具契约，再实现内部模块。
+4. Memory Core 不写死在 CLI、Bot handler 或 lark-cli 调用里。
+5. 所有入口：OpenClaw、CLI、Bot、Benchmark 后续都应调用同一套 Copilot Core。
+6. 向量检索只针对 curated memory，不向量化全部 raw events。
+7. Heartbeat 主动提醒进入 MVP，但先做 reminder candidate + card/dry-run，不做复杂个性化推送。
+8. 不做分布式缓存。
+9. 不做完整多租户权限后台 UI，但数据模型预留 `tenant_id`、`organization_id`、`visibility_policy`。
+10. 旧模块不一次性迁移或删除；MVP 稳定后再决定哪些旧路径迁移、废弃或保留为兼容入口。
+
+## 3. 目标目录结构
+
+本轮 MVP 目标结构如下。此计划只创建本文档；具体目录和文件在用户明确要求“开始执行”后再实现。
+
+```text
+memory_engine/
+  copilot/
+    __init__.py
+    schemas.py
+    service.py
+    orchestrator.py
+    retrieval.py
+    embeddings.py
+    governance.py
+    heartbeat.py
+    permissions.py
+    tools.py
+
+agent_adapters/
+  openclaw/
+    memory_tools.schema.json
+    feishu_memory_copilot.skill.md
+    examples/
+      historical_decision_search.json
+      conflict_update_flow.json
+      task_prefetch_flow.json
+
+tests/
+  test_copilot_schemas.py
+  test_copilot_tools.py
+  test_copilot_retrieval.py
+  test_copilot_governance.py
+  test_copilot_prefetch.py
+  test_copilot_heartbeat.py
+
+benchmarks/
+  copilot_recall_cases.json
+  copilot_candidate_cases.json
+  copilot_conflict_cases.json
+  copilot_layer_cases.json
+  copilot_prefetch_cases.json
+  copilot_heartbeat_cases.json
+```
+
+模块边界：
+
+| 文件 | 职责 | 不应承担 |
+|---|---|---|
+| `memory_engine/copilot/schemas.py` | 定义工具输入输出、memory、evidence、candidate、context pack、reminder candidate 的 dataclass / typed schema | 不直接访问 SQLite，不调用 lark-cli |
+| `memory_engine/copilot/service.py` | Copilot Core 应用服务，承接 search、create_candidate、confirm、reject、versions、prefetch | 不解析 OpenClaw runtime，不生成飞书卡片 |
+| `memory_engine/copilot/orchestrator.py` | 决定 L0-L3 query cascade、prefetch、冲突更新和 heartbeat 的编排顺序 | 不直接做底层 SQL |
+| `memory_engine/copilot/retrieval.py` | 结构化过滤、关键词/全文召回、向量召回、merge、rerank、Top K | 不改变记忆状态 |
+| `memory_engine/copilot/embeddings.py` | curated memory embedding 构建、轻量相似度计算、embedding cache | 不 embed raw events |
+| `memory_engine/copilot/governance.py` | candidate / active / superseded / rejected / stale / archived 状态机、冲突判断、版本链 | 不生成 UI |
+| `memory_engine/copilot/heartbeat.py` | review_due、deadline、长期未 recall、当前线程相关提醒的候选生成和门控 | 不直接发送真实飞书消息 |
+| `memory_engine/copilot/permissions.py` | scope、tenant、organization、visibility policy、敏感信息脱敏 | 不决定业务召回排序 |
+| `memory_engine/copilot/tools.py` | OpenClaw tool handler 与统一错误格式，对接 `service.py` | 不绕过 service 直接写库 |
+| `agent_adapters/openclaw/memory_tools.schema.json` | OpenClaw 可调用工具的 JSON schema | 不塞业务规则 |
+| `agent_adapters/openclaw/feishu_memory_copilot.skill.md` | 给 OpenClaw Agent 的使用说明和 progressive disclosure 示例 | 不重复实现 Python 逻辑 |
+
+## 4. OpenClaw 工具接口计划
+
+统一错误格式：
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "scope_required",
+    "message": "scope is required",
+    "retryable": false,
+    "details": {}
+  }
+}
+```
+
+MVP 错误码：
+
+| code | 含义 | 典型处理 |
+|---|---|---|
+| `scope_required` | 缺少 scope | Agent 补传当前项目或飞书线程 scope |
+| `permission_denied` | 当前用户或线程无权限访问该 scope | Agent 不展示记忆内容，只提示权限不足 |
+| `memory_not_found` | 未找到 memory 或 candidate | Agent 说明无匹配并建议创建候选 |
+| `candidate_not_confirmable` | candidate 已 active / rejected / archived | Agent 展示当前状态 |
+| `validation_error` | 输入字段不合法 | Agent 修正工具调用参数 |
+| `sensitive_content_blocked` | 内容包含 secret / token / 高风险敏感信息 | 进入人工复核或脱敏 |
+| `internal_error` | 未分类异常 | 记录日志，返回可读失败原因 |
+
+### 4.1 `memory.search`
+
+用途：查询当前有效的 curated memory，默认只返回 `active`。
+
+输入字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `query` | string | 是 | 用户自然语言问题 |
+| `scope` | string | 是 | 例如 `project:feishu_ai_challenge`、`chat:<chat_id>` |
+| `top_k` | integer | 否 | 默认 3，MVP 最大 10 |
+| `filters` | object | 否 | `type`、`layer`、`status`，默认 `status=active` |
+| `current_context` | object | 否 | L0 当前会话、飞书线程、任务上下文 |
+
+输出字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 是否成功 |
+| `query` | string | 原始 query |
+| `scope` | string | 实际检索 scope |
+| `results` | array | Top K memory |
+| `results[].memory_id` | string | memory id |
+| `results[].type` | string | decision / deadline / owner / workflow / risk / document |
+| `results[].subject` | string | 主题 |
+| `results[].current_value` | string | 当前有效值 |
+| `results[].status` | string | 默认 active |
+| `results[].version` | integer | 当前版本 |
+| `results[].layer` | string | L1 / L2 / L3 |
+| `results[].score` | number | rerank 后分数 |
+| `results[].evidence` | object | `source_type`、`source_id`、`quote`、`created_at`、`actor_id` |
+| `trace` | object | cascade、召回来源、merge/rerank 摘要 |
+
+内部模块：
+
+- `memory_engine/copilot/tools.py`
+- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/orchestrator.py`
+- `memory_engine/copilot/retrieval.py`
+- `memory_engine/copilot/permissions.py`
+- 旧 `memory_engine/repository.py` 作为第一阶段 storage adapter / fallback
+
+MVP 验收方式：
+
+- `tests/test_copilot_tools.py` 验证工具输入输出和错误格式。
+- `tests/test_copilot_retrieval.py` 验证默认只返回 active，superseded 不作为当前答案。
+- `benchmarks/copilot_recall_cases.json` 达到 Recall@3 >= 60%、Evidence Coverage >= 80%。
+
+### 4.2 `memory.create_candidate`
+
+用途：从用户显式记忆、飞书消息、文档、OpenClaw 当前上下文或 benchmark fixture 中生成候选记忆。
+
+输入字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `text` | string | 是 | 待判断内容 |
+| `scope` | string | 是 | 记忆归属 scope |
+| `source` | object | 是 | `source_type`、`source_id`、`actor_id`、`created_at`、`quote` |
+| `current_context` | object | 否 | 当前线程、任务、已有 L0 context |
+| `auto_confirm` | boolean | 否 | MVP 默认 false；低风险手动记忆可配置为 true，但仍过 governance |
+
+输出字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 是否成功 |
+| `candidate` | object | 候选记忆 |
+| `candidate.memory_id` | string | candidate id |
+| `candidate.type` | string | 类型 |
+| `candidate.subject` | string | 主题 |
+| `candidate.current_value` | string | 值 |
+| `candidate.summary` | string | 摘要 |
+| `candidate.confidence` | number | 置信度 |
+| `candidate.importance` | number | 重要性 |
+| `candidate.status` | string | candidate / active |
+| `candidate.evidence` | object | 强制证据 |
+| `risk_flags` | array | `sensitive`、`conflict`、`low_confidence` 等 |
+| `conflict` | object/null | old -> new 覆盖关系 |
+
+内部模块：
+
+- `service.py`
+- `governance.py`
+- `permissions.py`
+- `retrieval.py`，用于同 scope 同 subject 冲突查找
+- 旧 `document_ingestion.py` 可作为文档候选提取 fallback
+
+MVP 验收方式：
+
+- `tests/test_copilot_governance.py` 验证候选必须带 evidence。
+- `benchmarks/copilot_candidate_cases.json` 达到 Candidate Precision >= 60%。
+- 高风险内容不得无确认自动 active。
+
+### 4.3 `memory.confirm`
+
+用途：把 candidate 确认为 active，必要时把旧 active 版本转为 superseded。
+
+输入字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `candidate_id` | string | 是 | 待确认 candidate |
+| `scope` | string | 是 | 权限校验 |
+| `actor_id` | string | 是 | 确认人 |
+| `reason` | string | 否 | 确认理由 |
+
+输出字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 是否成功 |
+| `memory_id` | string | active memory id |
+| `status` | string | active |
+| `version` | integer | 当前版本号 |
+| `superseded` | object/null | 被覆盖的旧版本 |
+| `evidence` | object | 确认证据和原始来源证据 |
+
+内部模块：
+
+- `tools.py`
+- `service.py`
+- `governance.py`
+- `permissions.py`
+
+MVP 验收方式：
+
+- 单测验证 candidate -> active。
+- 冲突 candidate confirm 后旧版本进入 superseded。
+- Bitable / card 层能展示确认后的状态和版本。
+
+### 4.4 `memory.reject`
+
+用途：拒绝 candidate，保留审计记录，默认不进入 recall。
+
+输入字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `candidate_id` | string | 是 | 待拒绝 candidate |
+| `scope` | string | 是 | 权限校验 |
+| `actor_id` | string | 是 | 拒绝人 |
+| `reason` | string | 否 | 拒绝理由 |
+
+输出字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 是否成功 |
+| `memory_id` | string | candidate id |
+| `status` | string | rejected |
+| `reason` | string | 拒绝理由 |
+
+内部模块：
+
+- `service.py`
+- `governance.py`
+- `permissions.py`
+
+MVP 验收方式：
+
+- `tests/test_copilot_governance.py` 验证 rejected 不进入 search / prefetch。
+- `memory.search` 对同 query 不返回 rejected。
+
+### 4.5 `memory.explain_versions`
+
+用途：解释某条 memory 的版本链、覆盖关系和证据来源。
+
+输入字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `memory_id` | string | 是 | memory id |
+| `scope` | string | 是 | 权限校验 |
+| `include_archived` | boolean | 否 | 默认 false |
+
+输出字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 是否成功 |
+| `memory_id` | string | memory id |
+| `active_version` | object | 当前版本 |
+| `versions` | array | 所有可见版本 |
+| `versions[].status` | string | active / superseded / stale / archived |
+| `versions[].value` | string | 版本值 |
+| `versions[].supersedes_version_id` | string/null | 覆盖关系 |
+| `versions[].evidence` | object | 来源证据 |
+| `explanation` | string | 给 Agent 使用的简短解释 |
+
+内部模块：
+
+- `service.py`
+- `governance.py`
+- `permissions.py`
+- 旧 `repository.versions()` 可作为初版 adapter
+
+MVP 验收方式：
+
+- `benchmarks/copilot_conflict_cases.json` 验证 Version Trace Coverage。
+- 冲突更新后，默认 search 返回新值，explain_versions 能看到旧值被 superseded。
+
+### 4.6 `memory.prefetch`
+
+用途：OpenClaw Agent 执行任务前预取项目上下文，返回 compact context pack。
+
+输入字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `task` | string | 是 | 例如 `deployment_checklist`、`weekly_report` |
+| `scope` | string | 是 | 项目或线程 scope |
+| `current_context` | object | 是 | L0 当前消息、任务类型、用户意图、线程主题 |
+| `top_k` | integer | 否 | 默认 5 |
+
+输出字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 是否成功 |
+| `context_pack` | object | Agent 可直接使用的上下文包 |
+| `context_pack.memories` | array | active memory 列表 |
+| `context_pack.missing_context` | array | 尚缺信息 |
+| `context_pack.risks` | array | 可能影响任务的风险 |
+| `context_pack.evidence_summary` | array | 来源摘要 |
+| `trace` | object | prefetch 触发原因和召回路径 |
+
+内部模块：
+
+- `service.py`
+- `orchestrator.py`
+- `retrieval.py`
+- `permissions.py`
+
+MVP 验收方式：
+
+- `tests/test_copilot_prefetch.py` 覆盖 checklist / report / meeting prep 三类任务。
+- `benchmarks/copilot_prefetch_cases.json` 达到 Agent Task Context Use Rate >= 70%、Prefetch Relevance@3 >= 60%。
+
+### 4.7 未来预留工具
+
+| 工具 | 用途 | MVP 处理 |
+|---|---|---|
+| `memory.search_hot` | 只查 L1 Hot Memory | 暂不暴露，先由 `memory.search` trace 展示 L1 命中 |
+| `memory.search_recent` | 查 L2 Warm Memory | 暂不暴露 |
+| `memory.search_deep` | 触发 L3 Cold Memory 深度检索 | 暂不暴露，可在 no match 时由 orchestrator 内部调用 |
+| `memory.promote` | 手动提升重要记忆到 Hot Memory | 预留 schema |
+| `memory.review_due` | 查找需要复核的记忆 | D7 heartbeat 可先内部实现，后续工具化 |
+| `memory.proactive_check` | heartbeat 主动提醒判断 | MVP 内部 prototype，初赛后再稳定为工具 |
+
+## 5. Multi-Level Memory 实施计划
+
+### 5.1 L0-L3 定义
+
+| Level | 名称 | 内容 | MVP 落点 | 默认召回策略 |
+|---|---|---|---|---|
+| L0 | Agent Working Context | 当前 OpenClaw session、当前飞书线程、当前任务上下文、当前用户意图 | `schemas.WorkingContext`，由 OpenClaw adapter / CLI dry-run 传入 | 只作为 query expansion 和 rerank 信号，不长期存储 |
+| L1 | Hot Memory | 当前项目、当前群聊、当前任务最相关 active memory | 单机 hot set + SQLite `layer='L1'` 标记 | 优先查，p95 <= 100ms |
+| L2 | Warm Memory | 最近 2-7 天项目记忆、candidate、近期文档抽取、未关闭风险 | SQLite + FTS / lightweight vector index，`layer='L2'` | L1 不足时查 |
+| L3 | Cold Memory | 历史版本、raw events、旧 evidence、归档文档 | SQLite raw_events / versions / archived docs，`layer='L3'` | 只在追溯、解释版本或 L1/L2 不足时查 |
+
+### 5.2 Query Cascade
+
+```text
+L0 current_context
+  -> scope / permission check
+  -> L1 hot memory search
+  -> if enough confidence: return candidate set
+  -> L2 warm memory search
+  -> if still insufficient: L3 cold search
+  -> merge
+  -> rerank
+  -> enforce evidence
+  -> Top K
+  -> promotion / demotion side effects
+```
+
+关键要求：
+
+- cascade 不能直接扫描所有 memory records。
+- 默认 `memory.search` 只返回 `active`。
+- L3 raw events 只用于追溯和补证据，不作为默认答案直接返回。
+- Top K 每条结果必须带 evidence；缺 evidence 的结果降权或被过滤。
+
+### 5.3 Promotion Policy
+
+提升到更热层的条件：
+
+- 被频繁 recall，例如 24 小时内 recall_count >= 3。
+- 用户确认重要，例如 card 点击“标记重要”或 confirm reason 包含长期规则。
+- 与当前任务高度相关，例如 prefetch 使用后 Agent 输出引用该记忆。
+- 涉及 deadline、deployment、risk、security。
+- 刚发生冲突更新，避免旧值再次污染任务。
+
+MVP 实现：
+
+- 在 memory row 上增加或模拟 `layer`、`promotion_reason`、`last_promoted_at`。
+- 第一版可以通过 adapter 字段或迁移脚本扩展 SQLite；不直接重写旧 repository。
+
+### 5.4 Demotion Policy
+
+降级到更冷层的条件：
+
+- 长期未 recall，超过 hot TTL。
+- 项目阶段结束。
+- 旧版本被 superseded。
+- 用户标记过期。
+- 超过 `expires_at` 或 `review_due_at` 未通过复核。
+
+MVP 实现：
+
+- active memory 可从 L1 降到 L2。
+- superseded 版本默认进入 L3 / cold。
+- rejected 不参与 recall。
+- archived 只用于审计和版本解释。
+
+### 5.5 Stale / Superseded 处理
+
+- `superseded`：明确被新版本覆盖，默认 recall 不返回；`memory.explain_versions` 可返回。
+- `stale`：当前信息可能过期，默认 search 可不返回或低权返回，必须标注需要复核。
+- `archived`：长期归档，只在 deep search / explain_versions 中按权限返回。
+- `candidate`：只出现在确认队列和 governance review，不进入默认 search。
+- 旧版本不删除；状态转移和 evidence 保留。
+
+### 5.6 Evidence 强制要求
+
+每条 active memory 必须至少有一个 evidence：
+
+```text
+source_type
+source_id
+quote
+created_at
+actor_id
+source_chat_id / source_doc_id 可选
+```
+
+MVP 验收：
+
+- Evidence Coverage >= 80%。
+- 无 evidence 的 active memory 不允许进入 OpenClaw card / prefetch context pack，除非明确标注为 legacy fallback 且不计入正式 benchmark。
+
+## 6. Retrieval / Embedding 实施计划
+
+### 6.1 Curated Memory Embedding 范围
+
+只 embed curated memory：
+
+- `memory.subject`
+- `memory.current_value`
+- `memory.summary`
+- `evidence.quote`
+
+不 embed：
+
+- 全量 raw events。
+- 全量历史聊天全文。
+- 未筛选文档全文。
+- 被 rejected 的 candidate。
+
+原因：
+
+- 控制噪声。
+- 控制 10 天开发范围。
+- 减少敏感信息扩散。
+- 让召回以 active memory 状态机为主，而不是把所有聊天塞进向量库。
+
+### 6.2 Hybrid Retrieval 顺序
+
+MVP 检索顺序固定为：
+
+1. scope / status / layer / type 结构化过滤。
+2. keyword / FTS 召回，优先匹配 subject、current_value、evidence quote。
+3. vector similarity 召回，只在 curated memory embedding 上执行。
+4. merge，按 memory_id 去重，保留不同召回通道分数。
+5. rerank，综合 importance、recency、confidence、version freshness、layer、evidence completeness。
+
+MVP 可用本地轻量实现：
+
+- 关键词可先复用旧 `repository._score_recall()` 的 subject 经验，再升级为 FTS。
+- 向量可先用本地轻量 embedding 或 deterministic pseudo embedding 做 contract test，确保接口稳定。
+- 不要求复杂向量数据库或分布式向量服务。
+- 如果 embedding 暂时不可用，keyword + structured filter 必须仍能跑通 benchmark fallback。
+
+### 6.3 Rerank 规则
+
+建议基础公式：
+
+```text
+score = keyword_score
+      + vector_score
+      + importance_bonus
+      + confidence_bonus
+      + recency_bonus
+      + layer_bonus
+      + evidence_bonus
+      - stale_penalty
+      - superseded_penalty
+```
+
+硬规则：
+
+- `rejected` 永不返回。
+- `superseded` 默认不返回；只有 explain_versions / deep trace 返回。
+- evidence 缺失的结果不能作为正式 Top 1。
+- scope permission check 在 rerank 前后都要执行一次，避免 merge 时混入越权结果。
+
+## 7. Governance 实施计划
+
+### 7.1 状态定义
+
+| 状态 | 含义 | 默认是否 recall | 可见入口 |
+|---|---|---:|---|
+| `candidate` | 待确认候选记忆 | 否 | candidate card、review queue |
+| `active` | 当前有效记忆 | 是 | search、prefetch、card、benchmark |
+| `superseded` | 被新版本覆盖 | 否 | explain_versions、audit |
+| `rejected` | 用户拒绝或系统判定不应保存 | 否 | audit |
+| `stale` | 可能过期，需复核 | 默认否或低权标注 | review_due、heartbeat |
+| `archived` | 历史归档 | 否 | deep search、audit |
+
+### 7.2 自动候选识别
+
+候选来源：
+
+- 飞书群聊中出现长期规则、决策、负责人、截止时间、风险结论。
+- 飞书文档或 Markdown ingestion 抽取出的结构化结论。
+- OpenClaw Agent 当前任务中发现用户显式要求记住。
+- benchmark fixture 注入。
+
+候选必须输出：
+
+- type。
+- subject。
+- current_value。
+- summary。
+- confidence。
+- importance。
+- evidence。
+- risk_flags。
+
+低置信或高风险候选必须停留在 `candidate`，通过 card 或 dry-run 展示给用户确认。
+
+### 7.3 用户手动记忆
+
+显式表达包括：
+
+- “记住”
+- “请记一下”
+- “以后都按”
+- “这个规则固定下来”
+- “统一改成”
+
+处理原则：
+
+- 手动记忆也必须经过 Memory Core。
+- 手动写入必须记录当前消息作为 evidence。
+- 不能绕过敏感信息检查。
+- 如果与旧 active memory 冲突，必须进入冲突更新流程。
+
+### 7.4 冲突更新
+
+冲突表达包括：
+
+- “刚才说错了”
+- “不对”
+- “统一改成”
+- “旧规则不用了”
+- “以后不要用”
+- “按新版走”
+
+处理流程：
+
+```text
+create_candidate
+  -> find same scope + same normalized subject active memory
+  -> detect old -> new conflict
+  -> create candidate with conflict metadata
+  -> confirm
+  -> old active version -> superseded / L3 cold
+  -> new version -> active
+  -> search 默认只返回 new
+  -> explain_versions 可追溯 old/new/evidence
+```
+
+旧版本不删除，只进入 `superseded` / cold。
+
+### 7.5 Version Explainability
+
+`memory.explain_versions` 必须回答：
+
+- 当前有效值是什么。
+- 旧值是什么。
+- 旧值为什么失效。
+- 覆盖来自哪条飞书消息、文档或 benchmark event。
+- 谁确认了更新。
+- 是否存在 stale / archived 风险。
+
+## 8. Heartbeat 主动提醒计划
+
+MVP 必须做 heartbeat reminder prototype，但先做 reminder candidate + card/dry-run，不做复杂个性化推送。
+
+### 8.1 触发方式
+
+- OpenClaw heartbeat。
+- scheduled check。
+- manual `review_due` / `memory.review_due`。
+- Agent task start pre-check。
+
+MVP 先实现：
+
+- `memory_engine/copilot/heartbeat.py` 中的 `generate_reminder_candidates(now, scope, current_context)`。
+- CLI / test dry-run 可调用该函数。
+- OpenClaw adapter 文档说明 heartbeat 如何调用。
+
+### 8.2 候选来源
+
+| 来源 | 示例 | MVP 处理 |
+|---|---|---|
+| `review_due_at <= now` | 某条部署规则到复核时间 | 生成 reminder candidate |
+| important memory N 天未 recall | 重要风险 5 天未被查过 | 进入候选，过 cooldown 再提醒 |
+| deadline 即将到期 | 周报 24 小时内到期 | 高优先级候选 |
+| 当前线程主题与 active memory 高相似 | 群里重新讨论部署 region | relevance 达阈值才提醒 |
+
+### 8.3 门控
+
+提醒必须经过：
+
+- importance >= threshold。
+- relevance >= threshold。
+- cooldown 未命中。
+- scope permission 允许。
+- sensitive redaction 完成。
+
+敏感内容规则：
+
+- token、secret、完整内部链接不得出现在卡片正文。
+- 高风险 security / production / customer 类记忆默认需要人工确认。
+- `Sensitive Reminder Leakage Rate` 必须等于 0。
+
+### 8.4 输出
+
+MVP 输出：
+
+- reminder candidate。
+- 飞书卡片或 dry-run log。
+- Bitable reminder record 可选，不作为第一周阻塞项。
+
+候选字段：
+
+```text
+reminder_id
+memory_id
+scope
+trigger_type
+title
+message
+importance
+relevance
+cooldown_until
+redacted_evidence
+recommended_action
+```
+
+## 9. 7 天 MVP 开发排期
+
+### D1，2026-04-26：implementation plan + OpenClaw tool schema + copilot package skeleton
+
+当日目标：
+
+- 完成本计划文档。
+- 冻结 OpenClaw MVP tool schema。
+- 新增 `memory_engine/copilot/` 空骨架和 schema stub。
+- 不改旧 `repository.py` 和 Feishu handler。
+
+需要改/新增的文件：
+
+- `docs/feishu-memory-copilot-implementation-plan.md`
+- `agent_adapters/openclaw/memory_tools.schema.json`
+- `agent_adapters/openclaw/feishu_memory_copilot.skill.md`
+- `agent_adapters/openclaw/examples/*.json`
+- `memory_engine/copilot/__init__.py`
+- `memory_engine/copilot/schemas.py`
+- `memory_engine/copilot/tools.py`
+
+测试：
+
+- `python3 -m compileall memory_engine scripts`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+- 新增 `tests/test_copilot_schemas.py`
+
+验收标准：
+
+- schema 能描述 6 个 MVP 工具。
+- Copilot package 可 import。
+- 旧 Day1 benchmark 仍通过。
+
+可交给队友的晚上补位任务：
+
+- 打开 `agent_adapters/openclaw/memory_tools.schema.json`，检查工具字段是否能让非本项目 Agent 理解。
+- 用浅显中文改 `feishu_memory_copilot.skill.md` 的触发示例，保证评委能看懂“什么时候该调用记忆工具”。
+- 不改核心 Python 代码。
+
+### D2，2026-04-27：schemas/service/tools 跑通 `memory.search` contract test
+
+当日目标：
+
+- 实现 `CopilotService.search()` 和 `tools.memory_search()`。
+- 旧 `MemoryRepository.recall_candidates()` 作为 storage adapter / fallback。
+- search 返回统一 JSON 和错误格式。
+
+需要改/新增的文件：
+
+- `memory_engine/copilot/schemas.py`
+- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/tools.py`
+- `memory_engine/copilot/permissions.py`
+- `tests/test_copilot_tools.py`
+- `tests/test_copilot_retrieval.py`
+
+测试：
+
+- `python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_retrieval`
+- `python3 -m compileall memory_engine scripts`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+
+验收标准：
+
+- `memory.search` 对 active memory 返回 Top K with evidence。
+- 缺 scope、无权限、无结果时返回统一错误。
+- 默认不返回 candidate / rejected / superseded。
+
+可交给队友的晚上补位任务：
+
+- 准备 10 条真实项目协作 query，写入 `benchmarks/copilot_recall_cases.json` 草稿。
+- 每条 query 标注正确答案和必须出现的 evidence 关键词。
+- 不处理数据库、权限或 token。
+
+### D3，2026-04-28：L0/L1/L2/L3 数据模型和 query cascade
+
+当日目标：
+
+- 实现 L0 Working Context schema。
+- 实现 L1/L2/L3 layer 字段和 query cascade。
+- 在不大改旧 schema 的前提下，先通过 adapter / lightweight migration 支持 layer。
+
+需要改/新增的文件：
+
+- `memory_engine/copilot/orchestrator.py`
+- `memory_engine/copilot/retrieval.py`
+- `memory_engine/copilot/schemas.py`
+- `tests/test_copilot_retrieval.py`
+- `benchmarks/copilot_layer_cases.json`
+
+测试：
+
+- `python3 -m unittest tests.test_copilot_retrieval`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+
+验收标准：
+
+- query cascade trace 能显示 L1 -> L2 -> L3。
+- L1 命中 p95 <= 100ms 的本地测试路径成型。
+- L3 raw events 不直接作为默认答案。
+
+可交给队友的晚上补位任务：
+
+- 给 `benchmarks/copilot_layer_cases.json` 补 15 条 layer 场景：热记忆、近 7 天记忆、旧版本、归档证据。
+- 用中文备注每条为什么属于 Hot / Warm / Cold。
+
+### D4，2026-04-29：hybrid retrieval + curated memory embedding
+
+当日目标：
+
+- 实现 structured filter + keyword/FTS + vector similarity + merge + rerank。
+- embedding 只覆盖 curated memory 字段。
+- embedding 不成为单点依赖，关键词 fallback 必须可用。
+
+需要改/新增的文件：
+
+- `memory_engine/copilot/retrieval.py`
+- `memory_engine/copilot/embeddings.py`
+- `tests/test_copilot_retrieval.py`
+- `benchmarks/copilot_recall_cases.json`
+
+测试：
+
+- `python3 -m unittest tests.test_copilot_retrieval`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+- 如实现 benchmark runner 扩展：`python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json`
+
+验收标准：
+
+- Hybrid retrieval trace 能看到 structured / keyword / vector / rerank。
+- 不向量化 raw events。
+- Recall@3 >= 60% 的第一版目标可测。
+
+可交给队友的晚上补位任务：
+
+- 人工检查 recall 失败样例，标注失败分类：keyword_miss、vector_miss、wrong_subject_normalization、evidence_missing。
+- 把失败分类补进 benchmark case 的备注。
+
+### D5，2026-04-30：create_candidate + manual memory + evidence + governance
+
+当日目标：
+
+- 实现 `memory.create_candidate`、`memory.confirm`、`memory.reject`。
+- 手动记忆和自动候选统一走 governance。
+- evidence 成为 active 的强约束。
+
+需要改/新增的文件：
+
+- `memory_engine/copilot/governance.py`
+- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/tools.py`
+- `memory_engine/copilot/permissions.py`
+- `tests/test_copilot_governance.py`
+- `benchmarks/copilot_candidate_cases.json`
+
+测试：
+
+- `python3 -m unittest tests.test_copilot_governance tests.test_copilot_tools`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+
+验收标准：
+
+- 手动“记住”不绕过 safety / evidence / conflict check。
+- candidate 默认不进入 search。
+- confirm 后进入 active；reject 后不召回。
+- Candidate Precision >= 60% 的 benchmark 数据集成型。
+
+可交给队友的晚上补位任务：
+
+- 补 30 条候选识别样例：15 条应该记、15 条不应该记。
+- 每条用白话写“为什么值得记 / 为什么不值得记”。
+
+### D6，2026-05-01：conflict update + versions + stale leakage tests
+
+当日目标：
+
+- 实现冲突更新 old -> new 的 Copilot governance 路径。
+- `memory.explain_versions` 输出可解释版本链。
+- stale / superseded 不泄漏到默认 recall。
+
+需要改/新增的文件：
+
+- `memory_engine/copilot/governance.py`
+- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/tools.py`
+- `tests/test_copilot_governance.py`
+- `benchmarks/copilot_conflict_cases.json`
+
+测试：
+
+- `python3 -m unittest tests.test_copilot_governance`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+- 如果 runner 支持：`python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`
+
+验收标准：
+
+- Conflict Update Accuracy >= 70%。
+- 旧版本进入 superseded / cold。
+- 默认 recall 不返回旧值作为当前答案。
+- explain_versions 能解释旧值为什么失效。
+
+可交给队友的晚上补位任务：
+
+- 设计 20 组更像真人表达的冲突样例，例如“刚才说错了”“统一改成”“以后别用这个”。
+- 检查版本链文案是否能让非技术评委看懂。
+
+### D7，2026-05-02：`memory.prefetch` + heartbeat reminder prototype + OpenClaw demo flow
+
+当日目标：
+
+- 实现 `memory.prefetch` context pack。
+- 实现 heartbeat reminder candidate prototype。
+- 完成至少 2 条 OpenClaw Agent E2E demo flow：历史决策查询、任务前 prefetch；目标第三条为冲突更新。
+
+需要改/新增的文件：
+
+- `memory_engine/copilot/orchestrator.py`
+- `memory_engine/copilot/heartbeat.py`
+- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/tools.py`
+- `agent_adapters/openclaw/examples/*.json`
+- `tests/test_copilot_prefetch.py`
+- `tests/test_copilot_heartbeat.py`
+- `benchmarks/copilot_prefetch_cases.json`
+- `benchmarks/copilot_heartbeat_cases.json`
+
+测试：
+
+- `python3 -m unittest tests.test_copilot_prefetch tests.test_copilot_heartbeat`
+- `python3 -m compileall memory_engine scripts`
+- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
+
+验收标准：
+
+- Agent Task Context Use Rate >= 70%。
+- heartbeat 能输出 reminder candidate。
+- Sensitive Reminder Leakage Rate = 0。
+- OpenClaw demo flow 有可复制输入输出样例。
+
+可交给队友的晚上补位任务：
+
+- 按 `agent_adapters/openclaw/examples/` 走一遍 demo 样例，记录哪里不像真实办公 Copilot。
+- 准备 5 分钟 Demo 讲解词：先讲用户痛点，再讲 Agent 自动调用记忆工具。
+
+## 10. 2026-05-03 到 2026-05-07 初赛收尾计划
+
+### 2026-05-03：Benchmark expansion
+
+- 扩展 `benchmarks/copilot_*_cases.json`。
+- 将 recall、candidate、conflict、layer、prefetch、heartbeat 指标统一到 runner。
+- 产出机器可读 JSON / CSV 和评委可读 Markdown。
+- 更新 `docs/benchmark-report.md`。
+
+验收命令：
+
+```bash
+python3 -m compileall memory_engine scripts
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+```
+
+### 2026-05-04：Demo runbook + README
+
+- 更新 `docs/demo-runbook.md`。
+- 更新 `README.md`，突出 Feishu Memory Copilot、OpenClaw tools、可复现 benchmark。
+- 固定 demo seed 数据和 dry-run 路径。
+- OpenClaw runtime 若不稳定，保留 CLI/dry-run 兜底，但叙事不退回 CLI-first。
+
+### 2026-05-05：白皮书
+
+- 创建或重写 `docs/memory-definition-and-architecture-whitepaper.md`。
+- 顺序：paper/background first，why design works，current reproduction / implementation correspondence，progress and next steps。
+- 覆盖记忆定义、状态机、证据链、OpenClaw 入口、飞书生态、安全权限、Benchmark 证明。
+
+### 2026-05-06：提交材料 + 录屏/截图
+
+- 创建 `docs/submission-checklist.md`。
+- 准备录屏分镜和截图清单。
+- 检查 `agent_adapters/openclaw/` 文档和 examples 是否可复制执行或明确标注 dry-run。
+- 做全流程 QA：CLI、Copilot tools、benchmark、Feishu dry-run / replay、Bitable 可选同步。
+
+### 2026-05-07：最终验证和 push
+
+- 从干净状态跑完整验证。
+- 固定 Demo 数据、提交 hash、tag 或版本说明。
+- 确认远程仓库包含三大交付物，不包含 `.env`、`.omx/`、数据库、缓存、临时报告、真实飞书日志和 token。
+- 最终 push origin HEAD。
+
+最终验收命令：
+
+```bash
+git status --short --ignored
+python3 -m compileall memory_engine scripts
+python3 -m unittest discover tests
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+```
+
+## 11. Benchmark 和测试计划
+
+### 11.1 PRD 指标映射
+
+| PRD 指标 | MVP 目标 | 主要 benchmark | 主要测试 |
+|---|---:|---|---|
+| Recall@3 | >= 60% | `benchmarks/copilot_recall_cases.json` | `tests/test_copilot_retrieval.py` |
+| Conflict Update Accuracy | >= 70% | `benchmarks/copilot_conflict_cases.json` | `tests/test_copilot_governance.py` |
+| Evidence Coverage | >= 80% | recall / candidate / conflict 全部统计 | `tests/test_copilot_tools.py` |
+| Candidate Precision | >= 60% | `benchmarks/copilot_candidate_cases.json` | `tests/test_copilot_governance.py` |
+| Agent Task Context Use Rate | >= 70% | `benchmarks/copilot_prefetch_cases.json` | `tests/test_copilot_prefetch.py` |
+| L1 Hot Recall p95 | <= 100ms | `benchmarks/copilot_layer_cases.json` | `tests/test_copilot_retrieval.py` |
+| Sensitive Reminder Leakage Rate | 0 | `benchmarks/copilot_heartbeat_cases.json` | `tests/test_copilot_heartbeat.py` |
+
+### 11.2 单元测试清单
+
+| 测试文件 | 覆盖范围 |
+|---|---|
+| `tests/test_copilot_schemas.py` | schema 必填字段、默认值、状态枚举、错误格式 |
+| `tests/test_copilot_tools.py` | 6 个 MVP tools 的输入输出 contract、错误码 |
+| `tests/test_copilot_retrieval.py` | L0-L3 cascade、active-only、hybrid retrieval、rerank、evidence 强制 |
+| `tests/test_copilot_governance.py` | candidate / active / superseded / rejected / stale / archived 状态转移 |
+| `tests/test_copilot_prefetch.py` | task context pack、missing context、Agent 使用率统计 |
+| `tests/test_copilot_heartbeat.py` | reminder candidate、importance/relevance/cooldown/permission/sensitive gates |
+
+保留现有测试：
+
+- `tests/test_benchmark_day7.py`
+- `tests/test_document_ingestion.py`
+- `tests/test_feishu_day3.py`
+- `tests/test_feishu_day5.py`
+- `tests/test_feishu_day6.py`
+- `tests/test_feishu_interactive_cards.py`
+- `tests/test_feishu_runtime_logging.py`
+- `tests/test_bitable_sync.py`
+
+### 11.3 Benchmark 文件清单
+
+| 文件 | 目的 |
+|---|---|
+| `benchmarks/day1_cases.json` | 保留旧本地闭环基线 |
+| `benchmarks/day7_anti_interference.json` | 保留抗干扰资产 |
+| `benchmarks/copilot_recall_cases.json` | 历史决策召回 |
+| `benchmarks/copilot_candidate_cases.json` | 自动候选识别 |
+| `benchmarks/copilot_conflict_cases.json` | 冲突更新和 stale leakage |
+| `benchmarks/copilot_layer_cases.json` | L1/L2/L3 分层召回和延迟 |
+| `benchmarks/copilot_prefetch_cases.json` | OpenClaw Agent task prefetch |
+| `benchmarks/copilot_heartbeat_cases.json` | heartbeat reminder candidate 和敏感泄漏 |
+
+### 11.4 失败分类
+
+每个失败 case 必须记录：
+
+```text
+case_id
+input_events
+query_or_task
+expected_result
+actual_result
+failed_metric
+retrieved_layer
+retrieved_memory_ids
+rerank_score
+failure_reason
+recommended_fix
+```
+
+失败分类枚举：
+
+- `candidate_not_detected`
+- `wrong_subject_normalization`
+- `wrong_layer_routing`
+- `vector_miss`
+- `keyword_miss`
+- `stale_value_leaked`
+- `evidence_missing`
+- `agent_did_not_prefetch`
+- `reminder_too_noisy`
+- `permission_scope_error`
+
+### 11.5 每日验证命令
+
+每天最少运行：
+
+```bash
+python3 -m compileall memory_engine scripts
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+```
+
+新增 Copilot 测试后追加：
+
+```bash
+python3 -m unittest tests.test_copilot_schemas
+python3 -m unittest tests.test_copilot_tools
+python3 -m unittest tests.test_copilot_retrieval
+python3 -m unittest tests.test_copilot_governance
+python3 -m unittest tests.test_copilot_prefetch
+python3 -m unittest tests.test_copilot_heartbeat
+```
+
+### 11.6 最终验收命令
+
+```bash
+python3 -m compileall memory_engine scripts
+python3 -m unittest discover tests
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+```
+
+注意：在对应 benchmark runner 未实现前，`copilot_*` 命令可以先作为计划中的验收入口；当天实现哪个 benchmark，就把哪个纳入强制验证。
+
+## 12. 旧代码复用和废弃策略
+
+| 模块 | 当前价值 | MVP 处理 | 稳定后再决定 |
+|---|---|---|---|
+| `memory_engine/repository.py` | 已有 SQLite remember / recall / versions / candidate confirm / reject / evidence 经验 | 不直接大改；作为 Copilot storage adapter / fallback；新增 Copilot service 先包它 | 拆出 repository interface，补 tenant/layer/visibility 字段，逐步迁移 |
+| `memory_engine/benchmark.py` | 已有 Day1、Day5、Day7 benchmark runner 和报告生成 | 复用 runner 结构，新增 copilot benchmark 分支 | 统一指标输出，支持多 benchmark suite |
+| `memory_engine/cli.py` | 可复现兜底入口，已有 remember / recall / versions / ingest-doc / bitable / feishu | 不作为主架构；后续 CLI 命令调用 Copilot Core | 保留为 demo / debug bridge |
+| `memory_engine/feishu_runtime.py` | 已有 Feishu event replay/listen、命令处理、日志、card publish | 不把新 Copilot Core 写进 handler；先通过 adapter 调 `service.py` | 将 `/remember` `/recall` 等旧命令迁到 Copilot tools |
+| `memory_engine/feishu_cards.py` | 已有 card 字段、候选确认按钮、版本链按钮经验 | 复用展示经验；card 只消费 Copilot service 输出 | 拆出 Copilot card renderer |
+| `memory_engine/document_ingestion.py` | 已有 Markdown / lark-cli docs fetch、candidate quote 抽取 | 作为 `memory.create_candidate` 的文档来源 fallback | 抽取成 ingestion adapter，不直接写 repository |
+| `memory_engine/bitable_sync.py` | 已有 Memory Ledger / Versions / Benchmark Results 同步 | 作为可选 review surface，不作为 source of truth | 增加 reminder record 和 Copilot metrics 表 |
+| `tests/` | 已有 Bot、Card、Bitable、文档 ingestion、D7 benchmark 测试 | 保留；新增 copilot 测试，不删除旧测试 | 旧入口迁移后更新测试断言 |
+| `benchmarks/` | 已有 Day1、D5、D7 数据资产 | 保留；新增 `copilot_*` 数据集 | 合并报告生成和失败分析 |
+
+明确要求：
+
+- 不直接删除旧模块。
+- 不一次性大改旧路径。
+- 先通过 adapter 或 service 层复用旧能力。
+- 新功能优先进入 `memory_engine/copilot/`。
+- 等 MVP 稳定后再决定哪些旧路径迁移或废弃。
+
+## 13. 风险和取舍
+
+| 风险 | 影响 | Mitigation |
+|---|---|---|
+| 10 天周期过短 | OpenClaw、retrieval、heartbeat、benchmark 和白皮书可能不能全部打磨 | 先完成 2026-04-26 到 2026-05-02 MVP 闭环；2026-05-03 到 2026-05-07 只收尾三大交付物；复杂个性化提醒、完整多租户后台、分布式缓存全部延后 |
+| OpenClaw runtime 集成风险 | 可能滑回旧 CLI/Bot demo | schema 先行，`agent_adapters/openclaw/` 先交付；真实 runtime 不稳时用 examples + CLI/dry-run 证明工具契约，但产品叙事仍是 OpenClaw-native |
+| embedding 质量风险 | Recall@3 不达标 | 使用 hybrid retrieval；结构化过滤和 keyword/FTS 作为稳态兜底；只 embed curated memory；失败分类记录 `vector_miss` |
+| heartbeat 太吵的风险 | 用户觉得系统乱插话 | MVP 只生成 reminder candidate；必须通过 importance、relevance、cooldown、permission、sensitive gates；Sensitive Reminder Leakage Rate 必须为 0 |
+| 旧实现拖累架构的风险 | 新 Core 被旧 CLI/Bot handler 绑死 | 新功能只进 `memory_engine/copilot/`；旧 repository 只当 storage adapter；所有入口后续调用同一套 service |
+| 飞书权限 / lark-cli profile 风险 | 真实飞书消息、文档、Bitable 写入失败 | 保留 fixture、replay、dry-run；文档明确 profile setup；lark-cli 是操作层，不是核心状态机 |
+| Benchmark 达不到指标的风险 | 初赛证明力不足 | 缩小 P0 场景到项目协作记忆；强化 subject normalization、evidence、规则检索；每日跑基础验证和专项 benchmark |
+| 权限模型太弱 | 企业级可信度不足 | MVP 预留 `tenant_id`、`organization_id`、`visibility_policy`，默认同 scope 召回，跨 scope 禁止 |
+| 自动候选误记 | 系统显得不可靠 | 高风险和低置信候选进入人工确认；Candidate Precision 进入硬指标 |
+| 旧值泄漏 | 用户误用过期信息 | 默认 recall 只返回 active；superseded/stale leakage 进入 benchmark；版本解释工具单独返回旧值 |
+
+## 14. 执行顺序和下一步代码入口
+
+此轮只生成 implementation plan，不开始实现代码。
+
+下一步如果用户明确要求“开始执行”，建议从以下文件开始：
+
+1. `agent_adapters/openclaw/memory_tools.schema.json`：先冻结工具 schema。
+2. `memory_engine/copilot/schemas.py`：定义工具输入输出和 memory 状态模型。
+3. `memory_engine/copilot/tools.py`：实现 OpenClaw 工具 handler 的薄封装。
+4. `memory_engine/copilot/service.py`：把 `memory.search` 先接到旧 repository fallback。
+5. `tests/test_copilot_schemas.py` 和 `tests/test_copilot_tools.py`：先锁 contract，再扩展 retrieval 和 governance。
+
+不要从 `memory_engine/repository.py` 或 `memory_engine/feishu_runtime.py` 开始大改；这两个文件只在 adapter 确认需要时做小步扩展。
