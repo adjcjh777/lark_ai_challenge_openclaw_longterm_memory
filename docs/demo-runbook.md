@@ -156,4 +156,4 @@ scripts/start_feishu_bot.sh
 
 - 如果飞书现场权限失败怎么办？
   - 本地 replay 可以完整演示同一套 handler。
-  - `docs/day3-handoff.md` 已记录真实群、profile 和保底验证命令。
+  - `docs/archive/legacy-day-docs/day3-handoff.md` 已记录真实群、profile 和保底验证命令。

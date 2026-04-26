@@ -12,8 +12,8 @@ Benchmark 文件：`benchmarks/day5_ingestion_cases.json`
 
 输入文档：
 
-- `docs/demo-docs/day5-architecture-decisions.md`
-- `docs/demo-docs/day5-weekly-meeting-notes.md`
+- `docs/archive/legacy-day-docs/demo-docs/day5-architecture-decisions.md`
+- `docs/archive/legacy-day-docs/demo-docs/day5-weekly-meeting-notes.md`
 
 每份文档包含：
 

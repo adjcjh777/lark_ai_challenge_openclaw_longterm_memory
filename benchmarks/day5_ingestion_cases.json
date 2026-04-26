@@ -1,7 +1,7 @@
 [
   {
     "case_id": "day5_architecture_doc_001",
-    "document": "docs/demo-docs/day5-architecture-decisions.md",
+    "document": "docs/archive/legacy-day-docs/demo-docs/day5-architecture-decisions.md",
     "expected_candidate_min": 5,
     "limit": 12,
     "expected_quotes": [
@@ -29,7 +29,7 @@
   },
   {
     "case_id": "day5_weekly_meeting_doc_001",
-    "document": "docs/demo-docs/day5-weekly-meeting-notes.md",
+    "document": "docs/archive/legacy-day-docs/demo-docs/day5-weekly-meeting-notes.md",
     "expected_candidate_min": 5,
     "limit": 12,
     "expected_quotes": [
