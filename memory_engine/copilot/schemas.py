@@ -24,6 +24,15 @@ ERROR_CODES = {
     "internal_error",
 }
 
+SOURCE_FIELDS = {"source_type", "source_id", "actor_id", "created_at", "quote", "source_chat_id", "source_doc_id"}
+SEARCH_FIELDS = {"query", "scope", "top_k", "filters", "current_context"}
+SEARCH_FILTER_FIELDS = {"type", "layer", "status"}
+CREATE_CANDIDATE_FIELDS = {"text", "scope", "source", "current_context", "auto_confirm"}
+CONFIRM_FIELDS = {"candidate_id", "scope", "actor_id", "reason"}
+REJECT_FIELDS = {"candidate_id", "scope", "actor_id", "reason"}
+EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived"}
+PREFETCH_FIELDS = {"task", "scope", "current_context", "top_k"}
+
 
 class ValidationError(ValueError):
     """Raised when an OpenClaw tool payload does not match the Copilot contract."""
@@ -63,6 +72,7 @@ class CandidateSource:
     @classmethod
     def from_payload(cls, payload: Any) -> "CandidateSource":
         data = _require_object(payload, "source")
+        _reject_unknown_fields(data, SOURCE_FIELDS, "source")
         return cls(
             source_type=_require_string(data, "source_type"),
             source_id=_require_string(data, "source_id"),
@@ -99,8 +109,9 @@ class SearchRequest:
     @classmethod
     def from_payload(cls, payload: Any) -> "SearchRequest":
         data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, SEARCH_FIELDS, "memory.search")
         scope = _require_scope(data)
-        filters = _optional_object(data, "filters")
+        filters = _search_filters(data)
         if "status" not in filters:
             filters["status"] = "active"
         return cls(
@@ -132,12 +143,13 @@ class CreateCandidateRequest:
     @classmethod
     def from_payload(cls, payload: Any) -> "CreateCandidateRequest":
         data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, CREATE_CANDIDATE_FIELDS, "memory.create_candidate")
         return cls(
             text=_require_string(data, "text"),
             scope=_require_scope(data),
             source=CandidateSource.from_payload(data.get("source")),
             current_context=_optional_object(data, "current_context"),
-            auto_confirm=bool(data.get("auto_confirm", False)),
+            auto_confirm=_optional_bool(data, "auto_confirm", default=False),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -160,6 +172,7 @@ class ConfirmRequest:
     @classmethod
     def from_payload(cls, payload: Any) -> "ConfirmRequest":
         data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, CONFIRM_FIELDS, "memory.confirm")
         return cls(
             candidate_id=_require_string(data, "candidate_id"),
             scope=_require_scope(data),
@@ -178,6 +191,7 @@ class RejectRequest:
     @classmethod
     def from_payload(cls, payload: Any) -> "RejectRequest":
         data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, REJECT_FIELDS, "memory.reject")
         return cls(
             candidate_id=_require_string(data, "candidate_id"),
             scope=_require_scope(data),
@@ -195,10 +209,11 @@ class ExplainVersionsRequest:
     @classmethod
     def from_payload(cls, payload: Any) -> "ExplainVersionsRequest":
         data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, EXPLAIN_VERSIONS_FIELDS, "memory.explain_versions")
         return cls(
             memory_id=_require_string(data, "memory_id"),
             scope=_require_scope(data),
-            include_archived=bool(data.get("include_archived", False)),
+            include_archived=_optional_bool(data, "include_archived", default=False),
         )
 
 
@@ -212,9 +227,8 @@ class PrefetchRequest:
     @classmethod
     def from_payload(cls, payload: Any) -> "PrefetchRequest":
         data = _require_object(payload, "payload")
-        current_context = _optional_object(data, "current_context")
-        if not current_context:
-            raise ValidationError("current_context is required")
+        _reject_unknown_fields(data, PREFETCH_FIELDS, "memory.prefetch")
+        current_context = _require_non_empty_object(data, "current_context")
         return cls(
             task=_require_string(data, "task"),
             scope=_require_scope(data),
@@ -238,6 +252,15 @@ def _optional_object(data: dict[str, Any], field_name: str) -> dict[str, Any]:
     return dict(value)
 
 
+def _require_non_empty_object(data: dict[str, Any], field_name: str) -> dict[str, Any]:
+    if field_name not in data:
+        raise ValidationError(f"{field_name} is required")
+    value = _optional_object(data, field_name)
+    if not value:
+        raise ValidationError(f"{field_name} must be a non-empty object")
+    return value
+
+
 def _require_string(data: dict[str, Any], field_name: str) -> str:
     value = data.get(field_name)
     if not isinstance(value, str) or not value.strip():
@@ -255,6 +278,13 @@ def _optional_string(data: dict[str, Any], field_name: str) -> str | None:
     return value or None
 
 
+def _optional_bool(data: dict[str, Any], field_name: str, *, default: bool) -> bool:
+    value = data.get(field_name, default)
+    if not isinstance(value, bool):
+        raise ValidationError(f"{field_name} must be a boolean")
+    return value
+
+
 def _require_scope(data: dict[str, Any]) -> str:
     scope = _require_string(data, "scope")
     try:
@@ -262,6 +292,25 @@ def _require_scope(data: dict[str, Any]) -> str:
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
     return scope
+
+
+def _reject_unknown_fields(data: dict[str, Any], allowed_fields: set[str], context: str) -> None:
+    unknown_fields = sorted(set(data) - allowed_fields)
+    if unknown_fields:
+        joined = ", ".join(unknown_fields)
+        raise ValidationError(f"{context} contains unsupported field(s): {joined}")
+
+
+def _search_filters(data: dict[str, Any]) -> dict[str, Any]:
+    filters = _optional_object(data, "filters")
+    _reject_unknown_fields(filters, SEARCH_FILTER_FIELDS, "memory.search.filters")
+    if "type" in filters and filters["type"] not in MEMORY_TYPES:
+        raise ValidationError(f"filters.type must be one of: {', '.join(sorted(MEMORY_TYPES))}")
+    if "layer" in filters and filters["layer"] not in MEMORY_LAYERS:
+        raise ValidationError(f"filters.layer must be one of: {', '.join(sorted(MEMORY_LAYERS))}")
+    if "status" in filters and filters["status"] not in MEMORY_STATUSES:
+        raise ValidationError(f"filters.status must be one of: {', '.join(sorted(MEMORY_STATUSES))}")
+    return filters
 
 
 def _top_k(value: Any, *, default: int) -> int:

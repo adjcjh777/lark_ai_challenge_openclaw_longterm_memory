@@ -40,6 +40,13 @@ def error_response(
 
 
 def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
+    """Parse and validate a tool request payload.
+
+    This is intentionally a request-parser envelope, not the final OpenClaw
+    tool response. Service handlers will convert parsed requests into
+    tool-specific outputs such as search results, candidates, and traces.
+    """
+
     parser = REQUEST_TYPES.get(tool_name)
     if parser is None:
         return error_response(
@@ -56,7 +63,7 @@ def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
     return {
         "ok": True,
         "tool": tool_name,
-        "request": _to_plain_dict(request),
+        "parsed_request": _to_plain_dict(request),
     }
 
 

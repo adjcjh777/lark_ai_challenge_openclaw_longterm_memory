@@ -19,6 +19,16 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual("2026.4.24", schema["openclaw_version"])
         self.assertEqual(supported_tool_names(), schema_tools)
 
+    def test_schema_matches_parser_edge_contracts(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        tools = {tool["name"]: tool["input_schema"] for tool in schema["tools"]}
+
+        search_filters = tools["memory.search"]["properties"]["filters"]
+        self.assertFalse(search_filters["additionalProperties"])
+
+        prefetch_context = tools["memory.prefetch"]["properties"]["current_context"]
+        self.assertEqual(1, prefetch_context["minProperties"])
+
     def test_validate_tool_request_accepts_search_payload(self) -> None:
         result = validate_tool_request(
             "memory.search",
@@ -31,7 +41,9 @@ class CopilotToolContractTest(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual("memory.search", result["tool"])
-        self.assertEqual("active", result["request"]["filters"]["status"])
+        self.assertIn("parsed_request", result)
+        self.assertNotIn("results", result)
+        self.assertEqual("active", result["parsed_request"]["filters"]["status"])
 
     def test_validate_tool_request_uses_standard_error_shape(self) -> None:
         result = validate_tool_request("memory.search", {"query": "deployment"})

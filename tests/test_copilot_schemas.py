@@ -7,6 +7,8 @@ from memory_engine.copilot.schemas import (
     CopilotError,
     CreateCandidateRequest,
     PrefetchRequest,
+    ExplainVersionsRequest,
+    ConfirmRequest,
     SearchRequest,
     ValidationError,
 )
@@ -23,6 +25,27 @@ class CopilotSchemaTest(unittest.TestCase):
 
         self.assertEqual(3, request.top_k)
         self.assertEqual({"status": "active"}, request.filters)
+
+    def test_search_request_rejects_unknown_fields(self) -> None:
+        with self.assertRaises(ValidationError):
+            SearchRequest.from_payload(
+                {
+                    "query": "production deployment region",
+                    "scope": "project:feishu_ai_challenge",
+                    "unexpected": "value",
+                }
+            )
+
+    def test_search_request_rejects_invalid_filters(self) -> None:
+        invalid_payloads = [
+            {"query": "deployment", "scope": "project:feishu_ai_challenge", "filters": {"layer": "L9"}},
+            {"query": "deployment", "scope": "project:feishu_ai_challenge", "filters": {"status": "unknown"}},
+            {"query": "deployment", "scope": "project:feishu_ai_challenge", "filters": {"type": "chat"}},
+            {"query": "deployment", "scope": "project:feishu_ai_challenge", "filters": {"extra": "value"}},
+        ]
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload), self.assertRaises(ValidationError):
+                SearchRequest.from_payload(payload)
 
     def test_search_request_rejects_invalid_scope(self) -> None:
         with self.assertRaises(ValidationError):
@@ -58,12 +81,62 @@ class CopilotSchemaTest(unittest.TestCase):
         self.assertEqual("msg_1", request.source.source_id)
         self.assertEqual("Production deployment must use --canary.", request.source.quote)
 
+    def test_create_candidate_rejects_non_boolean_auto_confirm(self) -> None:
+        for value in ("false", "0", 1):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                CreateCandidateRequest.from_payload(
+                    {
+                        "text": "Production deployment must use --canary.",
+                        "scope": "project:feishu_ai_challenge",
+                        "source": {
+                            "source_type": "feishu_message",
+                            "source_id": "msg_1",
+                            "actor_id": "user_1",
+                            "created_at": "2026-04-26T10:00:00+08:00",
+                            "quote": "Production deployment must use --canary.",
+                        },
+                        "auto_confirm": value,
+                    }
+                )
+
+    def test_explain_versions_rejects_non_boolean_include_archived(self) -> None:
+        for value in ("false", "0", 1):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                ExplainVersionsRequest.from_payload(
+                    {
+                        "memory_id": "mem_1",
+                        "scope": "project:feishu_ai_challenge",
+                        "include_archived": value,
+                    }
+                )
+
+    def test_confirm_request_rejects_unknown_fields(self) -> None:
+        with self.assertRaises(ValidationError):
+            ConfirmRequest.from_payload(
+                {
+                    "candidate_id": "mem_1",
+                    "scope": "project:feishu_ai_challenge",
+                    "actor_id": "user_1",
+                    "unexpected": "value",
+                }
+            )
+
     def test_prefetch_requires_current_context(self) -> None:
         with self.assertRaises(ValidationError):
             PrefetchRequest.from_payload(
                 {
                     "task": "deployment_checklist",
                     "scope": "project:feishu_ai_challenge",
+                }
+            )
+
+    def test_prefetch_rejects_empty_current_context(self) -> None:
+        with self.assertRaises(ValidationError):
+            PrefetchRequest.from_payload(
+                {
+                    "task": "deployment_checklist",
+                    "scope": "project:feishu_ai_challenge",
+                    "current_context": {},
                 }
             )
 
