@@ -58,6 +58,9 @@
 
 # 队友可读文档写作规则
 ## 日期 implementation plan、handoff、队友任务和看板备注必须用浅显中文；先讲要做什么，再讲为什么，不要先堆技术名词。
+## `README.md` 是队友打开 GitHub 后看到的第一入口；当前要交给队友的任务必须放在 README 顶部标题后的第一个主要小节，不能埋在文档末尾或只放在 `docs/` 目录里。
+## README 顶部队友任务必须使用可点击 Markdown 链接，直接指向日期计划、handoff、具体文件、具体示例文件或 GitHub 新建文件入口；不要只写“去某个文件夹里找”。
+## 当队友任务发生变化时，必须同步更新 README 顶部任务区、当前日期 implementation plan / handoff，以及飞书共享任务看板，三处任务描述、负责人、截止日期和完成标准要一致。
 ## 每份日期计划或 handoff 必须包含“给队友先看这个”小节，用 3-5 条说明：今天做了什么、队友今晚从哪里开始、要交付什么、怎么判断做对、遇到问题发什么给我。
 ## 队友任务最多 5 条，每条都要有明确动作、文件/页面位置和完成标准；不要只写“检查/优化/研究”，必须写清检查什么、改哪里、什么算通过。
 ## 技术词第一次出现要顺手解释，例如：Benchmark（评测脚本）、candidate（待确认记忆）、Recall@3（前三条结果里能找到正确答案）。
@@ -72,6 +75,12 @@
 ## 飞书共享任务看板同步规则
 ### 项目任务同步看板是 `https://jcneyh7qlo8i.feishu.cn/wiki/DlikwJHLGi2MjdkaC5LcZeIznAe?from=from_copylink`，标题为“飞书挑战赛任务跟进看板”，用于同步程俊豪与赵阳的项目进度和任务指派。
 ### 每次开始新阶段、完成当日闭环、更新日期计划、更新 handoff、或用户要求同步进度时，必须先读取 `docs/feishu-memory-copilot-implementation-plan.md`、当前绝对日期 implementation-plan、上一日 handoff/执行记录和当前代码状态，再更新该看板。
+### 每日任务开始前同步：执行某个 `docs/plans/YYYY-MM-DD-implementation-plan.md` 前，必须创建或更新当天程俊豪主线任务记录，`任务描述` 写清 `YYYY-MM-DD 程俊豪` 和当日交付物，`状态=进行中`，`指派给=程俊豪`，填写截止日期和优先级，不得提前勾选 `完成情况-程俊豪`。
+### 每日任务开始前还必须把当日计划或上一日 handoff 的“队友晚上补位任务”同步为赵阳任务记录，`状态=待启动` 或按实际情况 `进行中`，`指派给=赵阳`，填写截止日期、优先级和完成标准；不得勾选 `完成情况-赵阳`。
+### 每日任务完成后同步：当程俊豪的当日任务已有代码/文档/验证证据时，必须精确更新对应任务记录，设置 `完成情况-程俊豪=true` 且 `状态=已完成`，备注写入验证命令结果、commit hash、文档路径和仍未解决的风险。
+### 程俊豪任务完成后必须根据最新日期计划或 handoff 给赵阳布置晚上补位任务，优先追加或精确更新赵阳的独立任务记录；只写清任务、文件位置、截止日期、验收标准和问题反馈方式，不替赵阳勾选完成。
+### 赵阳任务完成规则：只有赵阳自己在看板勾选，或用户明确要求“把赵阳这条标记完成”时，才可以设置 `完成情况-赵阳=true`；不得根据本地代码、聊天推测或程俊豪任务完成情况代替赵阳打勾。
+### 如果 lark-cli 登录、权限或 API 错误导致看板同步失败，不能声称已同步；必须在最终回复和 handoff 中写清失败命令、错误摘要和本地替代入口，并保持 README 顶部队友任务链接最新，方便队友先从 GitHub 执行。
 ### 该链接是 Wiki 包装的 Sheets 页面，且页面内嵌 Bitable block。操作流程必须是：先用 `lark-cli wiki spaces get_node --params '{"token":"DlikwJHLGi2MjdkaC5LcZeIznAe"}'` 解析真实 `obj_token`；再用 `lark-cli api GET /open-apis/sheets/v2/spreadsheets/<spreadsheet_token>/metainfo` 读取 `blockInfo.blockToken`；将 `blockToken` 按 `_` 拆成 `app_token` 和 `table_id`；最后用 `lark-cli base +...` 操作记录。
 ### 不要直接用 `lark-cli sheets +read/+write` 修改该看板的数据区；这个页面的数据区是 Bitable block，Sheets 单元格 API 可能返回 `not found sheetId`。
 ### 看板字段语义固定：`任务描述` 写清 `YYYY-MM-DD`、负责人和交付物；`状态` 只用 `待启动`、`进行中`、`已完成`、`延期`、`暂停`；`优先级` 只用 `P0/P1/P2`；`指派给` 必须使用飞书人员字段；`任务截止日期` 使用绝对日期；`备注` 写验收证据、文档路径或剩余风险。

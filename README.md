@@ -1,5 +1,16 @@
 # Feishu Memory Copilot
 
+## 给队友先看这个：当前任务
+
+如果你只打开 GitHub 首页，先从这里开始。今晚主要补评测样例和检查可读性，不需要改核心 Python 代码，也不用接真实飞书权限。完成后在飞书共享看板里自己勾选 `完成情况-赵阳`；程俊豪这边不会代勾。
+
+| 当前任务 | 直接入口 | 交付物 | 完成标准 |
+|---|---|---|---|
+| 准备 recall 评测草稿 | [2026-04-27 handoff：队友晚上补位任务](docs/plans/2026-04-27-handoff.md#队友晚上补位任务)；[新建 copilot_recall_cases.json](https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory/new/main?filename=benchmarks/copilot_recall_cases.json) | `benchmarks/copilot_recall_cases.json` | 10 条真实项目问题，每条包含 `query`、`expected`、`evidence_keyword` |
+| 准备分层评测样例 | [2026-04-28 plan：队友晚上补位任务](docs/plans/2026-04-28-implementation-plan.md#队友晚上补位任务)；[新建 copilot_layer_cases.json](https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory/new/main?filename=benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 15 条 Hot / Warm / Cold 样例，并用中文说明为什么属于这一层 |
+| 检查 Windows embedding 配置 | [队友 Windows 配置文档](docs/reference/teammate-windows-cognee-embedding-setup.md) | 文档批注或修正 PR | Windows 队友能照着安装 Ollama、拉取模型，并知道怎么验证 |
+| 检查 OpenClaw 示例字段 | [historical_decision_search.json](agent_adapters/openclaw/examples/historical_decision_search.json)、[conflict_update_flow.json](agent_adapters/openclaw/examples/conflict_update_flow.json)、[task_prefetch_flow.json](agent_adapters/openclaw/examples/task_prefetch_flow.json) | 字段问题清单或修正 PR | 不懂的字段直接标注；确认示例能和 [memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json) 对上 |
+
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
 ## 当前状态
