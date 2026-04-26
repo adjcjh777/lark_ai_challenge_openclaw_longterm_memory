@@ -1,0 +1,19 @@
+{
+  "name": "task_prefetch_flow",
+  "description": "Prefetch active memory before generating a deployment checklist.",
+  "steps": [
+    {
+      "tool": "memory.prefetch",
+      "arguments": {
+        "task": "deployment_checklist",
+        "scope": "project:feishu_ai_challenge",
+        "current_context": {
+          "thread_id": "feishu-thread-demo",
+          "user_intent": "generate today's deployment checklist",
+          "current_message": "Help me produce the deployment checklist for today."
+        },
+        "top_k": 5
+      }
+    }
+  ]
+}

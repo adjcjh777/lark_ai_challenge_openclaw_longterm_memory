@@ -1,0 +1,22 @@
+{
+  "name": "historical_decision_search",
+  "description": "Search the active production deployment decision before answering a user.",
+  "steps": [
+    {
+      "tool": "memory.search",
+      "arguments": {
+        "query": "production deployment region",
+        "scope": "project:feishu_ai_challenge",
+        "top_k": 3,
+        "filters": {
+          "status": "active",
+          "type": "decision"
+        },
+        "current_context": {
+          "thread_id": "feishu-thread-demo",
+          "user_intent": "answer a historical decision question"
+        }
+      }
+    }
+  ]
+}

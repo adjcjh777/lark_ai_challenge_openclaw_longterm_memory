@@ -109,6 +109,18 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 python3 -m unittest tests.test_copilot_schemas
 ```
 
+## 今日执行记录
+
+本次已经在今日允许范围内补上第一批 Copilot 代码边界，明天可以从真实 Cognee adapter spike 和 `memory.search` fallback 继续：
+
+- 已新增 `agent_adapters/openclaw/memory_tools.schema.json`，先冻结 OpenClaw 工具契约。
+- 已新增 `agent_adapters/openclaw/feishu_memory_copilot.skill.md` 和 `agent_adapters/openclaw/examples/*.json`，用于 OpenClaw 端演示历史决策召回、冲突更新和任务前预取。
+- 已新增 `memory_engine/copilot/` skeleton，包含 schema 校验、Cognee 窄 adapter 边界和工具请求校验。
+- 已新增 `tests/test_copilot_schemas.py` 和 `tests/test_copilot_tools.py`，确保 schema、工具列表、标准错误格式和 examples 不漂移。
+- 已补 `tests/__init__.py`，让 `python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools` 这种模块路径命令可以按 AGENTS.md 要求运行。
+
+今日仍不做：真实 Cognee SDK 安装、Cognee server / Docker、完整 retrieval/governance/heartbeat、旧 Bot handler 大改。
+
 ## 验收标准
 
 - `AGENTS.md` 不再把旧 `competition-master-execution-plan.md` 作为默认主控。

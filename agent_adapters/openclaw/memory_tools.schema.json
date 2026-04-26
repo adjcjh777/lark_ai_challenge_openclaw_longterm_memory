@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "feishu-memory-copilot-tools",
+  "version": "2026-04-26",
+  "openclaw_version": "2026.4.24",
+  "description": "OpenClaw tool contract for the Feishu Memory Copilot MVP.",
+  "tools": [
+    {
+      "name": "memory.search",
+      "description": "Search active curated memory for a scope and return evidence-backed top-k results.",
+      "input_schema": {
+        "type": "object",
+        "required": ["query", "scope"],
+        "additionalProperties": false,
+        "properties": {
+          "query": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3},
+          "filters": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "type": {"type": "string"},
+              "layer": {"type": "string", "enum": ["L1", "L2", "L3"]},
+              "status": {"type": "string", "default": "active"}
+            }
+          },
+          "current_context": {"type": "object", "additionalProperties": true}
+        }
+      }
+    },
+    {
+      "name": "memory.create_candidate",
+      "description": "Create an evidence-backed memory candidate from an explicit note, Feishu message, document, or benchmark fixture.",
+      "input_schema": {
+        "type": "object",
+        "required": ["text", "scope", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "text": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "source": {"$ref": "#/$defs/source"},
+          "current_context": {"type": "object", "additionalProperties": true},
+          "auto_confirm": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    {
+      "name": "memory.confirm",
+      "description": "Confirm a candidate as active memory, superseding older active versions when needed.",
+      "input_schema": {
+        "type": "object",
+        "required": ["candidate_id", "scope", "actor_id"],
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "actor_id": {"type": "string", "minLength": 1},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "memory.reject",
+      "description": "Reject a candidate while keeping an audit record outside default recall.",
+      "input_schema": {
+        "type": "object",
+        "required": ["candidate_id", "scope", "actor_id"],
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "actor_id": {"type": "string", "minLength": 1},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    {
+      "name": "memory.explain_versions",
+      "description": "Explain a memory version chain, superseded values, and source evidence.",
+      "input_schema": {
+        "type": "object",
+        "required": ["memory_id", "scope"],
+        "additionalProperties": false,
+        "properties": {
+          "memory_id": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "include_archived": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    {
+      "name": "memory.prefetch",
+      "description": "Prefetch a compact context pack before an OpenClaw agent task.",
+      "input_schema": {
+        "type": "object",
+        "required": ["task", "scope", "current_context"],
+        "additionalProperties": false,
+        "properties": {
+          "task": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "current_context": {"type": "object", "additionalProperties": true},
+          "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
+        }
+      }
+    }
+  ],
+  "error_schema": {
+    "type": "object",
+    "required": ["ok", "error"],
+    "additionalProperties": false,
+    "properties": {
+      "ok": {"const": false},
+      "error": {
+        "type": "object",
+        "required": ["code", "message", "retryable", "details"],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "scope_required",
+              "permission_denied",
+              "memory_not_found",
+              "candidate_not_confirmable",
+              "validation_error",
+              "sensitive_content_blocked",
+              "internal_error"
+            ]
+          },
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"},
+          "details": {"type": "object", "additionalProperties": true}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["source_type", "source_id", "actor_id", "created_at", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "source_type": {"type": "string", "minLength": 1},
+        "source_id": {"type": "string", "minLength": 1},
+        "actor_id": {"type": "string", "minLength": 1},
+        "created_at": {"type": "string", "minLength": 1},
+        "quote": {"type": "string", "minLength": 1},
+        "source_chat_id": {"type": "string"},
+        "source_doc_id": {"type": "string"}
+      }
+    }
+  }
+}

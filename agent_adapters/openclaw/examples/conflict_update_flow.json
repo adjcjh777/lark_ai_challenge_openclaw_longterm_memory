@@ -1,0 +1,39 @@
+{
+  "name": "conflict_update_flow",
+  "description": "Create and confirm a candidate that supersedes an older deployment rule.",
+  "steps": [
+    {
+      "tool": "memory.create_candidate",
+      "arguments": {
+        "text": "Correction: production deployment region is ap-shanghai from now on.",
+        "scope": "project:feishu_ai_challenge",
+        "source": {
+          "source_type": "feishu_message",
+          "source_id": "msg_demo_conflict_001",
+          "actor_id": "user_demo_owner",
+          "created_at": "2026-04-26T10:00:00+08:00",
+          "quote": "Correction: production deployment region is ap-shanghai from now on.",
+          "source_chat_id": "chat_demo_project"
+        },
+        "auto_confirm": false
+      }
+    },
+    {
+      "tool": "memory.confirm",
+      "arguments": {
+        "candidate_id": "mem_candidate_demo",
+        "scope": "project:feishu_ai_challenge",
+        "actor_id": "user_demo_owner",
+        "reason": "Confirmed in project chat"
+      }
+    },
+    {
+      "tool": "memory.explain_versions",
+      "arguments": {
+        "memory_id": "mem_active_demo",
+        "scope": "project:feishu_ai_challenge",
+        "include_archived": false
+      }
+    }
+  ]
+}
