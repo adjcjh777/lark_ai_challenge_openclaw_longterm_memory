@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import Any, Callable
 
+from .permissions import check_scope_access
 from .schemas import (
     ConfirmRequest,
     CopilotError,
@@ -13,6 +14,7 @@ from .schemas import (
     SearchRequest,
     ValidationError,
 )
+from .service import CopilotService
 
 
 REQUEST_TYPES: dict[str, Callable[[Any], Any]] = {
@@ -65,6 +67,37 @@ def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
         "tool": tool_name,
         "parsed_request": _to_plain_dict(request),
     }
+
+
+def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService | None = None) -> dict[str, Any]:
+    if tool_name == "memory.search":
+        if not isinstance(payload, dict) or not payload.get("scope"):
+            return error_response("scope_required", "scope is required", details={"tool": tool_name})
+        permission_error = check_scope_access(payload.get("scope"), payload.get("current_context"))
+        if permission_error is not None:
+            return permission_error.to_response()
+
+    parser = REQUEST_TYPES.get(tool_name)
+    if parser is None:
+        return error_response(
+            "validation_error",
+            f"unsupported memory tool: {tool_name}",
+            details={"supported_tools": supported_tool_names()},
+        )
+
+    try:
+        request = parser(payload)
+    except ValidationError as exc:
+        return error_response("validation_error", str(exc), details={"tool": tool_name})
+
+    if tool_name == "memory.search":
+        return (service or CopilotService()).search(request)
+
+    return error_response(
+        "validation_error",
+        f"{tool_name} is declared but not implemented in the 2026-04-27 MVP slice",
+        details={"tool": tool_name},
+    )
 
 
 def _to_plain_dict(value: Any) -> dict[str, Any]:

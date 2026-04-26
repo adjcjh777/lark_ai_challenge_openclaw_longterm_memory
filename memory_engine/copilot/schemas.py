@@ -60,6 +60,153 @@ class CopilotError:
 
 
 @dataclass(frozen=True)
+class Evidence:
+    source_type: str
+    source_id: str | None
+    quote: str | None
+    source_url: str | None = None
+    source_chat_id: str | None = None
+    source_doc_id: str | None = None
+    document_token: str | None = None
+    document_title: str | None = None
+
+    @classmethod
+    def from_repository_source(cls, source: dict[str, Any] | None) -> "Evidence":
+        source = source or {}
+        return cls(
+            source_type=str(source.get("source_type") or "unknown"),
+            source_id=source.get("source_id"),
+            quote=source.get("quote"),
+            document_token=source.get("document_token"),
+            document_title=source.get("document_title"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "source_type": self.source_type,
+            "source_id": self.source_id,
+            "quote": self.quote,
+        }
+        optional_values = {
+            "source_url": self.source_url,
+            "source_chat_id": self.source_chat_id,
+            "source_doc_id": self.source_doc_id,
+            "document_token": self.document_token,
+            "document_title": self.document_title,
+        }
+        result.update({key: value for key, value in optional_values.items() if value})
+        return result
+
+
+@dataclass(frozen=True)
+class MemoryResult:
+    memory_id: str
+    type: str
+    subject: str
+    current_value: str
+    status: str
+    version: int | None
+    score: float
+    rank: int
+    evidence: list[Evidence] = field(default_factory=list)
+
+    @classmethod
+    def from_repository_candidate(cls, candidate: dict[str, Any]) -> "MemoryResult":
+        status = str(candidate.get("status") or "")
+        if status not in MEMORY_STATUSES:
+            raise ValidationError(f"unsupported memory status from repository: {status}")
+        return cls(
+            memory_id=str(candidate["memory_id"]),
+            type=str(candidate["type"]),
+            subject=str(candidate["subject"]),
+            current_value=str(candidate.get("answer") or ""),
+            status=status,
+            version=candidate.get("version"),
+            score=float(candidate.get("score") or 0),
+            rank=int(candidate.get("rank") or 0),
+            evidence=[Evidence.from_repository_source(candidate.get("source"))],
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "memory_id": self.memory_id,
+            "type": self.type,
+            "subject": self.subject,
+            "current_value": self.current_value,
+            "status": self.status,
+            "version": self.version,
+            "score": self.score,
+            "rank": self.rank,
+            "evidence": [item.to_dict() for item in self.evidence],
+        }
+
+
+@dataclass(frozen=True)
+class CandidateMemory:
+    candidate_id: str
+    type: str
+    subject: str
+    current_value: str
+    status: str = "candidate"
+    version: int = 1
+    evidence: list[Evidence] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        if self.status != "candidate":
+            raise ValidationError("CandidateMemory status must remain candidate")
+        return {
+            "candidate_id": self.candidate_id,
+            "type": self.type,
+            "subject": self.subject,
+            "current_value": self.current_value,
+            "status": self.status,
+            "version": self.version,
+            "evidence": [item.to_dict() for item in self.evidence],
+        }
+
+
+@dataclass(frozen=True)
+class RecallTrace:
+    strategy: str
+    query: str
+    scope: str
+    requested_top_k: int
+    returned_count: int
+    fallback_used: bool = False
+    cognee_available: bool | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "strategy": self.strategy,
+            "query": self.query,
+            "scope": self.scope,
+            "requested_top_k": self.requested_top_k,
+            "returned_count": self.returned_count,
+            "fallback_used": self.fallback_used,
+            "cognee_available": self.cognee_available,
+        }
+
+
+@dataclass(frozen=True)
+class SearchResponse:
+    query: str
+    scope: str
+    top_k: int
+    results: list[MemoryResult]
+    trace: RecallTrace
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "query": self.query,
+            "scope": self.scope,
+            "top_k": self.top_k,
+            "results": [result.to_dict() for result in self.results],
+            "trace": self.trace.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
 class CandidateSource:
     source_type: str
     source_id: str

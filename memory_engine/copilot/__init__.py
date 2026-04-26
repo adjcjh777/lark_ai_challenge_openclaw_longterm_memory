@@ -7,24 +7,34 @@ governance behavior into the old Day 1 repository implementation.
 
 from .schemas import (
     CandidateSource,
+    CandidateMemory,
     ConfirmRequest,
     CopilotError,
     CreateCandidateRequest,
+    Evidence,
     ExplainVersionsRequest,
+    MemoryResult,
     PrefetchRequest,
+    RecallTrace,
     RejectRequest,
     SearchRequest,
+    SearchResponse,
     ValidationError,
 )
 
 __all__ = [
     "CandidateSource",
+    "CandidateMemory",
     "ConfirmRequest",
     "CopilotError",
     "CreateCandidateRequest",
+    "Evidence",
     "ExplainVersionsRequest",
+    "MemoryResult",
     "PrefetchRequest",
+    "RecallTrace",
     "RejectRequest",
     "SearchRequest",
+    "SearchResponse",
     "ValidationError",
 ]

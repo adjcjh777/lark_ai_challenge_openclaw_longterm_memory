@@ -4,6 +4,8 @@ import unittest
 
 from memory_engine.copilot.schemas import (
     CandidateSource,
+    Evidence,
+    MemoryResult,
     CopilotError,
     CreateCandidateRequest,
     PrefetchRequest,
@@ -147,6 +149,35 @@ class CopilotSchemaTest(unittest.TestCase):
         self.assertEqual("scope_required", response["error"]["code"])
         self.assertFalse(response["error"]["retryable"])
         self.assertEqual({}, response["error"]["details"])
+
+    def test_repository_candidate_maps_to_memory_result_with_evidence(self) -> None:
+        result = MemoryResult.from_repository_candidate(
+            {
+                "answer": "生产部署必须加 --canary --region cn-shanghai",
+                "memory_id": "mem_1",
+                "status": "active",
+                "subject": "生产部署",
+                "type": "workflow",
+                "score": 121,
+                "rank": 1,
+                "version": 2,
+                "source": {
+                    "source_type": "benchmark",
+                    "source_id": "evt_1",
+                    "quote": "生产部署必须加 --canary --region cn-shanghai",
+                },
+            }
+        )
+
+        payload = result.to_dict()
+
+        self.assertEqual("mem_1", payload["memory_id"])
+        self.assertEqual("workflow", payload["type"])
+        self.assertEqual("生产部署必须加 --canary --region cn-shanghai", payload["current_value"])
+        self.assertEqual("active", payload["status"])
+        self.assertEqual(2, payload["version"])
+        self.assertEqual(121.0, payload["score"])
+        self.assertEqual([Evidence("benchmark", "evt_1", "生产部署必须加 --canary --region cn-shanghai").to_dict()], payload["evidence"])
 
 
 if __name__ == "__main__":

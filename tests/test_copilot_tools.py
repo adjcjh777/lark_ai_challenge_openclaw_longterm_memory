@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
-from memory_engine.copilot.tools import supported_tool_names, validate_tool_request
+from memory_engine.copilot.service import CopilotService
+from memory_engine.copilot.tools import handle_tool_request, supported_tool_names, validate_tool_request
+from memory_engine.db import connect, init_db
+from memory_engine.repository import MemoryRepository
 
 
 SCHEMA_PATH = Path("agent_adapters/openclaw/memory_tools.schema.json")
@@ -52,6 +56,58 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual("validation_error", result["error"]["code"])
         self.assertFalse(result["error"]["retryable"])
         self.assertEqual({"tool": "memory.search"}, result["error"]["details"])
+
+    def test_handle_memory_search_returns_scope_required_before_validation(self) -> None:
+        result = handle_tool_request("memory.search", {"query": "deployment"})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("scope_required", result["error"]["code"])
+        self.assertEqual({"tool": "memory.search"}, result["error"]["details"])
+
+    def test_handle_memory_search_denies_context_scope_mismatch(self) -> None:
+        result = handle_tool_request(
+            "memory.search",
+            {
+                "query": "deployment",
+                "scope": "project:feishu_ai_challenge",
+                "current_context": {"scope": "project:other"},
+            },
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+
+    def test_handle_memory_search_uses_repository_fallback(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "生产部署必须加 --canary --region cn-shanghai",
+                source_type="unit_test",
+            )
+
+            result = handle_tool_request(
+                "memory.search",
+                {
+                    "query": "生产部署参数",
+                    "scope": "project:feishu_ai_challenge",
+                    "top_k": 3,
+                },
+                service=CopilotService(repository=repo),
+            )
+            conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("project:feishu_ai_challenge", result["scope"])
+        self.assertEqual(1, len(result["results"]))
+        self.assertEqual("active", result["results"][0]["status"])
+        self.assertEqual("生产部署", result["results"][0]["subject"])
+        self.assertIn("--canary", result["results"][0]["current_value"])
+        self.assertTrue(result["results"][0]["evidence"][0]["quote"])
+        self.assertEqual("repository.recall_candidates", result["trace"]["strategy"])
+        self.assertTrue(result["trace"]["fallback_used"])
 
     def test_examples_only_use_declared_tools(self) -> None:
         supported = set(supported_tool_names())
