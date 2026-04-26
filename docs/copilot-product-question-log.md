@@ -192,11 +192,80 @@ Product Surfaces
   - 误打扰率。
   - 证据覆盖率。
 
+### 问题 6：OpenClaw 在 Memory Copilot 中作为什么角色？
+
+用户原始问题：
+
+> 因为这次的赛题是 openclaw 赛道 要做成 memory copilot 的话是否要在 openclaw 上大做文章？ 基于 openclaw 和 openclaw 飞书插件的能力以及 lark-cli 和飞书 api 来做集成？openclaw 在 memory copilot 中作为什么角色出现？
+
+当前结论：
+
+- OpenClaw 赛道里必须突出 OpenClaw，但不能把产品窄化成“一个 OpenClaw 插件”。
+- Memory Engine 是记忆大脑，飞书是办公现场，OpenClaw 是让这个大脑变成 Agent Copilot 的运行入口。
+- OpenClaw 在产品中承担四个角色：
+  - Agent runtime：承载用户与 Agent 的自然语言交互。
+  - Feishu channel：通过 OpenClaw 飞书插件把 Agent 接入飞书消息现场。
+  - Tool orchestration：决定何时调用 `memory.search`、`memory.remember_candidate`、`memory.explain_versions`、`memory.proactive_check`、`memory.review_due` 等工具。
+  - 赛道叙事核心：让评委看到这不是普通 Bot，而是基于 OpenClaw 的企业办公 Agent 记忆层。
+- `lark-cli` 和飞书 OpenAPI 是飞书操作层：
+  - `lark-cli` 适合比赛 Demo、离线复现、Agent 友好调用和快速覆盖消息、文档、多维表格等飞书能力。
+  - 飞书 OpenAPI 适合生产化、高频链路、细粒度权限控制和稳定的卡片/文档/Bitable 集成。
+
+推荐分层：
+
+```text
+用户在飞书群聊 / 单聊
+        |
+        v
+OpenClaw Feishu Channel
+接收消息、上下文、@mention、线程信息
+        |
+        v
+OpenClaw Agent
+理解意图、判断是否调用记忆工具、组织回复
+        |
+        v
+Memory Copilot Tools
+search / candidate / confirm / versions / proactive_check / review_due
+        |
+        v
+Memory Copilot Core
+候选识别、冲突判断、状态机、证据链、主动提醒策略
+        |
+        v
+Memory Store
+raw_events / memories / versions / evidence / recall_logs
+        |
+        v
+Feishu Action Layer
+lark-cli 或 Feishu OpenAPI 发送卡片、读文档、写 Bitable
+```
+
+对后续重构的影响：
+
+- 要补一个 `agent_adapters/openclaw/` 方向，把 Memory Copilot Core 暴露成 OpenClaw 可调用的工具或 Skill。
+- OpenClaw adapter 只负责工具 schema、调用路由和示例，不直接实现记忆状态机。
+- 飞书 Bot 面向人，OpenClaw Agent 面向自然语言任务编排；二者共享同一套 Memory Copilot Core。
+- Demo 需要至少包含一个 OpenClaw 场景：
+  - 用户在飞书里问 OpenClaw Agent 历史决策。
+  - Agent 调用 memory search。
+  - Memory Core 返回当前有效结论、旧值覆盖关系和来源证据。
+  - Agent 通过飞书卡片返回结果。
+- 更智能的 OpenClaw Demo 是自然讨论触发：
+  - 群里出现“刚才说错了，region 统一改成 ap-shanghai”。
+  - OpenClaw Agent 判断这是覆盖旧记忆。
+  - Agent 调用候选写入和冲突检测工具。
+  - 飞书卡片请求确认是否覆盖旧规则。
+
 ## 3. 当前产品定位草案
 
 建议后续统一使用这个定位：
 
 > Feishu Memory Copilot 是一个面向企业协作的主动式记忆助手。它从飞书群聊、文档、会议和任务中自动识别高价值上下文，维护带证据和版本的团队记忆，并在后续讨论、决策冲突和遗忘风险出现时主动提醒团队。
+
+面向 OpenClaw 赛道的版本：
+
+> 本项目以 OpenClaw 为 Agent 运行入口，以飞书官方插件、lark-cli 和飞书 OpenAPI 为办公集成层，以 Memory Engine 为长期记忆核心，构建一个能主动识别、召回、更新和提醒团队记忆的 Feishu Memory Copilot。
 
 更短的答辩版本：
 
@@ -214,28 +283,33 @@ Product Surfaces
    - 将当前 CLI / Feishu handler 中的业务逻辑收敛到可复用 service。
    - OpenClaw plugin、Skill、CLI、Bot 都调用同一套 service。
 
-3. 新增自动候选识别
+3. 补 OpenClaw adapter
+   - 在 `agent_adapters/openclaw/` 下定义工具 schema、Skill 文档和最小调用示例。
+   - 目标是证明 OpenClaw Agent 能调用 Memory Copilot Core，而不是重写 OpenClaw 或替代飞书 Bot。
+   - 第一版可以用 CLI bridge：OpenClaw 调用本项目 CLI；后续再升级为本地 HTTP 或直接 Python service。
+
+4. 新增自动候选识别
    - 从 raw event 中判断是否值得记。
    - 输出 candidate memory，而不是直接 active。
    - 低置信度和高风险内容走人工确认。
 
-4. 新增主动提醒策略
+5. 新增主动提醒策略
    - 基于当前消息、active memory、相关度、重要性、冷却时间和权限判断是否插话。
    - 主动提醒必须能解释为什么提醒。
 
-5. 补齐评测
+6. 补齐评测
    - 在现有 D7 抗干扰基础上继续补 D8 矛盾更新和 D9 效能指标。
    - 为主动提醒增加误打扰率和接受率指标。
 
-6. 白皮书重写
+7. 白皮书重写
    - 以 Feishu Memory Copilot 为主线重写，而不是以命令集合为主线。
-   - 把 OpenClaw plugin、Skill、npm wrapper 都降级为产品入口和生态适配。
+   - 把 OpenClaw 明确写成 Agent runtime / tool orchestration / Feishu channel 入口，把 Skill 和 npm wrapper 写成生态适配。
 
 ## 5. 当前不做的事
 
 - 不把 npm 包作为主发布形态。
 - 不把 Skill 当作完整产品。
+- 不把 OpenClaw 当作核心数据库或记忆状态机。
 - 不为了显得智能而直接把所有聊天塞进 prompt 或向量库。
 - 不把主动提醒做成无阈值的刷屏机器人。
 - 不在 P0 阶段铺开所有飞书模块，应先证明三个核心场景闭环。
-
