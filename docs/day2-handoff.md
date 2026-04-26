@@ -76,6 +76,12 @@ LARK_CLI_PROFILE=your_profile
 /recall 生产部署 region
 ```
 
+完整队友演示语料已补到 `docs/day2-demo-inputs.md`，其中包含 10 条最小演示输入和 10 条备用测试输入。群聊测试统一使用：
+
+```text
+@Feishu Memory Engine bot /remember 生产部署必须加 --canary --region cn-shanghai
+```
+
 ## 队友今晚任务
 
 1. 打开飞书开放平台后台，按“飞书后台仍需人工确认”的 6 条逐项打勾。
@@ -83,6 +89,15 @@ LARK_CLI_PROFILE=your_profile
 3. 如果机器人能回复，截图保存：用户命令、机器人回复、更新前后的两次召回结果。
 4. 如果机器人没回复，把失败现象写到 `docs/day2-qa-notes.md`，包含：哪条命令、群聊截图、终端报错。
 5. 看机器人回复是否像正常中文；不自然的地方先写建议，不用直接改代码。
+
+## 队友任务补齐记录
+
+2026-04-25 已补齐 D2 队友任务，详见 `docs/day2-qa-notes.md` 和 `docs/day2-demo-inputs.md`。
+
+- 飞书后台检查项已按后续真实测试证据回填；真实 token、群聊 ID、截图不写入仓库。
+- 20 条飞书 Demo 输入已写入 `docs/day2-demo-inputs.md`。
+- 回复文案人工审查结论已写入 `docs/day2-qa-notes.md`。
+- 本地 replay 验证仍作为无权限时的保底路径。
 
 今晚不用做：
 

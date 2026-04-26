@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -9,6 +8,7 @@ from memory_engine.benchmark import run_document_ingestion_benchmark
 from memory_engine.db import connect, init_db
 from memory_engine.document_ingestion import extract_candidate_quotes, fetch_feishu_document_text, ingest_document_source
 from memory_engine.repository import MemoryRepository
+from temp_utils import WorkspaceTempDir
 
 
 FIXTURE = Path("tests/fixtures/day5_doc_ingestion_fixture.md")
@@ -16,7 +16,7 @@ FIXTURE = Path("tests/fixtures/day5_doc_ingestion_fixture.md")
 
 class DocumentIngestionTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = WorkspaceTempDir("document_ingestion")
         self.db_path = Path(self.temp_dir.name) / "memory.sqlite"
         self.conn = connect(self.db_path)
         init_db(self.conn)

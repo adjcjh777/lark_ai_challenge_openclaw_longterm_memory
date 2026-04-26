@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import LarkCliPublisher
 from memory_engine.feishu_runtime import handle_message_event
+from temp_utils import WorkspaceTempDir
 
 
 class FakePublisher(LarkCliPublisher):
@@ -91,7 +91,7 @@ def card_action_payload(action: str, memory_id: str, *, candidate_index: int | N
 
 class FeishuInteractiveCardsTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
+        self.temp_dir = WorkspaceTempDir("feishu_interactive_cards")
         self.db_path = Path(self.temp_dir.name) / "memory.sqlite"
         self.conn = connect(self.db_path)
         init_db(self.conn)
