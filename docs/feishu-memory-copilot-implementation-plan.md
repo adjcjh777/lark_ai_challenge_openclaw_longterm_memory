@@ -7,7 +7,7 @@
 
 ## 1. 执行目标
 
-本轮重构的目标是把项目从 CLI-first memory demo 转成 OpenClaw-native Feishu Memory Copilot：OpenClaw Agent 作为主入口和工具编排层，Memory Copilot Core 作为长期记忆大脑，飞书、lark-cli、Feishu OpenAPI 作为办公数据和动作集成层，Bitable 和 card 作为展示与交互层。
+本轮重构的目标是把项目从 CLI-first memory demo 转成 OpenClaw-native Feishu Memory Copilot：OpenClaw Agent 作为主入口和工具编排层，Cognee 作为开源知识/记忆引擎核心，Memory Copilot Core 作为企业记忆治理层，飞书、lark-cli、Feishu OpenAPI 作为办公数据和动作集成层，Bitable 和 card 作为展示与交互层。
 
 MVP 必须在 2026-04-26 到 2026-05-02 这一周内完成可演示闭环，至少覆盖历史决策召回、候选记忆生成、冲突更新、版本解释、Agent 任务前预取和 heartbeat reminder prototype。
 
@@ -37,13 +37,15 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 1. 先新增 `memory_engine/copilot/`，不直接破坏旧实现。
 2. 旧实现继续作为 reference / fallback，包括 SQLite 经验、benchmark 样例、Feishu Bot / card 经验、Bitable 台账经验、文档 ingestion 经验和 Day1 本地闭环验证经验。
 3. OpenClaw tools schema 先行，先冻结工具契约，再实现内部模块。
-4. Memory Core 不写死在 CLI、Bot handler 或 lark-cli 调用里。
-5. 所有入口：OpenClaw、CLI、Bot、Benchmark 后续都应调用同一套 Copilot Core。
-6. 向量检索只针对 curated memory，不向量化全部 raw events。
-7. Heartbeat 主动提醒进入 MVP，但先做 reminder candidate + card/dry-run，不做复杂个性化推送。
-8. 不做分布式缓存。
-9. 不做完整多租户权限后台 UI，但数据模型预留 `tenant_id`、`organization_id`、`visibility_policy`。
-10. 旧模块不一次性迁移或删除；MVP 稳定后再决定哪些旧路径迁移、废弃或保留为兼容入口。
+4. Cognee 是当前选定的 memory 系统核心；通过窄 adapter 调用其本地知识/记忆引擎能力，不把 Cognee API 散落在产品代码里。
+5. Memory Copilot Core 自研企业记忆治理：candidate / active / superseded / rejected / stale / archived、evidence、version、permission、OpenClaw tools、Feishu review surface 和 Benchmark 都归本项目负责。
+6. Memory Core 不写死在 CLI、Bot handler 或 lark-cli 调用里。
+7. 所有入口：OpenClaw、CLI、Bot、Benchmark 后续都应调用同一套 Copilot Core。
+8. 向量检索只针对 curated memory，不向量化全部 raw events。
+9. Heartbeat 主动提醒进入 MVP，但先做 reminder candidate + card/dry-run，不做复杂个性化推送。
+10. 不做分布式缓存。
+11. 不做完整多租户权限后台 UI，但数据模型预留 `tenant_id`、`organization_id`、`visibility_policy`。
+12. 旧模块不一次性迁移或删除；MVP 稳定后再决定哪些旧路径迁移、废弃或保留为兼容入口。
 
 ## 3. 目标目录结构
 
@@ -56,6 +58,7 @@ memory_engine/
     schemas.py
     service.py
     orchestrator.py
+    cognee_adapter.py
     retrieval.py
     embeddings.py
     governance.py
@@ -94,8 +97,9 @@ benchmarks/
 | 文件 | 职责 | 不应承担 |
 |---|---|---|
 | `memory_engine/copilot/schemas.py` | 定义工具输入输出、memory、evidence、candidate、context pack、reminder candidate 的 dataclass / typed schema | 不直接访问 SQLite，不调用 lark-cli |
-| `memory_engine/copilot/service.py` | Copilot Core 应用服务，承接 search、create_candidate、confirm、reject、versions、prefetch | 不解析 OpenClaw runtime，不生成飞书卡片 |
-| `memory_engine/copilot/orchestrator.py` | 决定 L0-L3 query cascade、prefetch、冲突更新和 heartbeat 的编排顺序 | 不直接做底层 SQL |
+| `memory_engine/copilot/service.py` | Copilot Core 应用服务，承接 search、create_candidate、confirm、reject、versions、prefetch | 不解析 OpenClaw runtime，不生成飞书卡片，不把 Cognee API 泄漏给入口层 |
+| `memory_engine/copilot/orchestrator.py` | 决定 L0-L3 query cascade、prefetch、冲突更新和 heartbeat 的编排顺序 | 不直接做底层 SQL，不直接拼 Cognee 原始返回 |
+| `memory_engine/copilot/cognee_adapter.py` | 封装 Cognee 本地 memory engine，负责 dataset 命名、remember/recall 或 add/cognify/search 调用、结果规范化 | 不维护 Copilot 状态机，不直接生成 Feishu 文案 |
 | `memory_engine/copilot/retrieval.py` | 结构化过滤、关键词/全文召回、向量召回、merge、rerank、Top K | 不改变记忆状态 |
 | `memory_engine/copilot/embeddings.py` | curated memory embedding 构建、轻量相似度计算、embedding cache | 不 embed raw events |
 | `memory_engine/copilot/governance.py` | candidate / active / superseded / rejected / stale / archived 状态机、冲突判断、版本链 | 不生成 UI |
@@ -1122,7 +1126,8 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 | 模块 | 当前价值 | MVP 处理 | 稳定后再决定 |
 |---|---|---|---|
-| `memory_engine/repository.py` | 已有 SQLite remember / recall / versions / candidate confirm / reject / evidence 经验 | 不直接大改；作为 Copilot storage adapter / fallback；新增 Copilot service 先包它 | 拆出 repository interface，补 tenant/layer/visibility 字段，逐步迁移 |
+| Cognee | 开源知识/记忆引擎核心，适合本地部署和调试，提供 graph + vector memory substrate | 通过 `memory_engine/copilot/cognee_adapter.py` 接入；作为长期 memory core 的主要底层，不承担企业状态机 | 稳定后评估是否扩展 ontology、memify、HTTP server 或可视化能力 |
+| `memory_engine/repository.py` | 已有 SQLite remember / recall / versions / candidate confirm / reject / evidence 经验 | 不直接大改；作为 Copilot ledger / storage adapter / fallback，保留 evidence、versions、recall_logs 等项目自研证明 | 拆出 repository interface，补 tenant/layer/visibility 字段，逐步迁移 |
 | `memory_engine/benchmark.py` | 已有 Day1、Day5、Day7 benchmark runner 和报告生成 | 复用 runner 结构，新增 copilot benchmark 分支 | 统一指标输出，支持多 benchmark suite |
 | `memory_engine/cli.py` | 可复现兜底入口，已有 remember / recall / versions / ingest-doc / bitable / feishu | 不作为主架构；后续 CLI 命令调用 Copilot Core | 保留为 demo / debug bridge |
 | `memory_engine/feishu_runtime.py` | 已有 Feishu event replay/listen、命令处理、日志、card publish | 不把新 Copilot Core 写进 handler；先通过 adapter 调 `service.py` | 将 `/remember` `/recall` 等旧命令迁到 Copilot tools |
@@ -1136,7 +1141,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 - 不直接删除旧模块。
 - 不一次性大改旧路径。
-- 先通过 adapter 或 service 层复用旧能力。
+- 先通过 adapter 或 service 层复用旧能力，并通过 `cognee_adapter.py` 接入 Cognee。
 - 新功能优先进入 `memory_engine/copilot/`。
 - 等 MVP 稳定后再决定哪些旧路径迁移或废弃。
 
@@ -1146,6 +1151,8 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 |---|---|---|
 | 10 天周期过短 | OpenClaw、retrieval、heartbeat、benchmark 和白皮书可能不能全部打磨 | 先完成 2026-04-26 到 2026-05-02 MVP 闭环；2026-05-03 到 2026-05-07 只收尾三大交付物；复杂个性化提醒、完整多租户后台、分布式缓存全部延后 |
 | OpenClaw runtime 集成风险 | 可能滑回旧 CLI/Bot demo | schema 先行，`agent_adapters/openclaw/` 先交付；真实 runtime 不稳时用 examples + CLI/dry-run 证明工具契约，但产品叙事仍是 OpenClaw-native |
+| Cognee 接入变成黑盒包装 | 评委认为只是接了外部 memory API | Cognee 只作为本地开源 memory substrate；状态机、证据链、版本解释、权限、OpenClaw tools、Feishu card 和 Benchmark 全部由本项目实现并展示 |
+| Cognee API 或本地后端调试不稳 | MVP 进度被底层集成拖住 | 先实现窄 adapter 和 repository fallback；D2/D3 只锁接口和最小 recall/search，复杂 ontology、memify、HTTP server 后置 |
 | embedding 质量风险 | Recall@3 不达标 | 使用 hybrid retrieval；结构化过滤和 keyword/FTS 作为稳态兜底；只 embed curated memory；失败分类记录 `vector_miss` |
 | heartbeat 太吵的风险 | 用户觉得系统乱插话 | MVP 只生成 reminder candidate；必须通过 importance、relevance、cooldown、permission、sensitive gates；Sensitive Reminder Leakage Rate 必须为 0 |
 | 旧实现拖累架构的风险 | 新 Core 被旧 CLI/Bot handler 绑死 | 新功能只进 `memory_engine/copilot/`；旧 repository 只当 storage adapter；所有入口后续调用同一套 service |
@@ -1163,8 +1170,9 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 1. `agent_adapters/openclaw/memory_tools.schema.json`：先冻结工具 schema。
 2. `memory_engine/copilot/schemas.py`：定义工具输入输出和 memory 状态模型。
-3. `memory_engine/copilot/tools.py`：实现 OpenClaw 工具 handler 的薄封装。
-4. `memory_engine/copilot/service.py`：把 `memory.search` 先接到旧 repository fallback。
-5. `tests/test_copilot_schemas.py` 和 `tests/test_copilot_tools.py`：先锁 contract，再扩展 retrieval 和 governance。
+3. `memory_engine/copilot/cognee_adapter.py`：定义 Cognee 本地 memory engine 的窄接口和 fallback 行为。
+4. `memory_engine/copilot/tools.py`：实现 OpenClaw 工具 handler 的薄封装。
+5. `memory_engine/copilot/service.py`：把 `memory.search` 先接到 Cognee adapter + 旧 repository fallback。
+6. `tests/test_copilot_schemas.py`、`tests/test_copilot_tools.py` 和后续 adapter contract test：先锁 contract，再扩展 retrieval 和 governance。
 
 不要从 `memory_engine/repository.py` 或 `memory_engine/feishu_runtime.py` 开始大改；这两个文件只在 adapter 确认需要时做小步扩展。

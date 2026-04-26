@@ -10,7 +10,7 @@
 ## 新的项目主控执行文档是 `docs/feishu-memory-copilot-implementation-plan.md`。
 ## 后续每个新对话、新阶段任务或每日开发任务，必须先读取并遵循该 implementation plan 中的当前日期/阶段安排，再结合用户最新指令执行。
 ## 旧主控文档 `docs/archive/legacy-master/competition-master-execution-plan.md` 已降级为归档参考；不要再把它作为默认执行入口。
-## 当前项目主线：从 CLI-first / Bot-first memory demo 切换为 OpenClaw-native Feishu Memory Copilot。OpenClaw Agent 是主入口和工具编排层，Memory Copilot Core 是长期记忆大脑，Feishu / lark-cli / Feishu OpenAPI 是办公数据和动作集成层，Bitable / card 是展示和交互层。
+## 当前项目主线：从 CLI-first / Bot-first memory demo 切换为 OpenClaw-native Feishu Memory Copilot。OpenClaw Agent 是主入口和工具编排层，Cognee 是开源知识/记忆引擎核心，Memory Copilot Core 是企业记忆治理层，Feishu / lark-cli / Feishu OpenAPI 是办公数据和动作集成层，Bitable / card 是展示和交互层。
 ## 当前执行周期：2026-04-26 至 2026-05-02 完成 MVP 可演示闭环；2026-05-03 至 2026-05-07 完成 Benchmark、Demo、白皮书、答辩材料和初赛提交缓冲。
 ## 初赛优先级最高：先保证《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report 三大交付物闭环，再做复赛加分项。
 ## 每日任务应按新主控计划拆分为：用户白天主线任务、队友晚上补位任务、范围边界、验收标准、以绝对日期命名的 implementation-plan 文档。不要再新增 `day1`、`day2` 这种日期不明确的主线计划文件。
@@ -26,7 +26,9 @@
 # Copilot-first 开发边界
 ## 新功能优先进入 `memory_engine/copilot/` 和 `agent_adapters/openclaw/`；不要从大改 `memory_engine/repository.py`、`memory_engine/feishu_runtime.py` 或旧 CLI 命令开始。
 ## OpenClaw tools schema 先行：先冻结 `agent_adapters/openclaw/memory_tools.schema.json`，再实现 `memory_engine/copilot/schemas.py`、`tools.py`、`service.py`。
-## Memory Copilot Core 是长期记忆大脑；CLI、Feishu Bot、Benchmark、Bitable、lark-cli 都是入口或展示/验证层，后续应调用同一套 Copilot Core。
+## Cognee 是当前选定的 memory 系统核心：优先复用其本地知识/记忆引擎能力和 `remember / recall / improve / forget`、低层 `add / cognify / search` 流程；不要改成 Mem0、Graphiti、MemOS、Letta、Zep 或 TiMem，除非用户明确重新做选型。
+## Memory Copilot Core 负责企业记忆治理；candidate / active / superseded / rejected / stale / archived 状态机、证据链、版本解释、权限门控、OpenClaw tools、Feishu card 和 Benchmark 仍由本项目实现，不能交给 Cognee 或任何外部 API 黑盒。
+## CLI、Feishu Bot、Benchmark、Bitable、lark-cli 都是入口或展示/验证层，后续应调用同一套 Copilot Core。
 ## 旧 Day1-Day7 实现只能作为 reference / fallback。复用旧能力时通过 adapter 或 service 层包起来，不把新业务逻辑继续塞进旧 handler。
 ## 默认不向量化全部 raw events；embedding 只针对 curated memory 的 subject、current_value、summary 和 evidence quote。
 ## Heartbeat 主动提醒进入 MVP，但先做 reminder candidate + card/dry-run，不做复杂个性化推送。
