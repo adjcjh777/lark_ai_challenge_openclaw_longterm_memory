@@ -32,6 +32,12 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 3. OpenClaw 相关开发和验收前运行：`python3 scripts/check_openclaw_version.py`。
 4. 若未来必须升级 OpenClaw，必须先更新锁文件、AGENTS、主控计划和当日计划，再重新跑基础验证。
 
+### 1.1.1 Cognee / RightCode 本地接入基线
+
+2026-04-27 本地 spike 采用 `cognee==0.1.20`，并锁定 `httpx==0.27.2` 以避开 Cognee 依赖链中 OpenAI SDK 与 `httpx 0.28.x` 的兼容问题。Cognee 数据目录固定为项目内 `.data/cognee/`，不得提交。
+
+RightCode custom provider 当前用于 LLM 文本模型验证：`gpt-5.3-codex-high` 的最小 chat completion 已验证可返回结果。Cognee 真实闭环仍需要 embedding provider；当前 RightCode `/embeddings` 对 `text-embedding-3-large` 返回 `PermissionDeniedError: Your request was blocked.`，所以真实 `cognify -> search` 暂时阻塞在 embedding 阶段。MVP 继续保持 `memory.search` 的旧 repository fallback，直到补齐可用 embedding provider/model。
+
 ## 1.2 每日任务启动 Prompt
 
 本节是每天开新对话时的复制粘贴入口。原则：先让 Agent 读取 `AGENTS.md`、本总控文档和当天绝对日期计划，再按当天计划里的“今日执行清单（按顺序）”推进；不临时扩展到“今日不做”的范围。

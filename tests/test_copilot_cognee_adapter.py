@@ -81,8 +81,7 @@ class CogneeAdapterContractTest(unittest.TestCase):
 
         self.assertEqual("add", method)
         self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", kwargs["dataset_name"])
-        self.assertEqual("生产部署必须加 --canary", args[0]["content"])
-        self.assertEqual({"source_type": "unit_test", "source_id": "evt_1"}, args[0]["metadata"])
+        self.assertEqual("生产部署必须加 --canary", args[0])
 
     def test_remember_candidate_text_falls_back_to_add_when_sdk_lacks_remember(self) -> None:
         class LegacyCogneeClient:
@@ -104,8 +103,7 @@ class CogneeAdapterContractTest(unittest.TestCase):
 
         method, args, kwargs = client.calls[-1]
         self.assertEqual("add", method)
-        self.assertEqual("生产部署必须加 --canary", args[0]["content"])
-        self.assertEqual({"source_type": "unit_test"}, args[0]["metadata"])
+        self.assertEqual("生产部署必须加 --canary", args[0])
         self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", kwargs["dataset_name"])
 
     def test_adapter_normalizes_search_without_rewriting_status(self) -> None:
@@ -120,6 +118,8 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertEqual("生产部署", results[0]["subject"])
         self.assertEqual("unit_test", results[0]["evidence"][0]["source_type"])
         self.assertIn("--canary", results[0]["evidence"][0]["quote"])
+        self.assertEqual("search", client.calls[-1][0])
+        self.assertEqual("生产部署参数", client.calls[-1][1][1])
 
     def test_adapter_normalizes_async_search_results(self) -> None:
         class AsyncSearchClient(FakeCogneeClient):

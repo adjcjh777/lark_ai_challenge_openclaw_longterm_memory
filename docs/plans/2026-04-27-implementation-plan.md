@@ -100,6 +100,15 @@ python3 scripts/spike_cognee_local.py
 - 缺 scope、无结果、权限不足时返回统一错误结构。
 - 默认不返回 candidate / rejected / superseded。
 
+## 执行记录：Cognee / RightCode 接入结论
+
+- 已安装并锁定 `cognee==0.1.20`；为兼容该版本依赖的 OpenAI SDK/httpx 调用形态，额外锁定 `httpx==0.27.2`，避免 `httpx 0.28.x` 的 `proxies` 参数不兼容问题。
+- `scripts/spike_cognee_local.py --dry-run` 已跑通；Cognee 本地数据目录固定在项目内 `.data/cognee/`，由 `.gitignore` 排除。
+- RightCode custom provider 的文本模型通路可用：使用 `gpt-5.3-codex-high` 发起最小 chat completion 可以返回 `ok`。
+- Cognee 真实 SDK 路径当前结论是“部分跑通”：`add` 阶段成功，`cognify` 阶段进入 LiteLLM embedding 调用后被 provider 阻断，`search` 因 `cognify` 未完成被跳过。
+- 直接调用 RightCode `/embeddings` 的 `text-embedding-3-large` 也返回 `PermissionDeniedError: Your request was blocked.`，因此当前 blocker 是 embedding provider 不可用，不是本地 adapter、数据目录或 OpenClaw 版本问题。
+- 后续如继续真实 Cognee 闭环，需要补一个可用的 embedding provider/model；在此之前，MVP 的 `memory.search` 继续走本项目旧 repository fallback，并保持 Cognee 只通过 `CogneeAdapter` 窄边界接入。
+
 ## 队友晚上补位任务
 
 给队友先看这个：

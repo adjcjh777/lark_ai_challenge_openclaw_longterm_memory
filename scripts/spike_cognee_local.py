@@ -17,6 +17,7 @@ from memory_engine.copilot.cognee_adapter import CogneeMemoryAdapter, load_cogne
 
 DATA_ROOT = Path(".data/cognee/data")
 SYSTEM_ROOT = Path(".data/cognee/system")
+DATABASE_ROOT = SYSTEM_ROOT / "databases"
 
 
 def main() -> None:
@@ -28,6 +29,7 @@ def main() -> None:
 
     DATA_ROOT.mkdir(parents=True, exist_ok=True)
     SYSTEM_ROOT.mkdir(parents=True, exist_ok=True)
+    DATABASE_ROOT.mkdir(parents=True, exist_ok=True)
     _configure_local_cognee_paths()
 
     adapter = CogneeMemoryAdapter()
@@ -72,15 +74,16 @@ def main() -> None:
     try:
         result = asyncio.run(_run_real_spike(adapter, args.scope, args.query))
     except Exception as exc:  # pragma: no cover - depends on local Cognee/provider state
-        _print_blocked(dataset_name, "cognee real SDK call failed", exc)
+        _print_blocked(dataset_name, "cognee real SDK call failed before stage reporting", exc)
         return
 
     _print(
         {
-            "ok": True,
+            "ok": result["ok"],
             "dry_run": False,
-            "status": "real_run",
+            "status": "real_run" if result["ok"] else "blocked",
             "dataset_name": dataset_name,
+            "blocked": result["blocked"],
             "data_root": str(DATA_ROOT),
             "system_root": str(SYSTEM_ROOT),
             "result": result,
@@ -91,30 +94,67 @@ def main() -> None:
 def _configure_local_cognee_paths() -> None:
     os.environ.setdefault("DATA_ROOT_DIRECTORY", str(DATA_ROOT.resolve()))
     os.environ.setdefault("SYSTEM_ROOT_DIRECTORY", str(SYSTEM_ROOT.resolve()))
+    os.environ.setdefault("DB_PATH", str(DATABASE_ROOT.resolve()))
     os.environ.setdefault("DB_PROVIDER", "sqlite")
     os.environ.setdefault("DB_NAME", "feishu_memory_copilot_cognee")
     os.environ.setdefault("VECTOR_DB_PROVIDER", "lancedb")
-    os.environ.setdefault("GRAPH_DATABASE_PROVIDER", "kuzu")
+    os.environ.setdefault("VECTOR_DB_URL", str((DATABASE_ROOT / "cognee.lancedb").resolve()))
+    os.environ.setdefault("GRAPH_DATABASE_PROVIDER", "NETWORKX")
+    os.environ.setdefault("GRAPH_FILE_PATH", str((DATABASE_ROOT / "cognee_graph.pkl").resolve()))
+    os.environ.setdefault("MONITORING_TOOL", "llmlite")
     os.environ.setdefault("TELEMETRY_DISABLED", "true")
 
 
 def _missing_provider_configuration() -> str | None:
     provider = os.environ.get("LLM_PROVIDER", "openai").lower()
-    if provider == "openai" and not os.environ.get("OPENAI_API_KEY") and not os.environ.get("LLM_API_KEY"):
-        return "missing OPENAI_API_KEY or LLM_API_KEY for Cognee default OpenAI provider"
+    llm_api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not llm_api_key:
+        return "missing OPENAI_API_KEY or LLM_API_KEY"
+    if provider == "custom" and not os.environ.get("LLM_ENDPOINT"):
+        return "LLM_ENDPOINT is required for Cognee custom provider"
 
-    embedding_provider = os.environ.get("EMBEDDING_PROVIDER")
-    if provider != "openai" and not embedding_provider:
-        return "non-OpenAI LLM_PROVIDER is set but EMBEDDING_PROVIDER is missing"
     return None
 
 
 async def _run_real_spike(adapter: CogneeMemoryAdapter, scope: str, query: str) -> dict[str, Any]:
     content = "生产部署必须加 --canary --region cn-shanghai"
-    await _maybe_await(adapter.add_raw_event(scope, content, source_type="spike", source_id="spike_2026_04_27"))
-    await _maybe_await(adapter.cognify_scope(scope))
-    results = await _maybe_await(adapter.search(scope, query))
-    return {"result_count": len(results), "results": results[:3]}
+    stages: list[dict[str, Any]] = []
+
+    add_result = await _run_stage(
+        stages,
+        "add",
+        adapter.add_raw_event,
+        scope,
+        content,
+        source_type="spike",
+        source_id="spike_2026_04_27",
+    )
+    if add_result["blocked"]:
+        return {"ok": False, "blocked": add_result["blocked"], "stages": stages, "result_count": 0, "results": []}
+
+    cognify_result = await _run_stage(stages, "cognify", adapter.cognify_scope, scope)
+    if cognify_result["blocked"]:
+        stages.append({"stage": "search", "ok": False, "skipped": True, "reason": "cognify did not finish"})
+        return {"ok": False, "blocked": cognify_result["blocked"], "stages": stages, "result_count": 0, "results": []}
+
+    search_result = await _run_stage(stages, "search", adapter.search, scope, query)
+    if search_result["blocked"]:
+        return {"ok": False, "blocked": search_result["blocked"], "stages": stages, "result_count": 0, "results": []}
+
+    results = search_result["value"]
+    return {"ok": True, "blocked": None, "stages": stages, "result_count": len(results), "results": results[:3]}
+
+
+async def _run_stage(stages: list[dict[str, Any]], name: str, func: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    try:
+        value = await _maybe_await(func(*args, **kwargs))
+    except Exception as exc:  # pragma: no cover - depends on local Cognee/provider state
+        blocked = f"{name} failed: {type(exc).__name__}: {exc}"
+        stages.append({"stage": name, "ok": False, "blocked": blocked})
+        return {"blocked": blocked, "value": None}
+
+    stages.append({"stage": name, "ok": True})
+    return {"blocked": None, "value": value}
 
 
 async def _maybe_await(value: Any) -> Any:

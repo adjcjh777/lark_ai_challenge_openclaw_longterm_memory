@@ -64,10 +64,10 @@ class CogneeMemoryAdapter:
         return f"{self.dataset_prefix}_{safe_scope}"
 
     def add_raw_event(self, scope: str, content: str, **metadata: Any) -> Any:
-        return self.add(scope, {"content": content, "metadata": metadata})
+        return self.add(scope, content)
 
     def cognify_scope(self, scope: str, **kwargs: Any) -> Any:
-        return self.cognify(scope, **kwargs)
+        return self._call("cognify", datasets=self.dataset_for_scope(scope), **kwargs)
 
     def remember_candidate_text(self, scope: str, content: str, **metadata: Any) -> Any:
         if self.client is not None and hasattr(self.client, "remember"):
@@ -100,7 +100,7 @@ class CogneeMemoryAdapter:
         return self._call("cognify", dataset_name=self.dataset_for_scope(scope), **kwargs)
 
     def search(self, scope: str, query: str, **kwargs: Any) -> Any:
-        raw_results = self._call("search", query, dataset_name=self.dataset_for_scope(scope), **kwargs)
+        raw_results = self._search(query, **kwargs)
         if hasattr(raw_results, "__await__"):
             return self._normalize_async_search_results(raw_results)
         return self._normalize_search_results(raw_results)
@@ -112,6 +112,23 @@ class CogneeMemoryAdapter:
             )
         method = getattr(self.client, method_name)
         return method(*args, **kwargs)
+
+    def _search(self, query: str, **kwargs: Any) -> Any:
+        if self.client is None:
+            raise CogneeAdapterNotConfigured(
+                "Cognee client is not configured; inject a local SDK client in the 2026-04-27 spike"
+            )
+
+        try:
+            from cognee.api.v1.search.search_v2 import SearchType
+        except Exception:
+            return self._call("search", query, **kwargs)
+
+        query_type = kwargs.pop("query_type", SearchType.CHUNKS)
+        try:
+            return self.client.search(query_type, query, **kwargs)
+        except TypeError:
+            return self._call("search", query, **kwargs)
 
     def _normalize_search_results(self, raw_results: Any) -> list[dict[str, Any]]:
         if raw_results is None:
