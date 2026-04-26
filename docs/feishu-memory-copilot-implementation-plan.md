@@ -32,6 +32,116 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 3. OpenClaw 相关开发和验收前运行：`python3 scripts/check_openclaw_version.py`。
 4. 若未来必须升级 OpenClaw，必须先更新锁文件、AGENTS、主控计划和当日计划，再重新跑基础验证。
 
+## 1.2 每日任务启动 Prompt
+
+本节是每天开新对话时的复制粘贴入口。原则：先让 Agent 读取 `AGENTS.md`、本总控文档和当天绝对日期计划，再按当天计划里的“今日执行清单（按顺序）”推进；不临时扩展到“今日不做”的范围。
+
+### 直接启动今天任务
+
+每天开工时优先复制这一段即可。如果系统日期正确，Agent 应自动定位当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`。
+
+```text
+工作目录：/Users/junhaocheng/feishu_ai_challenge
+
+请开始执行今天的 Feishu Memory Copilot 任务。
+
+必须先读取并遵循：
+1. AGENTS.md
+2. docs/feishu-memory-copilot-implementation-plan.md
+3. 按当前日期定位的 docs/plans/YYYY-MM-DD-implementation-plan.md
+4. git status --short
+5. 当前代码结构，尤其是 memory_engine/、agent_adapters/openclaw/、benchmarks/、tests/、docs/
+
+执行要求：
+- 先确认今天的绝对日期、阶段、当日目标和“今日做到什么程度”。
+- 严格按当天计划里的“今日执行清单（按顺序）”推进。
+- 只做当天计划范围内的任务，不要扩展到“今日不做”的事项。
+- 新功能优先进入 memory_engine/copilot/ 和 agent_adapters/openclaw/。
+- 不要从大改 memory_engine/repository.py、memory_engine/feishu_runtime.py 或旧 CLI/Bot handler 开始。
+- OpenClaw 版本必须保持 2026.4.24，先运行 python3 scripts/check_openclaw_version.py。
+- 每完成一个可运行闭环或关键文档更新后，按 AGENTS.md 要求验证、提交并推送。
+
+今天必须至少运行的基础验证：
+python3 scripts/check_openclaw_version.py
+python3 -m compileall memory_engine scripts
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+
+如果当天计划要求新增专项测试或 benchmark，也要按当天计划追加执行。
+
+最终回复请包含：
+- 今天完成了什么
+- 新增/修改文件
+- 验证结果
+- 仍未实现或仍有风险的事项
+- 下一步应该从哪个文件继续
+```
+
+### 指定日期启动任务
+
+如果要补做某一天，或当天系统日期不准，复制下面这段并把 `YYYY-MM-DD` 改成目标日期，例如 `2026-04-27`。
+
+```text
+工作目录：/Users/junhaocheng/feishu_ai_challenge
+目标日期：YYYY-MM-DD
+
+请执行目标日期对应的 Feishu Memory Copilot 每日任务。
+
+必须先读取并遵循：
+1. AGENTS.md
+2. docs/feishu-memory-copilot-implementation-plan.md
+3. docs/plans/YYYY-MM-DD-implementation-plan.md
+4. git status --short
+5. 当前代码结构，尤其是 memory_engine/、agent_adapters/openclaw/、benchmarks/、tests/、docs/
+
+执行要求：
+- 先复述该日期的阶段、当日目标、“今日做到什么程度”和“今日不做”。
+- 严格按该日期计划里的“今日执行清单（按顺序）”推进。
+- 如果发现代码现状与日期计划不一致，以当前代码为事实源，但不要擅自扩大范围；必要时先更新该日期计划或记录偏差。
+- 新功能优先进入 memory_engine/copilot/ 和 agent_adapters/openclaw/。
+- 不要从大改 memory_engine/repository.py、memory_engine/feishu_runtime.py 或旧 CLI/Bot handler 开始。
+- OpenClaw 版本必须保持 2026.4.24，先运行 python3 scripts/check_openclaw_version.py。
+- 每完成一个可运行闭环或关键文档更新后，按 AGENTS.md 要求验证、提交并推送。
+
+基础验证：
+python3 scripts/check_openclaw_version.py
+python3 -m compileall memory_engine scripts
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+
+如果该日期计划要求新增专项测试或 benchmark，也要按计划追加执行。
+
+最终回复请包含：
+- 目标日期任务完成情况
+- 新增/修改文件
+- 验证结果
+- 未完成风险或降级说明
+- 下一步应该从哪个文件继续
+```
+
+### 当天只想先做计划复核
+
+如果当天不想让 Agent 直接改代码，只想检查计划是否足够细，可以复制这一段。
+
+```text
+工作目录：/Users/junhaocheng/feishu_ai_challenge
+
+请只复核今天的每日 implementation plan，不要开始实现代码。
+
+必须先读取：
+1. AGENTS.md
+2. docs/feishu-memory-copilot-implementation-plan.md
+3. 按当前日期定位的 docs/plans/YYYY-MM-DD-implementation-plan.md
+
+请检查：
+- 当日目标是否具体
+- “今日做到什么程度”是否可验收
+- “今日执行清单”是否写到文件路径和完成标准
+- 测试命令是否覆盖当天改动
+- 队友晚上补位任务是否能独立执行
+- “今日不做”是否足够防止范围扩散
+
+如需修改，只更新文档，不写实现代码。完成后运行基础验证并按 AGENTS.md 提交推送。
+```
+
 ## 2. 架构落地原则
 
 1. 先新增 `memory_engine/copilot/`，不直接破坏旧实现。
