@@ -31,6 +31,13 @@
 ## 默认不向量化全部 raw events；embedding 只针对 curated memory 的 subject、current_value、summary 和 evidence quote。
 ## Heartbeat 主动提醒进入 MVP，但先做 reminder candidate + card/dry-run，不做复杂个性化推送。
 
+# OpenClaw 版本锁定
+## 本项目 OpenClaw 开发版本固定为 `2026.4.24`（本机 `openclaw --version` 显示 `OpenClaw 2026.4.24 (cbcfdf6)`）。
+## 版本锁文件是 `agent_adapters/openclaw/openclaw-version.lock`；后续 OpenClaw adapter、tool schema、skill、demo flow 和 runtime 联调都必须基于该版本。
+## 不要运行 `openclaw update`、`npm update -g openclaw`、`npm install -g openclaw@latest`，也不要切换 stable / beta / dev channel，除非用户明确要求重新升级并重新锁定版本。
+## 如果本机版本漂移或需要重装，只允许使用 exact version：`npm i -g openclaw@2026.4.24 --no-fund --no-audit`。
+## 每次开始 OpenClaw 相关开发或验收前，运行 `python3 scripts/check_openclaw_version.py`，确认当前 CLI 版本与锁文件一致。
+
 # 队友可读文档写作规则
 ## 日期 implementation plan、handoff、队友任务和看板备注必须用浅显中文；先讲要做什么，再讲为什么，不要先堆技术名词。
 ## 每份日期计划或 handoff 必须包含“给队友先看这个”小节，用 3-5 条说明：今天做了什么、队友今晚从哪里开始、要交付什么、怎么判断做对、遇到问题发什么给我。
