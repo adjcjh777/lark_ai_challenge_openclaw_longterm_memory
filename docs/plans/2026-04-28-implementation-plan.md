@@ -12,9 +12,14 @@
 - `AGENTS.md`
 - `docs/feishu-memory-copilot-implementation-plan.md`
 - `docs/plans/2026-04-28-implementation-plan.md`
+- `docs/plans/2026-04-27-handoff.md`
 - `docs/feishu-memory-copilot-prd.md` 的 Multi-Level Memory 章节
 - `memory_engine/copilot/cognee_adapter.py`
 - `memory_engine/repository.py`
+
+## 前置状态
+
+2026-04-26 和 2026-04-27 已完成 OpenClaw schema、Copilot skeleton、Cognee adapter contract、`memory.search` repository fallback、Cognee local spike、RightCode 文本模型验证和本地 Ollama embedding 基线。进入今天任务时，应先把这些作为已完成前提，不要重新选型或重做旧 Bot 主线。
 
 ## 用户白天主线任务
 

@@ -11,7 +11,7 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 1. `AGENTS.md`
 2. `docs/feishu-memory-copilot-implementation-plan.md`
 3. 当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`
-4. 必要时读取上一日 handoff / 执行记录
+4. 必要时读取上一日 handoff / 执行记录，例如 `2026-04-27-handoff.md`
 5. 只有被当天计划明确引用时，才读取 `docs/archive/legacy-day-docs/` 或 `docs/reference/`
 
 ## 每日计划必须包含的执行粒度
@@ -33,6 +33,7 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 |---|---|---|
 | 2026-04-26 | `2026-04-26-implementation-plan.md` | 主控切换、OpenClaw tool schema、Copilot package skeleton |
 | 2026-04-27 | `2026-04-27-implementation-plan.md` | Cognee local spike、adapter contract、Copilot schemas、`memory.search` fallback |
+| 2026-04-27 | `2026-04-27-handoff.md` | 2026-04-26/27 完成总结和 2026-04-28 接续说明 |
 | 2026-04-28 | `2026-04-28-implementation-plan.md` | `memory.search` service contract、L0/L1/L2/L3 和 query cascade |
 | 2026-04-29 | `2026-04-29-implementation-plan.md` | hybrid retrieval、Cognee recall/search fallback、curated memory embedding |
 | 2026-04-30 | `2026-04-30-implementation-plan.md` | candidate、manual memory、evidence、governance、document candidate source |

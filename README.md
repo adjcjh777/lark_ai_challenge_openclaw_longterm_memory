@@ -1,184 +1,130 @@
-# lark_ai_challenge_openclaw_longterm_memory
-飞书AI挑战赛-Openclaw企业级长程记忆方向
+# Feishu Memory Copilot
 
-## Day 1 本地闭环
+飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
-本仓库当前实现 `remember -> recall -> conflict update -> benchmark stub` 的本地最小闭环。Day 1 不接真实飞书 Bot、Bitable 写入、H5、embedding 或 OpenClaw 深度集成。
+## 当前状态
 
-初始化 SQLite：
+截至 2026-04-27，项目已完成 2026-04-26 和 2026-04-27 两天任务：
 
-```bash
-python3 -m memory_engine init-db
-```
+- OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
+- OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
+- Copilot Core 第一批骨架已建立：`memory_engine/copilot/`。
+- `memory.search` 已有最小 service/tool contract，并可通过旧 `MemoryRepository` fallback 返回 active memory with evidence。
+- Cognee 已通过窄 adapter 隔离在 `memory_engine/copilot/cognee_adapter.py`。
+- Cognee 本地 spike 已验证：RightCode 文本模型 + Ollama 本地 embedding 可跑通 `add -> cognify -> search`。
+- 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
 
-写入和召回：
+## 快速验证
 
-```bash
-python3 -m memory_engine remember --scope project:feishu_ai_challenge "生产部署必须加 --canary --region cn-shanghai"
-python3 -m memory_engine recall --scope project:feishu_ai_challenge "生产部署参数"
-python3 -m memory_engine remember --scope project:feishu_ai_challenge "不对，生产部署 region 改成 ap-shanghai"
-python3 -m memory_engine recall --scope project:feishu_ai_challenge "生产部署 region"
-```
-
-运行 Day 1 benchmark：
+基础验证：
 
 ```bash
+python3 scripts/check_openclaw_version.py
+python3 -m compileall memory_engine scripts
 python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 ```
 
-默认数据库路径是 `data/memory.sqlite`，可用 `MEMORY_DB_PATH` 覆盖。仓库已忽略 `.env`、`.omx/` 和 `data/*.sqlite`。
-
-如需安装为 `memory` 命令：
+Copilot contract 验证：
 
 ```bash
-python3 -m pip install -e .
-memory benchmark run benchmarks/day1_cases.json
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_cognee_adapter
 ```
 
-## Day 2 飞书 Bot 最小闭环
-
-本机已安装 `lark-cli`，Day 2 的真实事件监听和消息回复优先使用 `lark-cli`：
+Embedding provider 验证：
 
 ```bash
-lark-cli --version
+python3 scripts/check_embedding_provider.py
+ollama ps
+ollama stop qwen3-embedding:0.6b-fp16
 ```
 
-Day 2 最小 Bot 权限：
+`check_embedding_provider.py` 会拉起本地 Ollama embedding 模型；验证结束后需要检查 `ollama ps`，并停止本项目拉起的 `qwen3-embedding:0.6b-fp16`，避免持续占用 Mac mini GPU/内存。
 
-- `im:message.group_at_msg:readonly`
-- `im:message.p2p_msg:readonly`
-- `im:message:send_as_bot`
+## 每日任务入口
 
-环境变量：
+每天开工前先读：
+
+1. `AGENTS.md`
+2. `docs/feishu-memory-copilot-implementation-plan.md`
+3. 当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`
+
+总控文档里已经提供可复制的每日启动 Prompt：
+
+- `docs/feishu-memory-copilot-implementation-plan.md` 的 `1.2 每日任务启动 Prompt`
+
+当前日期计划：
+
+- `docs/plans/2026-04-26-implementation-plan.md`
+- `docs/plans/2026-04-27-implementation-plan.md`
+- `docs/plans/2026-04-27-handoff.md`
+- `docs/plans/2026-04-28-implementation-plan.md`
+
+## 主架构边界
+
+新功能优先进入：
+
+```text
+memory_engine/copilot/
+agent_adapters/openclaw/
+```
+
+不要从大改这些旧路径开始：
+
+```text
+memory_engine/repository.py
+memory_engine/feishu_runtime.py
+memory_engine/cli.py
+```
+
+旧实现保留为 reference / fallback，包括本地 SQLite 记忆、Feishu Bot、Bitable 同步、文档 ingestion 和旧 benchmark 样例。
+
+## 本地数据和敏感文件
+
+以下内容不得提交：
+
+- `.env`
+- `.env.local`
+- `.data/`
+- `.omx/`
+- `data/*.sqlite`
+- `logs/`
+- `reports/`
+- 真实飞书日志、群聊 ID、用户 ID、token
+
+Cognee 本地数据目录固定在 `.data/cognee/`。
+
+## 旧 CLI / Bot 兜底
+
+旧本地 memory loop 仍可作为 fallback 使用：
 
 ```bash
-MEMORY_DB_PATH=data/memory.sqlite
-MEMORY_DEFAULT_SCOPE=project:feishu_ai_challenge
-FEISHU_BOT_MODE=reply
-FEISHU_LOG_DIR=logs/feishu-bot
+python3 -m memory_engine init-db
+python3 -m memory_engine remember --scope project:feishu_ai_challenge "生产部署必须加 --canary --region cn-shanghai"
+python3 -m memory_engine recall --scope project:feishu_ai_challenge "生产部署参数"
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 ```
 
-如果使用指定 lark-cli profile，可额外设置：
-
-```bash
-LARK_CLI_PROFILE=your_profile
-```
-
-本地 replay 不需要飞书凭证：
+旧 Feishu Bot replay 仍可用于回归：
 
 ```bash
 python3 -m memory_engine feishu replay tests/fixtures/feishu_text_remember_event.json
 python3 -m memory_engine feishu replay tests/fixtures/feishu_text_recall_event.json
 ```
 
-真实长连接监听使用 `lark-cli event +subscribe`：
-
-```bash
-scripts/start_feishu_bot.sh
-```
-
-监听日志会写入 `logs/feishu-bot/feishu-listen-<timestamp>.ndjson`，每条记录都包含 `ts` 时间戳，便于排查真实群消息、卡片按钮回调和发送 fallback。
-
-调试时不真实回复飞书：
+真实监听仍使用：
 
 ```bash
 scripts/start_feishu_bot.sh --dry-run
 ```
 
-Demo 输入：
+注意：旧 Bot 是 fallback 和可复现测试面，不是新 Copilot 主入口。
 
-```text
-/remember 生产部署必须加 --canary --region cn-shanghai
-/recall 生产部署参数
-/remember 不对，生产部署 region 改成 ap-shanghai
-/recall 生产部署 region
-```
+## 关键文档
 
-## Day 3 真实 Bot 稳定化
-
-Day 3 增加稳定中文回复格式和 Demo 命令：
-
-- `/help`：展示可用命令、参数示例和 Demo 推荐输入。
-- `/health`：展示数据库路径、默认 scope、dry-run 状态和回复模式。
-- `/remember`、`/recall`、`/versions` 回复统一包含：类型、主题、状态、版本、来源。
-- 非文本、空消息、机器人自发消息、重复消息、未知命令都有明确处理。
-
-真实测试群配置：
-
-- 群名：内部测试群，真实名称不提交到公开仓库。
-- `chat_id`：使用本地环境变量 `FEISHU_TEST_CHAT_ID`，真实值不提交。
-- 群聊中请使用 `@Feishu Memory Engine bot /help` 这类 @Bot 命令；单聊可省略 @。
-
-本地 Day 3 验证：
-
-```bash
-python3 -m unittest discover -s tests
-rm -f /tmp/feishu_d3_replay.sqlite
-python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_text_help_event.json
-python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_text_health_event.json
-```
-
-## Day 4 Bitable 记忆台账
-
-Day 4 增加 SQLite 到飞书多维表格的最小同步脚本。默认是本地 dry-run，不需要 Bitable 权限，也不会影响本地 `remember` / `recall` 核心能力。
-
-查看表结构：
-
-```bash
-python3 -m memory_engine bitable schema
-```
-
-预览同步内容和将要执行的 `lark-cli` 命令：
-
-```bash
-python3 -m memory_engine bitable sync --benchmark-cases benchmarks/day1_cases.json
-```
-
-生成 Day 4 评委看板样例数据：
-
-```bash
-python3 scripts/seed_day4_demo_data.py --scope project:day4_demo
-python3 -m memory_engine bitable sync --scope project:day4_demo --benchmark-cases benchmarks/day1_cases.json
-```
-
-有 Base 权限后写入真实 Bitable：
-
-```bash
-export BITABLE_BASE_TOKEN="app_xxx"
-export BITABLE_LEDGER_TABLE="Memory Ledger"
-export BITABLE_VERSIONS_TABLE="Memory Versions"
-export BITABLE_BENCHMARK_TABLE="Benchmark Results"
-export LARK_CLI_PROFILE="feishu-ai-challenge"
-export LARK_CLI_AS="user"
-
-python3 -m memory_engine bitable sync --write --benchmark-cases benchmarks/day1_cases.json
-```
-
-建表命令预览：
-
-```bash
-python3 -m memory_engine bitable setup-commands --base-token "$BITABLE_BASE_TOKEN" --profile feishu-ai-challenge --as-identity user
-```
-
-视图建议见 [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)。
-
-## 文档
-
-- [项目总览：我们在做什么](docs/project-overview.md)
-- [比赛总控执行文档](docs/competition-master-execution-plan.md)
-- [飞书 Memory Engine 调研与项目规划](docs/feishu-memory-engine-research-and-plan.md)
-- [Hermes Agent 参考笔记](docs/hermes-agent-reference-notes.md)
-- [Day 1 执行文档](docs/day1-execution-plan.md)
-- [Day 1 Handoff](docs/day1-handoff.md)
-- [Day 2 实现计划](docs/day2-implementation-plan.md)
-- [Day 2 Handoff](docs/day2-handoff.md)
-- [Day 3 实现计划](docs/day3-implementation-plan.md)
-- [Day 3 Handoff](docs/day3-handoff.md)
-- [Day 4 实现计划](docs/day4-implementation-plan.md)
-- [Day 4 Handoff](docs/day4-handoff.md)
-- [Day 3 安全风险决策](docs/day3-security-risk-decision.md)
-- [Bitable 记忆台账与评委视图建议](docs/bitable-ledger-views.md)
-- [Day 4 Bitable Demo 讲解词](docs/day4-bitable-demo-talk-track.md)
-- [真实飞书 Demo Runbook](docs/demo-runbook.md)
-- [队友 lark-cli 配置与 Day 2 测试指南](docs/teammate-lark-cli-setup.md)
-- [项目原型图 Mermaid 源码](docs/diagrams/README.md)
+- 主控计划：`docs/feishu-memory-copilot-implementation-plan.md`
+- PRD：`docs/feishu-memory-copilot-prd.md`
+- 日期计划索引：`docs/plans/README.md`
+- 2026-04-27 handoff：`docs/plans/2026-04-27-handoff.md`
+- 队友 Windows embedding 配置：`docs/reference/teammate-windows-cognee-embedding-setup.md`
+- 旧资料归档：`docs/archive/`
+- 长期参考资料：`docs/reference/`
