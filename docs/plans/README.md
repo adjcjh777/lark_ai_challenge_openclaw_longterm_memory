@@ -19,15 +19,14 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 | 日期 | 文件 | 阶段 |
 |---|---|---|
 | 2026-04-26 | `2026-04-26-implementation-plan.md` | 主控切换、OpenClaw tool schema、Copilot package skeleton |
-| 2026-04-27 | `2026-04-27-implementation-plan.md` | `memory.search` contract |
-| 2026-04-28 | `2026-04-28-implementation-plan.md` | L0/L1/L2/L3 和 query cascade |
-| 2026-04-29 | `2026-04-29-implementation-plan.md` | hybrid retrieval 和 curated memory embedding |
-| 2026-04-30 | `2026-04-30-implementation-plan.md` | candidate、manual memory、evidence、governance |
-| 2026-05-01 | `2026-05-01-implementation-plan.md` | conflict update、versions、stale leakage |
-| 2026-05-02 | `2026-05-02-implementation-plan.md` | prefetch、heartbeat、OpenClaw demo flow |
-| 2026-05-03 | `2026-05-03-implementation-plan.md` | Benchmark expansion |
-| 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook 和 README |
-| 2026-05-05 | `2026-05-05-implementation-plan.md` | 白皮书 |
-| 2026-05-06 | `2026-05-06-implementation-plan.md` | 提交材料、录屏、QA |
+| 2026-04-27 | `2026-04-27-implementation-plan.md` | Cognee local spike、adapter contract、Copilot schemas、`memory.search` fallback |
+| 2026-04-28 | `2026-04-28-implementation-plan.md` | `memory.search` service contract、L0/L1/L2/L3 和 query cascade |
+| 2026-04-29 | `2026-04-29-implementation-plan.md` | hybrid retrieval、Cognee recall/search fallback、curated memory embedding |
+| 2026-04-30 | `2026-04-30-implementation-plan.md` | candidate、manual memory、evidence、governance、document candidate source |
+| 2026-05-01 | `2026-05-01-implementation-plan.md` | conflict update、versions、stale leakage、Card/Bitable review surface |
+| 2026-05-02 | `2026-05-02-implementation-plan.md` | prefetch、heartbeat、OpenClaw demo/card dry-run flow |
+| 2026-05-03 | `2026-05-03-implementation-plan.md` | Benchmark expansion、metrics report、review surface evidence check |
+| 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook、README、OpenClaw examples freeze |
+| 2026-05-05 | `2026-05-05-implementation-plan.md` | 白皮书、architecture proof、competition narrative |
+| 2026-05-06 | `2026-05-06-implementation-plan.md` | 提交材料、录屏、QA、scope freeze |
 | 2026-05-07 | `2026-05-07-implementation-plan.md` | 最终验证、提交缓冲、push |
-

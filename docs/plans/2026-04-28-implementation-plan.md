@@ -1,11 +1,11 @@
 # 2026-04-28 Implementation Plan
 
-阶段：L0/L1/L2/L3 数据模型和 query cascade  
+阶段：`memory.search` service contract、L0/L1/L2/L3 数据模型和 query cascade
 主控：`docs/feishu-memory-copilot-implementation-plan.md`
 
 ## 当日目标
 
-让 Copilot Core 具备 Multi-Level Memory 的最小形态：L0 当前上下文、L1 Hot Memory、L2 Warm Memory、L3 Cold Memory，并让 search trace 能展示 query cascade。
+让 Copilot Core 具备第一条完整 search contract：OpenClaw 工具输入进入 `tools.py`，再到 `CopilotService.search()`，再由 orchestrator 决定 L0 -> L1 -> L2 -> L3 的最小召回顺序。今天重点是 trace、状态过滤和 fallback 路径，不做复杂向量效果冲刺。
 
 ## 必读上下文
 
@@ -13,47 +13,68 @@
 - `docs/feishu-memory-copilot-implementation-plan.md`
 - `docs/plans/2026-04-28-implementation-plan.md`
 - `docs/feishu-memory-copilot-prd.md` 的 Multi-Level Memory 章节
+- `memory_engine/copilot/cognee_adapter.py`
+- `memory_engine/repository.py`
 
 ## 用户白天主线任务
 
 1. 在 `schemas.py` 中补 `WorkingContext`、`MemoryLayer`、`RetrievalTrace`。
-2. 新增 `memory_engine/copilot/orchestrator.py`，实现 L0 -> L1 -> L2 -> L3 -> merge -> rerank -> Top K 的编排骨架。
-3. 新增 `memory_engine/copilot/retrieval.py`，先提供 layer-aware search 接口。
-4. 通过 adapter 或 lightweight migration 支持 `layer` 字段，不直接大改旧 repository。
-5. 新增 `benchmarks/copilot_layer_cases.json` 草稿。
+2. 完整实现 `CopilotService.search()` 和 `tools.memory_search()`，保持工具层只是薄封装。
+3. 新增 `memory_engine/copilot/orchestrator.py`，实现 L0 -> L1 -> L2 -> L3 -> merge -> rerank -> Top K 的编排骨架。
+4. 新增 `memory_engine/copilot/retrieval.py`，先提供 layer-aware search 接口。
+5. 通过 adapter 或 lightweight migration 支持 `layer` 字段，不直接大改旧 repository。
+6. 让 search trace 显示 backend：`cognee`、`repository_fallback` 或 `dry_run`。
+7. 新增 `benchmarks/copilot_recall_cases.json` 和 `benchmarks/copilot_layer_cases.json` 草稿。
 
 ## 需要改/新增的文件
 
 - `memory_engine/copilot/schemas.py`
+- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/tools.py`
 - `memory_engine/copilot/orchestrator.py`
 - `memory_engine/copilot/retrieval.py`
-- `memory_engine/copilot/service.py`
+- `memory_engine/copilot/permissions.py`
+- `tests/test_copilot_tools.py`
 - `tests/test_copilot_retrieval.py`
+- `benchmarks/copilot_recall_cases.json`
 - `benchmarks/copilot_layer_cases.json`
 
 ## 测试
 
 ```bash
-python3 -m unittest tests.test_copilot_retrieval
+python3 scripts/check_openclaw_version.py
+python3 -m unittest tests.test_copilot_tools tests.test_copilot_retrieval
 python3 -m compileall memory_engine scripts
 python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 ```
 
+如果 `copilot_recall_cases.json` runner 已实现，再追加：
+
+```bash
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+```
+
 ## 验收标准
 
+- `memory.search` 输出包含 `memory_id`、`type`、`subject`、`current_value`、`status`、`version`、`score`、`evidence`、`trace`。
 - search trace 能显示至少 L1 / L2 fallback。
 - L1 命中 p95 <= 100ms 的本地测试路径成型。
 - L3 raw events 不直接作为默认答案。
 - superseded / archived 只进入 explain 或 deep trace。
+- `benchmarks/copilot_recall_cases.json` 至少有 5 条可读样例。
 
 ## 队友晚上补位任务
 
-1. 给 `benchmarks/copilot_layer_cases.json` 补 15 条 layer 场景。
-2. 每条用中文备注为什么属于 Hot / Warm / Cold。
-3. 检查“旧版本”和“归档证据”是否不会被误写成当前答案。
+给队友先看这个：
+
+1. 今天主要让“查询历史决策”这条工具链完整走通。
+2. 你给 `benchmarks/copilot_layer_cases.json` 补 15 条分层场景：常用规则、最近讨论、旧版本、归档证据。
+3. 每条用中文备注为什么属于 Hot / Warm / Cold。Hot 是最常用的记忆，Warm 是最近或待处理记忆，Cold 是历史或归档证据。
+4. 顺手检查 `copilot_recall_cases.json` 是否像真实飞书项目群问题。
+5. 遇到问题发我：case_id、你觉得应该命中的记忆、实际看起来可能命中的记忆。
 
 今晚不用做：
 
 - 不用实现复杂向量库。
 - 不用改 Feishu Bot handler。
-
+- 不用做完整权限后台。

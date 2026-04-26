@@ -26,7 +26,9 @@
 # Copilot-first 开发边界
 ## 新功能优先进入 `memory_engine/copilot/` 和 `agent_adapters/openclaw/`；不要从大改 `memory_engine/repository.py`、`memory_engine/feishu_runtime.py` 或旧 CLI 命令开始。
 ## OpenClaw tools schema 先行：先冻结 `agent_adapters/openclaw/memory_tools.schema.json`，再实现 `memory_engine/copilot/schemas.py`、`tools.py`、`service.py`。
+## 正式写代码前的技术调研结论必须落到 `docs/feishu-memory-copilot-implementation-plan.md` 和后续 `docs/plans/YYYY-MM-DD-implementation-plan.md`，不能只留在聊天记录里；调研结论进入计划后，后续按计划执行并用代码状态校准。
 ## Cognee 是当前选定的 memory 系统核心：优先复用其本地知识/记忆引擎能力和 `remember / recall / improve / forget`、低层 `add / cognify / search` 流程；不要改成 Mem0、Graphiti、MemOS、Letta、Zep 或 TiMem，除非用户明确重新做选型。
+## Cognee 接入优先走本地 Python SDK spike 和窄 adapter；MVP 第一阶段不要先起 Cognee server / Docker，不要让业务代码到处直接 `import cognee`。
 ## Memory Copilot Core 负责企业记忆治理；candidate / active / superseded / rejected / stale / archived 状态机、证据链、版本解释、权限门控、OpenClaw tools、Feishu card 和 Benchmark 仍由本项目实现，不能交给 Cognee 或任何外部 API 黑盒。
 ## CLI、Feishu Bot、Benchmark、Bitable、lark-cli 都是入口或展示/验证层，后续应调用同一套 Copilot Core。
 ## 旧 Day1-Day7 实现只能作为 reference / fallback。复用旧能力时通过 adapter 或 service 层包起来，不把新业务逻辑继续塞进旧 handler。
