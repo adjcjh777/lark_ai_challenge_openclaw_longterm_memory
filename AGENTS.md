@@ -42,6 +42,13 @@
 ## 如果本机版本漂移或需要重装，只允许使用 exact version：`npm i -g openclaw@2026.4.24 --no-fund --no-audit`。
 ## 每次开始 OpenClaw 相关开发或验收前，运行 `python3 scripts/check_openclaw_version.py`，确认当前 CLI 版本与锁文件一致。
 
+# 依赖安装与版本锁定
+## 如果执行计划需要的 CLI、SDK、插件或 Python/npm 依赖尚未安装，可以直接安装，不要停下来让用户手动处理。
+## 安装任何新依赖后，必须立即锁定 exact version，并把版本写入项目内可追踪文件，例如 lock 文件、requirements/pyproject、package lock、脚本校验文件、AGENTS.md 或当日 implementation plan；不要只留在聊天记录里。
+## 新安装的依赖默认禁止自动升级：不要使用 latest、beta、dev channel、floating range 或自动更新命令；如工具支持 auto-update 开关，安装后必须关闭自动更新或在项目脚本/环境说明中固定禁用方式。
+## 后续恢复、重装或 CI/本机验收只允许使用已锁定版本；除非用户明确要求升级，否则不要主动更新已锁定依赖。
+## 如果某个工具无法锁 exact version，必须在当日计划或 commit message 的 `Not-tested:` / `Constraint:` 中写清原因、当前版本、安装命令和风险。
+
 # 队友可读文档写作规则
 ## 日期 implementation plan、handoff、队友任务和看板备注必须用浅显中文；先讲要做什么，再讲为什么，不要先堆技术名词。
 ## 每份日期计划或 handoff 必须包含“给队友先看这个”小节，用 3-5 条说明：今天做了什么、队友今晚从哪里开始、要交付什么、怎么判断做对、遇到问题发什么给我。
