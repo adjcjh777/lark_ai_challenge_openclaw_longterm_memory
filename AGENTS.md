@@ -49,6 +49,13 @@
 ## 后续恢复、重装或 CI/本机验收只允许使用已锁定版本；除非用户明确要求升级，否则不要主动更新已锁定依赖。
 ## 如果某个工具无法锁 exact version，必须在当日计划或 commit message 的 `Not-tested:` / `Constraint:` 中写清原因、当前版本、安装命令和风险。
 
+# 本地模型与 Ollama 清理规则
+## Cognee / embedding 测试使用的本地模型必须按项目锁定文件执行；当前默认模型见 `memory_engine/copilot/embedding-provider.lock`。
+## 每次运行 `scripts/check_embedding_provider.py`、`scripts/spike_cognee_local.py` 或任何会拉起 Ollama embedding 的验证后，必须执行 `ollama ps` 检查是否仍有本项目模型驻留。
+## 如果 `ollama ps` 显示 `qwen3-embedding:0.6b-fp16`、`bge-m3:567m` 或其他本项目测试拉起的模型仍在运行，验证结束后必须执行 `ollama stop <model>` 关闭，避免持续占用 Mac mini GPU/内存。
+## 只关闭本项目测试拉起或明确由本项目使用的 Ollama 模型；不要误停用户或队友正在运行的无关模型。
+## 最终回复的验证结果里要写清 Ollama 清理状态，例如：`ollama ps` 已确认无本项目模型驻留，或说明仍保留运行的具体原因。
+
 # 队友可读文档写作规则
 ## 日期 implementation plan、handoff、队友任务和看板备注必须用浅显中文；先讲要做什么，再讲为什么，不要先堆技术名词。
 ## 每份日期计划或 handoff 必须包含“给队友先看这个”小节，用 3-5 条说明：今天做了什么、队友今晚从哪里开始、要交付什么、怎么判断做对、遇到问题发什么给我。
