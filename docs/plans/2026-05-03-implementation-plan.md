@@ -26,6 +26,36 @@
 6. 记录失败分类和 recommended fix。
 7. 确认 Bitable Benchmark Results dry-run 字段能承载这些指标，不要求真实写入。
 
+## 今日做到什么程度
+
+今天结束时必须从“有功能”推进到“能自证”：
+
+- PRD 里的每个指标都有对应 case 文件、runner 入口或明确的降级验证说明。
+- benchmark 输出至少能生成机器可读 JSON summary 和评委可读 Markdown 段落。
+- 所有失败都要分类，不能只写 failed。
+- `docs/benchmark-report.md` 可以作为初赛材料初稿，不只是内部日志。
+- Bitable Benchmark Results 可以 dry-run 展示指标字段，但真实写入不作为今天阻塞项。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 盘点 benchmark 文件 | `benchmarks/copilot_*_cases.json` | 6 类 case 文件都存在；没有实现的写明 placeholder 和 runner 缺口 | `ls benchmarks/copilot_*_cases.json` 有结果 |
+| 2 | 扩展 runner schema | `memory_engine/benchmark.py` | 支持 recall/candidate/conflict/layer/prefetch/heartbeat 的 case_type | runner 能识别 case_type |
+| 3 | 计算 PRD 指标 | `benchmark.py` | Recall@3、Conflict Accuracy、Evidence Coverage、Candidate Precision、Context Use、L1 p95、Sensitive Leakage | summary 中有指标字段 |
+| 4 | 写失败分类 | `benchmark.py`、case JSON | 每个 failed case 有 failure_type 和 recommended_fix | 报告中能按类型汇总 |
+| 5 | 扩展样例集 | `benchmarks/*.json` | 每类至少 5-10 条高质量样例，优先真实办公语气 | benchmark 或人工校验可读 |
+| 6 | 生成报告 | `docs/benchmark-report.md` | 包含指标表、失败分类、样例证据、当前局限 | 文档可直接给评委看 |
+| 7 | 对齐 Bitable 字段 | `bitable_sync.py` | Benchmark Results dry-run 字段能承载全部指标 | dry-run payload 有指标字段 |
+| 8 | 保留旧基线 | `day1_cases.json` | 旧本地 memory demo 仍可复现 | day1 benchmark 通过 |
+
+## 今日不做
+
+- 不为了指标好看删除失败样例。
+- 不把未实现的 runner 写成已通过。
+- 不临时扩大产品功能。
+- 不真实写 Bitable 生产表，除非基础报告已完成。
+
 ## 指标计算任务
 
 | 指标 | 当日计算入口 |

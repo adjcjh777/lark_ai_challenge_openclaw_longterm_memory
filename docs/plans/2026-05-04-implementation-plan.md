@@ -25,6 +25,36 @@
 6. 在 runbook 中展示 evidence、version chain、stale/superseded 不泄漏、reminder candidate dry-run。
 7. 确认 demo flow 覆盖历史决策查询、任务前 prefetch、冲突更新三条线，至少前两条必须可演示。
 
+## 今日做到什么程度
+
+今天结束时必须让一个不熟悉仓库的人能按文档复现核心 demo：
+
+- README 第一屏能说明这是 OpenClaw-native Feishu Memory Copilot，不是旧 CLI demo。
+- Demo runbook 有 5 分钟演示顺序、每一步输入、预期输出和失败兜底。
+- OpenClaw examples 与 `memory_tools.schema.json` 字段一致。
+- 如果 live OpenClaw gateway 不稳，runbook 明确 schema examples + CLI/dry-run 的替代演示。
+- demo seed / replay 数据固定，避免现场临时造数据。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 写 README 快速开始 | `README.md` | 10 分钟内能看懂定位、安装、验证、demo、benchmark | 队友按 README 能走到第一条命令 |
+| 2 | 写 demo runbook | `docs/demo-runbook.md` | 5 分钟脚本，覆盖痛点、工具调用、证据、版本、prefetch、heartbeat | 每步有输入和预期输出 |
+| 3 | 固定 demo 数据 | `scripts/demo_seed.py` 或 examples | 能复现历史决策、冲突更新、prefetch 三条主线 | seed/dry-run 输出稳定 |
+| 4 | 冻结 OpenClaw examples | `agent_adapters/openclaw/examples/*.json` | examples 字段与 schema 对齐，至少 2 条必演示可复制 | JSON 可解析，和 runbook 互相引用 |
+| 5 | 写 fallback 路径 | `docs/demo-runbook.md` | live 失败时走 CLI/dry-run/replay/录屏，不退回 CLI-first 叙事 | runbook 有“现场故障处理”小节 |
+| 6 | 串联 benchmark | `docs/benchmark-report.md` | demo 里展示的能力能在 report 里找到对应指标 | runbook 引用指标章节 |
+| 7 | 检查敏感文件 | README / `.gitignore` | 说明 `.data/cognee/`、logs、token 不提交 | `git status --ignored` 不出现敏感提交项 |
+| 8 | 全量 smoke test | 本地命令 | README 中的核心命令至少手动跑一次 | final 记录成功/失败命令 |
+
+## 今日不做
+
+- 不新增 MVP 外的新工具或新入口。
+- 不让 README 变成营销页，优先可复现。
+- 不把 OpenClaw runtime 不稳定包装成已完全验证。
+- 不真实写飞书生产空间，除非 dry-run 和材料已稳定。
+
 ## 需要改/新增的文件
 
 - `README.md`

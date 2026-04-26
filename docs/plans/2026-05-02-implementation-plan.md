@@ -28,6 +28,36 @@
 7. 让 Bitable dry-run payload 覆盖 Memory Ledger、Versions、Candidate Review、Benchmark Results、Reminder Candidates。
 8. 扩展 `benchmarks/copilot_prefetch_cases.json` 和 `benchmarks/copilot_heartbeat_cases.json`，至少各有 5 条可读样例。
 
+## 今日做到什么程度
+
+今天结束时 MVP 第一周必须能演示“Agent 不是被动搜索，而是任务前主动取上下文”：
+
+- `memory.prefetch` 能根据 task/scope/current_context 返回 compact context pack。
+- context pack 至少包含 relevant memory、evidence、risk/deadline、版本状态和 trace 摘要。
+- heartbeat 不直接骚扰用户，只生成 reminder candidate 和 card/dry-run log。
+- sensitive、permission、cooldown、stale/superseded 门控必须生效。
+- OpenClaw examples 至少能复制演示历史决策查询和任务前 prefetch。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 实现 prefetch schema | `schemas.py`、`service.py` | 定义 task/context pack/relevant memory/risk/deadline 字段 | prefetch 单测覆盖字段 |
+| 2 | 实现 prefetch tool | `tools.py` | `memory.prefetch` 调 service，不直接查库 | tools 单测覆盖成功和 scope error |
+| 3 | 新增 heartbeat | `heartbeat.py` | review_due、important_not_recalled、deadline、thread_similarity 四类候选源 | heartbeat 单测覆盖每类 trigger |
+| 4 | 加 reminder gates | `heartbeat.py`、`permissions.py` | importance、relevance、cooldown、scope permission、sensitive redaction | Sensitive Reminder Leakage Rate = 0 |
+| 5 | 接 card dry-run | `feishu_cards.py` | reminder/candidate/version card 均可从 service 输出生成 payload | card 测试或 dry-run 输出 |
+| 6 | 接 Bitable dry-run | `bitable_sync.py` | Reminder Candidates 表 payload 字段完整 | bitable 测试或 dry-run 输出 |
+| 7 | 冻结 examples | `agent_adapters/openclaw/examples/*.json` | 至少历史决策查询、任务前 prefetch 两条可复制输入输出 | examples 可读，字段与 schema 对齐 |
+| 8 | 建专项 benchmark | `copilot_prefetch_cases.json`、`copilot_heartbeat_cases.json` | 各至少 5 条样例，含 sensitive/stale 边界 | runner 或单测能覆盖核心指标 |
+
+## 今日不做
+
+- 不做复杂个性化推送。
+- 不把 reminder 直接发真实群作为必选验收。
+- 不新增 MVP 之外的 OpenClaw 工具。
+- 不为了 demo 绕过 sensitive redaction。
+
 ## 需要改/新增的文件
 
 - `memory_engine/copilot/orchestrator.py`

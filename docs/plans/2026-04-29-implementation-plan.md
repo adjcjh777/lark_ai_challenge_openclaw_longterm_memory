@@ -27,6 +27,36 @@
 7. 扩展 `memory_engine/benchmark.py`，至少支持 `benchmarks/copilot_recall_cases.json` 的 Recall@3 和 Evidence Coverage。
 8. 扩展 `benchmarks/copilot_recall_cases.json`，保持 5-10 条最小可读样例先跑通。
 
+## 今日做到什么程度
+
+今天结束时 retrieval 要能证明“不是把所有东西丢进向量库”：
+
+- 检索顺序固定为 structured filter -> keyword/FTS -> vector similarity -> merge -> rerank。
+- embedding 只处理 curated memory 的 `subject`、`current_value`、`summary`、`evidence.quote`。
+- raw events、完整聊天记录、真实日志不进入 embedding。
+- Cognee 是召回通道之一，不是 governance 和 evidence 的 source of truth。
+- Recall@3 和 Evidence Coverage 至少能在本地 runner 或等价测试里计算。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 实现结构化过滤 | `retrieval.py` | scope/status/layer/type 过滤先执行，默认 active | 单测验证 rejected/superseded 不返回 |
+| 2 | 实现 keyword/FTS 召回 | `retrieval.py` | 匹配 subject/current_value/summary/evidence quote | keyword 命中 case 通过 |
+| 3 | 新增 embedding 接口 | `embeddings.py` | 本地轻量实现可 deterministic；字段范围写死为 curated memory | 单测验证 raw_event 字段不参与 |
+| 4 | 接入 Cognee 可选通道 | `cognee_adapter.py`、`retrieval.py` | Cognee 可用则纳入候选，不可用不影响 keyword fallback | fake adapter 单测覆盖 unavailable |
+| 5 | evidence 补齐 | `retrieval.py`、`service.py` | 缺 evidence 的结果降权或不进正式 Top 1 | evidence_missing 测试通过 |
+| 6 | merge + rerank | `retrieval.py` | 合并重复 memory，综合 importance/recency/confidence/layer/evidence | trace 展示各分数来源 |
+| 7 | 扩展 benchmark runner | `memory_engine/benchmark.py` | 支持 `copilot_recall_cases.json` 的 Recall@3、Evidence Coverage | 命令能输出 summary |
+| 8 | 扩展 recall 样例 | `benchmarks/copilot_recall_cases.json` | 先保证 5-10 条高质量样例可跑，再扩展 | benchmark 能跑或缺口写清 |
+
+## 今日不做
+
+- 不引入复杂向量数据库或分布式向量服务。
+- 不向量化全量 raw events。
+- 不为了指标临时绕过 evidence requirement。
+- 不把 Cognee 返回结果未经 Copilot 统一 schema 直接给 OpenClaw。
+
 ## 需要改/新增的文件
 
 - `memory_engine/copilot/retrieval.py`

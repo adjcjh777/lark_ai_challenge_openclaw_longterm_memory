@@ -29,6 +29,36 @@
 7. 确认 `copilot_*` benchmark、examples、dry-run 降级说明没有互相矛盾。
 8. 提交并 `git push origin HEAD`。
 
+## 今日做到什么程度
+
+今天结束时必须能提交初赛材料并保留可追溯证据：
+
+- 远程仓库 main 分支包含最终 README、Demo runbook、Benchmark Report、白皮书、submission checklist。
+- 所有能跑的验证命令已从干净状态跑过。
+- 不能跑或未实现的专项 benchmark 有明确降级说明。
+- Demo 数据、提交 hash、OpenClaw 版本和材料版本固定。
+- 现场失败时有 replay / dry-run / 录屏兜底。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 冻结工作区 | Git | `git status --short --ignored` 查清未提交和忽略文件 | 无敏感文件 staged |
+| 2 | 校验版本锁 | OpenClaw | 确认仍是 `2026.4.24` | `python3 scripts/check_openclaw_version.py` 通过 |
+| 3 | 跑最终验证 | 本地命令 | compileall、unittest、day1、day7、所有已存在 copilot benchmark | 命令结果记录到 checklist |
+| 4 | 检查材料一致性 | README/runbook/report/whitepaper/checklist | 功能范围、指标、风险、fallback 不互相矛盾 | checklist 标注已查 |
+| 5 | 固定 Demo 信息 | `docs/submission-summary.md` 或 checklist | seed、examples、录屏/截图、提交 hash、演示顺序 | 可复制给提交表单 |
+| 6 | 处理最后 blocker | 相关文件 | 只修 P0：验证失败、材料缺失、敏感文件、演示断链 | blocker 清零或有降级说明 |
+| 7 | 提交最终版本 | Git | 只提交当前任务相关文件，Lore commit message 写验证 | commit hash 记录 |
+| 8 | 推送远程 | GitHub | `git push origin HEAD` 成功 | 远程 main 含最终提交 |
+
+## 今日不做
+
+- 不临场加新功能。
+- 不修改 OpenClaw 版本。
+- 不重开架构选型。
+- 不修非阻塞美化问题，放到复赛待办。
+
 ## 需要改/新增的文件
 
 - `README.md`

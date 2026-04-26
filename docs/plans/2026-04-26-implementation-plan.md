@@ -31,6 +31,36 @@
 6. 把正式写代码前的调研结论转成执行队列，写入总控计划和后续每日计划。
 7. 如果继续执行代码，优先实现 OpenClaw tool schema、Cognee adapter boundary 和 Copilot package skeleton。
 
+## 今日做到什么程度
+
+今天结束时必须达到“可以从明天直接写代码”的状态，而不是只完成方向讨论：
+
+- 执行入口已切换：新对话默认读 `AGENTS.md`、主控 implementation plan、当天绝对日期计划。
+- OpenClaw 版本已固定：本机版本、锁文件、检查脚本和 AGENTS 规则一致。
+- 每日计划已细化：2026-04-26 至 2026-05-07 每天都能看出“做什么、改哪些文件、做到什么程度、怎么验收”。
+- D1 代码任务已定义清楚：若继续执行代码，只做 OpenClaw schema、skill examples、Copilot package skeleton，不进入旧 Bot handler 大改。
+- 队友晚上能接手检查计划，不需要理解所有底层实现。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 确认执行契约 | `AGENTS.md` | 新主控、OpenClaw-first、Cognee 边界、版本锁定都写清楚 | `rg "主控|OpenClaw 版本锁定|Cognee" AGENTS.md` 有结果 |
+| 2 | 固定 OpenClaw 版本 | `agent_adapters/openclaw/openclaw-version.lock`、`scripts/check_openclaw_version.py` | 锁定 `2026.4.24`，后续禁止自动跟随 latest | `python3 scripts/check_openclaw_version.py` 通过 |
+| 3 | 细化总控计划 | `docs/feishu-memory-copilot-implementation-plan.md` | 明确 2026-04-26 至 2026-05-02 MVP，2026-05-03 至 2026-05-07 收尾 | 文档包含每日排期、模块边界、测试/benchmark |
+| 4 | 细化每日计划 | `docs/plans/*.md` | 每天有完成定义、文件级任务、验收标准、队友补位任务 | `docs/plans/README.md` 索引能找到每一天 |
+| 5 | 明确 D1 代码边界 | `2026-04-26-implementation-plan.md` | 只准备 schema/skeleton，不实现完整 retrieval/governance | 文档写明“后续代码执行时新增”的文件和范围 |
+| 6 | 保留旧资产 | `docs/archive/`、`docs/reference/` | 旧 day 文档和参考资料不删除、不作为主控 | 目录存在，README 说明用途 |
+| 7 | 基础验证 | 本地命令 | 文档改动不破坏旧可复现基线 | compileall 和 day1 benchmark 通过 |
+| 8 | 提交推送 | Git | 关键执行契约进入远程仓库 | `git log -1 --oneline` 可见本次提交 |
+
+## 今日不做
+
+- 不实现完整 `memory.search`、retrieval、governance、heartbeat。
+- 不大改 `memory_engine/repository.py`、`memory_engine/feishu_runtime.py` 或旧 CLI。
+- 不把真实飞书 Bot / Bitable / OpenClaw gateway 作为今日阻塞。
+- 不引入新依赖；Cognee 真实安装和 adapter contract 放到 2026-04-27。
+
 ## 调研落盘任务
 
 本节把“最高优先级”和“下一优先级前两项”调研转成后续计划，避免只停留在聊天记录里。

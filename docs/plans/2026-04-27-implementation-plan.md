@@ -28,6 +28,36 @@
 7. 新增 `memory_engine/copilot/service.py` 和 `tools.py`，让 `memory.search` 第一版复用旧 `MemoryRepository.recall_candidates()`，但不把业务逻辑写进 CLI 或 Feishu handler。
 8. 创建或补充 `agent_adapters/openclaw/memory_tools.schema.json`，至少覆盖 `memory.search` 和统一错误格式。
 
+## 今日做到什么程度
+
+今天结束时必须有一条“能 import、能 dry-run、能用旧 repository fallback 查 active memory”的最小链路：
+
+- `memory_engine/copilot/` 目录存在，schema、adapter、service、tools 都能被 Python import。
+- Cognee 是否真实可用要有结论：真实跑通、dry-run 跑通、或 blocked 原因写在命令输出/文档里。
+- `memory.search` 的工具契约不再停留在口头：schema 文件至少有 search 输入、输出和统一错误格式。
+- `CopilotService.search()` 可以先走旧 repository fallback，但输出必须是 Copilot-owned schema。
+- 今天不追求召回效果，只锁接口、错误格式、evidence 字段和 fallback 行为。
+
+## 今日执行清单（按顺序）
+
+| 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
+|---|---|---|---|---|
+| 1 | 创建 Copilot 包骨架 | `memory_engine/copilot/__init__.py` | 包可 import，不暴露旧 CLI 逻辑 | `python3 -m compileall memory_engine scripts` 通过 |
+| 2 | 定义核心 schema | `schemas.py` | 至少覆盖 `Evidence`、`MemoryResult`、`CandidateMemory`、`RecallTrace`、`ToolError`、search request/response | `tests/test_copilot_schemas.py` 通过 |
+| 3 | 写 Cognee spike | `scripts/spike_cognee_local.py` | `--dry-run` 必须可跑；真实 SDK 可用则跑真实闭环 | dry-run 输出明确 `ok/dry_run/blocked` |
+| 4 | 锁 Cognee adapter 边界 | `cognee_adapter.py` | 只有 adapter 文件允许直接接触 Cognee；返回 Copilot schema，不返回 Cognee 原始对象 | `tests/test_copilot_cognee_adapter.py` fake adapter 通过 |
+| 5 | 写权限最小门控 | `permissions.py` | 缺 scope、scope 不匹配时返回统一错误 | `tests/test_copilot_tools.py` 覆盖错误格式 |
+| 6 | 实现 search fallback | `service.py`、`tools.py` | `memory.search` 可调用旧 repository fallback，默认只查 active | 工具测试能拿到 Top K with evidence |
+| 7 | 冻结 search schema | `agent_adapters/openclaw/memory_tools.schema.json` | 至少包含 `memory.search` 输入/输出/error 结构 | JSON 可解析，字段名和 `tools.py` 对齐 |
+| 8 | 保持旧基线 | benchmark | 不破坏 Day1 本地 memory 闭环 | `day1_cases.json` pass rate 仍为 1.0 |
+
+## 今日不做
+
+- 不实现 L0/L1/L2/L3 完整 cascade。
+- 不实现 hybrid retrieval 和 embedding。
+- 不让业务代码直接 `import cognee`。
+- 不接真实 Feishu Bot、Bitable 或 OpenClaw gateway。
+
 ## 需要改/新增的文件
 
 - `.gitignore`
