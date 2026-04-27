@@ -1,102 +1,119 @@
 # 2026-05-06 Implementation Plan
 
-阶段：提交材料、录屏、QA、scope freeze
+阶段：完整产品 Phase 0 / Phase 0.5（提交冻结保护 + 产品化基线 RFC）
 主控：`docs/feishu-memory-copilot-implementation-plan.md`
+产品化入口：`docs/productization/complete-product-roadmap-prd.md`、`docs/productization/complete-product-roadmap-test-spec.md`
+
+## 执行前先看这个
+
+1. 今天不是临时加功能，而是把“完整产品路线”落到仓库可追踪文档，同时保护初赛提交材料不被破坏。
+2. 我接下来从 README 顶部、总控计划、产品化 PRD/Test Spec、Demo/Benchmark/白皮书一致性开始。
+3. 今天要交付：Phase 0 提交冻结说明、Phase 0.5 产品化基线说明、no-overclaim（不夸大 live 能力）检查清单。
+4. 判断做对：读者打开 GitHub 第一屏能知道下一步是完整产品推进；同时不会误以为已经完成真实飞书 live ingestion。
+5. 遇到问题记录：哪些能力只是 schema demo、dry-run、replay、OpenClaw live bridge，哪些才是 future limited Feishu ingestion。
 
 ## 当日目标
 
-初赛冻结前 QA 和材料打包：修复会影响 5 分钟 Demo 的阻塞问题，准备提交 checklist、录屏分镜、截图证据和最终验证路径。今天开始范围冻结，只修阻塞，不再新增未验证功能。
+完成完整产品路线的第一步：**先保护初赛提交闭环，再把产品化基线 RFC 写清楚**。
+
+今天的重点不是写新代码，而是把 PRD 里的完整产品定义落到仓库文档，让后续开发不会继续停留在零散 Demo：
+
+- Phase 0：保护已完成的 README、Demo runbook、Benchmark Report、白皮书和提交材料路径。
+- Phase 0.5：把产品化基线契约写清楚，包括 dry-run / replay / OpenClaw live bridge / limited Feishu ingestion / productized live 的区别。
+- 把 2026-05-06 和 2026-05-07 从“只做提交收尾”改成“提交保护 + 产品化启动”的连续计划。
 
 ## 必读上下文
 
 - `AGENTS.md`
 - `docs/feishu-memory-copilot-implementation-plan.md`
+- `docs/productization/complete-product-roadmap-prd.md`
+- `docs/productization/complete-product-roadmap-test-spec.md`
 - `docs/plans/2026-05-06-implementation-plan.md`
+- `docs/plans/2026-05-05-handoff.md`
 - `README.md`
 - `docs/demo-runbook.md`
 - `docs/benchmark-report.md`
 - `docs/memory-definition-and-architecture-whitepaper.md`
 
-## 用户白天主线任务
+## 我的主线任务
 
-1. 创建 `docs/submission-checklist.md`。
-2. 做全流程 QA：Copilot tools、CLI fallback、Feishu dry-run / replay、benchmark、Bitable 可选同步。
-3. 准备录屏分镜和截图清单。
-4. 检查 README、Demo runbook、Benchmark Report、白皮书之间是否有矛盾表述。
-5. 确认 `agent_adapters/openclaw/` 文档中的命令可复制执行或明确标注为 schema demo / dry-run。
-6. 检查 Cognee 本地 SDK path、`.data/cognee/`、repository fallback 的说法是否一致。
-7. 检查 stale/superseded 不泄漏、sensitive reminder 不泄漏、evidence coverage 的验证证据是否写入材料。
+1. 更新 README 顶部入口，让 GitHub 第一屏显示“完整产品 Phase 0/0.5”当前任务。
+2. 更新总控计划，明确 2026-05-06 起采用 `Proof MVP -> Contracted Live Slice -> Controlled Productization` 路线。
+3. 把 `.omx/plans/` 中批准的 PRD/Test Spec 复制或同步到 `docs/productization/`，让它们进入仓库可追踪文档。
+4. 检查 README、Demo runbook、Benchmark Report、白皮书是否把 dry-run / replay / OpenClaw live bridge 写成真实飞书 live ingestion；如有，改成准确标签。
+5. 更新飞书共享看板：创建或更新 `2026-05-06 程俊豪 完整产品 Phase 0/0.5` 任务，状态为进行中或已完成，备注写文档路径和验证命令。
 
 ## 今日做到什么程度
 
-今天结束时进入 scope freeze：只修提交阻塞，不再扩功能。
+今天结束时，后续开发应该能从仓库文档直接继续，而不是只靠聊天记录或 `.omx/` 本地状态：
 
-- `docs/submission-checklist.md` 能逐项判断白皮书、Demo、Benchmark Report 是否达标。
-- README、runbook、benchmark report、whitepaper 的架构叙事一致。
-- 录屏脚本、截图清单和 fallback 路径准备好。
-- 所有验证命令有当前结果；失败项必须写成 checklist blocker 或降级说明。
-- 敏感文件、日志、数据库、token 不进入提交。
+- `docs/productization/complete-product-roadmap-prd.md` 存在并写清 Phase 0-7。
+- `docs/productization/complete-product-roadmap-test-spec.md` 存在并写清测试矩阵、权限反例和 no-overclaim 检查。
+- README 顶部第一个主要小节指向完整产品当前任务。
+- 总控计划说明 2026-05-06 起进入完整产品路线，但初赛三大交付物仍要保护。
+- 05-06/05-07 日期计划不再只写“提交材料收尾”，而是清楚写出 Phase 0/0.5 和 Phase 1 的衔接。
+- 没有新增未验证代码能力，没有声称真实飞书 live ingestion 已完成。
 
 ## 今日执行清单（按顺序）
 
 | 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
 |---|---|---|---|---|
-| 1 | 创建提交 checklist | `docs/submission-checklist.md` | 覆盖三大交付物、命令、截图、风险、提交链接 | checklist 每项可勾选 |
-| 2 | 文档一致性检查 | README/runbook/report/whitepaper | OpenClaw、Cognee、Copilot Core、Feishu 职责描述一致 | 没有互相矛盾表述 |
-| 3 | 跑全量 QA | 本地命令 | compileall、unittest、day1、day7、已有 copilot benchmarks | 结果记录到 checklist |
-| 4 | 修 P0 阻塞 | 相关文件 | 只修影响 demo/benchmark/提交的 blocker | 每个 blocker 有修复或降级说明 |
-| 5 | 准备录屏分镜 | checklist/runbook | 5 分钟视频每 30-60 秒讲什么、展示什么 | 可直接开始录屏 |
-| 6 | 准备截图清单 | checklist | README、tool schema、demo output、benchmark summary、whitepaper 图 | 截图文件名和用途明确 |
-| 7 | 检查敏感文件 | Git | `.env`、`.omx/`、`.data/`、logs、db、token 不被 staged | `git status --short --ignored` 复核 |
-| 8 | 最终范围冻结 | checklist | 后续只修 P0，不接新功能 | checklist 标注 freeze 规则 |
-
-## 今日不做
-
-- 不新增未进入 benchmark 的功能。
-- 不大重构核心架构。
-- 不为了录屏临时绕过权限、安全或 evidence。
-- 不把未验证的 live 能力写成最终能力。
-
-## 需要改/新增的文件
-
-- `docs/submission-checklist.md`
-- `docs/demo-runbook.md`
-- `docs/benchmark-report.md`
-- `docs/memory-definition-and-architecture-whitepaper.md`
-- `README.md`
-- 可选：`scripts/verify.sh`
-
-## 测试
-
-```bash
-python3 scripts/check_openclaw_version.py
-python3 -m compileall memory_engine scripts
-python3 -m unittest discover tests
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
-python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md
-```
-
-如果 `copilot_*` runner 已存在，再追加当天已有的全部专项 benchmark；没有实现的必须进入 checklist 的降级说明。
-
-## 验收标准
-
-- submission checklist 能逐项确认初赛三大交付物。
-- 任意一天坏掉的功能都不能留到 2026-05-07。
-- README 足够让评委或未来复现者复现核心流程。
-- 敏感文件、数据库、日志、token 不进入提交。
-- Demo 失败时有 replay / dry-run / 录屏保底。
+| 1 | 校验当前环境 | OpenClaw / Git | 确认版本锁和工作树状态 | `python3 scripts/check_openclaw_version.py` 通过，记录 `git status --short` |
+| 2 | 固化产品化计划 | `docs/productization/` | PRD/Test Spec 从 `.omx/plans/` 进入可追踪文档 | 两个 Markdown 文件存在，可点击 |
+| 3 | 更新 README 顶部 | `README.md` | 第一屏显示完整产品 Phase 0/0.5 任务和直接链接 | 打开 README 不用翻目录 |
+| 4 | 更新总控计划 | `docs/feishu-memory-copilot-implementation-plan.md` | 1.x 和 05-06/05-07 排期说明完整产品路线 | 明确 Contract Freeze Gate 前不接真实 ingestion |
+| 5 | 更新日期计划 | `docs/plans/2026-05-06-implementation-plan.md`、`docs/plans/2026-05-07-implementation-plan.md` | 今天和明天任务能直接执行 | 每天有“执行前先看这个”和完成标准 |
+| 6 | 做 no-overclaim 检查 | README/runbook/report/whitepaper | schema demo、dry-run、replay、OpenClaw live bridge、limited ingestion 标签一致 | 无“已完成真实飞书 live ingestion”误导 |
+| 7 | 同步飞书共享看板 | lark-cli | 05-06 程俊豪任务和补充任务更新 | `lark-cli base +record-list` 读回确认，失败则写清错误 |
+| 8 | 验证文档改动 | 本地命令 | 文档-only 至少通过版本锁和 diff 检查 | `python3 scripts/check_openclaw_version.py`、`git diff --check` 通过 |
 
 ## 我的补充任务
 
-先看这个：
+1. 检查 `docs/demo-runbook.md` 中每个演示步骤是否标注了 replay / dry-run / OpenClaw schema demo。
+2. 检查 `agent_adapters/openclaw/examples/` 是否还让人误解为真实 runtime 已稳定接通。
+3. 检查 `docs/benchmark-report.md` 是否把 benchmark 结果写成产品上线证明；如果有，改成“评测证明”。
+4. 检查 `docs/memory-definition-and-architecture-whitepaper.md` 是否明确多租户权限目前是下一阶段硬门槛，而不是已完整生产化。
+5. 在看板备注里写清：今天不接真实飞书 ingestion，不改 OpenClaw 版本，不写新功能代码。
 
-1. 今天开始不加新功能，只做提交前检查。
-2. 按 checklist 逐项验收。
-3. 完成 Benchmark Report 终稿审阅，尤其看指标和失败分类是否容易懂。
-4. 录第一版 Demo 视频或至少准备截图证据。
-5. 遇到问题记录：checklist 项、失败现象、截图或命令输出。
+## 今日不做
 
-本阶段不用做：
+- 不实现 Phase 1 的 storage migration 或权限代码。
+- 不接真实飞书消息、文档或 Bitable ingestion。
+- 不启动 `$team` 并行实现。
+- 不升级 OpenClaw，不重选 Cognee。
+- 不把 OpenClaw seed/local bridge 写成 Feishu live ingestion。
 
-- 不用再加新功能。
-- 不用做大重构。
+## 需要改/新增的文件
+
+- `README.md`
+- `docs/feishu-memory-copilot-implementation-plan.md`
+- `docs/productization/complete-product-roadmap-prd.md`
+- `docs/productization/complete-product-roadmap-test-spec.md`
+- `docs/plans/2026-05-06-implementation-plan.md`
+- `docs/plans/2026-05-07-implementation-plan.md`
+- 如 no-overclaim 检查发现问题，再小改：`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md`
+
+## 验证
+
+文档-only 改动至少运行：
+
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
+```
+
+如果同步看板，必须读回确认：
+
+```bash
+lark-cli base +record-list ...
+```
+
+本阶段不运行 embedding / Cognee / Ollama；如果临时运行相关验证，结束前必须执行 `ollama ps` 并停止本项目模型。
+
+## 验收标准
+
+- README 顶部能直接点击进入产品化 PRD/Test Spec 和日期计划。
+- 总控计划和 05-06/05-07 日期计划都清楚说明完整产品路线。
+- Phase 0/0.5 可执行：先保护提交，再写产品化基线，不开始代码实现。
+- 文档没有把 dry-run、replay、schema demo、OpenClaw local bridge 夸大为真实飞书 live ingestion。
+- 飞书共享看板与 README/日期计划一致；如果同步失败，最终回复和 handoff 必须写明失败命令和错误。

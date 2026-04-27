@@ -11,7 +11,7 @@
 
 MVP 必须在 2026-04-26 到 2026-05-02 这一周内完成可演示闭环，至少覆盖历史决策召回、候选记忆生成、冲突更新、版本解释、Agent 任务前预取和 heartbeat reminder prototype。
 
-2026-05-03 到 2026-05-07 用于初赛收尾：Benchmark expansion、Demo runbook、README、白皮书、提交材料、录屏/截图、最终验证和 push。初赛优先级仍然是三大交付物闭环：《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report。
+2026-05-03 到 2026-05-05 已完成初赛证明层：Benchmark Report、Demo runbook、README 快速开始和《Memory 定义与架构白皮书》初稿。2026-05-06 起主线升级为完整产品推进路线：先保护初赛提交闭环，再做 Productization Baseline RFC 和 Storage + Permission Contract Freeze，后续再进入 OpenClaw live bridge、Feishu review surface、limited Feishu ingestion、heartbeat、deployability 和 Product QA。初赛三大交付物仍必须保留并可提交：《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report；但它们不再替代完整产品路线。
 
 当前日期和阶段确认：
 
@@ -33,7 +33,26 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 3. OpenClaw 相关开发和验收前运行：`python3 scripts/check_openclaw_version.py`。
 4. 若未来必须升级 OpenClaw，必须先更新锁文件、AGENTS、主控计划和当日计划，再重新跑基础验证。
 
-### 1.1.1 Cognee / RightCode 本地接入基线
+### 1.1.1 完整产品路线基线
+
+2026-04-27 的 `$deep-interview` 和 `$ralplan` 已把后续目标从“零散 Demo / 提交材料收尾”提升为“PRD 定义下的完整产品”。批准后的产品化计划已经落到仓库可追踪文档：
+
+- `docs/productization/complete-product-roadmap-prd.md`
+- `docs/productization/complete-product-roadmap-test-spec.md`
+
+路线采用 **Proof MVP -> Contracted Live Slice -> Controlled Productization**：
+
+1. **Phase 0 Submission Freeze Preservation**：保护 2026-05-06 / 2026-05-07 初赛提交闭环，README、Demo、Benchmark Report、白皮书、录屏/截图不被产品化探索破坏。
+2. **Phase 0.5 Productization Baseline RFC**：把 dry-run、replay、OpenClaw live bridge、limited Feishu ingestion、productized live 的区别写清楚；只做文档和验收基线，不写代码。
+3. **Phase 1 Storage + Permission Contract Freeze**：先冻结 `tenant_id`、`organization_id`、`visibility_policy`、permission context、service permission decision、OpenClaw payload、audit fields 和 negative permission cases。Phase 1 通过前不启动 `$team` 并行实现。
+4. **Phase 2 OpenClaw Live Bridge**：OpenClaw 真实调用本地/seed Copilot service，但不能称为 Feishu live ingestion。
+5. **Phase 3 Feishu UI / Review Surface**：Feishu card、Bitable 和文档页只消费 Copilot service 的 permission-aware output，不做 source of truth。
+6. **Phase 4 Limited Feishu Ingestion**：指定飞书来源只进入 candidate pipeline，不自动 active。
+7. **Phase 5-7**：heartbeat controlled reminder、deployability/healthcheck、Product QA 和 no-overclaim claim audit。
+
+硬规则：真实多租户权限不能再只停留在字段预留；missing permission context 必须 fail closed；`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、heartbeat 等动作都要进入 service-action permission matrix。
+
+### 1.1.2 Cognee / RightCode 本地接入基线
 
 2026-04-27 本地 spike 采用 `cognee==0.1.20`，并锁定 `httpx==0.27.2` 以避开 Cognee 依赖链中 OpenAI SDK 与 `httpx 0.28.x` 的兼容问题。Cognee 数据目录固定为项目内 `.data/cognee/`，不得提交。
 
@@ -45,7 +64,15 @@ RightCode custom provider 当前用于 LLM 文本模型验证：`gpt-5.3-codex-h
 
 ## 1.2 每日任务启动 Prompt
 
-本节是每天开新对话时的复制粘贴入口，已经按 2026-04-27 之后的单人执行状态更新。每天启动任务前，Agent 必须先判断“今天是哪一天、这一天计划是否已经完成、当前代码和看板处于什么状态”，再决定继续执行、补齐遗漏，还是只做计划/看板修正。
+本节是每天开新对话时的复制粘贴入口，已经按 2026-04-27 之后的单人执行状态和 2026-05-06 起的完整产品路线更新。每天启动任务前，Agent 必须先判断“今天是哪一天、这一天计划是否已经完成、当前代码和看板处于什么状态”，再决定继续执行、补齐遗漏，还是只做计划/看板修正。
+
+如果任务目标是继续推进完整产品，而不是只修提交材料，请优先读取：
+
+1. `docs/productization/complete-product-roadmap-prd.md`
+2. `docs/productization/complete-product-roadmap-test-spec.md`
+3. 当前日期的 `docs/plans/YYYY-MM-DD-implementation-plan.md`
+
+当前阶段的安全顺序是：Phase 0/0.5 文档和提交保护 -> Phase 1 契约冻结 -> Phase 2 OpenClaw live bridge -> Phase 3 Feishu review surface -> Phase 4 limited Feishu ingestion。不要跳过 Phase 1 直接接真实飞书数据。
 
 当前适用规则：
 
@@ -1216,71 +1243,92 @@ recommended_action
 - 准备 5 分钟 Demo 讲解词：先讲用户痛点，再讲 Agent 自动调用记忆工具。
 - 检查 reminder 文案中是否有 token、secret 或完整内部链接。
 
-## 11. 2026-05-03 到 2026-05-07 初赛收尾计划
+## 11. 2026-05-03 到 2026-05-07 初赛证明层与完整产品启动计划
 
-### 2026-05-03：Benchmark expansion
+2026-05-03 至 2026-05-05 已完成初赛证明层：Benchmark Report、Demo runbook、README 快速开始和《Memory 定义与架构白皮书》初稿。2026-05-06 起不再只按“提交材料收尾”理解任务，而是进入 **完整产品 Phase 0 / 0.5 / Phase 1**：先保护初赛提交闭环，再把产品化契约冻结下来。
+
+### 2026-05-03：Benchmark expansion（已完成）
 
 - 扩展 `benchmarks/copilot_*_cases.json`。
 - 将 recall、candidate、conflict、layer、prefetch、heartbeat 指标统一到 runner。
-- 指标必须覆盖 Recall@3、Conflict Update Accuracy、Evidence Coverage、Candidate Precision、Agent Task Context Use Rate、L1 Hot Recall p95、Sensitive Reminder Leakage Rate、Stale Leakage Rate。
-- 每个 `copilot_*_cases.json` 先保证 5-10 条高质量样例可复现，再扩展数量。
-- 产出机器可读 JSON / CSV 和评委可读 Markdown。
-- 更新 `docs/benchmark-report.md`。
-- 每个失败 case 记录失败分类和 recommended fix。
+- 指标覆盖 Recall@3、Conflict Update Accuracy、Evidence Coverage、Candidate Precision、Agent Task Context Use Rate、L1 Hot Recall p95、Sensitive Reminder Leakage Rate、Stale Leakage Rate。
+- 产出 `docs/benchmark-report.md`，包含失败分类和 recommended fix。
+
+验收命令按当日 handoff 和当前仓库已有 runner 执行。
+
+### 2026-05-04：Demo runbook + README（已完成）
+
+- 更新 `docs/demo-runbook.md`。
+- 更新 `README.md` 快速开始，突出 Feishu Memory Copilot、OpenClaw tools、可复现 benchmark。
+- 固定 demo seed 数据和 dry-run/replay 路径。
+- OpenClaw runtime 若不稳定，保留 schema demo / CLI / dry-run 兜底，但叙事不退回 CLI-first。
+
+### 2026-05-05：白皮书（已完成）
+
+- 创建或重写 `docs/memory-definition-and-architecture-whitepaper.md`。
+- 覆盖记忆定义、状态机、证据链、OpenClaw 入口、飞书生态、安全权限、Benchmark 证明。
+- 明确本阶段不宣称完整企业后台、生产安全认证或真实飞书全量 ingestion 已完成。
+
+### 2026-05-06：Phase 0 / Phase 0.5（提交冻结保护 + 产品化基线 RFC）
+
+主计划：`docs/plans/2026-05-06-implementation-plan.md`。
+
+今天要做：
+
+- 保护 README、Demo runbook、Benchmark Report、白皮书和提交材料路径，避免产品化探索破坏初赛闭环。
+- 将 `$ralplan` 批准的完整产品 PRD/Test Spec 固化到：
+  - `docs/productization/complete-product-roadmap-prd.md`
+  - `docs/productization/complete-product-roadmap-test-spec.md`
+- 更新 README 顶部入口，让打开 GitHub 第一屏就能进入完整产品当前任务。
+- 做 no-overclaim 检查：不能把 schema demo、dry-run、replay、OpenClaw seed/local bridge 写成 Feishu live ingestion。
+- 更新飞书共享看板中的 2026-05-06 程俊豪任务。
+
+今天不做：
+
+- 不写 Phase 1 权限/迁移代码。
+- 不接真实飞书 ingestion。
+- 不启动 `$team` 并行。
 
 验收命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
-python3 -m compileall memory_engine scripts
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+git diff --check
 ```
 
-### 2026-05-04：Demo runbook + README
+### 2026-05-07：Phase 1 准备（Storage + Permission Contract Freeze）+ 初赛提交缓冲
 
-- 更新 `docs/demo-runbook.md`。
-- 更新 `README.md`，突出 Feishu Memory Copilot、OpenClaw tools、可复现 benchmark。
-- 固定 demo seed 数据和 dry-run 路径。
-- OpenClaw runtime 若不稳定，保留 CLI/dry-run 兜底，但叙事不退回 CLI-first。
+主计划：`docs/plans/2026-05-07-implementation-plan.md`。
 
-### 2026-05-05：白皮书
+今天要做：
 
-- 创建或重写 `docs/memory-definition-and-architecture-whitepaper.md`。
-- 顺序：paper/background first，why design works，current reproduction / implementation correspondence，progress and next steps。
-- 覆盖记忆定义、状态机、证据链、OpenClaw 入口、飞书生态、安全权限、Benchmark 证明。
+- 先确认初赛提交材料仍可提交；如有提交 blocker，先修 blocker。
+- 如果提交闭环安全，开始冻结 Phase 1 契约：storage、permission、OpenClaw payload、audit、migration、negative permission cases。
+- 明确首版 OpenClaw payload 兼容方案：优先 `current_context.permission`，除非明确需要顶层 `permission_context`。
+- 明确所有 action 的 fail-closed 行为：`memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、heartbeat。
+- 更新飞书共享看板中的 2026-05-07 程俊豪 Phase 1 任务。
 
-### 2026-05-06：提交材料 + 录屏/截图
+今天不做：
 
-- 创建 `docs/submission-checklist.md`。
-- 准备录屏分镜和截图清单。
-- 检查 `agent_adapters/openclaw/` 文档和 examples 是否可复制执行或明确标注 dry-run。
-- 做全流程 QA：CLI、Copilot tools、benchmark、Feishu dry-run / replay、Bitable 可选同步。
+- 不直接修改数据库迁移代码，除非用户明确进入实现阶段。
+- 不接真实飞书 ingestion。
+- 不启动 `$team`；Contract Freeze Gate 未通过前禁止并行大实现。
 
-### 2026-05-07：最终验证和 push
-
-- 从干净状态跑完整验证。
-- 固定 Demo 数据、提交 hash、tag 或版本说明。
-- 确认远程仓库包含三大交付物，不包含 `.env`、`.omx/`、数据库、缓存、临时报告、真实飞书日志和 token。
-- 最终 push origin HEAD。
-
-最终验收命令：
+最终验收命令按改动类型选择。文档-only 至少运行：
 
 ```bash
-git status --short --ignored
 python3 scripts/check_openclaw_version.py
-python3 -m compileall memory_engine scripts
-python3 -m unittest discover tests
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
-python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md
-python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+git diff --check
 ```
+
+如触达代码、schema、tests，再追加：
+
+```bash
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
+```
+
+阶段闭环前的完整验证仍以当前仓库已实现 runner 为准；缺失项写入 Not-tested，不得假装通过。
 
 ## 12. Benchmark 和测试计划
 
