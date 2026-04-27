@@ -22,12 +22,11 @@ Metadata:
 5. 第一版不做完整企业后台、分布式架构、正式生产安全认证；历史迁移和主动推送轻量化。
 6. README、Demo runbook、Benchmark Report、白皮书、录屏和截图讲同一个产品故事，不能把 schema demo、dry-run、seed/local bridge 说成真实飞书 live ingestion。
 
-RALPLAN intake 时的仓库事实：
+RALPLAN intake 时的仓库事实（历史快照，已被 2026-05-07 Phase 1/Phase 2 前置实现部分推进）：
 - RALPLAN 启动前 README 顶部仍把下一步描述为 2026-05-06 提交材料、录屏、QA 和 scope freeze；当前仓库副本已将 README 顶部改为完整产品路线入口（`README.md:7-11`）。
 - SQLite 基础表仍以 `scope_type/scope_id` 为主，`raw_events` 和 `memories` 尚无 `tenant_id`、`organization_id`、`visibility_policy`（`memory_engine/db.py:14-47`）。
-- 当前权限检查允许缺失 `allowed_scopes` 时直接通过，说明还不是 fail-closed 的真实权限契约（`memory_engine/copilot/permissions.py:20-48`）。
-- OpenClaw 工具 schema 当前 `memory.search` 只强制 `query/scope`，`current_context` 仍是开放对象；`confirm/reject/explain_versions` 没有冻结权限上下文字段（`agent_adapters/openclaw/memory_tools.schema.json:9-114`）。
-- Copilot service 当前只在 `search/create_candidate/prefetch` 可见地调用 `check_scope_access`，`confirm/reject/explain_versions` 顶层尚未统一 fail-closed（`memory_engine/copilot/service.py:39-69`）。
+- 2026-05-07 最新状态：`current_context.permission` 已进入 OpenClaw schema；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 已在 `CopilotService` 统一权限门控；missing/malformed permission 已 fail closed；真实 Feishu document ingestion 已在 fetch 前 fail closed。对应提交：`b6b17b4`。
+- 仍未完成：storage migration、audit table、healthcheck、OpenClaw runtime live bridge、Feishu review surface 和 limited Feishu ingestion。
 
 ---
 
@@ -171,15 +170,17 @@ Phase 7   Product QA
 这些文件是后续代码实现的优先事实源；本 PRD 的第 6-7 节只保留摘要，若摘要与独立契约冲突，以 `docs/productization/contracts/` 下的文件为准。
 
 **Contract Freeze Gate**：
-- [ ] Data model / migration RFC 完成。
-- [ ] `tenant_id` / `organization_id` / `visibility_policy` 冻结。
-- [ ] Permission context schema 冻结。
-- [ ] Service permission decision contract 冻结。
-- [ ] OpenClaw payload decision 冻结。
-- [ ] Negative permission cases 进入 test plan。
-- [ ] Audit fields 冻结。
-- [ ] Architect / Critic 对 contract freeze 无 blocker。
-- [ ] README/docs 没有把 Phase 2 写成 Feishu live ingestion。
+- [x] Data model / migration RFC 完成。
+- [x] `tenant_id` / `organization_id` / `visibility_policy` 冻结。
+- [x] Permission context schema 冻结。
+- [x] Service permission decision contract 冻结。
+- [x] OpenClaw payload decision 冻结。
+- [x] Negative permission cases 进入 test plan。
+- [x] Audit fields 冻结。
+- [x] Architect / Critic 对 contract freeze 无 blocker。
+- [x] README/docs 没有把 Phase 2 写成 Feishu live ingestion。
+
+2026-05-07 补充：Phase 2 权限前置实现已完成，见 [2026-05-07 handoff](../plans/2026-05-07-handoff.md)。这不等于 Phase 2 OpenClaw live bridge 已完成；下一步仍要做 OpenClaw/本地桥真实调用 seed/local Copilot service。
 
 ### Phase 2：OpenClaw Live Bridge
 
@@ -188,11 +189,13 @@ Phase 7   Product QA
 **不做**：真实 Feishu ingestion、自动 active、绕过 permission、把 OpenClaw adapter 写成 source of truth。
 
 **Exit gate**：
-- [ ] `python3 scripts/check_openclaw_version.py` 通过。
+- [x] `python3 scripts/check_openclaw_version.py` 通过。
 - [ ] OpenClaw tool 调用 seed/local service 成功。
 - [ ] response 包含 result、evidence、permission decision summary、trace/request id。
-- [ ] missing permission context fail closed。
-- [ ] Demo 文案明确这是 OpenClaw live bridge，不是 Feishu live ingestion。
+- [x] missing/malformed permission context fail closed。
+- [x] Demo/README 文案明确这不是 Feishu live ingestion。
+
+当前 Phase 2 状态：权限前置实现通过；OpenClaw live bridge 仍未完成。
 
 ### Phase 3：Feishu UI / Review Surface
 

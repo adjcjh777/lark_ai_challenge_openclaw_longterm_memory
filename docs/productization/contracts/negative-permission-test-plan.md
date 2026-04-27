@@ -1,7 +1,7 @@
 # Negative Permission Test Plan：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase 1 contract freeze（文档冻结，待代码实现）
+状态：Phase 1 contract freeze 已完成；第一批反例已实现到 `tests/test_copilot_permissions.py`（commit `b6b17b4`）
 适用范围：后续 `tests/test_copilot_permissions.py`、OpenClaw examples、Feishu review surface tests、Product QA。
 
 ## 1. 目标
@@ -47,6 +47,25 @@ Actors：
 | `perm_heartbeat_sensitive` | heartbeat | reminder contains secret-like text | suppressed/redacted; no push |
 | `perm_source_context_mismatch` | any read | chat/doc restricted memory requested elsewhere | deny/redact |
 | `perm_revoked_source_evidence` | search/explain | source deleted/revoked | evidence withheld or memory stale |
+
+## 3.1 Implemented Negative Cases（2026-05-07）
+
+已实现并通过：
+
+- missing `current_context.permission` fails closed：`memory.search`、`memory.explain_versions`、`memory.prefetch`。
+- malformed permission fails closed。
+- tenant mismatch search denied。
+- organization mismatch search denied。
+- private visibility non-owner denied。
+- member confirm/reject denied。
+- member `create_candidate(auto_confirm=True)` 不能绕过 reviewer / owner / admin。
+- 真实 Feishu document ingestion 缺失/畸形 permission 时在 fetch 前 fail closed。
+
+仍待后续补齐：
+
+- heartbeat sensitive reminder 的完整权限反例矩阵。
+- revoked source evidence 的 redaction / stale 行为。
+- 每个工具独立覆盖 requested_action mismatch、workspace mismatch 的机械矩阵。
 
 ## 4. Assertions
 

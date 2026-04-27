@@ -8,7 +8,8 @@
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 进入完整产品 Phase 1：冻结 Storage + Permission 契约，先让后续代码实现有统一事实源 | [2026-05-07 产品化计划](docs/plans/2026-05-07-implementation-plan.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md)；[Storage Contract](docs/productization/contracts/storage-contract.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[OpenClaw Payload Contract](docs/productization/contracts/openclaw-payload-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[Migration RFC](docs/productization/contracts/migration-rfc.md)；[Negative Permission Test Plan](docs/productization/contracts/negative-permission-test-plan.md) | storage、permission、OpenClaw payload、audit、migration、negative permission cases 六份契约文档 | 明确 `tenant_id` / `organization_id` / `visibility_policy`、`current_context.permission`、fail-closed、redaction、审计字段和迁移兼容；仍不接真实 Feishu ingestion，不启动 `$team` 并行代码实现 |
+| 下一步进入完整产品 Phase 2：OpenClaw live bridge，用 OpenClaw/本地桥真实调用 permission-aware Copilot service | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md)；[OpenClaw Payload Contract](docs/productization/contracts/openclaw-payload-contract.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json)；[OpenClaw examples](agent_adapters/openclaw/examples/) | seed/local service bridge、permission-aware tool response、trace/request id、missing/malformed permission fail-closed demo | OpenClaw 版本仍为 `2026.4.24`；`memory.*` 工具通过 service 调用；返回 evidence、permission decision、trace；明确这不是 Feishu live ingestion |
+| Phase 1 契约冻结和 Phase 2 权限前置实现已完成，可以作为下一步代码事实源 | [2026-05-07 产品化计划](docs/plans/2026-05-07-implementation-plan.md)；[Storage Contract](docs/productization/contracts/storage-contract.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[OpenClaw Payload Contract](docs/productization/contracts/openclaw-payload-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[Migration RFC](docs/productization/contracts/migration-rfc.md)；[Negative Permission Test Plan](docs/productization/contracts/negative-permission-test-plan.md)；[test_copilot_permissions.py](tests/test_copilot_permissions.py) | 六份契约文档、统一权限门控、负例测试、真实 Feishu doc fetch 前 fail closed | commit `a81be0c` 完成 Phase 1 contract freeze；commit `b6b17b4` 完成 permission pre-implementation；51 个专项测试和 124 个全量测试通过；飞书看板已同步 |
 | Phase 0 / 0.5 已完成：保护初赛提交闭环，并把产品化基线路线落到仓库文档 | [2026-05-06 产品化计划](docs/plans/2026-05-06-implementation-plan.md)；[总控计划](docs/feishu-memory-copilot-implementation-plan.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md) | README 顶部入口、总控计划、05-06/05-07 日期计划、产品化 PRD/Test Spec | 三大初赛交付物不被破坏；文档清楚区分 schema demo / dry-run / replay / OpenClaw live bridge / limited Feishu ingestion；Phase 1 Contract Freeze Gate 明确后才能进入代码实现或 `$team` 并行 |
 | 2026-05-05 白皮书初稿已完成，作为 Phase 0 提交冻结证据 | [2026-05-05 handoff](docs/plans/2026-05-05-handoff.md)；[whitepaper](docs/memory-definition-and-architecture-whitepaper.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md) | Memory 定义与架构白皮书可提交初稿 | 能回答 Define it / Build it / Prove it；没有把未完成 live 能力写成已完成 |
 | 2026-05-04 Demo 固定和 README 快速开始已完成，作为 Phase 0 可复现证据 | [2026-05-04 handoff](docs/plans/2026-05-04-handoff.md)；[demo-runbook.md](docs/demo-runbook.md)；[demo_seed.py](scripts/demo_seed.py)；[OpenClaw examples](agent_adapters/openclaw/examples/) | 5 分钟 Demo runbook、OpenClaw examples、demo dry-run replay | 新读者能复现历史决策召回、冲突更新、prefetch 和 heartbeat dry-run；OpenClaw runtime 不稳时有 schema examples + CLI/dry-run 兜底 |
@@ -18,7 +19,7 @@
 
 ## 当前状态
 
-截至 2026-05-07 计划口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 正在推进完整产品路线与 Phase 1 契约冻结：
+截至 2026-05-07 最新口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 已完成完整产品路线、Phase 1 契约冻结和 Phase 2 权限前置实现，下一步进入 OpenClaw live bridge：
 
 - OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
 - OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
@@ -45,6 +46,8 @@
 - `scripts/demo_seed.py` 已固定 demo dry-run replay：默认使用临时 SQLite，不写飞书生产空间；可用 `--json-output reports/demo_replay.json` 生成本地演示证据。
 - `agent_adapters/openclaw/examples/*.json` 已标注 copyable / schema demo 边界，并和 `memory_tools.schema.json` 的实际 search 输出字段对齐。
 - `docs/memory-definition-and-architecture-whitepaper.md` 已完成初赛可提交初稿，覆盖 Define it / Build it / Prove it、架构边界、状态机、证据链、Demo/Benchmark 证明、局限和复赛路线。
+- Phase 1 contract freeze 已完成：storage、permission、OpenClaw payload、audit、migration、negative permission test plan 均已落到 `docs/productization/contracts/`。
+- Phase 2 权限前置实现已完成：`current_context.permission` 缺失或畸形会 fail closed；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 都经过 `CopilotService` 统一权限门控；真实 Feishu document ingestion 在 fetch 前必须通过权限校验。
 
 ## 10 分钟快速开始
 
@@ -159,6 +162,8 @@ ollama stop qwen3-embedding:0.6b-fp16
 - `docs/plans/2026-05-05-implementation-plan.md`
 - `docs/plans/2026-05-05-handoff.md`
 - `docs/plans/2026-05-06-implementation-plan.md`
+- `docs/plans/2026-05-07-implementation-plan.md`
+- `docs/plans/2026-05-07-handoff.md`
 
 ## 主架构边界
 

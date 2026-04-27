@@ -97,12 +97,14 @@ Required artifacts:
 - [negative permission test plan](contracts/negative-permission-test-plan.md)
 
 Checks:
-- [ ] `tenant_id` / `organization_id` / `visibility_policy` 字段语义冻结。
-- [ ] service permission decision contract 冻结。
-- [ ] OpenClaw payload 决定：`current_context.permission` 或顶层 `permission_context`。
-- [ ] 所有 tool/action fail-closed 行为写入权限矩阵。
-- [ ] Negative cases 进入测试。
-- [ ] Architect/Critic 无 blocker 后才允许 `$team` 并行。
+- [x] `tenant_id` / `organization_id` / `visibility_policy` 字段语义冻结。
+- [x] service permission decision contract 冻结。
+- [x] OpenClaw payload 决定：首版使用 `current_context.permission`。
+- [x] 所有 tool/action fail-closed 行为写入权限矩阵。
+- [x] Negative cases 进入测试计划。
+- [x] Architect/Critic 无 blocker。
+
+2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。仍未完成 storage migration、audit table 和 OpenClaw live bridge。
 
 Commands:
 
@@ -139,14 +141,17 @@ Required artifacts:
 Checks:
 - [ ] OpenClaw 真实调用本地/seed Copilot service。
 - [ ] response 含 permission decision summary。
-- [ ] missing/malformed permission context fail closed。
-- [ ] 文档明确不是 Feishu live ingestion。
+- [x] missing/malformed permission context fail closed。
+- [x] 文档明确不是 Feishu live ingestion。
+
+当前状态：permission fail-closed 已完成；OpenClaw live bridge 仍是下一步。
 
 Commands:
 
 ```bash
 python3 scripts/check_openclaw_version.py
-python3 -m unittest tests.test_copilot_tools
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_permissions tests.test_copilot_schemas tests.test_copilot_tools tests.test_document_ingestion
 ```
 
 Fallback:

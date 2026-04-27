@@ -1,18 +1,19 @@
 # Permission Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase 1 contract freeze（文档冻结，待代码实现）
+状态：Phase 1 contract freeze 已完成；Phase 2 权限前置实现已完成（commit `b6b17b4`）
 适用范围：`memory_engine/copilot/permissions.py`、`schemas.py`、`service.py`、OpenClaw tool payload、Feishu review surface。
 
 ## 1. 目标
 
-把当前 scope-level allowlist 升级为 tenant / organization / visibility-aware permission contract。Phase 1 冻结行为，不直接改运行代码。
+把当前 scope-level allowlist 升级为 tenant / organization / visibility-aware permission contract。Phase 1 冻结行为；2026-05-07 已把第一批 fail-closed 和 service-action 权限门控落到代码。
 
-当前差距：
+当前差距（历史快照；已部分修复）：
 
-- 当前 `check_scope_access()` 在 `allowed_scopes is None` 时返回 allow，不是 fail-closed。
-- `WorkingContext` 没有 `tenant_id`、`organization_id`、`visibility_policy`、roles 或 permission decision 字段。
-- `confirm`、`reject`、`explain_versions` 顶层尚未统一调用权限检查。
+- 已修复：`current_context.permission` 缺失或畸形时 fail closed。
+- 已修复：`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 统一经过 `CopilotService` 权限门控。
+- 已修复：`confirm/reject` 不再只依赖 `actor_id` 字符串；可从 permission actor 派生 actor。
+- 仍未完成：数据库层 tenant / organization / visibility migration、audit table、Feishu review surface、OpenClaw live bridge。
 
 ## 2. Permission Context
 

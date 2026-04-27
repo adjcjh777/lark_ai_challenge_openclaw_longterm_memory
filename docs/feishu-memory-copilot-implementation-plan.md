@@ -52,6 +52,12 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 
 硬规则：真实多租户权限不能再只停留在字段预留；missing permission context 必须 fail closed；`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、heartbeat 等动作都要进入 service-action permission matrix。
 
+2026-05-07 最新进展：
+
+- Phase 1 contract freeze 已完成，事实源位于 `docs/productization/contracts/`。
+- Phase 2 权限前置实现已完成，commit `b6b17b4`：六个 MVP `memory.*` 工具进入 `CopilotService` 统一权限门控，missing/malformed `current_context.permission` fail closed，真实 Feishu document ingestion 在 fetch 前必须通过权限校验。
+- 下一步是 Phase 2 OpenClaw live bridge：让 OpenClaw/本地桥真实调用 seed/local Copilot service，并返回 permission-aware output。仍不接真实 Feishu ingestion。
+
 ### 1.1.2 Cognee / RightCode 本地接入基线
 
 2026-04-27 本地 spike 采用 `cognee==0.1.20`，并锁定 `httpx==0.27.2` 以避开 Cognee 依赖链中 OpenAI SDK 与 `httpx 0.28.x` 的兼容问题。Cognee 数据目录固定为项目内 `.data/cognee/`，不得提交。

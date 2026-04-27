@@ -23,7 +23,20 @@
 - [Migration RFC](../productization/contracts/migration-rfc.md)：冻结旧 `scope_type/scope_id` 到 tenant-aware 存储的幂等迁移策略。
 - [Negative Permission Test Plan](../productization/contracts/negative-permission-test-plan.md)：冻结后续权限反例测试清单。
 
-当前阶段仍是 **contract freeze**，不是代码实现；下一步应先做 review / architect sign-off，再把这些文档转成 `tests/test_copilot_permissions.py`、schema 更新和 migration dry-run。
+Phase 1 contract freeze 已完成并通过架构验收；随后已按用户明确指令进入 **Phase 2 权限前置实现**，把 permission contract 的第一批可执行约束落到代码。
+
+已完成的 Phase 2 前置实现：
+
+- 新增 `tests/test_copilot_permissions.py`。
+- 更新 `memory_engine/copilot/schemas.py`、`permissions.py`、`service.py`、`governance.py`。
+- 更新 `agent_adapters/openclaw/memory_tools.schema.json` 和 examples。
+- `current_context.permission` 缺失或畸形时 fail closed。
+- `memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch` 都经过 `CopilotService` 统一权限门控。
+- `create_candidate(auto_confirm=True)` 不能绕过 reviewer / owner / admin。
+- 真实 Feishu document ingestion 在 fetch 前必须先通过权限校验；本轮仍不接真实 Feishu ingestion。
+- commit：`b6b17b4 Fail closed before Copilot permission-gated memory actions`。
+
+下一步不再重复做 Phase 1 契约冻结，也不要重复实现权限前置。应从 [2026-05-07 handoff](2026-05-07-handoff.md) 接续，进入 Phase 2 OpenClaw live bridge：让 OpenClaw/本地桥真实调用 seed/local Copilot service，并返回 permission-aware output。
 
 ## 当日目标
 
@@ -71,6 +84,12 @@
 - confirm/reject/explain_versions/prefetch/heartbeat 都进入权限矩阵。
 - 旧数据迁移兼容规则写清楚：默认 tenant/org/visibility、迁移幂等、旧 benchmark 仍可跑、schema version 进 healthcheck。
 - 仍不声称真实飞书 live ingestion 已完成。
+
+补充完成状态（2026-05-07 Phase 2 权限前置实现）：
+
+- 权限前置代码已完成、架构审查 APPROVED、提交并推送到 `origin/main`。
+- 飞书共享任务看板已新增并读回确认 `2026-05-07 程俊豪：Phase 2 权限前置实现`，状态为 `已完成`。
+- 当前仍不声称 OpenClaw live bridge 已完成；真实 Feishu ingestion 仍未开始。
 
 ## 今日执行清单（按顺序）
 
@@ -143,6 +162,18 @@ git diff --check
 python3 -m compileall memory_engine scripts
 python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
 ```
+
+Phase 2 权限前置实现已运行并通过：
+
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_permissions tests.test_copilot_schemas tests.test_copilot_tools tests.test_document_ingestion
+python3 -m unittest discover tests
+```
+
+结果：OpenClaw `2026.4.24`；51 个专项测试通过；124 个全量测试通过；OpenClaw schema/examples JSON 校验通过；`ollama ps` 确认无本项目模型驻留。
 
 本阶段不运行 Cognee / embedding / Ollama；如果运行，结束前必须执行：
 

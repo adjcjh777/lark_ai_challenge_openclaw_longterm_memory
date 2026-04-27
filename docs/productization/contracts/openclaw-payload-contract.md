@@ -1,7 +1,7 @@
 # OpenClaw Payload Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase 1 contract freeze（文档冻结，待代码实现）
+状态：Phase 1 contract freeze 已完成；OpenClaw schema 已按 `current_context.permission` 更新（commit `b6b17b4`）
 适用范围：`agent_adapters/openclaw/memory_tools.schema.json`、OpenClaw examples、`memory_engine/copilot/tools.py`。
 
 ## 1. 决策
@@ -64,6 +64,12 @@
 | `memory.reject` | `candidate_id`, `scope`, `current_context.permission`, `reason` | 同上。 |
 | `memory.explain_versions` | `memory_id`, `scope`, `current_context.permission` | 版本值/evidence 可能 redacted。 |
 | `memory.prefetch` | `task`, `scope`, `current_context.permission` | 返回 denied/empty pack 时仍含 trace。 |
+
+实现状态（2026-05-07）：
+
+- 已完成：`agent_adapters/openclaw/memory_tools.schema.json` 要求六个 MVP 工具携带 `current_context.permission`。
+- 已完成：examples 已补 allow/deny/redacted 相关样例。
+- 仍未完成：OpenClaw runtime live bridge 真实调用 seed/local Copilot service；下一步从 `memory_engine/copilot/tools.py` 和 OpenClaw adapter 入口继续。
 
 ## 4. Error Format
 
