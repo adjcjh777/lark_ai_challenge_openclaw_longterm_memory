@@ -36,6 +36,8 @@
     "ok": false,
     "error_code": "permission_denied",
     "reason_code": "tenant_mismatch",
+    "bridge_permission_decision": "deny",
+    "must_include": ["bridge.request_id", "bridge.trace_id", "bridge.permission_decision"],
     "must_not_include": ["current_value", "evidence"]
   },
   "benchmark_evidence": "docs/productization/contracts/negative-permission-test-plan.md"

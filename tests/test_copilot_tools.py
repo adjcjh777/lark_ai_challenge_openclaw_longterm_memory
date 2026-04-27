@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request, supported_tool_names, validate_tool_request
@@ -58,9 +59,17 @@ class CopilotToolContractTest(unittest.TestCase):
 
         for tool_name in supported_tool_names():
             self.assertIn("current_context", tools[tool_name]["required"])
+            self.assertIn("output_schema", {tool["name"]: tool for tool in schema["tools"]}[tool_name])
 
         current_context = schema["$defs"]["current_context"]
         self.assertEqual(["permission"], current_context["required"])
+
+        bridge = schema["$defs"]["bridge_metadata"]
+        self.assertEqual("openclaw_tool", bridge["properties"]["entrypoint"]["const"])
+        self.assertIn("permission_decision", bridge["required"])
+        self.assertIn("bridge", schema["$defs"]["search_output"]["required"])
+        self.assertIn("bridge", schema["$defs"]["tool_output"]["required"])
+        self.assertIn("bridge", schema["error_schema"]["properties"])
 
     def test_validate_tool_request_accepts_search_payload(self) -> None:
         result = validate_tool_request(
@@ -207,6 +216,26 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertIn("L1", result["trace"]["layers"])
         self.assertIn("keyword", result["trace"]["stages"])
         self.assertFalse(result["trace"]["fallback_used"])
+        self.assertEqual(
+            {
+                "entrypoint": "openclaw_tool",
+                "tool": "memory.search",
+                "request_id": "req_memory_search",
+                "trace_id": "trace_memory_search",
+            },
+            {
+                "entrypoint": result["bridge"]["entrypoint"],
+                "tool": result["bridge"]["tool"],
+                "request_id": result["bridge"]["request_id"],
+                "trace_id": result["bridge"]["trace_id"],
+            },
+        )
+        self.assertEqual("allow", result["bridge"]["permission_decision"]["decision"])
+        self.assertEqual("scope_access_granted", result["bridge"]["permission_decision"]["reason_code"])
+        self.assertEqual("memory.search", result["bridge"]["permission_decision"]["requested_action"])
+        self.assertEqual("team", result["bridge"]["permission_decision"]["requested_visibility"])
+        self.assertEqual("ou_test", result["bridge"]["permission_decision"]["actor"]["user_id"])
+        self.assert_search_output_matches_schema(result)
 
     def test_handle_memory_search_keeps_tools_layer_thin_with_injected_service(self) -> None:
         class StubService:
@@ -215,12 +244,216 @@ class CopilotToolContractTest(unittest.TestCase):
 
         result = handle_tool_request(
             "memory.search",
-            {"query": "部署参数", "scope": "project:feishu_ai_challenge"},
+            {"query": "部署参数", "scope": "project:feishu_ai_challenge", "current_context": current_context("memory.search")},
             service=StubService(),  # type: ignore[arg-type]
         )
 
         self.assertTrue(result["ok"])
         self.assertEqual("stub", result["trace"]["strategy"])
+        self.assertEqual("openclaw_tool", result["bridge"]["entrypoint"])
+        self.assertEqual("memory.search", result["bridge"]["tool"])
+
+    def test_handle_tool_request_bridges_all_mvp_actions_through_one_entrypoint(self) -> None:
+        class StubService:
+            def __init__(self) -> None:
+                self.called: list[str] = []
+
+            def search(self, request):
+                self.called.append("memory.search")
+                return {"ok": True, "results": [], "trace": {"strategy": "stub"}}
+
+            def create_candidate(self, request):
+                self.called.append("memory.create_candidate")
+                return {"ok": True, "candidate_id": "cand_stub", "candidate": {"status": "candidate"}}
+
+            def confirm(self, request):
+                self.called.append("memory.confirm")
+                return {"ok": True, "memory_id": "mem_stub", "memory": {"status": "active"}}
+
+            def reject(self, request):
+                self.called.append("memory.reject")
+                return {"ok": True, "candidate_id": "cand_stub", "status": "rejected"}
+
+            def explain_versions(self, request):
+                self.called.append("memory.explain_versions")
+                return {"ok": True, "versions": [], "active_version": None}
+
+            def prefetch(self, request):
+                self.called.append("memory.prefetch")
+                return {"ok": True, "context_pack": {"relevant_memories": []}, "state_mutation": "none"}
+
+        service = StubService()
+        payloads = {
+            "memory.search": {"query": "部署参数", "scope": SCOPE, "current_context": current_context("memory.search")},
+            "memory.create_candidate": {
+                "text": "决定：生产部署必须加 --canary。",
+                "scope": SCOPE,
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": "msg_bridge",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：生产部署必须加 --canary。",
+                },
+                "current_context": current_context("memory.create_candidate"),
+            },
+            "memory.confirm": {
+                "candidate_id": "cand_stub",
+                "scope": SCOPE,
+                "current_context": current_context("memory.confirm"),
+            },
+            "memory.reject": {
+                "candidate_id": "cand_stub",
+                "scope": SCOPE,
+                "current_context": current_context("memory.reject"),
+            },
+            "memory.explain_versions": {
+                "memory_id": "mem_stub",
+                "scope": SCOPE,
+                "current_context": current_context("memory.explain_versions"),
+            },
+            "memory.prefetch": {
+                "task": "生成部署 checklist",
+                "scope": SCOPE,
+                "current_context": current_context("memory.prefetch"),
+            },
+        }
+
+        for tool_name, payload in payloads.items():
+            with self.subTest(tool_name=tool_name):
+                result = handle_tool_request(tool_name, payload, service=service)  # type: ignore[arg-type]
+                self.assertTrue(result["ok"])
+                self.assertEqual(tool_name, result["bridge"]["tool"])
+                self.assertEqual("openclaw_tool", result["bridge"]["entrypoint"])
+                self.assertEqual(f"req_{tool_name.replace('.', '_')}", result["bridge"]["request_id"])
+                self.assertEqual(f"trace_{tool_name.replace('.', '_')}", result["bridge"]["trace_id"])
+                self.assertEqual("allow", result["bridge"]["permission_decision"]["decision"])
+                self.assert_bridge_matches_schema(result, tool_name)
+
+        self.assertEqual(supported_tool_names(), sorted(service.called))
+
+    def test_handle_tool_request_bridge_marks_permission_denials(self) -> None:
+        result = handle_tool_request(
+            "memory.search",
+            {
+                "query": "部署参数",
+                "scope": SCOPE,
+                "current_context": {
+                    "permission": {
+                        "request_id": "req_bad_permission",
+                        "trace_id": "trace_bad_permission",
+                    }
+                },
+            },
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("deny", result["bridge"]["permission_decision"]["decision"])
+        self.assertEqual("malformed_permission_context", result["bridge"]["permission_decision"]["reason_code"])
+        self.assertEqual("req_bad_permission", result["bridge"]["request_id"])
+        self.assertEqual("trace_bad_permission", result["bridge"]["trace_id"])
+        self.assert_error_output_matches_schema(result)
+
+    def test_handle_tool_request_omits_schema_unsafe_malformed_permission_fields(self) -> None:
+        result = handle_tool_request(
+            "memory.search",
+            {
+                "query": "部署参数",
+                "scope": SCOPE,
+                "current_context": {
+                    "scope": SCOPE,
+                    "permission": {
+                        "request_id": "req_bad_visibility",
+                        "trace_id": "trace_bad_visibility",
+                        "actor": {
+                            "user_id": "ou_test",
+                            "tenant_id": "tenant:demo",
+                            "organization_id": "org:demo",
+                            "roles": ["member", "reviewer"],
+                        },
+                        "source_context": {"entrypoint": "openclaw", "workspace_id": SCOPE},
+                        "requested_action": "memory.search",
+                        "requested_visibility": "secret",
+                        "timestamp": "2026-05-07T00:00:00+08:00",
+                    },
+                },
+            },
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("malformed_permission_context", result["error"]["details"]["reason_code"])
+        self.assertEqual("deny", result["bridge"]["permission_decision"]["decision"])
+        self.assertNotIn("requested_visibility", result["bridge"]["permission_decision"])
+        self.assert_error_output_matches_schema(result)
+
+    def test_handle_tool_request_omits_schema_unsafe_malformed_actor_fields(self) -> None:
+        result = handle_tool_request(
+            "memory.search",
+            {
+                "query": "部署参数",
+                "scope": SCOPE,
+                "current_context": {
+                    "scope": SCOPE,
+                    "permission": {
+                        "request_id": "req_bad_actor",
+                        "trace_id": "trace_bad_actor",
+                        "actor": {
+                            "user_id": {"nested": "bad"},
+                            "tenant_id": 123,
+                            "organization_id": "org:demo",
+                            "roles": [1, "reviewer"],
+                        },
+                        "source_context": {"entrypoint": "openclaw", "workspace_id": SCOPE},
+                        "requested_action": "memory.search",
+                        "requested_visibility": "team",
+                        "timestamp": "2026-05-07T00:00:00+08:00",
+                    },
+                },
+            },
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("malformed_permission_context", result["error"]["details"]["reason_code"])
+        self.assertEqual("deny", result["bridge"]["permission_decision"]["decision"])
+        self.assertEqual({"organization_id": "org:demo"}, result["bridge"]["permission_decision"]["actor"])
+        self.assert_error_output_matches_schema(result)
+
+    def test_handle_tool_request_fails_closed_for_missing_permission_on_all_mvp_actions(self) -> None:
+        payloads = {
+            "memory.search": {"query": "部署参数", "scope": SCOPE},
+            "memory.create_candidate": {
+                "text": "决定：生产部署必须加 --canary。",
+                "scope": SCOPE,
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": "msg_missing_permission",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：生产部署必须加 --canary。",
+                },
+            },
+            "memory.confirm": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
+            "memory.reject": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
+            "memory.explain_versions": {"memory_id": "mem_missing_permission", "scope": SCOPE},
+            "memory.prefetch": {
+                "task": "生成部署 checklist",
+                "scope": SCOPE,
+                "current_context": {"scope": SCOPE},
+            },
+        }
+
+        for tool_name, payload in payloads.items():
+            with self.subTest(tool_name=tool_name):
+                result = handle_tool_request(tool_name, payload)
+                self.assertFalse(result["ok"])
+                self.assertEqual("permission_denied", result["error"]["code"])
+                self.assertEqual("missing_permission_context", result["error"]["details"]["reason_code"])
+                self.assertEqual("deny", result["bridge"]["permission_decision"]["decision"])
+                self.assertEqual("missing_permission_context", result["bridge"]["permission_decision"]["reason_code"])
+                self.assert_bridge_matches_schema(result, tool_name)
 
     def test_handle_prefetch_keeps_tools_layer_thin_with_injected_service(self) -> None:
         class StubService:
@@ -238,7 +471,7 @@ class CopilotToolContractTest(unittest.TestCase):
             {
                 "task": "生成部署 checklist",
                 "scope": "project:feishu_ai_challenge",
-                "current_context": {"intent": "生产部署"},
+                "current_context": current_context("memory.prefetch"),
             },
             service=StubService(),  # type: ignore[arg-type]
         )
@@ -368,6 +601,58 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertIn("ap-shanghai", explained["active_version"]["value"])
         self.assertEqual(["active", "superseded"], sorted({item["status"] for item in explained["versions"]}))
         self.assertTrue(explained["supersedes"])
+
+    def assert_search_output_matches_schema(self, response: dict[str, Any]) -> None:
+        schema = self.schema()
+        search_output = schema["$defs"]["search_output"]
+        for field in search_output["required"]:
+            self.assertIn(field, response)
+        self.assertTrue(response["ok"])
+        self.assertEqual(set(response) - set(search_output["properties"]), set())
+        self.assert_bridge_matches_schema(response, "memory.search")
+
+    def assert_error_output_matches_schema(self, response: dict[str, Any]) -> None:
+        schema = self.schema()
+        error_schema = schema["error_schema"]
+        for field in error_schema["required"]:
+            self.assertIn(field, response)
+        self.assertFalse(response["ok"])
+        self.assertIn(response["error"]["code"], error_schema["properties"]["error"]["properties"]["code"]["enum"])
+        if "bridge" in response:
+            self.assert_bridge_matches_schema(response, response["bridge"]["tool"])
+
+    def assert_bridge_matches_schema(self, response: dict[str, Any], tool_name: str) -> None:
+        schema = self.schema()
+        bridge_schema = schema["$defs"]["bridge_metadata"]
+        self.assertIn("bridge", response)
+        bridge = response["bridge"]
+        for field in bridge_schema["required"]:
+            self.assertIn(field, bridge)
+        self.assertEqual("openclaw_tool", bridge["entrypoint"])
+        self.assertEqual(tool_name, bridge["tool"])
+        self.assertIn(bridge["tool"], bridge_schema["properties"]["tool"]["enum"])
+
+        decision = bridge["permission_decision"]
+        for field in bridge_schema["properties"]["permission_decision"]["required"]:
+            self.assertIn(field, decision)
+        decision_schema = bridge_schema["properties"]["permission_decision"]["properties"]
+        self.assertIn(decision["decision"], decision_schema["decision"]["enum"])
+        self.assertIn(decision["requested_action"], decision_schema["requested_action"]["enum"])
+        if "requested_visibility" in decision:
+            self.assertIn(decision["requested_visibility"], decision_schema["requested_visibility"]["enum"])
+        if "actor" in decision:
+            actor = decision["actor"]
+            for key in ("user_id", "open_id", "tenant_id", "organization_id"):
+                if key in actor:
+                    self.assertIsInstance(actor[key], str)
+            if "roles" in actor:
+                self.assertIsInstance(actor["roles"], list)
+                self.assertTrue(all(isinstance(role, str) for role in actor["roles"]))
+
+    def schema(self) -> dict[str, Any]:
+        if not hasattr(self, "_schema_cache"):
+            self._schema_cache = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        return self._schema_cache
 
     def test_examples_only_use_declared_tools(self) -> None:
         supported = set(supported_tool_names())

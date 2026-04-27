@@ -45,6 +45,8 @@
     "ok": true,
     "tool": "memory.prefetch",
     "context_pack_contains": ["relevant_memories", "evidence", "risks", "deadlines", "trace_summary"],
+    "must_include": ["bridge.request_id", "bridge.trace_id", "bridge.permission_decision"],
+    "bridge_permission_decision": "allow",
     "state_mutation": "none",
     "raw_events_included": false
   },

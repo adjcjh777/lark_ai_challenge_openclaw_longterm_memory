@@ -38,6 +38,8 @@
     "ok": false,
     "error_code": "permission_denied",
     "reason_code": "visibility_private_non_owner",
+    "bridge_permission_decision": "deny",
+    "must_include": ["bridge.request_id", "bridge.trace_id", "bridge.permission_decision"],
     "future_redaction_shape": {
       "decision": "redact",
       "visible_fields": ["subject", "summary"],

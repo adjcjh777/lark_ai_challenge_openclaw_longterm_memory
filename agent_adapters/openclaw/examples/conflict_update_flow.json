@@ -105,7 +105,9 @@
   "expected_output": {
     "ok": true,
     "version_chain_contains": ["active", "superseded"],
-    "default_search_should_not_return": ["cn-shanghai"]
+    "default_search_should_not_return": ["cn-shanghai"],
+    "each_step_must_include": ["bridge.request_id", "bridge.trace_id", "bridge.permission_decision"],
+    "bridge_permission_decision": "allow"
   },
   "benchmark_evidence": "docs/benchmark-report.md#样例证据"
 }

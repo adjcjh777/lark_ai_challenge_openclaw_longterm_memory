@@ -44,7 +44,8 @@
   "expected_output": {
     "ok": true,
     "results_status": "active",
-    "must_include": ["layer", "evidence", "matched_via", "why_ranked", "trace.steps"]
+    "must_include": ["layer", "evidence", "matched_via", "why_ranked", "trace.steps", "bridge.request_id", "bridge.trace_id", "bridge.permission_decision"],
+    "bridge_permission_decision": "allow"
   },
   "benchmark_evidence": "docs/benchmark-report.md#样例证据"
 }

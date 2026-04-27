@@ -51,7 +51,8 @@
           "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1},
           "auto_confirm": {"type": "boolean", "default": false}
         }
-      }
+      },
+      "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
       "name": "memory.confirm",
@@ -67,7 +68,8 @@
           "reason": {"type": "string"},
           "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
         }
-      }
+      },
+      "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
       "name": "memory.reject",
@@ -83,7 +85,8 @@
           "reason": {"type": "string"},
           "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
         }
-      }
+      },
+      "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
       "name": "memory.explain_versions",
@@ -98,7 +101,8 @@
           "include_archived": {"type": "boolean", "default": false},
           "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
         }
-      }
+      },
+      "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
       "name": "memory.prefetch",
@@ -113,7 +117,8 @@
           "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1},
           "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
         }
-      }
+      },
+      "output_schema": {"$ref": "#/$defs/tool_output"}
     }
   ],
   "error_schema": {
@@ -143,7 +148,8 @@
           "retryable": {"type": "boolean"},
           "details": {"type": "object", "additionalProperties": true}
         }
-      }
+      },
+      "bridge": {"$ref": "#/$defs/bridge_metadata"}
     }
   },
   "$defs": {
@@ -211,6 +217,52 @@
           "enum": ["private", "team", "organization", "tenant", "public_demo"]
         },
         "timestamp": {"type": "string", "minLength": 1}
+      }
+    },
+    "bridge_metadata": {
+      "type": "object",
+      "required": ["entrypoint", "tool", "permission_decision"],
+      "additionalProperties": false,
+      "properties": {
+        "entrypoint": {"const": "openclaw_tool"},
+        "tool": {
+          "type": "string",
+          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch"]
+        },
+        "request_id": {"type": "string", "minLength": 1},
+        "trace_id": {"type": "string", "minLength": 1},
+        "permission_decision": {
+          "type": "object",
+          "required": ["decision", "reason_code", "requested_action"],
+          "additionalProperties": false,
+          "properties": {
+            "decision": {"type": "string", "enum": ["allow", "deny"]},
+            "reason_code": {"type": "string", "minLength": 1},
+            "requested_action": {
+              "type": "string",
+              "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch"]
+            },
+            "requested_visibility": {
+              "type": "string",
+              "enum": ["private", "team", "organization", "tenant", "public_demo"]
+            },
+            "actor": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "user_id": {"type": "string"},
+                "open_id": {"type": "string"},
+                "tenant_id": {"type": "string"},
+                "organization_id": {"type": "string"},
+                "roles": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                }
+              }
+            },
+            "source_entrypoint": {"type": "string"}
+          }
+        }
       }
     },
     "source": {
@@ -289,9 +341,18 @@
         "stage": {"type": "string"}
       }
     },
+    "tool_output": {
+      "type": "object",
+      "required": ["ok", "bridge"],
+      "additionalProperties": true,
+      "properties": {
+        "ok": {"const": true},
+        "bridge": {"$ref": "#/$defs/bridge_metadata"}
+      }
+    },
     "search_output": {
       "type": "object",
-      "required": ["ok", "query", "scope", "top_k", "results", "trace"],
+      "required": ["ok", "query", "scope", "top_k", "results", "trace", "bridge"],
       "additionalProperties": false,
       "properties": {
         "ok": {"const": true},
@@ -329,7 +390,8 @@
             "fallback_used": {"type": "boolean"},
             "cognee_available": {"type": ["boolean", "null"]}
           }
-        }
+        },
+        "bridge": {"$ref": "#/$defs/bridge_metadata"}
       }
     }
   }
