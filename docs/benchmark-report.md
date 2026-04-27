@@ -136,4 +136,4 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 ## 下一步
 
-2026-05-04 从 `docs/plans/2026-05-04-implementation-plan.md` 继续，把 README、Demo runbook 和 OpenClaw examples 固定成可复现演示路径。
+2026-05-04 已把 README、Demo runbook、OpenClaw examples 和 `scripts/demo_seed.py` 固定成可复现演示路径。2026-05-05 从 `docs/plans/2026-05-05-implementation-plan.md` 继续写《Memory 定义与架构白皮书》，引用本报告和 `docs/demo-runbook.md` 作为证明材料。

@@ -175,7 +175,7 @@
     },
     "memory_result": {
       "type": "object",
-      "required": ["memory_id", "type", "subject", "current_value", "status", "version", "score", "rank", "evidence"],
+      "required": ["memory_id", "type", "subject", "current_value", "status", "layer", "version", "score", "rank", "evidence"],
       "additionalProperties": false,
       "properties": {
         "memory_id": {"type": "string", "minLength": 1},
@@ -183,13 +183,41 @@
         "subject": {"type": "string", "minLength": 1},
         "current_value": {"type": "string"},
         "status": {"type": "string", "enum": ["active"]},
+        "layer": {"type": "string", "enum": ["L1", "L2", "L3"]},
         "version": {"type": ["integer", "null"]},
         "score": {"type": "number"},
         "rank": {"type": "integer", "minimum": 1},
         "evidence": {
           "type": "array",
           "items": {"$ref": "#/$defs/evidence"}
-        }
+        },
+        "matched_via": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "why_ranked": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "retrieval_trace_step": {
+      "type": "object",
+      "required": ["layer", "backend", "query", "requested_top_k", "returned_count", "elapsed_ms", "hit_memory_ids"],
+      "additionalProperties": false,
+      "properties": {
+        "layer": {"type": "string"},
+        "backend": {"type": "string"},
+        "query": {"type": "string"},
+        "requested_top_k": {"type": "integer"},
+        "returned_count": {"type": "integer"},
+        "elapsed_ms": {"type": "number"},
+        "hit_memory_ids": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "note": {"type": "string"},
+        "layer_source": {"type": "string"},
+        "selection_reason": {"type": "string"},
+        "dropped_count": {"type": "integer"},
+        "stage": {"type": "string"}
       }
     },
     "search_output": {
@@ -207,7 +235,7 @@
         },
         "trace": {
           "type": "object",
-          "required": ["strategy", "query", "scope", "requested_top_k", "returned_count", "fallback_used", "cognee_available"],
+          "required": ["strategy", "query", "scope", "requested_top_k", "returned_count", "backend", "layers", "stages", "steps", "final_reason", "fallback_used", "cognee_available"],
           "additionalProperties": false,
           "properties": {
             "strategy": {"type": "string"},
@@ -215,6 +243,20 @@
             "scope": {"type": "string"},
             "requested_top_k": {"type": "integer"},
             "returned_count": {"type": "integer"},
+            "backend": {"type": "string"},
+            "layers": {
+              "type": "array",
+              "items": {"type": "string", "enum": ["L1", "L2", "L3"]}
+            },
+            "stages": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "steps": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/retrieval_trace_step"}
+            },
+            "final_reason": {"type": "string"},
             "fallback_used": {"type": "boolean"},
             "cognee_available": {"type": ["boolean", "null"]}
           }

@@ -1,6 +1,9 @@
 {
   "name": "conflict_update_flow",
   "description": "Create and confirm a candidate that supersedes an older deployment rule.",
+  "execution_mode": "schema_demo_with_runtime_ids",
+  "runtime_note": "The candidate_id returned by step 1 must be copied into step 2. The memory_id returned after confirmation must be copied into step 3.",
+  "demo_fallback": "python3 scripts/demo_seed.py --json-output reports/demo_replay.json",
   "steps": [
     {
       "tool": "memory.create_candidate",
@@ -21,7 +24,7 @@
     {
       "tool": "memory.confirm",
       "arguments": {
-        "candidate_id": "mem_candidate_demo",
+        "candidate_id": "<candidate_id_from_step_1>",
         "scope": "project:feishu_ai_challenge",
         "actor_id": "user_demo_owner",
         "reason": "Confirmed in project chat"
@@ -30,10 +33,16 @@
     {
       "tool": "memory.explain_versions",
       "arguments": {
-        "memory_id": "mem_active_demo",
+        "memory_id": "<memory_id_from_step_2>",
         "scope": "project:feishu_ai_challenge",
         "include_archived": false
       }
     }
-  ]
+  ],
+  "expected_output": {
+    "ok": true,
+    "version_chain_contains": ["active", "superseded"],
+    "default_search_should_not_return": ["cn-shanghai"]
+  },
+  "benchmark_evidence": "docs/benchmark-report.md#样例证据"
 }

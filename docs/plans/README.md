@@ -46,6 +46,7 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 | 2026-05-02 | `2026-05-02-handoff.md` | 2026-05-02 prefetch、heartbeat reminder candidate、OpenClaw demo dry-run 和 2026-05-03 接续说明 |
 | 2026-05-03 | `2026-05-03-implementation-plan.md` | Benchmark expansion、metrics report、review surface evidence check |
 | 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook、README、OpenClaw examples freeze |
+| 2026-05-04 | `2026-05-04-handoff.md` | 2026-05-04 Demo runbook、README 快速开始、demo dry-run 和 2026-05-05 接续说明 |
 | 2026-05-05 | `2026-05-05-implementation-plan.md` | 白皮书、architecture proof、competition narrative |
 | 2026-05-06 | `2026-05-06-implementation-plan.md` | 提交材料、录屏、QA、scope freeze |
 | 2026-05-07 | `2026-05-07-implementation-plan.md` | 最终验证、提交缓冲、push |

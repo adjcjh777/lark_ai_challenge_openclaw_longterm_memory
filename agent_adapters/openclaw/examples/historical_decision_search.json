@@ -1,6 +1,8 @@
 {
   "name": "historical_decision_search",
   "description": "Search the active production deployment decision before answering a user.",
+  "execution_mode": "copyable_openclaw_tool_call",
+  "demo_fallback": "python3 scripts/demo_seed.py --json-output reports/demo_replay.json",
   "steps": [
     {
       "tool": "memory.search",
@@ -25,6 +27,7 @@
   "expected_output": {
     "ok": true,
     "results_status": "active",
-    "must_include": ["evidence", "matched_via", "why_ranked"]
-  }
+    "must_include": ["layer", "evidence", "matched_via", "why_ranked", "trace.steps"]
+  },
+  "benchmark_evidence": "docs/benchmark-report.md#样例证据"
 }

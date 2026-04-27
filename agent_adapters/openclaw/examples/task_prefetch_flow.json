@@ -1,6 +1,8 @@
 {
   "name": "task_prefetch_flow",
   "description": "Prefetch active memory before generating a deployment checklist.",
+  "execution_mode": "copyable_openclaw_tool_call",
+  "demo_fallback": "python3 scripts/demo_seed.py --json-output reports/demo_replay.json",
   "steps": [
     {
       "tool": "memory.prefetch",
@@ -26,6 +28,8 @@
     "ok": true,
     "tool": "memory.prefetch",
     "context_pack_contains": ["relevant_memories", "evidence", "risks", "deadlines", "trace_summary"],
-    "state_mutation": "none"
-  }
+    "state_mutation": "none",
+    "raw_events_included": false
+  },
+  "benchmark_evidence": "docs/benchmark-report.md#样例证据"
 }
