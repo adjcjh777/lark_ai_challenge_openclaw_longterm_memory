@@ -45,90 +45,118 @@ RightCode custom provider 当前用于 LLM 文本模型验证：`gpt-5.3-codex-h
 
 ## 1.2 每日任务启动 Prompt
 
-本节是每天开新对话时的复制粘贴入口。原则：先让 Agent 读取 `AGENTS.md`、本总控文档和当天绝对日期计划，再按当天计划里的“今日执行清单（按顺序）”推进；不临时扩展到“今日不做”的范围。
+本节是每天开新对话时的复制粘贴入口，已经按 2026-04-27 之后的单人执行状态更新。每天启动任务前，Agent 必须先判断“今天是哪一天、这一天计划是否已经完成、当前代码和看板处于什么状态”，再决定继续执行、补齐遗漏，还是只做计划/看板修正。
+
+当前适用规则：
+
+- 项目从 2026-04-27 起按程俊豪单人执行；不再创建、指派或等待非本人任务。
+- 原先拆出去的评测样例、文案、QA、截图和材料检查，全部转为“我的补充任务”或后续自查任务。
+- README 顶部任务区、日期计划、handoff 和飞书共享看板必须保持同一口径。
+- 飞书共享看板可直接用 `lark-cli` 更新；只维护程俊豪任务，不覆盖无关历史记录。
+- 验证命令按改动类型选择：所有提交前至少运行 `python3 scripts/check_openclaw_version.py` 和 `git diff --check`；只有触达代码、脚本、schema、benchmark runner、测试数据或 legacy fallback 时，才追加对应专项验证。
 
 ### 直接启动今天任务
 
-每天开工时优先复制这一段即可。如果系统日期正确，Agent 应自动定位当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`。
+每天开工时优先复制这一段。如果系统日期正确，Agent 应自动定位当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`；如果当天任务已完成，Agent 不应重复实现，而应先报告完成证据和下一项可执行任务。
 
 ```text
 工作目录：/Users/junhaocheng/feishu_ai_challenge
 
-请开始执行今天的 Feishu Memory Copilot 任务。
+请开始执行今天的 Feishu Memory Copilot 任务。先判断今天计划是否已经完成，再决定继续执行、补齐遗漏或更新计划/看板。
 
 必须先读取并遵循：
 1. AGENTS.md
 2. docs/feishu-memory-copilot-implementation-plan.md
 3. 按当前日期定位的 docs/plans/YYYY-MM-DD-implementation-plan.md
-4. git status --short
-5. 当前代码结构，尤其是 memory_engine/、agent_adapters/openclaw/、benchmarks/、tests/、docs/
+4. 如果存在上一日 handoff 或当天 handoff，也读取对应 docs/plans/YYYY-MM-DD-handoff.md
+5. README.md 顶部“今天先做这个：我的任务”
+6. git status --short
+7. 当前代码结构，尤其是 memory_engine/、memory_engine/copilot/、agent_adapters/openclaw/、benchmarks/、tests/、docs/
+
+启动前先做状态确认：
+- 复述今天的绝对日期、阶段、当日目标、“今日做到什么程度”、“今日不做”和“我的补充任务”。
+- 检查 OpenClaw 版本锁，运行：python3 scripts/check_openclaw_version.py
+- 检查工作树状态，不要覆盖用户或历史未跟踪文件。
+- 检查飞书共享看板是否需要创建或更新今天的程俊豪主线任务和“我的补充任务”；如需同步，直接按 AGENTS.md 用 lark-cli 更新并读回确认。
+- 如果发现今天任务已完成，不要重复写代码；先总结已完成证据，并只处理用户最新要求或计划中仍未闭环的事项。
 
 执行要求：
-- 先确认今天的绝对日期、阶段、当日目标和“今日做到什么程度”。
 - 严格按当天计划里的“今日执行清单（按顺序）”推进。
-- 只做当天计划范围内的任务，不要扩展到“今日不做”的事项。
+- 只做当天计划范围内的任务，不扩展到“今日不做”的事项。
 - 新功能优先进入 memory_engine/copilot/ 和 agent_adapters/openclaw/。
 - 不要从大改 memory_engine/repository.py、memory_engine/feishu_runtime.py 或旧 CLI/Bot handler 开始。
-- OpenClaw 版本必须保持 2026.4.24，先运行 python3 scripts/check_openclaw_version.py。
-- 每完成一个可运行闭环或关键文档更新后，按 AGENTS.md 要求验证、提交并推送。
+- 如果补充任务、handoff 或 README 顶部任务发生变化，同步更新文档和飞书共享看板。
+- 每完成一个可运行闭环、阶段交付或关键文档更新后，按 AGENTS.md 选择验证命令、提交并推送。
 
-今天必须至少运行的基础验证：
-python3 scripts/check_openclaw_version.py
-python3 -m compileall memory_engine scripts
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
-
-如果当天计划要求新增专项测试或 benchmark，也要按当天计划追加执行。
+验证规则：
+- 所有提交前至少运行：
+  python3 scripts/check_openclaw_version.py
+  git diff --check
+- 如果改了 Python 代码、脚本、OpenClaw schema、benchmark runner、测试数据或 fixture，追加：
+  python3 -m compileall memory_engine scripts
+- 如果改了 Copilot schema/tools/retrieval/benchmark，追加当天计划指定的 unittest 或 copilot_* benchmark。
+- 只有触达 legacy fallback、旧 Bot、旧 CLI、本地 repository、文档摄取、Bitable 同步或历史 benchmark runner 时，才追加：
+  python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+- 如果运行 Cognee / embedding / Ollama 相关验证，结束前必须执行 ollama ps，并停止本项目拉起的驻留模型。
 
 最终回复请包含：
 - 今天完成了什么
 - 新增/修改文件
 - 验证结果
+- 飞书共享看板同步结果
+- Ollama 清理状态（如本次未运行 embedding，也说明未拉起模型）
 - 仍未实现或仍有风险的事项
 - 下一步应该从哪个文件继续
 ```
 
 ### 指定日期启动任务
 
-如果要补做某一天，或当天系统日期不准，复制下面这段并把 `YYYY-MM-DD` 改成目标日期，例如 `2026-04-27`。
+如果要补做某一天，或当天系统日期不准，复制下面这段并把 `YYYY-MM-DD` 改成目标日期，例如 `2026-04-28`。
 
 ```text
 工作目录：/Users/junhaocheng/feishu_ai_challenge
 目标日期：YYYY-MM-DD
 
-请执行目标日期对应的 Feishu Memory Copilot 每日任务。
+请执行目标日期对应的 Feishu Memory Copilot 每日任务。先判断该日期任务是否已经完成，再决定继续执行、补齐遗漏或只更新计划/看板。
 
 必须先读取并遵循：
 1. AGENTS.md
 2. docs/feishu-memory-copilot-implementation-plan.md
 3. docs/plans/YYYY-MM-DD-implementation-plan.md
-4. git status --short
-5. 当前代码结构，尤其是 memory_engine/、agent_adapters/openclaw/、benchmarks/、tests/、docs/
+4. 如果存在上一日 handoff 或该日期 handoff，也读取对应 docs/plans/YYYY-MM-DD-handoff.md
+5. README.md 顶部“今天先做这个：我的任务”
+6. git status --short
+7. 当前代码结构，尤其是 memory_engine/、memory_engine/copilot/、agent_adapters/openclaw/、benchmarks/、tests/、docs/
 
 执行要求：
-- 先复述该日期的阶段、当日目标、“今日做到什么程度”和“今日不做”。
+- 先复述目标日期的阶段、当日目标、“今日做到什么程度”、“今日不做”和“我的补充任务”。
+- 运行 python3 scripts/check_openclaw_version.py，确认 OpenClaw 仍固定为 2026.4.24。
+- 如果代码现状与日期计划不一致，以当前代码为事实源；不要擅自扩大范围，必要时先更新该日期计划或 handoff 记录偏差。
+- 如果该日期任务已完成，不要重复实现；只补遗漏的验证、文档、看板或用户最新指定事项。
 - 严格按该日期计划里的“今日执行清单（按顺序）”推进。
-- 如果发现代码现状与日期计划不一致，以当前代码为事实源，但不要擅自扩大范围；必要时先更新该日期计划或记录偏差。
 - 新功能优先进入 memory_engine/copilot/ 和 agent_adapters/openclaw/。
 - 不要从大改 memory_engine/repository.py、memory_engine/feishu_runtime.py 或旧 CLI/Bot handler 开始。
-- OpenClaw 版本必须保持 2026.4.24，先运行 python3 scripts/check_openclaw_version.py。
-- 每完成一个可运行闭环或关键文档更新后，按 AGENTS.md 要求验证、提交并推送。
+- 若补充任务、README 顶部入口或看板任务发生变化，必须同步更新。
+- 完成后按 AGENTS.md 选择验证命令、提交并推送。
 
-基础验证：
-python3 scripts/check_openclaw_version.py
-python3 -m compileall memory_engine scripts
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
-
-如果该日期计划要求新增专项测试或 benchmark，也要按计划追加执行。
+验证规则：
+- 所有提交前至少运行：
+  python3 scripts/check_openclaw_version.py
+  git diff --check
+- 触达代码、脚本、schema、benchmark runner、测试数据或 fixture 时追加 compileall 和当天计划里的专项测试。
+- 触达 legacy fallback 或旧 benchmark runner 时才追加 day1 benchmark。
+- 运行 Cognee / embedding / Ollama 后，必须检查并清理本项目驻留模型。
 
 最终回复请包含：
 - 目标日期任务完成情况
 - 新增/修改文件
 - 验证结果
+- 飞书共享看板同步结果
 - 未完成风险或降级说明
 - 下一步应该从哪个文件继续
 ```
 
-### 当天只想先做计划复核
+### 只做计划复核或计划修正
 
 如果当天不想让 Agent 直接改代码，只想检查计划是否足够细，可以复制这一段。
 
@@ -141,16 +169,23 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 1. AGENTS.md
 2. docs/feishu-memory-copilot-implementation-plan.md
 3. 按当前日期定位的 docs/plans/YYYY-MM-DD-implementation-plan.md
+4. README.md 顶部“今天先做这个：我的任务”
+5. git status --short
 
 请检查：
-- 当日目标是否具体
-- “今日做到什么程度”是否可验收
-- “今日执行清单”是否写到文件路径和完成标准
-- 测试命令是否覆盖当天改动
-- 我的补充任务是否能独立执行
-- “今日不做”是否足够防止范围扩散
+- 当日目标是否具体，是否能在当天闭环。
+- “今日做到什么程度”是否可验收。
+- “今日执行清单”是否写到文件路径、模块边界和完成标准。
+- 验证命令是否按改动类型选择，避免把 day1 legacy benchmark 当成所有任务的默认主验收。
+- “我的补充任务”是否能由程俊豪独立执行，是否仍残留非本人负责或等待他人完成的说法。
+- README 顶部任务、日期计划、handoff 和飞书共享看板是否需要同步。
+- “今日不做”是否足够防止范围扩散。
 
-如需修改，只更新文档，不写实现代码。完成后运行基础验证并按 AGENTS.md 提交推送。
+如需修改，只更新文档和必要的看板说明，不写实现代码。完成后至少运行：
+python3 scripts/check_openclaw_version.py
+git diff --check
+
+如果计划修正改变了 benchmark 口径、依赖锁、OpenClaw/Cognee 约束或验证命令，再追加对应专项验证。最后按 AGENTS.md 提交并推送。
 ```
 
 ## 2. 架构落地原则
