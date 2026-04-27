@@ -534,6 +534,14 @@ class PrefetchRequest:
             top_k=_top_k(data.get("top_k"), default=DEFAULT_PREFETCH_TOP_K),
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task": self.task,
+            "scope": self.scope,
+            "current_context": dict(self.current_context),
+            "top_k": self.top_k,
+        }
+
 
 def _require_object(payload: Any, field_name: str) -> dict[str, Any]:
     if not isinstance(payload, dict):

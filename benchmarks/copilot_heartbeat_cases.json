@@ -1,0 +1,59 @@
+[
+  {
+    "case_id": "heartbeat_deadline_submission",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "准备初赛提交材料"},
+    "events": [
+      {"content": "提交材料截止时间是 2026-05-07，必须提前准备录屏。"}
+    ],
+    "expected_trigger": "deadline",
+    "expected_subject": "截止时间",
+    "failure_debug_hint": "deadline 类记忆应生成 reminder candidate。"
+  },
+  {
+    "case_id": "heartbeat_important_not_recalled",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "准备发布检查"},
+    "events": [
+      {"content": "生产部署必须加 --canary --region ap-shanghai。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "生产部署",
+    "failure_debug_hint": "高重要性 active 记忆从未召回时应主动提醒。"
+  },
+  {
+    "case_id": "heartbeat_thread_similarity_demo",
+    "type": "copilot_heartbeat",
+    "current_context": {"thread_topic": "Demo 讲解词"},
+    "events": [
+      {"content": "Demo 讲解词偏好：先讲用户痛点，再讲 Agent 自动调用记忆工具。"}
+    ],
+    "expected_trigger": "thread_similarity",
+    "expected_subject": "Demo 讲解词",
+    "failure_debug_hint": "线程主题相似时应生成 dry-run reminder candidate。"
+  },
+  {
+    "case_id": "heartbeat_sensitive_redaction",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "OpenAPI 调试"},
+    "events": [
+      {"content": "OpenAPI 调试风险：api_key=abcdefghi123456789 只能放本地环境。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "OpenAPI 调试风险",
+    "forbidden_value": "abcdefghi123456789",
+    "failure_debug_hint": "reminder dry-run 里不能泄漏 token / secret 原文。"
+  },
+  {
+    "case_id": "heartbeat_review_due",
+    "type": "copilot_heartbeat",
+    "review_due_ms": 0,
+    "current_context": {"intent": "复核老记忆"},
+    "events": [
+      {"content": "周报偏好：优先发飞书文档，再同步群消息。"}
+    ],
+    "expected_trigger": "review_due",
+    "expected_subject": "周报收件人",
+    "failure_debug_hint": "超过复核窗口的记忆应进入 review_due reminder candidate。"
+  }
+]

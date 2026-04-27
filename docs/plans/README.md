@@ -43,6 +43,7 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 | 2026-05-01 | `2026-05-01-implementation-plan.md` | conflict update、versions、Cold evidence、stale leakage、Card/Bitable review surface |
 | 2026-05-01 | `2026-05-01-handoff.md` | 2026-05-01 冲突更新、版本解释、conflict benchmark、Card/Bitable dry-run 和 2026-05-02 接续说明 |
 | 2026-05-02 | `2026-05-02-implementation-plan.md` | prefetch、heartbeat、agent run summary candidate、OpenClaw demo/card dry-run flow |
+| 2026-05-02 | `2026-05-02-handoff.md` | 2026-05-02 prefetch、heartbeat reminder candidate、OpenClaw demo dry-run 和 2026-05-03 接续说明 |
 | 2026-05-03 | `2026-05-03-implementation-plan.md` | Benchmark expansion、metrics report、review surface evidence check |
 | 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook、README、OpenClaw examples freeze |
 | 2026-05-05 | `2026-05-05-implementation-plan.md` | 白皮书、architecture proof、competition narrative |

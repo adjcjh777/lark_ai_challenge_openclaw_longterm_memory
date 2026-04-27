@@ -189,6 +189,44 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("stub", result["trace"]["strategy"])
 
+    def test_handle_prefetch_keeps_tools_layer_thin_with_injected_service(self) -> None:
+        class StubService:
+            def prefetch(self, request):
+                return {
+                    "ok": True,
+                    "tool": "memory.prefetch",
+                    "task": request.task,
+                    "scope": request.scope,
+                    "context_pack": {"relevant_memories": []},
+                }
+
+        result = handle_tool_request(
+            "memory.prefetch",
+            {
+                "task": "生成部署 checklist",
+                "scope": "project:feishu_ai_challenge",
+                "current_context": {"intent": "生产部署"},
+            },
+            service=StubService(),  # type: ignore[arg-type]
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.prefetch", result["tool"])
+        self.assertEqual("生成部署 checklist", result["task"])
+
+    def test_handle_prefetch_missing_scope_uses_scope_required_error(self) -> None:
+        result = handle_tool_request(
+            "memory.prefetch",
+            {
+                "task": "生成部署 checklist",
+                "current_context": {"intent": "生产部署"},
+            },
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("scope_required", result["error"]["code"])
+        self.assertEqual({"tool": "memory.prefetch"}, result["error"]["details"])
+
     def test_handle_candidate_confirm_reject_tools(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)

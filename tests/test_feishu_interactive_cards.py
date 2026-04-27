@@ -9,8 +9,10 @@ from memory_engine.db import connect, init_db
 from memory_engine.feishu_cards import (
     build_candidate_review_card,
     build_card_from_text,
+    build_reminder_candidate_card,
     build_version_chain_card,
     candidate_review_payload,
+    reminder_candidate_payload,
     version_chain_payload,
 )
 from memory_engine.feishu_config import FeishuConfig
@@ -319,6 +321,30 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("none", payload["state_mutation"])
         self.assertEqual("ver_2", payload["active_version"]["version_id"])
         self.assertIn("superseded", card["elements"][1]["text"]["content"])
+
+    def test_copilot_reminder_candidate_payload_is_dry_run(self) -> None:
+        reminder = {
+            "reminder_id": "rem_mem_1_deadline",
+            "memory_id": "mem_1",
+            "scope": "project:feishu_ai_challenge",
+            "subject": "提交材料",
+            "current_value": "提交材料截止时间是 2026-05-07。",
+            "reason": "这条记忆像是截止时间或发布风险，任务前先提醒。",
+            "trigger": "deadline",
+            "status": "candidate",
+            "due_at": "2026-05-07",
+            "evidence": {"quote": "提交材料截止时间是 2026-05-07。"},
+            "recommended_action": "review_reminder_candidate",
+            "risk_flags": [],
+        }
+
+        payload = reminder_candidate_payload(reminder)
+        card = build_reminder_candidate_card(reminder)
+
+        self.assertEqual("copilot_reminder_candidate", payload["surface"])
+        self.assertEqual("none", payload["state_mutation"])
+        self.assertEqual("deadline", payload["trigger"])
+        self.assertIn("dry-run", card["elements"][1]["text"]["content"])
 
 
 if __name__ == "__main__":

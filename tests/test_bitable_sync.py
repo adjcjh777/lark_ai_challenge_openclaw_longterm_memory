@@ -127,6 +127,32 @@ class BitableSyncTest(unittest.TestCase):
         self.assertIn("Reminder Candidates", tables)
         candidate_fields = {field["name"] for field in tables["Candidate Review"]["fields"]}
         self.assertTrue({"status", "subject", "new_value", "old_value", "evidence", "risk_flags", "recommended_action"} <= candidate_fields)
+        reminder_fields = {field["name"] for field in tables["Reminder Candidates"]["fields"]}
+        self.assertTrue({"reminder_id", "memory_id", "subject", "reason", "due_at", "recommended_action"} <= reminder_fields)
+
+    def test_reminder_candidates_can_be_included_in_dry_run_payload(self) -> None:
+        reminders = [
+            {
+                "reminder_id": "rem_mem_1_deadline",
+                "memory_id": "mem_1",
+                "scope": "project:feishu_ai_challenge",
+                "subject": "提交材料",
+                "current_value": "提交材料截止时间是 2026-05-07。",
+                "reason": "任务前提醒",
+                "status": "candidate",
+                "due_at": "2026-05-07",
+                "evidence": {"quote": "提交材料截止时间是 2026-05-07。"},
+                "recommended_action": "review_reminder_candidate",
+            }
+        ]
+
+        payload = collect_sync_payload(self.conn, reminder_candidates=reminders)
+        table = payload["tables"]["reminder_candidates"]
+
+        self.assertEqual(1, len(table["rows"]))
+        row = table["rows"][0]
+        self.assertEqual("rem_mem_1_deadline", row[table["fields"].index("reminder_id")])
+        self.assertEqual("review_reminder_candidate", row[table["fields"].index("recommended_action")])
 
 
 def setup_target():

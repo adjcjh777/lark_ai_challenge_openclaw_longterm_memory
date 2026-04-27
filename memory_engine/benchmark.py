@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, SearchRequest
+from .copilot.heartbeat import HeartbeatReminderEngine
+from .copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, PrefetchRequest, SearchRequest
 from .copilot.service import CopilotService
 from .db import connect, init_db
 from .document_ingestion import ingest_document_source
@@ -25,6 +26,10 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
         return run_copilot_candidate_benchmark(cases, source_path=cases_path, scope=scope)
     if isinstance(cases, list) and any(case.get("type") == "copilot_conflict" for case in cases):
         return run_copilot_conflict_benchmark(cases, source_path=cases_path, scope=scope)
+    if isinstance(cases, list) and any(case.get("type") == "copilot_prefetch" for case in cases):
+        return run_copilot_prefetch_benchmark(cases, source_path=cases_path, scope=scope)
+    if isinstance(cases, list) and any(case.get("type") == "copilot_heartbeat" for case in cases):
+        return run_copilot_heartbeat_benchmark(cases, source_path=cases_path, scope=scope)
 
     results = []
 
@@ -379,6 +384,145 @@ def run_copilot_conflict_benchmark(
         "name": Path(source_path).stem,
         "source": str(source_path),
         "summary": _copilot_conflict_metrics(results),
+        "results": results,
+    }
+
+
+def run_copilot_prefetch_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        with tempfile.NamedTemporaryFile(prefix="copilot_prefetch_benchmark_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+
+            for event in case.get("events", []):
+                repo.remember(scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_prefetch")
+
+            for update in case.get("conflict_updates", []):
+                repo.remember(scope, update, source_type="benchmark_prefetch_conflict")
+
+            started = time.perf_counter()
+            response = CopilotService(repository=repo).prefetch(
+                PrefetchRequest.from_payload(
+                    {
+                        "task": case["task"],
+                        "scope": scope,
+                        "current_context": case.get("current_context") or {"intent": case["task"]},
+                        "top_k": case.get("top_k", 5),
+                    }
+                )
+            )
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            conn.close()
+
+        pack = response.get("context_pack", {}) if response.get("ok") else {}
+        relevant = pack.get("relevant_memories", []) if isinstance(pack, dict) else []
+        text = json.dumps(pack, ensure_ascii=False)
+        expected_keyword = case.get("expected_memory_keyword", "")
+        forbidden = case.get("forbidden_value", "")
+        evidence_present = any(item.get("evidence") for item in relevant if isinstance(item, dict))
+        used_context = bool(relevant)
+        forbidden_leak = bool(forbidden and forbidden in text)
+        passed = bool(response.get("ok") and used_context and expected_keyword in text and evidence_present and not forbidden_leak)
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": case["type"],
+                "task": case["task"],
+                "expected_memory_keyword": expected_keyword,
+                "forbidden": forbidden,
+                "used_context": used_context,
+                "evidence_present": evidence_present,
+                "forbidden_leak": forbidden_leak,
+                "passed": passed,
+                "latency_ms": latency_ms,
+                "response": response,
+                "failure_debug_hint": case.get("failure_debug_hint"),
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_prefetch",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_prefetch_metrics(results),
+        "results": results,
+    }
+
+
+def run_copilot_heartbeat_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        with tempfile.NamedTemporaryFile(prefix="copilot_heartbeat_benchmark_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            for event in case.get("events", []):
+                repo.remember(scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_heartbeat")
+            if case.get("mark_recalled_query"):
+                repo.recall(scope, case["mark_recalled_query"])
+
+            started = time.perf_counter()
+            response = HeartbeatReminderEngine(
+                repo,
+                now_ms=case.get("now_ms"),
+                review_due_ms=case.get("review_due_ms", 7 * 24 * 60 * 60 * 1000),
+                cooldown_ms=case.get("cooldown_ms", 24 * 60 * 60 * 1000),
+            ).generate(
+                scope=scope,
+                current_context=case.get("current_context") or {"intent": case.get("intent", "")},
+                limit=case.get("limit", 5),
+            )
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            conn.close()
+
+        candidates = response.get("candidates", []) if response.get("ok") else []
+        text = json.dumps(candidates, ensure_ascii=False)
+        expected_trigger = case.get("expected_trigger")
+        expected_subject = case.get("expected_subject", "")
+        forbidden = case.get("forbidden_value", "")
+        expected_found = any(
+            (not expected_trigger or item.get("trigger") == expected_trigger)
+            and (not expected_subject or expected_subject in str(item.get("subject") or ""))
+            for item in candidates
+            if isinstance(item, dict)
+        )
+        sensitive_leak = bool(forbidden and forbidden in text)
+        passed = bool(response.get("ok") and expected_found and not sensitive_leak)
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": case["type"],
+                "expected_trigger": expected_trigger,
+                "expected_subject": expected_subject,
+                "candidate_count": len(candidates),
+                "expected_found": expected_found,
+                "sensitive_leak": sensitive_leak,
+                "passed": passed,
+                "latency_ms": latency_ms,
+                "response": response,
+                "failure_debug_hint": case.get("failure_debug_hint"),
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_heartbeat",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_heartbeat_metrics(results),
         "results": results,
     }
 
@@ -818,6 +962,42 @@ def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "superseded_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "evidence_coverage": _ratio(explain_evidence, total),
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+    }
+
+
+def _copilot_prefetch_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    used_context = sum(1 for result in results if result["used_context"])
+    evidence_present = sum(1 for result in results if result["evidence_present"])
+    forbidden_cases = [result for result in results if result.get("forbidden")]
+    forbidden_leaks = [result for result in forbidden_cases if result["forbidden_leak"]]
+    latencies = sorted(result["latency_ms"] for result in results)
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "agent_task_context_use_rate": _ratio(used_context, total),
+        "evidence_coverage": _ratio(evidence_present, total),
+        "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+    }
+
+
+def _copilot_heartbeat_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    expected_found = sum(1 for result in results if result["expected_found"])
+    sensitive_leaks = sum(1 for result in results if result["sensitive_leak"])
+    latencies = sorted(result["latency_ms"] for result in results)
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "reminder_candidate_rate": _ratio(expected_found, total),
+        "sensitive_reminder_leakage_rate": _ratio(sensitive_leaks, total),
+        "avg_candidate_count": round(sum(result["candidate_count"] for result in results) / total, 3) if total else 0.0,
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
     }

@@ -56,3 +56,14 @@ def sensitive_risk_flags(*texts: str | None) -> list[str]:
     if not flags:
         return []
     return ["sensitive_content", *sorted(set(flags))]
+
+
+def redact_sensitive_text(text: str | None) -> str:
+    """Redact obvious secret-like snippets before reminder/card dry-run output."""
+
+    if not text:
+        return ""
+    redacted = text
+    for flag, pattern in _SENSITIVE_PATTERNS:
+        redacted = pattern.sub(f"[REDACTED:{flag}]", redacted)
+    return redacted

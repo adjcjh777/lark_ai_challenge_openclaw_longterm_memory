@@ -116,6 +116,7 @@ def collect_sync_payload(
     benchmark_json: str | Path | None = None,
     benchmark_cases: str | Path | None = None,
     benchmark_name: str | None = None,
+    reminder_candidates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = {
         "tables": {
@@ -146,7 +147,7 @@ def collect_sync_payload(
             "reminder_candidates": {
                 "table": DEFAULT_TABLES["reminder_candidates"],
                 "fields": REMINDER_CANDIDATE_FIELDS,
-                "rows": [],
+                "rows": reminder_candidate_rows(reminder_candidates or []),
             },
         }
     }
@@ -313,6 +314,28 @@ def candidate_review_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
         ]
         for row in rows
     ]
+
+
+def reminder_candidate_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
+    rows = []
+    for reminder in reminders:
+        evidence = reminder.get("evidence") if isinstance(reminder.get("evidence"), dict) else {}
+        rows.append(
+            [
+                reminder.get("reminder_id"),
+                reminder.get("memory_id"),
+                reminder.get("scope"),
+                reminder.get("subject"),
+                reminder.get("current_value"),
+                reminder.get("reason"),
+                reminder.get("status"),
+                reminder.get("due_at"),
+                evidence.get("quote"),
+                reminder.get("recommended_action"),
+                _format_ms(int(time.time() * 1000)),
+            ]
+        )
+    return rows
 
 
 def benchmark_rows(

@@ -13,10 +13,18 @@
           "type": "decision"
         },
         "current_context": {
-          "thread_id": "feishu-thread-demo",
-          "user_intent": "answer a historical decision question"
+          "session_id": "openclaw-demo-session",
+          "scope": "project:feishu_ai_challenge",
+          "intent": "answer a historical decision question",
+          "thread_topic": "production deployment",
+          "allowed_scopes": ["project:feishu_ai_challenge"]
         }
       }
     }
-  ]
+  ],
+  "expected_output": {
+    "ok": true,
+    "results_status": "active",
+    "must_include": ["evidence", "matched_via", "why_ranked"]
+  }
 }

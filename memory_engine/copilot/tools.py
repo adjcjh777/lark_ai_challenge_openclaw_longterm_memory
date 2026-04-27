@@ -80,7 +80,7 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
     try:
         request = parser(payload)
     except ValidationError as exc:
-        if tool_name == "memory.search" and str(exc) == "scope is required":
+        if tool_name in {"memory.search", "memory.prefetch"} and str(exc) == "scope is required":
             return error_response("scope_required", "scope is required", details={"tool": tool_name})
         return error_response("validation_error", str(exc), details={"tool": tool_name})
 
@@ -94,6 +94,8 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
         return (service or CopilotService()).reject(request)
     if tool_name == "memory.explain_versions":
         return (service or CopilotService()).explain_versions(request)
+    if tool_name == "memory.prefetch":
+        return (service or CopilotService()).prefetch(request)
 
     return error_response(
         "validation_error",

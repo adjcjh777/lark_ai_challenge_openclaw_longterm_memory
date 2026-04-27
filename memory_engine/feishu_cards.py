@@ -154,6 +154,33 @@ def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str
     }
 
 
+def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
+    """Build a typed reminder payload from heartbeat dry-run output."""
+
+    return {
+        "surface": "copilot_reminder_candidate",
+        "title": "提醒候选",
+        "reminder_id": reminder.get("reminder_id"),
+        "memory_id": reminder.get("memory_id"),
+        "scope": reminder.get("scope"),
+        "subject": reminder.get("subject"),
+        "current_value": reminder.get("current_value"),
+        "reason": reminder.get("reason"),
+        "trigger": reminder.get("trigger"),
+        "status": reminder.get("status"),
+        "due_at": reminder.get("due_at"),
+        "evidence": reminder.get("evidence") or {},
+        "risk_flags": list(reminder.get("risk_flags") or []),
+        "recommended_action": reminder.get("recommended_action") or "review_reminder_candidate",
+        "buttons": [
+            {"action": "confirm_reminder", "label": "确认提醒", "required_for_mvp": False, "mode": "dry_run"},
+            {"action": "dismiss_reminder", "label": "暂不提醒", "required_for_mvp": False, "mode": "dry_run"},
+            {"action": "source", "label": "查看来源", "required_for_mvp": False, "mode": "dry_run"},
+        ],
+        "state_mutation": "none",
+    }
+
+
 def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str, Any]:
     payload = candidate_review_payload(candidate_response)
     conflict = payload["conflict"]
@@ -199,6 +226,45 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
                         {CARD_ACTION_KEY: "reject", "candidate_id": str(payload.get("candidate_id") or "")},
                     ),
                 ],
+            },
+        ],
+    }
+
+
+def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
+    payload = reminder_candidate_payload(reminder)
+    fields = [
+        ("状态", str(payload.get("status") or "")),
+        ("触发原因", str(payload.get("trigger") or "")),
+        ("主题", str(payload.get("subject") or "")),
+        ("提醒内容", str(payload.get("current_value") or "")),
+        ("为什么提醒", str(payload.get("reason") or "")),
+        ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
+        ("风险", ", ".join(payload.get("risk_flags") or []) or "无"),
+    ]
+    if payload.get("due_at"):
+        fields.append(("截止时间", str(payload["due_at"])))
+
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "purple" if payload.get("risk_flags") else "wathet",
+            "title": {"tag": "plain_text", "content": "提醒候选"},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label not in {"提醒内容", "为什么提醒", "证据"},
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                ],
+            },
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": "本阶段只生成 dry-run 提醒候选，不直接发群或写 active 记忆。"},
             },
         ],
     }

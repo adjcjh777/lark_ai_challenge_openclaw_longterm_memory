@@ -1,0 +1,76 @@
+[
+  {
+    "case_id": "prefetch_deployment_checklist",
+    "type": "copilot_prefetch",
+    "task": "生成生产部署 checklist",
+    "current_context": {
+      "scope": "project:feishu_ai_challenge",
+      "intent": "准备今天的生产部署 checklist",
+      "allowed_scopes": ["project:feishu_ai_challenge"]
+    },
+    "events": [
+      {"content": "生产部署必须加 --canary --region ap-shanghai，上线前检查回滚脚本。"}
+    ],
+    "expected_memory_keyword": "--canary",
+    "failure_debug_hint": "prefetch 应该把 active 部署规则放进 context pack。"
+  },
+  {
+    "case_id": "prefetch_deadline_context",
+    "type": "copilot_prefetch",
+    "task": "准备初赛提交材料",
+    "current_context": {
+      "intent": "整理初赛提交材料和录屏计划",
+      "thread_topic": "截止时间"
+    },
+    "events": [
+      {"content": "提交材料截止时间是 2026-05-07，必须提前准备录屏和截图。"}
+    ],
+    "expected_memory_keyword": "2026-05-07",
+    "failure_debug_hint": "context pack 需要包含截止时间类记忆。"
+  },
+  {
+    "case_id": "prefetch_demo_talk_track",
+    "type": "copilot_prefetch",
+    "task": "准备 5 分钟 Demo 讲解词",
+    "current_context": {
+      "intent": "Demo 讲解词",
+      "metadata": {"scene": "OpenClaw demo"}
+    },
+    "events": [
+      {"content": "Demo 讲解词偏好：先讲用户痛点，再讲 Agent 自动调用记忆工具。"}
+    ],
+    "expected_memory_keyword": "用户痛点",
+    "failure_debug_hint": "prefetch 应该能从任务描述带出 Demo 讲解偏好。"
+  },
+  {
+    "case_id": "prefetch_stale_value_filtered",
+    "type": "copilot_prefetch",
+    "task": "生成生产部署 region 检查",
+    "current_context": {
+      "intent": "生产部署 region 和发布参数"
+    },
+    "events": [
+      {"content": "生产部署 region 固定 cn-shanghai。"}
+    ],
+    "conflict_updates": [
+      "不对，生产部署 region 改成 ap-shanghai。"
+    ],
+    "expected_memory_keyword": "ap-shanghai",
+    "forbidden_value": "cn-shanghai",
+    "failure_debug_hint": "默认 prefetch 只能带 active 当前值，不能泄漏 superseded 旧 region。"
+  },
+  {
+    "case_id": "prefetch_bitable_review_surface",
+    "type": "copilot_prefetch",
+    "task": "检查 Bitable dry-run 字段",
+    "current_context": {
+      "intent": "Bitable dry-run 和 Candidate Review",
+      "thread_topic": "飞书接入"
+    },
+    "events": [
+      {"content": "飞书接入必须保留 Candidate Review 和 Reminder Candidates 两张 dry-run 表。"}
+    ],
+    "expected_memory_keyword": "Reminder Candidates",
+    "failure_debug_hint": "prefetch 应该能为看板/表格检查带出 dry-run 表约束。"
+  }
+]
