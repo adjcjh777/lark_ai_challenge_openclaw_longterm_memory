@@ -1148,10 +1148,11 @@ recommended_action
 
 - `python3 scripts/check_openclaw_version.py`
 - `python3 -m unittest tests.test_copilot_governance`
+- `python3 -m unittest tests.test_copilot_tools`
 - `python3 -m unittest tests.test_feishu_interactive_cards tests.test_bitable_sync`
 - `python3 -m compileall memory_engine scripts`
-- `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
-- 如果 runner 支持：`python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`
+- 只有触达 legacy fallback、旧 Bot、旧 CLI、本地 repository 或历史 benchmark runner 时，才追加 `python3 -m memory_engine benchmark run benchmarks/day1_cases.json`
 
 验收标准：
 
