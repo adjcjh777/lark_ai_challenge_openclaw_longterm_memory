@@ -4,10 +4,12 @@
 
 从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
 
+进度说明：当前自然日期仍按项目上下文记录为 2026-04-27；本地代码和文档已经提前完成 2026-04-28 的分层查询切片，所以当前可继续从 2026-04-29 的混合召回计划进入。不要回头重做 2026-04-28 的逐层查询和分层评测脚本，除非验证失败。
+
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 按 MemPalace 转换方案进入 2026-04-29 hybrid retrieval | [2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md)；[主控 6.4](docs/feishu-memory-copilot-implementation-plan.md#64-mempalace-借鉴的转换接入边界)；[retrieval.py](memory_engine/copilot/retrieval.py)；[benchmark.py](memory_engine/benchmark.py) | `RecallIndexEntry` 短索引、keyword/FTS、embedding 接口、Recall@3 评测入口 | trace 能看到 structured / keyword_index / vector / cognee / rerank，并展示 `matched_via` / `why_ranked`；不向量化 raw events |
-| 4 月 28 日稳定性硬化已完成 | [2026-04-28 handoff：稳定性说明](docs/plans/2026-04-28-handoff.md#仍未完成或仍有风险)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | layer 指标、trace 契约、fixture 自检、错误路径测试 | `copilot_layer_cases.json` 的 15 条样例不只可读，还会校验 `layer_accuracy` |
+| 按 MemPalace 转换方案进入 2026-04-29 混合召回 | [2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md)；[主控 6.4](docs/feishu-memory-copilot-implementation-plan.md#64-mempalace-借鉴的转换接入边界)；[retrieval.py](memory_engine/copilot/retrieval.py)；[benchmark.py](memory_engine/benchmark.py) | `RecallIndexEntry` 短索引、keyword/FTS、embedding 接口、Recall@3 评测入口 | trace 能看到 structured / keyword_index / vector / cognee / rerank，并展示 `matched_via` / `why_ranked`；不向量化 raw events |
+| 4 月 28 日稳定性硬化已完成 | [2026-04-28 handoff：稳定性说明](docs/plans/2026-04-28-handoff.md#仍未完成或仍有风险)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | 分层指标、trace 契约、fixture 自检、错误路径测试 | `copilot_layer_cases.json` 的 15 条样例不只可读，还会校验 `layer_accuracy` |
 | 继续扩展 recall 评测 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md) | 失败样例备注和 Recall@3 指标 | 问题像真实飞书项目群提问，每条能看出正确答案、证据关键词、企业记忆意图和可能失败原因 |
 
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
@@ -25,6 +27,7 @@
 - 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
 - 新增 `benchmarks/copilot_recall_cases.json`，并把 `benchmarks/copilot_layer_cases.json` 扩到 15 条分层样例；runner 已校验 `layer_accuracy`，fixture 自检会防重复、缺字段和缺失败排查提示。
 - MemPalace 调研结论已转换为日期计划：只借鉴原文证据、短索引、分层召回、可解释评测，不把 MemPalace 作为新依赖接入。
+- `docs/demo-runbook.md` 和 `docs/benchmark-report.md` 仍保留旧 demo / 旧 benchmark 证明材料，按 2026-05-03 至 2026-05-04 计划再系统更新；当前不要把它们当成 OpenClaw Copilot 最终材料。
 
 ## 快速验证
 
@@ -71,6 +74,7 @@ ollama stop qwen3-embedding:0.6b-fp16
 - `docs/plans/2026-04-27-handoff.md`
 - `docs/plans/2026-04-28-implementation-plan.md`
 - `docs/plans/2026-04-28-handoff.md`
+- `docs/plans/2026-04-29-implementation-plan.md`
 
 ## 主架构边界
 
@@ -138,6 +142,8 @@ scripts/start_feishu_bot.sh --dry-run
 - PRD：`docs/feishu-memory-copilot-prd.md`
 - 日期计划索引：`docs/plans/README.md`
 - 2026-04-27 handoff：`docs/plans/2026-04-27-handoff.md`
+- 2026-04-28 handoff：`docs/plans/2026-04-28-handoff.md`
+- 下一执行计划：`docs/plans/2026-04-29-implementation-plan.md`
 - Windows embedding 配置：`docs/reference/local-windows-cognee-embedding-setup.md`
 - 旧资料归档：`docs/archive/`
 - 长期参考资料：`docs/reference/`
