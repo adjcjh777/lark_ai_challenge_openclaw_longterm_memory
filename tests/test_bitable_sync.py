@@ -68,7 +68,10 @@ class BitableSyncTest(unittest.TestCase):
         benchmark_path = Path(self.temp_dir.name) / "benchmark.json"
         benchmark_path.write_text(
             '{"summary":{"case_count":3,"case_pass_rate":1.0,"conflict_accuracy":1.0,'
-            '"stale_leakage_rate":0.0,"evidence_coverage":1.0,"avg_latency_ms":0.2}}',
+            '"recall_at_3":1.0,"candidate_precision":1.0,"agent_task_context_use_rate":1.0,'
+            '"l1_hot_recall_p95_ms":0.4,"sensitive_reminder_leakage_rate":0.0,'
+            '"stale_leakage_rate":0.0,"evidence_coverage":1.0,"avg_latency_ms":0.2,'
+            '"failure_type_counts":{}}}',
             encoding="utf-8",
         )
 
@@ -78,6 +81,8 @@ class BitableSyncTest(unittest.TestCase):
         self.assertEqual(1, len(benchmark["rows"]))
         self.assertEqual("day1", benchmark["rows"][0][benchmark["fields"].index("benchmark_name")])
         self.assertEqual(3, benchmark["rows"][0][benchmark["fields"].index("case_count")])
+        self.assertEqual(1.0, benchmark["rows"][0][benchmark["fields"].index("recall_at_3")])
+        self.assertEqual(1.0, benchmark["rows"][0][benchmark["fields"].index("agent_task_context_use_rate")])
 
     def test_scope_filter_limits_memory_rows(self) -> None:
         self.repo.remember("project:feishu_ai_challenge", "生产部署必须加 --canary")
@@ -125,6 +130,20 @@ class BitableSyncTest(unittest.TestCase):
 
         self.assertIn("Candidate Review", tables)
         self.assertIn("Reminder Candidates", tables)
+        self.assertIn("Benchmark Results", tables)
+        benchmark_fields = {field["name"] for field in tables["Benchmark Results"]["fields"]}
+        self.assertTrue(
+            {
+                "recall_at_3",
+                "candidate_precision",
+                "agent_task_context_use_rate",
+                "l1_hot_recall_p95_ms",
+                "sensitive_reminder_leakage_rate",
+                "failure_type_counts",
+                "recommended_fix_summary",
+            }
+            <= benchmark_fields
+        )
         candidate_fields = {field["name"] for field in tables["Candidate Review"]["fields"]}
         self.assertTrue({"status", "subject", "new_value", "old_value", "evidence", "risk_flags", "recommended_action"} <= candidate_fields)
         reminder_fields = {field["name"] for field in tables["Reminder Candidates"]["fields"]}

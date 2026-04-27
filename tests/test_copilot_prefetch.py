@@ -98,6 +98,8 @@ class CopilotPrefetchTest(unittest.TestCase):
         self.assertGreaterEqual(result["summary"]["case_count"], 5)
         self.assertEqual(1.0, result["summary"]["agent_task_context_use_rate"])
         self.assertEqual(0.0, result["summary"]["stale_leakage_rate"])
+        self.assertEqual({}, result["summary"]["failure_type_counts"])
+        self.assertIn("actual_output_summary", result["results"][0])
 
 
 if __name__ == "__main__":

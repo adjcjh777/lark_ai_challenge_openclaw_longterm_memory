@@ -16,19 +16,37 @@ from .models import DEFAULT_SCOPE
 from .repository import MemoryRepository
 
 
+FAILURE_RECOMMENDED_FIXES = {
+    "candidate_not_detected": "检查 candidate 规则是否覆盖决策、负责人、截止时间、流程规则和风险结论。",
+    "wrong_subject_normalization": "检查 subject 归一化，确认新旧表达被归到同一主题。",
+    "wrong_layer_routing": "检查 L1/L2/L3 分层过滤、fallback 顺序和 trace 中的 layer 标记。",
+    "vector_miss": "检查 curated memory embedding 文本和 rerank 权重，确认语义改写能进入 Top 3。",
+    "keyword_miss": "检查关键词索引、文件名/参数名保留，以及 query token 是否被过度清洗。",
+    "stale_value_leaked": "检查 active-only 过滤和 version chain，确保 superseded / stale 不作为当前答案返回。",
+    "evidence_missing": "检查 evidence quote 写入和工具输出，召回结果必须带来源证据。",
+    "agent_did_not_prefetch": "检查 memory.prefetch 是否在 Agent 任务前被调用，且 context pack 非空。",
+    "reminder_too_noisy": "检查 heartbeat 触发条件、cooldown 和 relevance gate，避免漏发或乱发 reminder candidate。",
+    "permission_scope_error": "检查 scope permission、敏感内容脱敏和 reminder 输出权限门控。",
+    "false_positive_candidate": "检查低价值闲聊和临时确认的过滤规则，避免乱记。",
+}
+
+
 def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict[str, Any]:
     cases = json.loads(Path(cases_path).read_text(encoding="utf-8"))
     if isinstance(cases, dict) and cases.get("benchmark_type") == "anti_interference":
         return run_anti_interference_benchmark(cases, source_path=cases_path, scope=scope)
-    if isinstance(cases, list) and any(case.get("type") == "copilot_recall" for case in cases):
+    case_types = {_case_type(case) for case in cases} if isinstance(cases, list) else set()
+    if "copilot_recall" in case_types:
         return run_copilot_recall_benchmark(cases, source_path=cases_path, scope=scope)
-    if isinstance(cases, list) and any(case.get("type") == "copilot_candidate" for case in cases):
+    if "copilot_candidate" in case_types:
         return run_copilot_candidate_benchmark(cases, source_path=cases_path, scope=scope)
-    if isinstance(cases, list) and any(case.get("type") == "copilot_conflict" for case in cases):
+    if "copilot_conflict" in case_types:
         return run_copilot_conflict_benchmark(cases, source_path=cases_path, scope=scope)
-    if isinstance(cases, list) and any(case.get("type") == "copilot_prefetch" for case in cases):
+    if "copilot_layer" in case_types:
+        return run_copilot_layer_benchmark(cases, source_path=cases_path, scope=scope)
+    if "copilot_prefetch" in case_types:
         return run_copilot_prefetch_benchmark(cases, source_path=cases_path, scope=scope)
-    if isinstance(cases, list) and any(case.get("type") == "copilot_heartbeat" for case in cases):
+    if "copilot_heartbeat" in case_types:
         return run_copilot_heartbeat_benchmark(cases, source_path=cases_path, scope=scope)
 
     results = []
@@ -111,6 +129,88 @@ def _run_copilot_layer_case(repo: MemoryRepository, case: dict[str, Any], *, sco
     }
 
 
+def run_copilot_layer_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        with tempfile.NamedTemporaryFile(prefix="copilot_layer_benchmark_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+
+            for event in case.get("events", []):
+                repo.remember(scope, event, source_type="benchmark_copilot_layer")
+
+            expected_layer = case.get("expected_layer")
+            started = time.perf_counter()
+            recall_result = _run_copilot_layer_case(repo, case, scope=scope)
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            conn.close()
+
+        recalled = recall_result["recall"]
+        actual = _answer_from_recall(recalled)
+        expected = case.get("expected_active_value", "")
+        forbidden = case.get("forbidden_value")
+        evidence_present = _recall_has_evidence(recalled)
+        expected_ok = expected in actual if expected else bool(actual)
+        forbidden_leak = bool(forbidden and forbidden in actual)
+        layer_passed = recall_result["actual_layer"] == expected_layer if expected_layer else True
+        passed = bool(expected_ok and not forbidden_leak and evidence_present and layer_passed)
+        failure_type = _layer_failure_type(
+            case=case,
+            expected_ok=expected_ok,
+            evidence_present=evidence_present,
+            forbidden_leak=forbidden_leak,
+            layer_passed=layer_passed,
+        )
+
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": _case_type(case),
+                "query": case["query"],
+                "expected": expected,
+                "expected_output": {
+                    "expected_active_value": expected,
+                    "expected_layer": expected_layer,
+                    "forbidden_value": forbidden,
+                    "evidence_keyword": case.get("evidence_keyword"),
+                },
+                "actual": actual,
+                "actual_output_summary": {
+                    "actual_layer": recall_result["actual_layer"],
+                    "evidence_present": evidence_present,
+                    "forbidden_leak": forbidden_leak,
+                },
+                "forbidden": forbidden,
+                "passed": passed,
+                "latency_ms": latency_ms,
+                "evidence_present": evidence_present,
+                "expected_layer": expected_layer,
+                "actual_layer": recall_result["actual_layer"],
+                "layer_passed": layer_passed,
+                "recall": recalled,
+                "trace": recall_result["trace"],
+                "failure_type": failure_type,
+                "recommended_fix": _recommended_fix(case, failure_type),
+                "failure_debug_hint": case.get("failure_debug_hint"),
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_layer",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_layer_metrics(results),
+        "results": results,
+    }
+
+
 def run_copilot_recall_benchmark(
     cases: list[dict[str, Any]],
     *,
@@ -154,13 +254,31 @@ def run_copilot_recall_benchmark(
         recall_at_1 = expected_rank == 1
         recall_at_3 = expected_rank is not None and expected_rank <= 3
         passed = bool(recall_at_3 and evidence_present and not forbidden_leak)
+        failure_type = _recall_failure_type(
+            case=case,
+            recall_at_3=recall_at_3,
+            evidence_present=evidence_present,
+            forbidden_leak=forbidden_leak,
+        )
 
         results.append(
             {
                 "case_id": case["case_id"],
-                "case_type": case["type"],
+                "case_type": _case_type(case),
                 "query": case["query"],
                 "expected": expected,
+                "expected_output": {
+                    "expected_active_value": expected,
+                    "forbidden_value": forbidden,
+                    "evidence_keyword": evidence_keyword,
+                    "top_k": 3,
+                },
+                "actual_output_summary": {
+                    "expected_rank": expected_rank,
+                    "recall_at_3": recall_at_3,
+                    "evidence_present": evidence_present,
+                    "forbidden_leak": forbidden_leak,
+                },
                 "forbidden": forbidden,
                 "expected_rank": expected_rank,
                 "recall_at_1": recall_at_1,
@@ -171,8 +289,10 @@ def run_copilot_recall_benchmark(
                 "latency_ms": latency_ms,
                 "top_candidates": top_results,
                 "trace": response.get("trace"),
+                "failure_type": failure_type,
+                "recommended_fix": _recommended_fix(case, failure_type),
                 "failure_debug_hint": case.get("failure_debug_hint"),
-                "failure_category": case.get("failure_category"),
+                "planned_failure_category": case.get("failure_category"),
             }
         )
 
@@ -234,10 +354,20 @@ def run_copilot_candidate_benchmark(
         results.append(
             {
                 "case_id": case["case_id"],
-                "case_type": case["type"],
+                "case_type": _case_type(case),
                 "text": case["text"],
                 "expected_candidate": expected_candidate,
+                "expected_output": {
+                    "candidate_created": expected_candidate,
+                    "expected_reason": case.get("expected_reason"),
+                },
                 "candidate_created": candidate_created,
+                "actual_output_summary": {
+                    "action": response.get("action") if response.get("ok") else None,
+                    "candidate_created": candidate_created,
+                    "evidence_present": evidence_present,
+                    "risk_flags": response.get("risk_flags") if response.get("ok") else [],
+                },
                 "expected_reason": case.get("expected_reason"),
                 "actual_action": response.get("action") if response.get("ok") else None,
                 "candidate_id": (candidate or {}).get("candidate_id"),
@@ -245,6 +375,8 @@ def run_copilot_candidate_benchmark(
                 "conflict": response.get("conflict") if response.get("ok") else {},
                 "evidence_present": evidence_present,
                 "failure_category": failure_category or case.get("failure_category"),
+                "failure_type": failure_category,
+                "recommended_fix": _recommended_fix(case, failure_category),
                 "passed": passed,
                 "latency_ms": latency_ms,
                 "response": response,
@@ -353,14 +485,37 @@ def run_copilot_conflict_benchmark(
             and active_seen
             and explain_has_evidence
         )
+        failure_type = _conflict_failure_type(
+            conflict_detected=conflict_detected,
+            confirm_ok=bool(confirm_response and confirm_response.get("ok")),
+            expected_rank=expected_rank,
+            forbidden_leak=forbidden_leak,
+            superseded_seen=superseded_seen,
+            active_seen=active_seen,
+            explain_has_evidence=explain_has_evidence,
+        )
         results.append(
             {
                 "case_id": case["case_id"],
-                "case_type": case["type"],
+                "case_type": _case_type(case),
                 "text": case["text"],
                 "query": case["query"],
                 "expected_action": case.get("expected_action"),
                 "expected": expected,
+                "expected_output": {
+                    "expected_active_value": expected,
+                    "forbidden_value": forbidden,
+                    "expected_action": case.get("expected_action"),
+                    "version_statuses": ["active", "superseded"],
+                },
+                "actual_output_summary": {
+                    "conflict_detected": conflict_detected,
+                    "confirm_ok": bool(confirm_response and confirm_response.get("ok")),
+                    "expected_rank": expected_rank,
+                    "forbidden_leak": forbidden_leak,
+                    "version_statuses": sorted(status for status in version_statuses if status),
+                    "explain_has_evidence": explain_has_evidence,
+                },
                 "forbidden": forbidden,
                 "conflict_detected": conflict_detected,
                 "confirm_ok": bool(confirm_response and confirm_response.get("ok")),
@@ -375,6 +530,8 @@ def run_copilot_conflict_benchmark(
                 "confirm_response": confirm_response,
                 "search_response": search_response,
                 "explain_versions": explain_response,
+                "failure_type": failure_type,
+                "recommended_fix": _recommended_fix(case, failure_type),
                 "failure_debug_hint": case.get("failure_debug_hint"),
             }
         )
@@ -431,12 +588,30 @@ def run_copilot_prefetch_benchmark(
         used_context = bool(relevant)
         forbidden_leak = bool(forbidden and forbidden in text)
         passed = bool(response.get("ok") and used_context and expected_keyword in text and evidence_present and not forbidden_leak)
+        failure_type = _prefetch_failure_type(
+            expected_keyword=expected_keyword,
+            output_text=text,
+            used_context=used_context,
+            evidence_present=evidence_present,
+            forbidden_leak=forbidden_leak,
+        )
         results.append(
             {
                 "case_id": case["case_id"],
-                "case_type": case["type"],
+                "case_type": _case_type(case),
                 "task": case["task"],
                 "expected_memory_keyword": expected_keyword,
+                "expected_output": {
+                    "expected_memory_keyword": expected_keyword,
+                    "forbidden_value": forbidden,
+                    "context_pack_required": True,
+                },
+                "actual_output_summary": {
+                    "used_context": used_context,
+                    "relevant_memory_count": len(relevant),
+                    "evidence_present": evidence_present,
+                    "forbidden_leak": forbidden_leak,
+                },
                 "forbidden": forbidden,
                 "used_context": used_context,
                 "evidence_present": evidence_present,
@@ -444,6 +619,8 @@ def run_copilot_prefetch_benchmark(
                 "passed": passed,
                 "latency_ms": latency_ms,
                 "response": response,
+                "failure_type": failure_type,
+                "recommended_fix": _recommended_fix(case, failure_type),
                 "failure_debug_hint": case.get("failure_debug_hint"),
             }
         )
@@ -502,18 +679,31 @@ def run_copilot_heartbeat_benchmark(
         )
         sensitive_leak = bool(forbidden and forbidden in text)
         passed = bool(response.get("ok") and expected_found and not sensitive_leak)
+        failure_type = _heartbeat_failure_type(expected_found=expected_found, sensitive_leak=sensitive_leak)
         results.append(
             {
                 "case_id": case["case_id"],
-                "case_type": case["type"],
+                "case_type": _case_type(case),
                 "expected_trigger": expected_trigger,
                 "expected_subject": expected_subject,
+                "expected_output": {
+                    "expected_trigger": expected_trigger,
+                    "expected_subject": expected_subject,
+                    "forbidden_value": forbidden,
+                },
+                "actual_output_summary": {
+                    "candidate_count": len(candidates),
+                    "expected_found": expected_found,
+                    "sensitive_leak": sensitive_leak,
+                },
                 "candidate_count": len(candidates),
                 "expected_found": expected_found,
                 "sensitive_leak": sensitive_leak,
                 "passed": passed,
                 "latency_ms": latency_ms,
                 "response": response,
+                "failure_type": failure_type,
+                "recommended_fix": _recommended_fix(case, failure_type),
                 "failure_debug_hint": case.get("failure_debug_hint"),
             }
         )
@@ -543,6 +733,110 @@ def _candidate_failure_category(
     if candidate_created and not evidence_present:
         return "evidence_missing"
     return None
+
+
+def _case_type(case: dict[str, Any]) -> str:
+    return str(case.get("case_type") or case.get("type") or "")
+
+
+def _recommended_fix(case: dict[str, Any], failure_type: str | None) -> str | None:
+    if not failure_type:
+        return None
+    return case.get("recommended_fix") or FAILURE_RECOMMENDED_FIXES.get(failure_type) or case.get("failure_debug_hint")
+
+
+def _recall_failure_type(
+    *,
+    case: dict[str, Any],
+    recall_at_3: bool,
+    evidence_present: bool,
+    forbidden_leak: bool,
+) -> str | None:
+    if forbidden_leak:
+        return "stale_value_leaked"
+    if not evidence_present:
+        return "evidence_missing"
+    if not recall_at_3:
+        return case.get("failure_category") or "keyword_miss"
+    return None
+
+
+def _layer_failure_type(
+    *,
+    case: dict[str, Any],
+    expected_ok: bool,
+    evidence_present: bool,
+    forbidden_leak: bool,
+    layer_passed: bool,
+) -> str | None:
+    if forbidden_leak:
+        return "stale_value_leaked"
+    if not evidence_present:
+        return "evidence_missing"
+    if not layer_passed:
+        return "wrong_layer_routing"
+    if not expected_ok:
+        return case.get("failure_category") or "keyword_miss"
+    return None
+
+
+def _conflict_failure_type(
+    *,
+    conflict_detected: bool,
+    confirm_ok: bool,
+    expected_rank: int | None,
+    forbidden_leak: bool,
+    superseded_seen: bool,
+    active_seen: bool,
+    explain_has_evidence: bool,
+) -> str | None:
+    if forbidden_leak or not superseded_seen or not active_seen:
+        return "stale_value_leaked"
+    if not explain_has_evidence:
+        return "evidence_missing"
+    if not conflict_detected:
+        return "wrong_subject_normalization"
+    if not confirm_ok:
+        return "permission_scope_error"
+    if expected_rank is None or expected_rank > 3:
+        return "keyword_miss"
+    return None
+
+
+def _prefetch_failure_type(
+    *,
+    expected_keyword: str,
+    output_text: str,
+    used_context: bool,
+    evidence_present: bool,
+    forbidden_leak: bool,
+) -> str | None:
+    if forbidden_leak:
+        return "stale_value_leaked"
+    if not used_context:
+        return "agent_did_not_prefetch"
+    if not evidence_present:
+        return "evidence_missing"
+    if expected_keyword and expected_keyword not in output_text:
+        return "keyword_miss"
+    return None
+
+
+def _heartbeat_failure_type(*, expected_found: bool, sensitive_leak: bool) -> str | None:
+    if sensitive_leak:
+        return "permission_scope_error"
+    if not expected_found:
+        return "reminder_too_noisy"
+    return None
+
+
+def _failure_type_counts(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for result in results:
+        failure_type = result.get("failure_type")
+        if failure_type:
+            counts[failure_type] = counts.get(failure_type, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _answer_from_recall(recalled: dict[str, Any] | None) -> str:
@@ -693,6 +987,9 @@ def write_benchmark_outputs(
 
 
 def format_benchmark_report(result: dict[str, Any]) -> str:
+    if str(result.get("benchmark_type", "")).startswith("copilot_"):
+        return format_copilot_benchmark_report(result)
+
     summary = result.get("summary", {})
     layers = result.get("layers", {})
     by_type = result.get("by_type", {})
@@ -766,6 +1063,73 @@ def format_benchmark_report(result: dict[str, Any]) -> str:
             "",
             "- 当前 D7 主要验证抗干扰召回；矛盾更新专项和效能对比将在 D8/D9 补齐。",
             "- 召回仍是规则打分，不使用 embedding；这有利于解释性，但对复杂语义改写的覆盖有限。",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def format_copilot_benchmark_report(result: dict[str, Any]) -> str:
+    summary = result.get("summary", {})
+    benchmark_type = result.get("benchmark_type", "copilot")
+    lines = [
+        "# Benchmark Report",
+        "",
+        "日期：2026-05-03",
+        "",
+        f"## {benchmark_type}",
+        "",
+        "本节由 `memory_engine benchmark run` 生成，面向 OpenClaw-native Feishu Memory Copilot 的指标自证。",
+        "",
+        "### 可复现实验命令",
+        "",
+        "```bash",
+        f"python3 -m memory_engine benchmark run {result.get('source', '<cases>')} --json-output reports/{benchmark_type}.json --csv-output reports/{benchmark_type}.csv --markdown-output docs/benchmark-report.md",
+        "```",
+        "",
+        "### 指标摘要",
+        "",
+        "| 指标 | 数值 |",
+        "|---|---:|",
+    ]
+    for key, value in summary.items():
+        if isinstance(value, (int, float)):
+            lines.append(f"| {key} | {value} |")
+    lines.extend(
+        [
+            "",
+            "### 失败分类",
+            "",
+            "| failure_type | 数量 | recommended_fix |",
+            "|---|---:|---|",
+        ]
+    )
+    failure_counts = summary.get("failure_type_counts") or {}
+    if failure_counts:
+        for failure_type, count in failure_counts.items():
+            lines.append(f"| {failure_type} | {count} | {FAILURE_RECOMMENDED_FIXES.get(failure_type, '')} |")
+    else:
+        lines.append("| 无失败 | 0 | 当前样例全部通过；继续保留边界样例，不为了指标删样例。 |")
+    lines.extend(
+        [
+            "",
+            "### 样例证据",
+            "",
+            "| case_id | passed | failure_type | actual_output_summary |",
+            "|---|---:|---|---|",
+        ]
+    )
+    for item in result.get("results", [])[:20]:
+        actual = json.dumps(item.get("actual_output_summary", {}), ensure_ascii=False, sort_keys=True)
+        lines.append(
+            f"| {item.get('case_id')} | {str(bool(item.get('passed'))).lower()} | {item.get('failure_type') or ''} | {actual} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### 当前局限",
+            "",
+            "- 本报告证明 runner、字段和 failure 分类可复现，不代表最终指标已经冲到复赛目标。",
+            "- `reports/` 下的 JSON / CSV 是本地运行证据目录，默认不提交。",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -899,6 +1263,34 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _copilot_layer_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    evidence_present = sum(1 for result in results if result["evidence_present"])
+    layer_passed = sum(1 for result in results if result["layer_passed"])
+    forbidden_cases = [result for result in results if result.get("forbidden")]
+    forbidden_leaks = [result for result in forbidden_cases if result.get("forbidden") and result.get("forbidden") in result.get("actual", "")]
+    latencies = sorted(result["latency_ms"] for result in results)
+    l1_latencies = sorted(result["latency_ms"] for result in results if result.get("expected_layer") == "L1")
+    l2_cases = [result for result in results if result.get("expected_layer") == "L2"]
+    l3_cases = [result for result in results if result.get("expected_layer") == "L3"]
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "layer_case_count": total,
+        "layer_accuracy": _ratio(layer_passed, total),
+        "l1_hit_rate": _ratio(sum(1 for result in results if result.get("expected_layer") == "L1" and result["layer_passed"]), len(l1_latencies)),
+        "l2_fallback_success_rate": _ratio(sum(1 for result in l2_cases if result["layer_passed"]), len(l2_cases)),
+        "l3_deep_search_success_rate": _ratio(sum(1 for result in l3_cases if result["layer_passed"]), len(l3_cases)),
+        "l1_hot_recall_p95_ms": _percentile(l1_latencies, 0.95),
+        "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
+        "evidence_coverage": _ratio(evidence_present, total),
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
+    }
+
+
 def _copilot_recall_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(results)
     passed = sum(1 for result in results if result["passed"])
@@ -918,6 +1310,7 @@ def _copilot_recall_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
     }
 
 
@@ -937,6 +1330,7 @@ def _copilot_candidate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "candidate_not_detected": candidate_not_detected,
         "false_positive_candidate": false_positive,
         "evidence_missing": evidence_missing,
+        "failure_type_counts": _failure_type_counts(results),
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
     }
@@ -964,6 +1358,7 @@ def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "evidence_coverage": _ratio(explain_evidence, total),
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
     }
 
 
@@ -983,6 +1378,7 @@ def _copilot_prefetch_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
     }
 
 
@@ -1000,6 +1396,7 @@ def _copilot_heartbeat_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_candidate_count": round(sum(result["candidate_count"] for result in results) / total, 3) if total else 0.0,
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
     }
 
 
@@ -1136,6 +1533,37 @@ def _metric_rows(groups: dict[str, Any]) -> list[str]:
 def _write_csv(path: str | Path, results: list[dict[str, Any]]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    if results and str(results[0].get("case_type", "")).startswith("copilot_"):
+        fields = [
+            "case_id",
+            "case_type",
+            "passed",
+            "failure_type",
+            "recommended_fix",
+            "latency_ms",
+            "input_summary",
+            "expected_output",
+            "actual_output_summary",
+        ]
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            for result in results:
+                writer.writerow(
+                    {
+                        "case_id": result.get("case_id"),
+                        "case_type": result.get("case_type"),
+                        "passed": result.get("passed"),
+                        "failure_type": result.get("failure_type"),
+                        "recommended_fix": result.get("recommended_fix"),
+                        "latency_ms": result.get("latency_ms"),
+                        "input_summary": result.get("query") or result.get("text") or result.get("task") or result.get("expected_subject"),
+                        "expected_output": json.dumps(result.get("expected_output", {}), ensure_ascii=False, sort_keys=True),
+                        "actual_output_summary": json.dumps(result.get("actual_output_summary", {}), ensure_ascii=False, sort_keys=True),
+                    }
+                )
+        return
+
     fields = [
         "query_id",
         "expected_type",

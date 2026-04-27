@@ -47,13 +47,22 @@ VERSION_FIELDS = [
 BENCHMARK_FIELDS = [
     "run_id",
     "benchmark_name",
+    "benchmark_type",
     "source",
     "case_count",
     "case_pass_rate",
+    "recall_at_3",
     "conflict_accuracy",
+    "candidate_precision",
+    "candidate_recall",
+    "agent_task_context_use_rate",
+    "l1_hot_recall_p95_ms",
     "stale_leakage_rate",
     "evidence_coverage",
+    "sensitive_reminder_leakage_rate",
     "avg_latency_ms",
+    "failure_type_counts",
+    "recommended_fix_summary",
     "updated_at",
     "summary_json",
 ]
@@ -359,17 +368,27 @@ def benchmark_rows(
     summary = result.get("summary", result)
     now = _format_ms(int(time.time() * 1000))
     run_id = f"bench_{int(time.time() * 1000)}"
+    failure_type_counts = summary.get("failure_type_counts") or {}
     return [
         [
             run_id,
             benchmark_name or default_name,
+            result.get("benchmark_type", summary.get("benchmark_type", "")),
             source,
             summary.get("case_count", 0),
             summary.get("case_pass_rate", 0.0),
+            summary.get("recall_at_3", 0.0),
             summary.get("conflict_accuracy", 0.0),
+            summary.get("candidate_precision", 0.0),
+            summary.get("candidate_recall", 0.0),
+            summary.get("agent_task_context_use_rate", 0.0),
+            summary.get("l1_hot_recall_p95_ms", 0.0),
             summary.get("stale_leakage_rate", 0.0),
             summary.get("evidence_coverage", 0.0),
+            summary.get("sensitive_reminder_leakage_rate", 0.0),
             summary.get("avg_latency_ms", 0.0),
+            json.dumps(failure_type_counts, ensure_ascii=False, sort_keys=True),
+            _recommended_fix_summary(failure_type_counts),
             now,
             json.dumps(summary, ensure_ascii=False, sort_keys=True),
         ]
@@ -525,9 +544,15 @@ def _schema_fields(fields: list[str]) -> list[dict[str, str]]:
         "recall_count",
         "case_count",
         "case_pass_rate",
+        "recall_at_3",
         "conflict_accuracy",
+        "candidate_precision",
+        "candidate_recall",
+        "agent_task_context_use_rate",
+        "l1_hot_recall_p95_ms",
         "stale_leakage_rate",
         "evidence_coverage",
+        "sensitive_reminder_leakage_rate",
         "avg_latency_ms",
     }
     datetime_fields = {"updated_at"}
@@ -604,6 +629,12 @@ def _error_summary(errors: list[dict[str, Any]]) -> str | None:
         stderr = error.get("stderr") or error.get("stdout") or "unknown error"
         parts.append(f"{error['argv'][:4]} failed after {error['attempts']} attempts: {stderr[:240]}")
     return "\n".join(parts)
+
+
+def _recommended_fix_summary(failure_type_counts: dict[str, Any]) -> str:
+    if not failure_type_counts:
+        return "当前样例无失败；保留边界样例继续观察。"
+    return "; ".join(f"{name}:{count}" for name, count in sorted(failure_type_counts.items()))
 
 
 def _source(source_type: str | None, source_id: str | None) -> str:

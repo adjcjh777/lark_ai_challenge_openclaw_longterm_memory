@@ -1,164 +1,108 @@
-# Benchmark Report
+# Feishu Memory Copilot Benchmark Report
 
-日期：2026-04-25
+日期：2026-05-03
+主线：OpenClaw-native Feishu Memory Copilot
+证据来源：`memory_engine/benchmark.py`、`benchmarks/copilot_*_cases.json`、本地 `reports/copilot_*.json` / `reports/copilot_*.csv`
 
-## D7 抗干扰召回评测
+## 先看这个
 
-本轮评测验证 Memory Engine 在大量无关群聊干扰下，是否仍能从 active memory 层召回关键企业记忆。D7 把数据分为三层：
+1. 这份报告证明 Copilot MVP 已经有可复现的评测入口，不只是“看起来能用”。
+2. 本轮覆盖 recall（历史决策召回）、candidate（待确认记忆识别）、conflict（冲突更新）、layer（分层召回）、prefetch（任务前上下文包）、heartbeat（主动提醒候选）六类能力。
+3. 今天不追求最终指标冲高，先保证每个 PRD 指标都有输入字段、输出字段、失败分类和可复现命令。
+4. Bitable Benchmark Results 已有 dry-run 字段承载这些指标；今天不真实写飞书生产表。
+5. 当前所有样例通过，失败分类表仍保留，用于后续加入更难样例时定位问题。
 
-- raw events：完整消息归档，包含关键记忆写入和干扰对话，用于审计和失败定位。
-- curated memories：经过结构化抽取、去重和状态机管理的 active memory，是默认召回层。
-- recall logs：每次查询的候选、排名、延迟和失败诊断，用于复现实验结果。
-
-这种分层参考 Hermes persistent memory 的思路：长期记忆不是把所有聊天塞进 prompt，而是把高价值事实压缩成有界、可解释、可版本化的 active memory；raw archive 只在需要追溯上下文或定位失败时按需搜索。
-
-### 可复现实验命令
-
-```bash
-python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md --csv-output reports/day7_anti_interference.csv
-```
-
-### 数据规模
-
-| 层 | 数量 | 说明 |
-|---|---:|---|
-| raw events | 1050 | 关键记忆 + 干扰对话归档 |
-| curated memories | 50 | 已结构化并处于 active 状态的关键记忆 |
-| recall logs | 50 | 查询评测记录 |
-
-### 总体指标
-
-| 指标 | 数值 |
-|---|---:|
-| Recall@1 | 1.0000 |
-| Recall@3 | 1.0000 |
-| MRR | 1.0000 |
-| 平均延迟 ms | 0.688 |
-| P95 延迟 ms | 1.122 |
-
-### 按 Type 分项
-
-| Type | 查询数 | Recall@1 | Recall@3 | MRR | 平均延迟 ms |
-|---|---:|---:|---:|---:|---:|
-| decision | 16 | 1.0000 | 1.0000 | 1.0000 | 0.692 |
-| preference | 17 | 1.0000 | 1.0000 | 1.0000 | 0.665 |
-| workflow | 17 | 1.0000 | 1.0000 | 1.0000 | 0.708 |
-
-### 按 Subject 分项
-
-| Subject | 查询数 | Recall@1 | Recall@3 | MRR | 平均延迟 ms |
-|---|---:|---:|---:|---:|---:|
-| D7记忆001 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.849 |
-| D7记忆002 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.618 |
-| D7记忆003 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.683 |
-| D7记忆004 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.617 |
-| D7记忆005 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.854 |
-| D7记忆006 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.688 |
-| D7记忆007 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.533 |
-| D7记忆008 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.635 |
-| D7记忆009 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.708 |
-| D7记忆010 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.540 |
-| D7记忆011 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.584 |
-| D7记忆012 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.580 |
-| D7记忆013 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.599 |
-| D7记忆014 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.606 |
-| D7记忆015 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.529 |
-| D7记忆016 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.508 |
-| D7记忆017 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.554 |
-| D7记忆018 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.659 |
-| D7记忆019 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.752 |
-| D7记忆020 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.615 |
-| D7记忆021 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.748 |
-| D7记忆022 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.591 |
-| D7记忆023 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.578 |
-| D7记忆024 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.666 |
-| D7记忆025 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.896 |
-| D7记忆026 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.743 |
-| D7记忆027 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.650 |
-| D7记忆028 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.712 |
-| D7记忆029 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.666 |
-| D7记忆030 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.549 |
-| D7记忆031 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.544 |
-| D7记忆032 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.561 |
-| D7记忆033 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.620 |
-| D7记忆034 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.612 |
-| D7记忆035 | 1 | 1.0000 | 1.0000 | 1.0000 | 1.150 |
-| D7记忆036 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.675 |
-| D7记忆037 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.603 |
-| D7记忆038 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.602 |
-| D7记忆039 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.841 |
-| D7记忆040 | 1 | 1.0000 | 1.0000 | 1.0000 | 1.533 |
-| D7记忆041 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.766 |
-| D7记忆042 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.714 |
-| D7记忆043 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.654 |
-| D7记忆044 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.636 |
-| D7记忆045 | 1 | 1.0000 | 1.0000 | 1.0000 | 1.122 |
-| D7记忆046 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.667 |
-| D7记忆047 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.566 |
-| D7记忆048 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.644 |
-| D7记忆049 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.825 |
-| D7记忆050 | 1 | 1.0000 | 1.0000 | 1.0000 | 0.570 |
-
-### 当前结论
-
-- D7 数据集覆盖 50 条关键记忆、1000 条干扰对话和 50 条查询，满足 P0 并完成 P1 干扰规模加码。
-- 评测输出同时支持机器可读 JSON、CSV 和评委可读 Markdown 摘要；CSV 默认写入 `reports/`，不作为提交物。
-- FTS5 仅用于失败样例定位，不替代 active memory 状态机和结构化召回路径。
-
-## D7 企业对话数据质量评估
-
-本轮新增一批更接近真实飞书工作群的企业对话评测数据，用来替代早期偏合成化的 D7 样例，并为 D8 矛盾更新评测提供素材。它现在已经通过数据质量门禁，但还没有接入现有 `memory_engine benchmark run` 的执行链路，因此本节只记录数据集验收结论，不把它写成引擎召回指标。
-
-### 数据文件
-
-| 文件 | 用途 | 规模 |
-|---|---|---:|
-| `datasets/enterprise_dialogues.jsonl` | 真实群聊风格 thread，含消息、memory label、evidence、supersedes | 60 threads / 500 messages / 82 labels |
-| `datasets/noise_messages.txt` | 不应沉淀为长期记忆的干扰消息池 | 1000 条 |
-| `benchmarks/dialogue_memory_cases.json` | 基于企业对话生成的 recall / conflict / temporary noise case | 150 cases |
-| `datasets/feishu_demo_conversation.md` | 评委演示脚本素材 | 201 行 |
-| `scripts/validate_enterprise_data.py` | 数据质量门禁脚本 | 13 类检查 |
-
-### 质量门禁结果
+## 可复现实验命令
 
 ```bash
-python3 scripts/validate_enterprise_data.py
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json --json-output reports/copilot_recall.json --csv-output reports/copilot_recall.csv
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json --json-output reports/copilot_candidate.json --csv-output reports/copilot_candidate.csv
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json --json-output reports/copilot_conflict.json --csv-output reports/copilot_conflict.csv
+python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json --json-output reports/copilot_layer.json --csv-output reports/copilot_layer.csv
+python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json --json-output reports/copilot_prefetch.json --csv-output reports/copilot_prefetch.csv
+python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json --json-output reports/copilot_heartbeat.json --csv-output reports/copilot_heartbeat.csv
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 ```
 
-结果：`ALL CHECKS PASSED`。
+`reports/` 是本地运行证据目录，默认不提交。提交物里保留本报告和 benchmark case 文件。
 
-| 检查项 | 结果 |
-|---|---:|
-| JSONL thread 数 | 60 |
-| 每个 thread 消息数 | 8-12，满足 8-25 |
-| 含 superseded 的冲突 thread | 20 |
-| 含临时/不沉淀语义的 noise thread | 15 |
-| memory type 覆盖 | 10 类全覆盖 |
-| active evidence 有效性 | 通过 |
-| supersedes 引用一致性 | 通过 |
-| noise message 数 | 1000 |
-| project-related noise | 261 |
-| benchmark case 总数 | 150 |
-| recall / conflict / temporary noise | 90 / 40 / 20 |
-| difficulty easy / medium / hard | 43 / 41 / 66 |
+## PRD 指标映射
 
-### 评估结论
+| PRD 指标 | 本轮入口 | 当前结果 | MVP 目标 | 结论 |
+|---|---|---:|---:|---|
+| Recall@3 | `copilot_recall_cases.json` | 1.0000 | >= 0.6000 | 通过 |
+| Conflict Update Accuracy | `copilot_conflict_cases.json` | 1.0000 | >= 0.7000 | 通过 |
+| Evidence Coverage | recall / conflict / layer / prefetch | 1.0000 | >= 0.8000 | 通过 |
+| Candidate Precision | `copilot_candidate_cases.json` | 1.0000 | >= 0.6000 | 通过 |
+| Agent Task Context Use Rate | `copilot_prefetch_cases.json` | 1.0000 | >= 0.7000 | 通过 |
+| L1 Hot Recall p95 | `copilot_layer_cases.json` | 2.755 ms | 先记录，不设硬阈值 | 已有入口 |
+| Sensitive Reminder Leakage Rate | `copilot_heartbeat_cases.json` | 0.0000 | 0.0000 | 通过 |
+| Stale Leakage Rate | recall / conflict / layer / prefetch | 0.0000 | <= 0.1500 | 通过 |
 
-- 这批数据明显优于早期 `day7_anti_interference.json` 的合成样例：thread 有上下文、角色、时间、证据消息和 supersedes 关系，能支撑“企业协作记忆”叙事。
-- 150 条 case 已经覆盖 D7 抗干扰、D8 矛盾更新和临时噪声不沉淀三类能力，其中 40 条 conflict case 超过 D8 至少 30 组的最低要求。
-- 数据中没有真实密钥；出现 `token`、`API key` 等词的位置是在安全规则样例里，内容本身要求用 placeholder 替换。
+## 分项结果
 
-### 当前限制
+| benchmark | 样例数 | 通过率 | 核心指标 | 失败分类 |
+|---|---:|---:|---|---|
+| copilot_recall | 8 | 1.0000 | Recall@3 = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
+| copilot_candidate | 30 | 1.0000 | Candidate Precision = 1.0000；candidate_not_detected = 0；false_positive_candidate = 0 | 无失败 |
+| copilot_conflict | 10 | 1.0000 | Conflict Accuracy = 1.0000；Superseded Leakage = 0.0000；Evidence Coverage = 1.0000 | 无失败 |
+| copilot_layer | 15 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 2.755 ms | 无失败 |
+| copilot_prefetch | 5 | 1.0000 | Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000 | 无失败 |
+| copilot_heartbeat | 5 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000 | 无失败 |
+| day1 fallback | 10 | 1.0000 | 旧本地 memory demo 仍可复现 | 无失败 |
 
-直接运行：
+## 样例证据
 
-```bash
-python3 -m memory_engine benchmark run benchmarks/dialogue_memory_cases.json
-```
+| 能力 | 样例 | 证明点 |
+|---|---|---|
+| 历史决策召回 | `copilot_recall_deploy_region_001` | 旧 `cn-shanghai` 被覆盖后不进入当前答案，Top 3 返回 `ap-shanghai` 并带 evidence。 |
+| 候选记忆识别 | `cand_should_006` | 旧生产部署规则存在时，新 region 文本进入 conflict candidate，不直接覆盖 active 记忆。 |
+| 冲突更新 | `conflict_region_override_001` | confirm 后新版本 active，旧版本 superseded，`memory.explain_versions` 能展示版本链证据。 |
+| 分层召回 | `copilot_layer_hot_openclaw_version_001` | OpenClaw 版本锁规则走 L1 Hot Memory，并保留 evidence quote。 |
+| 任务前预取 | `prefetch_stale_value_filtered` | `memory.prefetch` 返回 compact context pack，只带 active `ap-shanghai`，不泄漏旧 `cn-shanghai`。 |
+| 主动提醒候选 | `heartbeat_sensitive_redaction` | reminder candidate 生成前会把 `api_key` 原文脱敏，Sensitive Reminder Leakage Rate = 0。 |
 
-会得到 `case_pass_rate = 0.0`。原因不是数据质量失败，而是现有 runner 对 list-of-cases 格式只读取每个 case 的 `events` 字段；新 case 通过 `source_thread_id` 指向 `datasets/enterprise_dialogues.jsonl`，还缺少“先注入对应 thread 的 active/superseded memory labels，再执行 query”的 runner adapter。下一步应新增 `dialogue_memory` benchmark runner，再把这批数据转成真正的引擎指标。
+## 失败分类
 
-### 局限
+| failure_type | 什么时候出现 | recommended fix |
+|---|---|---|
+| `candidate_not_detected` | 应该进入待确认记忆的文本没有生成 candidate | 检查 candidate 规则是否覆盖决策、负责人、截止时间、流程规则和风险结论。 |
+| `wrong_subject_normalization` | 新旧表达没归到同一主题，导致冲突检测或召回偏掉 | 检查 subject 归一化。 |
+| `wrong_layer_routing` | 期望 L1/L2/L3 的样例走错层 | 检查分层过滤、fallback 顺序和 trace。 |
+| `vector_miss` | 语义改写没有进入 Top 3 | 检查 curated memory embedding 文本和 rerank 权重。 |
+| `keyword_miss` | 明确关键词、文件名或参数名没有命中 | 检查 keyword_index 和 query token 清洗。 |
+| `stale_value_leaked` | stale 或 superseded 旧值进入当前答案 | 检查 active-only 过滤和 version chain。 |
+| `evidence_missing` | 输出没有 evidence quote | 检查 evidence 写入和工具输出。 |
+| `agent_did_not_prefetch` | 任务前没有拿到 context pack | 检查 Agent 是否调用 `memory.prefetch`。 |
+| `reminder_too_noisy` | reminder 漏发或乱发 | 检查 heartbeat trigger、cooldown 和 relevance gate。 |
+| `permission_scope_error` | 权限或敏感内容门控失败 | 检查 scope permission 和敏感内容脱敏。 |
 
-- 当前 D7 主要验证抗干扰召回；矛盾更新专项和效能对比将在 D8/D9 补齐。
-- 召回仍是规则打分，不使用 embedding；这有利于解释性，但对复杂语义改写的覆盖有限。
+当前本轮无失败样例；后续不要为了保持 100% 指标删除难例，新增失败时按上表归因。
+
+## Bitable Dry-Run 对齐
+
+`memory_engine/bitable_sync.py` 的 `Benchmark Results` 已扩展以下字段，能承载 2026-05-03 指标：
+
+- `benchmark_type`
+- `recall_at_3`
+- `candidate_precision`
+- `candidate_recall`
+- `agent_task_context_use_rate`
+- `l1_hot_recall_p95_ms`
+- `sensitive_reminder_leakage_rate`
+- `failure_type_counts`
+- `recommended_fix_summary`
+
+真实写飞书生产表不是今天阻塞项。今天只要求 dry-run payload 能展示字段，避免把评测结果锁死在本地日志里。
+
+## 当前局限
+
+- 样例规模仍是 MVP 级：recall 8 条、candidate 30 条、conflict 10 条、layer 15 条、prefetch 5 条、heartbeat 5 条。适合证明链路，不代表最终复赛级压力测试。
+- `reports/` 的 JSON / CSV 是本地运行证据，没有提交；评委材料优先读本报告和可复现命令。
+- Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable，没有跑真实 embedding；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。
+- heartbeat 仍是 reminder candidate / dry-run，不真实发群，不绕过治理层自动写 active memory。
+- Bitable 仍是展示和审核面，不是 source of truth。
+
+## 下一步
+
+2026-05-04 从 `docs/plans/2026-05-04-implementation-plan.md` 继续，把 README、Demo runbook 和 OpenClaw examples 固定成可复现演示路径。
