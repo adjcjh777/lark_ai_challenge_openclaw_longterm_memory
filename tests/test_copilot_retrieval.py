@@ -17,7 +17,7 @@ class CopilotRetrievalTest(unittest.TestCase):
             repo = MemoryRepository(conn)
             repo.remember(
                 "project:feishu_ai_challenge",
-                "评测报告周日 20:00 前完成，负责人是赵阳。",
+                "评测报告周日 20:00 前完成，负责人是程俊豪。",
                 source_type="unit_test",
             )
 
@@ -41,7 +41,7 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual(1, len(response["results"]))
         self.assertEqual("active", response["results"][0]["status"])
         self.assertEqual("L2", response["results"][0]["layer"])
-        self.assertIn("赵阳", response["results"][0]["current_value"])
+        self.assertIn("程俊豪", response["results"][0]["current_value"])
         step_layers = [step["layer"] for step in response["trace"]["steps"]]
         self.assertEqual(["L0", "L1", "L2", "L3"], step_layers)
         self.assertEqual("no_hot_match_above_threshold", response["trace"]["steps"][1]["note"])

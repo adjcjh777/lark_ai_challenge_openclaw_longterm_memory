@@ -1,6 +1,6 @@
 # 2026-05-07 Implementation Plan
 
-阶段：最终验证、提交缓冲、push  
+阶段：最终验证、提交缓冲、push
 主控：`docs/feishu-memory-copilot-implementation-plan.md`
 
 ## 当日目标
@@ -95,17 +95,17 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 现场网络或飞书权限失败时，有 replay / dry-run / 录屏保底。
 - `README.md`、白皮书、Benchmark Report 对 Cognee、OpenClaw、Copilot Core、Card/Bitable 的职责描述一致。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天只做最终验证和提交缓冲，不再临时加功能。
 2. 用非开发者视角走一遍 README。
 3. 做最终材料检查：白皮书、Demo、Benchmark Report 是否互相对得上。
 4. 整理复赛待办，不在提交前临时加大改动。
-5. 遇到问题发我：文件名、段落或命令输出。
+5. 遇到问题记录：文件名、段落或命令输出。
 
-今晚不用做：
+本阶段不用做：
 
 - 不临场修非阻塞问题。
 - 不新增未验证功能。

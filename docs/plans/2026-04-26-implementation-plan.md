@@ -1,7 +1,7 @@
 # 2026-04-26 Implementation Plan
 
 阶段：主控切换、P0/P1 调研落盘、OpenClaw tool schema、Copilot package skeleton
-主控：`docs/feishu-memory-copilot-implementation-plan.md`  
+主控：`docs/feishu-memory-copilot-implementation-plan.md`
 当天目标：把执行入口从旧 Day 文档切换到 OpenClaw-native Copilot 主线，把正式写代码前的技术调研结论写入总控和后续日期计划，并为第一批 Copilot 代码实现准备清晰边界。
 
 ## OpenClaw 版本基线
@@ -39,7 +39,7 @@
 - OpenClaw 版本已固定：本机版本、锁文件、检查脚本和 AGENTS 规则一致。
 - 每日计划已细化：2026-04-26 至 2026-05-07 每天都能看出“做什么、改哪些文件、做到什么程度、怎么验收”。
 - D1 代码任务已定义清楚：若继续执行代码，只做 OpenClaw schema、skill examples、Copilot package skeleton，不进入旧 Bot handler 大改。
-- 队友晚上能接手检查计划，不需要理解所有底层实现。
+- 我后续能按计划自查，不需要重新理解所有历史实现。
 
 ## 今日执行清单（按顺序）
 
@@ -48,7 +48,7 @@
 | 1 | 确认执行契约 | `AGENTS.md` | 新主控、OpenClaw-first、Cognee 边界、版本锁定都写清楚 | `rg "主控|OpenClaw 版本锁定|Cognee" AGENTS.md` 有结果 |
 | 2 | 固定 OpenClaw 版本 | `agent_adapters/openclaw/openclaw-version.lock`、`scripts/check_openclaw_version.py` | 锁定 `2026.4.24`，后续禁止自动跟随 latest | `python3 scripts/check_openclaw_version.py` 通过 |
 | 3 | 细化总控计划 | `docs/feishu-memory-copilot-implementation-plan.md` | 明确 2026-04-26 至 2026-05-02 MVP，2026-05-03 至 2026-05-07 收尾 | 文档包含每日排期、模块边界、测试/benchmark |
-| 4 | 细化每日计划 | `docs/plans/*.md` | 每天有完成定义、文件级任务、验收标准、队友补位任务 | `docs/plans/README.md` 索引能找到每一天 |
+| 4 | 细化每日计划 | `docs/plans/*.md` | 每天有完成定义、文件级任务、验收标准、我的补充任务 | `docs/plans/README.md` 索引能找到每一天 |
 | 5 | 明确 D1 代码边界 | `2026-04-26-implementation-plan.md` | 只准备 schema/skeleton，不实现完整 retrieval/governance | 文档写明“后续代码执行时新增”的文件和范围 |
 | 6 | 保留旧资产 | `docs/archive/`、`docs/reference/` | 旧 day 文档和参考资料不删除、不作为主控 | 目录存在，README 说明用途 |
 | 7 | 基础验证 | 本地命令 | 文档改动不破坏旧可复现基线 | compileall 和 day1 benchmark 通过 |
@@ -133,17 +133,16 @@ python3 -m unittest tests.test_copilot_schemas
 - `python3 scripts/check_openclaw_version.py` 输出 `OpenClaw version OK: 2026.4.24`。
 - 基础验证命令通过。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
-1. 今天主要完成主控切换和计划拆分，不要求你改核心代码。
-2. 你从 `docs/plans/README.md` 开始看，确认每天任务是否能看懂。
-3. 你重点看 `docs/plans/2026-04-27-implementation-plan.md` 和 `docs/plans/2026-04-28-implementation-plan.md`，确认明后两天能从哪里开始。
-4. 你要交付：指出 3 个不清楚的任务描述，或确认没有歧义。
-5. 做对的标准：非技术同学也能知道每天要交什么；遇到问题发我文件名和具体段落。
+1. 从 `docs/plans/README.md` 开始复查，每个日期计划都要能直接执行。
+2. 重点检查 `docs/plans/2026-04-27-implementation-plan.md` 和 `docs/plans/2026-04-28-implementation-plan.md`：确认明后两天能从哪里开始、改哪些文件、跑哪些验证。
+3. 把原先的外部检查任务改成自查清单：指出 3 个不清楚的任务描述，或确认没有歧义。
+4. 做对的标准：非技术读者也能知道每天要交什么；遇到问题记录文件名和具体段落。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用配置 `.env`。
 - 不用安装 Cognee。

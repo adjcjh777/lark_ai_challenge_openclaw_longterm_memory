@@ -1,9 +1,9 @@
-# 队友 Windows 环境：Cognee 本地 embedding 安装与验证
+# Windows 备用环境：Cognee 本地 embedding 安装与验证
 
 适用日期：2026-04-27 之后
-适用范围：Windows 队友复现 Feishu Memory Copilot 的 Cognee 本地测试环境
+适用范围：在 Windows 备用环境复现 Feishu Memory Copilot 的 Cognee 本地测试环境
 
-## 给队友先看这个
+## 先看这个
 
 1. 今天不让 RightCode 负责 embedding（向量表示），RightCode 只继续负责大模型文本能力。
 2. embedding 默认改成本机 Ollama 跑 `qwen3-embedding:0.6b-fp16`，这是一个 0.6B 参数、1024 维、约 1.2GB 的本地模型。
@@ -21,7 +21,7 @@
 | `bge-m3:567m` | 567M，约 1.2GB | 1024 | 59.56 | 未在同一表格列出 | 备选 |
 | `qwen3-embedding:4b-fp16` | 4B，约 8GB | 2560 | 69.45 | 72.27 | 暂不默认 |
 
-`qwen3-embedding:4b-fp16` 分数更高，但 8GB 模型在 16GB 机器上跑 Cognee 批处理会比较吃内存，也会让 Windows 队友复现更不稳。比赛 MVP 先选择 `qwen3-embedding:0.6b-fp16`：质量比 BGE-M3 更好，内存更稳，模型也能用 Ollama 直接下载。
+`qwen3-embedding:4b-fp16` 分数更高，但 8GB 模型在 16GB 机器上跑 Cognee 批处理会比较吃内存，也会让 Windows 备用环境复现更不稳。比赛 MVP 先选择 `qwen3-embedding:0.6b-fp16`：质量比 BGE-M3 更好，内存更稳，模型也能用 Ollama 直接下载。
 
 ## 你要安装什么
 

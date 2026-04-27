@@ -1,14 +1,14 @@
 # Feishu Memory Copilot
 
-## 给队友先看这个：当前任务
+## 今天先做这个：我的任务
 
-如果你只打开 GitHub 首页，先从这里开始。今晚主要补 `copilot_layer_cases` 分层评测样例，不需要改核心 Python 代码，也不用接真实飞书权限。完成后在飞书共享看板里自己勾选 `完成情况-赵阳`；程俊豪这边不会代勾。
+从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 补分层评测样例 | [2026-04-28 handoff：队友晚上补位任务](docs/plans/2026-04-28-handoff.md#队友晚上补位任务)；[copilot_layer_cases.json](benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 补到 15 条 Hot / Warm / Cold 样例，并用中文说明为什么属于这一层 |
+| 补分层评测样例 | [2026-04-28 handoff：我的补充任务](docs/plans/2026-04-28-handoff.md#我的补充任务)；[copilot_layer_cases.json](benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 补到 15 条 Hot / Warm / Cold 样例，并用中文说明为什么属于这一层 |
 | 检查 recall 评测草稿 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-28 plan](docs/plans/2026-04-28-implementation-plan.md) | 问题清单或补充 PR | 确认问题像真实飞书项目群提问，每条能看出正确答案和证据关键词 |
-| 复核 search trace 可读性 | [tests/test_copilot_retrieval.py](tests/test_copilot_retrieval.py)；[memory_engine/copilot/orchestrator.py](memory_engine/copilot/orchestrator.py) | 字段问题清单 | 能看懂 L0 / L1 / L2 / L3 每步是什么意思；不懂的字段直接标注 |
+| 复核 search trace 可读性 | [tests/test_copilot_retrieval.py](tests/test_copilot_retrieval.py)；[memory_engine/copilot/orchestrator.py](memory_engine/copilot/orchestrator.py) | 字段问题清单 | 能看懂 L0 / L1 / L2 / L3 每步是什么意思；不清楚的字段直接记录到 handoff |
 
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
@@ -137,6 +137,6 @@ scripts/start_feishu_bot.sh --dry-run
 - PRD：`docs/feishu-memory-copilot-prd.md`
 - 日期计划索引：`docs/plans/README.md`
 - 2026-04-27 handoff：`docs/plans/2026-04-27-handoff.md`
-- 队友 Windows embedding 配置：`docs/reference/teammate-windows-cognee-embedding-setup.md`
+- Windows embedding 配置：`docs/reference/local-windows-cognee-embedding-setup.md`
 - 旧资料归档：`docs/archive/`
 - 长期参考资料：`docs/reference/`

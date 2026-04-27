@@ -1,12 +1,12 @@
 # Day 7 Handoff
 
-日期：2026-04-25  
-目标日期：2026-04-30  
+日期：2026-04-25
+目标日期：2026-04-30
 主题：Benchmark 扩容，抗干扰测试成型
 
 说明：这是提前执行 D7。当前已优先完成 P0，并补齐 P1 中低成本加码项。
 
-## 给队友先看这个
+## 先看这个
 
 今天做的是评测脚本和企业对话数据评估。第一版脚本会先放入 50 条真正重要的记忆，再混入 1000 条无关聊天，然后问 50 个问题，检查系统还能不能找回正确记忆；新补的数据则是 60 个更像真实飞书群聊的 thread，用来替代偏合成的样例。
 
@@ -142,9 +142,9 @@ python3 -m unittest discover -s tests
 - 不提交 `.reference/hermes-agent/`。
 - 不提交 `data/memory.sqlite`。
 - 不提交 `reports/day7_anti_interference.csv` 或 `reports/day7_anti_interference.json`。
-- 当前工作区已有非本轮未跟踪文件 `docs/pr2-teammate-fix-notes.md`，本轮不纳入提交。
+- 当前工作区已有非本轮未跟踪文件 `docs/archive/legacy-day-docs/pr2-collaboration-fix-notes.md`，本轮不纳入提交。
 
-## 队友今晚任务
+## 历史补充任务
 
 1. 打开 `datasets/enterprise_dialogues.jsonl`，抽查 15 个 thread，看对话是否像真实飞书工作群；重点检查“刚才说错了”“统一改成”“以后都按这个”等冲突表达是否自然。
 2. 打开 `benchmarks/dialogue_memory_cases.json`，抽查 30 条 case：10 条 recall、10 条 conflict_update、10 条 temporary_noise。每条检查 query、expected_active_value、forbidden_value 是否能从 source thread 里找到证据。
@@ -160,7 +160,7 @@ python3 -m unittest discover -s tests
 
 ## 剩余风险
 
-- D7 数据集目前偏合成化，适合证明评测脚本能跑通；后续应让队友补真实群聊风格。
+- D7 数据集目前偏合成化，适合证明评测脚本能跑通；后续应让外部分工补真实群聊风格。
 - 新企业对话数据质量已通过，但还需要 runner adapter 才能变成真实引擎指标。
 - 当前召回仍为规则打分，复杂语义改写未覆盖；D8/D9 可结合企业对话失败样例再决定是否增强 subject 归一化。
 - `docs/benchmark-report.md` 目前只覆盖 D7 抗干扰，D8/D9 需要继续追加矛盾更新和效能指标章节。

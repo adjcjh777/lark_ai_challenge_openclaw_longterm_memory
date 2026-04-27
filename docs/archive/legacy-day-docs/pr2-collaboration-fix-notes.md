@@ -1,8 +1,8 @@
-# PR #2 修改说明：Day 1 数据集与白皮书补位
+# PR #2 修改说明：Day 1 数据集与白皮书补充
 
 日期：2026-04-25
 
-这次 PR 的方向是对的：补了 simple / conflict / noise 数据集，也开始写《Memory 定义与架构白皮书》初稿，和你负责的补位任务匹配。但目前先不要合并，因为新增材料还不能直接支撑 Day 1 / 初赛 Benchmark 验收。
+这次 PR 的方向是对的：补了 simple / conflict / noise 数据集，也开始写《Memory 定义与架构白皮书》初稿，和你负责的补充任务匹配。但目前先不要合并，因为新增材料还不能直接支撑 Day 1 / 初赛 Benchmark 验收。
 
 ## 这次为什么没有合并
 
@@ -165,7 +165,7 @@ docs/memory-definition-and-architecture-whitepaper/version_0.md
 
 ## 建议你这次 PR 的最小改法
 
-为了尽快合并，建议不要一次性扩展 runner，先把 PR 收敛成“队友补位材料包”：
+为了尽快合并，建议不要一次性扩展 runner，先把 PR 收敛成“外部分工补充材料包”：
 
 1. 把新增数据分成两类：
    - 可运行 benchmark：能被现有 runner 跑通。

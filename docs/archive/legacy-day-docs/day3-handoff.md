@@ -2,7 +2,7 @@
 
 日期：2026-04-24
 
-## 给队友先看这个
+## 先看这个
 
 1. 今天已经完成：真实飞书测试群里的机器人回复已经变稳定，能处理记住、召回、查看版本、帮助和健康检查。
 2. 你今晚从这里开始：打开 `docs/demo-runbook.md`，按里面的顺序在测试群完整跑两遍。
@@ -149,7 +149,7 @@ python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay te
 python3 -m memory_engine --db-path /tmp/feishu_d3_replay.sqlite feishu replay tests/fixtures/feishu_bot_self_event.json
 ```
 
-## 队友今晚任务
+## 历史补充任务
 
 1. 打开 `docs/demo-runbook.md`，在测试群按步骤跑 2 遍。
 2. 每一步都留截图：用户输入、机器人回复、版本链、错误命令处理。

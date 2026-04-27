@@ -72,7 +72,7 @@ DEMO_MEMORIES = (
         "mem_day4_workflow_handoff",
         "workflow",
         "每日 handoff",
-        ("每日收工必须更新 handoff，包含完成项、验证命令、队友任务和未验证项。",),
+        ("每日收工必须更新 handoff，包含完成项、验证命令、程俊豪任务和未验证项。",),
     ),
     DemoMemory(
         "mem_day4_workflow_bitable_sync",
@@ -139,10 +139,10 @@ DEMO_MEMORIES = (
         ("Demo 录屏必须在 2026-05-05 21:00 前完成第一版。",),
     ),
     DemoMemory(
-        "mem_day4_deadline_teammate_samples",
+        "mem_day4_deadline_solo_samples",
         "deadline",
         "样例数据截止",
-        ("队友补充的 20 条样例记忆需要在今晚 23:30 前交付。",),
+        ("程俊豪补充的 20 条样例记忆需要在今晚 23:30 前交付。",),
     ),
     DemoMemory(
         "mem_day4_risk_token",

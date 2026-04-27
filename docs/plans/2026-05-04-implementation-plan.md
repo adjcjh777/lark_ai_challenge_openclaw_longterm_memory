@@ -5,7 +5,7 @@
 
 ## 当日目标
 
-把可运行 Demo 固定下来，让评委或队友能按 README / runbook 复现 OpenClaw-native Copilot 主线；OpenClaw runtime 不稳定时，保留 CLI/dry-run 兜底，但叙事不退回 CLI-first。README 必须说明 Cognee 是本地 knowledge / memory engine，企业记忆治理由 Copilot Core 自研。
+把可运行 Demo 固定下来，让评委或未来复现者能按 README / runbook 复现 OpenClaw-native Copilot 主线；OpenClaw runtime 不稳定时，保留 CLI/dry-run 兜底，但叙事不退回 CLI-first。README 必须说明 Cognee 是本地 knowledge / memory engine，企业记忆治理由 Copilot Core 自研。
 
 ## 必读上下文
 
@@ -39,7 +39,7 @@
 
 | 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
 |---|---|---|---|---|
-| 1 | 写 README 快速开始 | `README.md` | 10 分钟内能看懂定位、安装、验证、demo、benchmark | 队友按 README 能走到第一条命令 |
+| 1 | 写 README 快速开始 | `README.md` | 10 分钟内能看懂定位、安装、验证、demo、benchmark | 我按 README 能走到第一条命令 |
 | 2 | 写 demo runbook | `docs/demo-runbook.md` | 5 分钟脚本，覆盖痛点、工具调用、证据、版本、prefetch、heartbeat | 每步有输入和预期输出 |
 | 3 | 固定 demo 数据 | `scripts/demo_seed.py` 或 examples | 能复现历史决策、冲突更新、prefetch 三条主线 | seed/dry-run 输出稳定 |
 | 4 | 冻结 OpenClaw examples | `agent_adapters/openclaw/examples/*.json` | examples 字段与 schema 对齐，至少 2 条必演示可复制 | JSON 可解析，和 runbook 互相引用 |
@@ -81,17 +81,17 @@ python3 -m unittest discover tests
 - OpenClaw runtime 不稳时，schema examples + CLI/dry-run 路径仍能证明工具契约。
 - README 明确本地数据目录 `.data/cognee/` 不提交，真实 token / 飞书日志不提交。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天主要把 Demo 固定成评委能复现的路径。
 2. 按 README 从头走一遍，记录卡住的位置。
 3. 改 demo 讲解词，让非工程评委能理解“不是普通搜索，而是有证据和版本的企业记忆”。
 4. 准备截图需求清单：需要截哪个页面、哪个输出、哪个指标表。
-5. 遇到问题发我：卡住步骤、命令或文档段落、实际输出。
+5. 遇到问题记录：卡住步骤、命令或文档段落、实际输出。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用临时扩大功能。
 - 不用改核心算法。

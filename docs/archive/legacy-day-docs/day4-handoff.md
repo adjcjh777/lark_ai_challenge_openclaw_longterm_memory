@@ -2,7 +2,7 @@
 
 日期：2026-04-27
 
-## 给队友先看这个
+## 先看这个
 
 1. 今天已经完成：本地记忆已经能同步到飞书多维表格，评委可以在表格里看到当前记忆、版本链和评测结果。
 2. 你今晚从这里开始：打开真实 Bitable 看板，先看字段顺序和视图是否清楚。
@@ -79,7 +79,7 @@ export LARK_CLI_AS="user"
 python3 -m memory_engine bitable sync --write --benchmark-cases benchmarks/day1_cases.json
 ```
 
-如果表名被队友改成中文或实际 table id，可通过环境变量或命令参数覆盖。
+如果表名被外部分工改成中文或实际 table id，可通过环境变量或命令参数覆盖。
 
 ## 视图建议
 
@@ -174,9 +174,9 @@ python3 -m memory_engine bitable sync --write --scope project:day4_demo --benchm
 平台限制：
 
 - 部分视图配置接口返回 `OpenAPIUpdateViewSort limited`、`OpenAPIUpdateViewGroup limited` 或 `OpenAPISetVisibleFields limited`。
-- 需要队友在真实 Bitable UI 中手动补齐：`By Version Status` 按 `status` 分组，`Latest Runs` 按 `updated_at` 倒序，个别视图字段顺序微调。
+- 需要外部分工在真实 Bitable UI 中手动补齐：`By Version Status` 按 `status` 分组，`Latest Runs` 按 `updated_at` 倒序，个别视图字段顺序微调。
 
-## 队友今晚任务
+## 历史补充任务
 
 1. 打开真实 Bitable 看板，确认 `memory_id`、`subject`、`current_value`、`status`、`version`、`updated_at` 这几个字段在前面，评委不用横向翻太久。
 2. 在 Bitable 页面里手动补齐两个视图：`By Version Status` 按状态分组，`Latest Runs` 按更新时间倒序。
@@ -192,4 +192,4 @@ python3 -m memory_engine bitable sync --write --scope project:day4_demo --benchm
 ## 未验证项
 
 - 当前同步策略是 append-only 批量创建，适合初赛 Demo 和评委看板；如果需要长期生产同步，后续应增加 record_id 映射表或按 `memory_id` 查找后更新。
-- Bitable 视图已创建，但部分排序、分组和字段顺序受 OpenAPI 限制，尚需队友在真实 Base UI 中人工检查和微调。
+- Bitable 视图已创建，但部分排序、分组和字段顺序受 OpenAPI 限制，尚需外部分工在真实 Base UI 中人工检查和微调。

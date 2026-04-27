@@ -98,17 +98,17 @@ python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
 - superseded / archived 只进入 explain 或 deep trace。
 - `benchmarks/copilot_recall_cases.json` 至少有 5 条可读样例。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天主要让“查询历史决策”这条工具链完整走通。
-2. 你给 `benchmarks/copilot_layer_cases.json` 补 15 条分层场景：常用规则、最近讨论、旧版本、归档证据。
+2. 我需要给 `benchmarks/copilot_layer_cases.json` 补 15 条分层场景：常用规则、最近讨论、旧版本、归档证据。
 3. 每条用中文备注为什么属于 Hot / Warm / Cold。Hot 是最常用的记忆，Warm 是最近或待处理记忆，Cold 是历史或归档证据。
 4. 顺手检查 `copilot_recall_cases.json` 是否像真实飞书项目群问题。
-5. 遇到问题发我：case_id、你觉得应该命中的记忆、实际看起来可能命中的记忆。
+5. 遇到问题记录：case_id、应该命中的记忆、实际看起来可能命中的记忆。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用实现复杂向量库。
 - 不用改 Feishu Bot handler。

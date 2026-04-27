@@ -100,9 +100,9 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - OpenClaw demo flow 至少覆盖历史决策查询和任务前 prefetch，目标再覆盖冲突更新。
 - card / Bitable 写入失败时有 dry-run payload，可展示 evidence、version chain 和 stale/superseded 过滤。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天要把第一周 Demo 闭环串起来，重点看 Agent 是否会在任务前主动取上下文。
 2. 按 `agent_adapters/openclaw/examples/` 走一遍 demo 样例。
@@ -110,7 +110,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 4. 准备 5 分钟 Demo 讲解词：先讲用户痛点，再讲 Agent 自动调用记忆工具。
 5. 检查 reminder 文案中是否有 token、secret 或完整内部链接。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用做复杂个性化推送。
 - 不用把 reminder 直接发到真实群，dry-run 可作为 MVP 验收。

@@ -1,8 +1,8 @@
 # Feishu Memory Copilot PRD
 
-日期：2026-04-26  
-状态：Draft for implementation planning  
-目标读者：项目负责人、队友、评委、后续重构执行者  
+日期：2026-04-26
+状态：Draft for implementation planning
+目标读者：项目负责人、评委、后续重构执行者
 产品定位：OpenClaw-native enterprise memory copilot for Feishu collaboration
 
 ## 1. Executive Summary
@@ -171,7 +171,7 @@ Acceptance criteria:
 ```text
 自动识别：
 1. 飞书群里出现：
-   “以后评测报告周日 20:00 前完成，负责人是赵阳。”
+   “以后评测报告周日 20:00 前完成，负责人是程俊豪。”
 2. Agent 或 ingestion pipeline 判断该消息包含长期价值。
 3. 调用 memory.create_candidate。
 4. Memory Core 生成 deadline + owner 类型候选记忆。

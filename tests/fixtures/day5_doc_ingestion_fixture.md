@@ -6,7 +6,7 @@
 - 约束：飞书 Bot 权限未确认时必须使用 replay 和 dry-run 演示。
 - 规则：Benchmark 报告必须包含 Recall@1、MRR 和平均延迟。
 - 偏好：Demo 文案优先使用中文结构化字段，避免只输出原始日志。
-- 负责人：Day5 文档 ingestion 由主链路维护，队友晚上补示例文档。
+- 负责人：Day5 文档 ingestion 由主链路维护，程俊豪晚上补示例文档。
 - 风险：文档读取权限阻塞时，统一改用 Markdown fixture 完成演示。
 - 结论：Bitable 同步失败不允许阻塞本地 Memory Engine 核心闭环。
 

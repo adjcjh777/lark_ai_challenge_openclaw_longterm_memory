@@ -1,6 +1,6 @@
-# 队友本机 lark-cli 配置与 Day 2 测试指南
+# 本机 lark-cli 配置与旧 Bot 测试指南
 
-适用对象：队友在自己的电脑上拉取仓库后，配置 `lark-cli` 并测试 Day 2 飞书 Bot 最小闭环。
+适用对象：程俊豪在本机或备用机器上配置 `lark-cli`，并测试旧 Feishu Bot 最小闭环。
 
 ## 1. 前置条件
 
@@ -8,14 +8,14 @@
 
 - 飞书开放平台应用已经发布。
 - 应用已经开启机器人能力。
-- 应用可用范围已经包含队友。
+- 应用可用范围已经包含当前测试账号。
 - 应用已开通并发布这些权限：
   - `im:message.group_at_msg:readonly`
   - `im:message.p2p_msg:readonly`
   - `im:message:send_as_bot`
-- 队友已被加入测试群，或队友有权限把机器人加入测试群。
+- 当前测试账号已被加入测试群，或有权限把机器人加入测试群。
 
-队友本机需要拿到这些真实值，但不要提交到仓库：
+当前测试环境需要拿到这些真实值，但不要提交到仓库：
 
 ```text
 App ID: 从本地安全渠道获取，例如 `FEISHU_APP_ID=cli_xxx`，不要提交真实值。
@@ -66,7 +66,7 @@ lark-cli profile list
 
 ### 2.2 获取 `FEISHU_TEST_CHAT_ID`
 
-先确保队友已经在测试群里，且应用可见范围包含队友。登录 user 身份：
+先确保当前测试账号已经在测试群里，且应用可见范围包含当前测试账号。登录 user 身份：
 
 ```bash
 lark-cli --profile feishu-ai-challenge auth login --domain im
@@ -191,7 +191,7 @@ lark-cli --profile feishu-ai-challenge doctor
 说明：
 
 - 只跑 Bot 长连接监听和 Bot 回复时，主要使用 bot 身份，不一定要求 user 登录。
-- 如果队友要用 CLI 搜索群、查历史消息或拉人进群，需要额外 user 登录：
+- 如果要用 CLI 搜索群、查历史消息或拉人进群，需要额外 user 登录：
 
 ```bash
 lark-cli --profile feishu-ai-challenge auth login --domain im
@@ -318,9 +318,9 @@ conn.close()
 PY
 ```
 
-## 10. 队友 Day 2 交付物
+## 10. 本机 Day 2 交付物
 
-队友不需要改核心代码。建议产出：
+本机测试不需要改核心代码。建议产出：
 
 ```text
 docs/day2-test-notes.md
@@ -362,7 +362,7 @@ lark-cli --profile feishu-ai-challenge auth login --domain im
 1. `scripts/start_feishu_bot.sh` 是否还在运行。
 2. 机器人是否在测试群。
 3. 飞书开放平台事件订阅是否已发布。
-4. 应用可用范围是否包含队友和测试群成员。
+4. 应用可用范围是否包含当前测试账号和测试群成员。
 5. 是否在群聊里 @机器人。
 
 ### 能收到事件但不能回复

@@ -63,10 +63,10 @@
     "case_id": "benchmark_owner_001",
     "type": "recall",
     "events": [
-      "Benchmark 由队友维护，主线开发不要被测试集阻塞。"
+      "Benchmark 由程俊豪维护，主线开发不要被测试集阻塞。"
     ],
     "query": "Benchmark 谁维护",
-    "expected_active_value": "队友"
+    "expected_active_value": "程俊豪"
   },
   {
     "case_id": "deadline_report_001",

@@ -1,6 +1,6 @@
 # Bitable 记忆台账与评委视图建议
 
-日期：2026-04-27  
+日期：2026-04-27
 适用阶段：D4 Bitable 记忆台账和评委可视化
 
 ## 表结构
@@ -91,8 +91,8 @@
 - `Memory Ledger / By Type`：已按 `type` 分组。
 - `Memory Ledger / Recently Updated`：已按 `updated_at` 倒序。
 - `Memory Versions / Version Chain`：已按 `memory_id` 分组，并按 `version` 升序。
-- `Memory Versions / By Version Status`：视图已创建；分组接口返回平台限制，需队友在 UI 中手动按 `status` 分组。
-- `Benchmark Results / Latest Runs`：视图已创建并设置核心字段顺序；排序接口返回平台限制，需队友在 UI 中手动按 `updated_at` 倒序。
+- `Memory Versions / By Version Status`：视图已创建；分组接口返回平台限制，需在 UI 中手动按 `status` 分组。
+- `Benchmark Results / Latest Runs`：视图已创建并设置核心字段顺序；排序接口返回平台限制，需在 UI 中手动按 `updated_at` 倒序。
 
 接口限制记录：部分视图配置调用返回 `OpenAPIUpdateViewSort limited`、`OpenAPIUpdateViewGroup limited` 或 `OpenAPISetVisibleFields limited`，数据写入和视图创建不受影响。
 
@@ -103,7 +103,7 @@
 3. 切到 `Memory Versions`：这里能看到旧版本已被标记为 `superseded`，新版本是 `active`，这就是企业协作里“决策变更可追溯”的核心价值。
 4. 切到 `Benchmark Results`：这里用数据证明系统没有只做 Demo，而是能通过冲突更新、旧值泄露率、证据覆盖率和延迟指标做自证。
 
-## 队友造数要求
+## 人工复核造数要求
 
 请造 20 条不同类型的记忆样例，覆盖：
 

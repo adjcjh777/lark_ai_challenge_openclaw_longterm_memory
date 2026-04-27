@@ -18,11 +18,11 @@
     "type": "copilot_recall",
     "layer_hint": "L2",
     "events": [
-      "Benchmark 评测样例由赵阳晚上补位维护，程俊豪负责白天主线代码。"
+      "Benchmark 评测样例由程俊豪补充维护，程俊豪负责白天主线代码。"
     ],
     "query": "评测样例谁维护",
-    "expected_active_value": "赵阳",
-    "evidence_keyword": "赵阳晚上补位维护",
+    "expected_active_value": "程俊豪",
+    "evidence_keyword": "程俊豪补充维护",
     "note": "覆盖最近协作任务的 Warm Memory。"
   },
   {
@@ -57,11 +57,11 @@
     "type": "copilot_recall",
     "layer_hint": "L2",
     "events": [
-      "赵阳今晚只补 benchmarks/copilot_layer_cases.json，不用改核心 Python 代码。"
+      "程俊豪今晚只补 benchmarks/copilot_layer_cases.json，不用改核心 Python 代码。"
     ],
-    "query": "赵阳今晚要不要改核心代码",
+    "query": "程俊豪今晚要不要改核心代码",
     "expected_active_value": "不用改核心 Python 代码",
     "evidence_keyword": "只补 benchmarks/copilot_layer_cases.json",
-    "note": "覆盖队友任务边界，避免范围扩散。"
+    "note": "覆盖程俊豪任务边界，避免范围扩散。"
   }
 ]

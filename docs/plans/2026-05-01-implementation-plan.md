@@ -94,17 +94,17 @@ python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
 - 候选记忆卡片展示当前结论、类型、主题、状态、版本、来源 evidence、是否覆盖旧值、风险标记。
 - Card / Bitable 只消费 Copilot service 输出，不直接改状态；真实写入失败时能输出 dry-run payload。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天要证明“旧规则不会继续误导 Agent”，重点看冲突更新和版本解释。
 2. 设计 20 组真实冲突表达，例如“刚才说错了”“统一改成”“以后别用这个”。
 3. 检查版本链文案是否能让非技术评委看懂：哪个是新值、哪个旧值已失效、证据来自哪里。
 4. 标注哪些冲突表达应该进入人工确认。
-5. 检查 Candidate Review 表字段是否能支持晚上人工复核。
+5. 检查 Candidate Review 表字段是否能支持后续人工复核。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用删除旧版本。
 - 不用做完整权限后台。

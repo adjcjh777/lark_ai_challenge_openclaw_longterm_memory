@@ -104,17 +104,17 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 每个 benchmark case 有输入字段、期望输出字段、实际输出摘要和 recommended fix。
 - 旧 Day1 benchmark 仍通过。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天重点是“怎么证明这个 Copilot 有用”，不是追求漂亮数字。
 2. 人工检查 20 条失败或边界样例。
 3. 把不自然的 benchmark 对话改得更像真实飞书项目群。
 4. 写 Benchmark Report 的“失败分类说明”和“当前局限”草稿。
-5. 遇到问题发我：case_id、你觉得不自然的句子、建议改成什么。
+5. 遇到问题记录：case_id、不自然的句子、建议改成什么。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用接真实飞书权限。
 - 不用追求最终指标上限，先保证指标可复现。

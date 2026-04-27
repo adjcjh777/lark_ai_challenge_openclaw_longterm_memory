@@ -1,7 +1,7 @@
 # Day 2 实现计划：接入飞书 Bot 最小闭环
 
-日期：2026-04-25  
-阶段：Day 2  
+日期：2026-04-25
+阶段：Day 2
 目标：在 Day 1 本地记忆引擎基础上，打通真实飞书 Bot 的 `接收消息 -> 写入/召回记忆 -> 回复飞书` 最小闭环。
 
 ## 1. Day 1 当前基线
@@ -118,7 +118,7 @@ python3 -m memory_engine feishu listen
 python3 -m memory_engine feishu replay tests/fixtures/feishu_message_event.json
 ```
 
-`listen` 用于真实飞书长连接。  
+`listen` 用于真实飞书长连接。
 `replay` 用于本地测试，不需要飞书凭证。
 
 ## 4. 配置与权限
@@ -406,9 +406,9 @@ python3 -m memory_engine feishu listen
 9. 接真实 Bot 回复。
 10. 更新 README 和 handoff。
 
-### 10.2 队友晚上任务
+### 10.2 历史补充任务
 
-队友不接核心代码。安排：
+外部分工不接核心代码。安排：
 
 1. 用测试群真实试 `/remember`、`/recall`。
 2. 记录失败输入和 Bot 回复截图。

@@ -5,12 +5,10 @@
 当前内容：
 
 - `bitable-ledger-views.md`：旧 Bitable 视图和讲解资料。
-- `feishu-memory-engine-research-and-plan.md`：早期 Memory Engine 研究和计划。
 - `hermes-agent-reference-notes.md`：Hermes Agent 参考机制摘录。
 - `project-overview.md`：旧项目总览和架构说明。
-- `teammate-lark-cli-setup.md`：队友 lark-cli 配置说明。
-- `teammate-windows-cognee-embedding-setup.md`：Windows 队友搭建本地 Ollama embedding 与 Cognee spike 环境的操作说明。
-- `pr2-teammate-fix-notes.md`：历史 PR 修复说明模板。
+- `local-lark-cli-setup.md`：本机 lark-cli 配置说明。
+- `local-windows-cognee-embedding-setup.md`：Windows 备用环境搭建本地 Ollama embedding 与 Cognee spike 环境的操作说明。
 
 使用规则：
 

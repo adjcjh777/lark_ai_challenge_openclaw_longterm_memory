@@ -1,8 +1,8 @@
 # Day 3 实现计划：真实飞书 Bot 稳定化与 Demo 口径
 
-日期：2026-04-26  
-阶段：Day 3  
-目标：在 Day 2 飞书 Bot 最小闭环基础上，把真实测试群演示稳定到评委可看懂、队友可复测、现场可兜底的状态。
+日期：2026-04-26
+阶段：Day 3
+目标：在 Day 2 飞书 Bot 最小闭环基础上，把真实测试群演示稳定到评委可看懂、外部分工可复测、现场可兜底的状态。
 
 ## 1. Day 2 当前基线
 
@@ -198,7 +198,7 @@ lark-cli im +messages-send \
   --msg-type text
 ```
 
-真实标识获取步骤写入 `docs/teammate-lark-cli-setup.md`，公开文档只保留占位符。
+真实标识获取步骤写入 `docs/reference/local-lark-cli-setup.md`，公开文档只保留占位符。
 
 ## 4. 安全与文档规则
 
@@ -302,9 +302,9 @@ docs/day3-security-risk-decision.md
 README.md
 ```
 
-## 7. 队友晚上任务
+## 7. 历史补充任务
 
-队友不需要改核心逻辑，重点做 Demo 可理解性补位：
+外部分工不需要改核心逻辑，重点做 Demo 可理解性补充：
 
 1. 按 `docs/demo-runbook.md` 在测试群人工跑 2 轮。
 2. 每一步记录截图需求：输入、Bot 回复、版本链、异常输入。

@@ -1,11 +1,11 @@
 # Day 4 Bitable Demo 讲解词
 
-日期：2026-04-27  
+日期：2026-04-27
 场景：评委打开 Bitable 看板时的 3 分钟讲解
 
 ## 0. 开场
 
-这张多维表格不是聊天记录备份，而是 Memory Engine 从协作信息里抽象出来的“可复用企业记忆台账”。  
+这张多维表格不是聊天记录备份，而是 Memory Engine 从协作信息里抽象出来的“可复用企业记忆台账”。
 评委可以从三张表快速看到：当前有效记忆、历史版本链、以及系统自证的 Benchmark 指标。
 
 ## 1. Memory Ledger
@@ -75,22 +75,22 @@
 
 ### 为什么不是普通搜索？
 
-普通搜索会返回相似内容；Memory Engine 返回当前有效结论。  
+普通搜索会返回相似内容；Memory Engine 返回当前有效结论。
 这里的 `status`、`version`、`supersedes_version_id` 证明系统知道旧规则已经被新规则覆盖。
 
 ### 为什么要放 Bitable？
 
-Bitable 是评委和业务人员能直接看的审计台账。  
+Bitable 是评委和业务人员能直接看的审计台账。
 SQLite 保证本地 Demo 和 Benchmark 稳定，Bitable 负责可视化、审核和协作展示。
 
 ### 如果 Bitable 权限不可用怎么办？
 
-核心能力不依赖 Bitable。  
+核心能力不依赖 Bitable。
 `remember`、`recall`、`benchmark` 都在本地 SQLite 闭环；Bitable 同步默认 dry-run，只有显式 `--write` 才写入。
 
 ### 重复同步怎么办？
 
-当前 Day4 为 append-only，同步目的是初赛展示。  
+当前 Day4 为 append-only，同步目的是初赛展示。
 如果进入生产化，会增加基于 `memory_id`、`version_id`、`run_id` 的 upsert 或 record_id 映射。
 
 ## 5. 结束语

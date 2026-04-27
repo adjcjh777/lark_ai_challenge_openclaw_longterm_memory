@@ -90,17 +90,17 @@ python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
 - evidence 缺失结果不能成为正式 Top 1。
 - Cognee 不可用时，keyword + repository fallback 仍能跑通测试。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
-1. 今天主要把“查得到”和“能证明查得到”接起来，不要求你安装 Cognee。
+1. 今天主要把“查得到”和“能证明查得到”接起来，不要求额外安装 Cognee。
 2. 人工检查 recall 失败样例，重点看问题是否像真实飞书群里的问法。
 3. 按 `keyword_miss`、`vector_miss`、`wrong_subject_normalization`、`evidence_missing` 标注失败原因。
 4. 把失败样例补回 benchmark 备注，每条写一句“应该命中哪条记忆”。
-5. 遇到问题发我：case_id、query、期望 evidence 和实际 Top 3。
+5. 遇到问题记录：case_id、query、期望 evidence 和实际 Top 3。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用引入新依赖。
 - 不用上分布式向量服务。

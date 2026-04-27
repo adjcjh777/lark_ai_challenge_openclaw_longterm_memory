@@ -12,13 +12,13 @@
     "layer_reason": "Hot 是最常用的记忆，应该优先走 L1。"
   },
   {
-    "case_id": "copilot_layer_warm_teammate_001",
+    "case_id": "copilot_layer_warm_solo_001",
     "type": "copilot_layer",
     "expected_layer": "L2",
     "events": [
-      "赵阳今晚补 copilot_layer_cases 分层场景，完成后自己在看板勾选。"
+      "程俊豪今晚补 copilot_layer_cases 分层场景，完成后自己在看板勾选。"
     ],
-    "query": "赵阳今晚补什么",
+    "query": "程俊豪今晚补什么",
     "expected_active_value": "copilot_layer_cases",
     "evidence_keyword": "完成后自己在看板勾选",
     "layer_reason": "Warm 是最近或待处理记忆，适合 L1 不足时 fallback。"

@@ -114,22 +114,22 @@ python3 scripts/spike_cognee_local.py
 
 - 参考 MTEB / C-MTEB 分数和 Ollama 包体后，默认 embedding 从备选 `bge-m3:567m` 调整为 `qwen3-embedding:0.6b-fp16`。
 - 选择原因：`qwen3-embedding:0.6b-fp16` 为 1024 维，官方 Ollama 包体约 1.2GB，适合 16GB Mac mini；Qwen3-Embedding 模型卡列出的 multilingual MTEB 为 64.33、C-MTEB 为 66.33，高于同体量 BGE-M3 的 multilingual MTEB 59.56。
-- `qwen3-embedding:4b-fp16` 虽然质量更高，但官方 Ollama F16 包体约 8GB；考虑 Cognee 批处理和 Windows 队友复现稳定性，暂不作为默认。
-- 已新增 `memory_engine/copilot/embedding-provider.lock` 锁定 provider、model、endpoint、dimensions，并新增 `.env.example`、`scripts/check_embedding_provider.py`、Windows/macOS Ollama setup 脚本和队友文档。
+- `qwen3-embedding:4b-fp16` 虽然质量更高，但官方 Ollama F16 包体约 8GB；考虑 Cognee 批处理和 Windows 备用环境复现稳定性，暂不作为默认。
+- 已新增 `memory_engine/copilot/embedding-provider.lock` 锁定 provider、model、endpoint、dimensions，并新增 `.env.example`、`scripts/check_embedding_provider.py`、Windows/macOS Ollama setup 脚本和本地复现文档。
 - 切换 embedding 维度后，旧 `.data/cognee/` 里可能残留 3072 维 LanceDB schema；`scripts/spike_cognee_local.py --reset-local-data` 用于安全删除项目内 `.data/cognee/` 后重建本地 Cognee 数据。
 - 本机已验证 `ollama pull qwen3-embedding:0.6b-fp16`、`python3 scripts/check_embedding_provider.py`、以及 `RightCode gpt-5.3-codex-high + Ollama qwen3-embedding:0.6b-fp16` 的 Cognee 真实 `add -> cognify -> search` 三阶段闭环。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天会先验证 Cognee（本地记忆引擎）能不能在本机最小跑通；如果没装好，也要有 dry-run 输出说明原因。
-2. 你准备 10 条真实项目协作问题，写入 `benchmarks/copilot_recall_cases.json` 草稿。
+2. 我需要准备 10 条真实项目协作问题，写入 `benchmarks/copilot_recall_cases.json` 草稿。
 3. 每条问题写清正确答案、应该出现的来源证据关键词，以及为什么这是项目长期记忆。
 4. 检查 `scripts/spike_cognee_local.py` 输出说明是否能看出“真实跑通 / dry-run / blocked”的区别。
-5. 遇到问题发我：具体 case_id、问题句子和你觉得不清楚的字段。
+5. 遇到问题记录：具体 case_id、问题句子和不清楚的字段。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用配置真实 OpenClaw runtime。
 - 不用接真实飞书权限。

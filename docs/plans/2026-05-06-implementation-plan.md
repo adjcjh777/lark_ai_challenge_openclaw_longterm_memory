@@ -82,21 +82,21 @@ python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --
 
 - submission checklist 能逐项确认初赛三大交付物。
 - 任意一天坏掉的功能都不能留到 2026-05-07。
-- README 足够让评委或队友复现核心流程。
+- README 足够让评委或未来复现者复现核心流程。
 - 敏感文件、数据库、日志、token 不进入提交。
 - Demo 失败时有 replay / dry-run / 录屏保底。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天开始不加新功能，只做提交前检查。
 2. 按 checklist 逐项验收。
 3. 完成 Benchmark Report 终稿审阅，尤其看指标和失败分类是否容易懂。
 4. 录第一版 Demo 视频或至少准备截图证据。
-5. 遇到问题发我：checklist 项、失败现象、截图或命令输出。
+5. 遇到问题记录：checklist 项、失败现象、截图或命令输出。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用再加新功能。
 - 不用做大重构。

@@ -92,17 +92,17 @@ python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
 - 文档 ingestion 只生成 candidate source，不直接改 active 状态。
 - Candidate Precision >= 60% 的 benchmark 数据集成型。
 
-## 队友晚上补位任务
+## 我的补充任务
 
-给队友先看这个：
+先看这个：
 
 1. 今天要做的是“什么内容值得成为待确认记忆”，不是直接把所有内容存起来。
 2. 补 30 条候选识别样例：15 条应该记，15 条不应该记。
 3. 每条写白话原因，说明“为什么值得记 / 为什么不值得记”。
 4. 检查卡片或 dry-run 文案里是否能看出这是“待确认记忆”，而不是已经生效。
-5. 遇到问题发我：case_id、原文、你认为的正确处理和原因。
+5. 遇到问题记录：case_id、原文、正确处理和原因。
 
-今晚不用做：
+本阶段不用做：
 
 - 不用替用户确认高风险记忆。
 - 不用改 Bitable 同步。

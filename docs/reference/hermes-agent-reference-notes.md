@@ -1,8 +1,8 @@
 # Hermes Agent 参考笔记
 
-版本：2026-04-25  
-本地参考源码：`.reference/hermes-agent/`  
-当前参考快照：`023b1bf`  
+版本：2026-04-25
+本地参考源码：`.reference/hermes-agent/`
+当前参考快照：`023b1bf`
 上游仓库：https://github.com/NousResearch/hermes-agent
 
 ## 1. 使用边界
