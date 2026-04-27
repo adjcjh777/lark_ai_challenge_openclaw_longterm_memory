@@ -4,12 +4,12 @@
 
 从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
 
-进度说明：2026-05-03 的 Copilot Benchmark Report 和指标自证已完成，recall / candidate / conflict / layer / prefetch / heartbeat 六类评测都有 runner 输出、失败分类和报告入口。下一步从 2026-05-04 的 Demo runbook、README 快速开始和 OpenClaw examples freeze 继续，不要回头重做 2026-05-03 的指标报告，除非验证失败。
+进度说明：2026-05-03 的 Copilot Benchmark Report 和指标自证已完成，并已补 10 条证明力难例；recall / candidate / conflict / layer / prefetch / heartbeat 六类评测都有 runner 输出、失败分类、反例说明和报告入口。下一步从 2026-05-04 的 Demo runbook、README 快速开始和 OpenClaw examples freeze 继续，不要回头重做 2026-05-03 的指标报告，除非验证失败。
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
 | 继续进入 2026-05-04 Demo 固定和 README 快速开始 | [2026-05-04 plan](docs/plans/2026-05-04-implementation-plan.md)；[2026-05-03 handoff](docs/plans/2026-05-03-handoff.md)；[demo-runbook.md](docs/demo-runbook.md)；[README.md](README.md)；[OpenClaw examples](agent_adapters/openclaw/examples/)；[benchmark-report.md](docs/benchmark-report.md) | 5 分钟 Demo runbook、README 快速开始、OpenClaw examples freeze、demo seed 或 dry-run 路径 | 新读者能按 README / runbook 复现历史决策召回、冲突更新、prefetch 和 heartbeat dry-run；OpenClaw runtime 不稳时有 CLI/dry-run 兜底 |
-| 2026-05-03 Benchmark Report 和指标自证已完成 | [2026-05-03 handoff](docs/plans/2026-05-03-handoff.md)；[2026-05-03 plan](docs/plans/2026-05-03-implementation-plan.md)；[benchmark.py](memory_engine/benchmark.py)；[benchmark-report.md](docs/benchmark-report.md)；[bitable_sync.py](memory_engine/bitable_sync.py) | Copilot recall / candidate / conflict / layer / prefetch / heartbeat 指标报告、失败分类、评委可读 Benchmark Report | Recall@3 = 1.0；Candidate Precision = 1.0；Conflict Accuracy = 1.0；Context Use = 1.0；Sensitive Reminder Leakage Rate = 0；Bitable dry-run 字段能承载指标 |
+| 2026-05-03 Benchmark Report 和指标自证已完成 | [2026-05-03 handoff](docs/plans/2026-05-03-handoff.md)；[2026-05-03 plan](docs/plans/2026-05-03-implementation-plan.md)；[benchmark.py](memory_engine/benchmark.py)；[benchmark-report.md](docs/benchmark-report.md)；[bitable_sync.py](memory_engine/bitable_sync.py) | Copilot recall / candidate / conflict / layer / prefetch / heartbeat 指标报告、10 条难例、失败分类、反例说明、评委可读 Benchmark Report | Recall@3 = 1.0；Candidate Precision = 1.0；Conflict Accuracy = 1.0；Context Use = 1.0；Sensitive Reminder Leakage Rate = 0；Bitable dry-run 字段能承载指标 |
 | 2026-05-02 prefetch、heartbeat 和 OpenClaw demo dry-run 已完成 | [2026-05-02 handoff](docs/plans/2026-05-02-handoff.md)；[2026-05-02 plan](docs/plans/2026-05-02-implementation-plan.md)；[service.py](memory_engine/copilot/service.py)；[heartbeat.py](memory_engine/copilot/heartbeat.py)；[task_prefetch_flow.json](agent_adapters/openclaw/examples/task_prefetch_flow.json)；[copilot_prefetch_cases.json](benchmarks/copilot_prefetch_cases.json)；[copilot_heartbeat_cases.json](benchmarks/copilot_heartbeat_cases.json) | `memory.prefetch` context pack、heartbeat reminder candidate、agent run summary candidate、OpenClaw demo flow、reminder card / Bitable dry-run | Agent 任务前能主动拿到相关记忆、evidence 和风险提示；reminder 只生成 candidate/dry-run，不真实骚扰用户；Sensitive Reminder Leakage Rate = 0 |
 | 2026-05-01 冲突更新和版本解释已完成 | [2026-05-01 handoff](docs/plans/2026-05-01-handoff.md)；[2026-05-01 plan](docs/plans/2026-05-01-implementation-plan.md)；[governance.py](memory_engine/copilot/governance.py)；[copilot_conflict_cases.json](benchmarks/copilot_conflict_cases.json)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | old -> new 冲突更新、`memory.explain_versions`、candidate review card / version card、Bitable dry-run 字段设计 | Conflict Update Accuracy = 1.0；旧值进入 superseded 后不再作为默认 search 当前答案；版本解释能说清新旧值和 evidence |
 | 2026-04-30 候选记忆治理已完成 | [2026-04-30 handoff](docs/plans/2026-04-30-handoff.md)；[governance.py](memory_engine/copilot/governance.py)；[copilot_candidate_cases.json](benchmarks/copilot_candidate_cases.json)；[test_copilot_governance.py](tests/test_copilot_governance.py) | `memory.create_candidate`、`memory.confirm`、`memory.reject`、evidence gate、30 条 candidate benchmark | candidate 默认不进入 search；confirm 后才 active；reject 后不召回；Candidate Precision = 1.0 |
@@ -41,9 +41,9 @@
 - Candidate Review card、Version Chain card 和 Bitable dry-run 五类表字段已成型，当前只消费 Copilot service 输出，不直接改状态。
 - `memory.prefetch` 已接入 Copilot service / tools，返回 compact context pack，包含 relevant memory、evidence、risk/deadline、version status 和 trace summary，不带 raw events。
 - `memory_engine/copilot/heartbeat.py` 已生成 heartbeat reminder candidate 和 agent run summary candidate；只做 dry-run，不真实发群，不绕过 governance 自动 active。
-- 新增 `benchmarks/copilot_prefetch_cases.json` 和 `benchmarks/copilot_heartbeat_cases.json`，各 5 条样例；prefetch runner 输出 Agent Task Context Use Rate，heartbeat runner 输出 Sensitive Reminder Leakage Rate。
-- `docs/benchmark-report.md` 已串联 recall、candidate、conflict、layer、prefetch、heartbeat 六类指标，报告包含失败分类、PRD 指标映射和 Bitable Benchmark Results dry-run 字段说明。
-- `docs/benchmark-report.md` 已更新为 OpenClaw-native Copilot 指标报告；`docs/demo-runbook.md` 仍按 2026-05-04 计划继续固定可复现演示路径。
+- `benchmarks/copilot_prefetch_cases.json` 已有 6 条样例，`benchmarks/copilot_heartbeat_cases.json` 已有 6 条样例；prefetch runner 输出 Agent Task Context Use Rate，heartbeat runner 输出 Sensitive Reminder Leakage Rate。
+- `docs/benchmark-report.md` 已串联 recall、candidate、conflict、layer、prefetch、heartbeat 六类指标，报告包含失败分类、反例说明、PRD 指标映射和 Bitable Benchmark Results dry-run 字段说明。
+- `docs/benchmark-report.md` 已加入 10 条证明力难例：recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 6 条全部通过；`docs/demo-runbook.md` 仍按 2026-05-04 计划继续固定可复现演示路径。
 
 ## 快速验证
 

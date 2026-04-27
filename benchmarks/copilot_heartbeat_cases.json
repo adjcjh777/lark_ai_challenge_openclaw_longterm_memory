@@ -55,5 +55,17 @@
     "expected_trigger": "review_due",
     "expected_subject": "周报收件人",
     "failure_debug_hint": "超过复核窗口的记忆应进入 review_due reminder candidate。"
+  },
+  {
+    "case_id": "heartbeat_sensitive_webhook_redaction",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "飞书审批调试"},
+    "events": [
+      {"content": "飞书审批调试风险：secret=whsec_live_123456789 只能放本地环境。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "飞书接入",
+    "forbidden_value": "whsec_live_123456789",
+    "failure_debug_hint": "reminder candidate 可以提示需要检查飞书审批风险，但不能泄漏 secret 原文。"
   }
 ]

@@ -110,6 +110,20 @@
     "expected_reason": "这是仓库协作规则。"
   },
   {
+    "case_id": "cand_should_016",
+    "type": "copilot_candidate",
+    "text": "结论：真实飞书提醒本阶段只生成 reminder candidate，不直接发群。",
+    "expected_candidate": true,
+    "expected_reason": "这是主动提醒的产品边界，后续演示和实现都要遵守。"
+  },
+  {
+    "case_id": "cand_should_017",
+    "type": "copilot_candidate",
+    "text": "约束：评测报告新增失败样例时必须保留 case_id 和 recommended_fix。",
+    "expected_candidate": true,
+    "expected_reason": "这是 benchmark 可排障性的长期要求。"
+  },
+  {
     "case_id": "cand_skip_001",
     "type": "copilot_candidate",
     "text": "大家下午三点喝咖啡。",
@@ -213,5 +227,19 @@
     "text": "这条先放着，回头再说。",
     "expected_candidate": false,
     "expected_reason": "没有明确事实或决策，不能沉淀。"
+  },
+  {
+    "case_id": "cand_skip_016",
+    "type": "copilot_candidate",
+    "text": "我觉得那个临时方案可以先听听，等会儿再定。",
+    "expected_candidate": false,
+    "expected_reason": "只是讨论态度，没有形成决定、规则或负责人信息。"
+  },
+  {
+    "case_id": "cand_skip_017",
+    "type": "copilot_candidate",
+    "text": "刚才有人提到 lark-oapi，但还没定，先别写进计划。",
+    "expected_candidate": false,
+    "expected_reason": "这是未采纳的临时想法，不能作为待确认记忆。"
   }
 ]

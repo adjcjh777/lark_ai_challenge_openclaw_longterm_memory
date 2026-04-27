@@ -125,5 +125,39 @@
     "failure_debug_hint": "如果失败，先检查旧 sheets 说法是否仍在 Top 3，再看 override intent 是否生效。",
     "failure_category": "stale_conflict",
     "note": "stale-conflict：旧写法必须被新 Bitable block 写法覆盖。"
+  },
+  {
+    "case_id": "copilot_recall_multi_turn_deadline_override_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "初赛材料周日晚上提交，先按这个节奏排期。",
+      "周日只冻结 Demo，初赛材料最终改成 2026-05-07 中午前提交。"
+    ],
+    "query": "初赛材料到底什么时候提交",
+    "expected_active_value": "2026-05-07 中午前",
+    "forbidden_value": "周日晚上提交",
+    "evidence_keyword": "最终改成 2026-05-07 中午前提交",
+    "expected_memory_intent": "记录多轮改口后的当前截止时间，避免把旧排期当成最终提交时间。",
+    "failure_debug_hint": "如果失败，先检查截止时间 subject 是否把周日旧值 superseded，再看 Top 3 是否仍含旧排期。",
+    "failure_category": "stale_conflict",
+    "note": "hard-case：同一事项被多次改口，默认 search 只能返回最终提交时间。"
+  },
+  {
+    "case_id": "copilot_recall_tentative_tool_not_decision_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "有人建议看板同步可以研究 lark-oapi，但先别写进计划。",
+      "最终飞书看板同步统一用 lark-cli base，不引入 lark-oapi。"
+    ],
+    "query": "飞书看板同步现在用什么",
+    "expected_active_value": "lark-cli base",
+    "forbidden_value": "研究 lark-oapi",
+    "evidence_keyword": "最终飞书看板同步统一用 lark-cli base",
+    "expected_memory_intent": "区分临时建议和最终决策，避免把讨论中的工具方案当成当前规则。",
+    "failure_debug_hint": "如果失败，先检查最终决策是否进入 active，再看临时建议短语是否被错误提升。",
+    "failure_category": "vector_miss",
+    "note": "hard-case：群聊里出现过未采纳方案，召回时必须选择最终决策。"
   }
 ]

@@ -72,5 +72,23 @@
     ],
     "expected_memory_keyword": "Reminder Candidates",
     "failure_debug_hint": "prefetch 应该能为看板/表格检查带出 dry-run 表约束。"
+  },
+  {
+    "case_id": "prefetch_bitable_block_not_sheet_api",
+    "type": "copilot_prefetch",
+    "task": "准备共享看板同步检查",
+    "current_context": {
+      "intent": "Bitable 共享看板写入链路",
+      "thread_topic": "飞书看板同步"
+    },
+    "events": [
+      {"content": "Bitable 共享看板必须用 sheets 单元格 API。"}
+    ],
+    "conflict_updates": [
+      "不对，Bitable 共享看板必须用 lark-cli base record 写入。"
+    ],
+    "expected_memory_keyword": "lark-cli base",
+    "forbidden_value": "sheets 单元格 API",
+    "failure_debug_hint": "prefetch 只能把 active 的 Bitable 写入链路带给 Agent，不能把 superseded Sheets 写法放进 context pack。"
   }
 ]
