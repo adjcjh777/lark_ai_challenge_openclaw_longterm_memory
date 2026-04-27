@@ -13,6 +13,7 @@
     "evidence_keyword": "生产部署 region 改成 ap-shanghai",
     "expected_memory_intent": "记录发布规则的当前有效版本，避免旧 region 污染后续部署决策。",
     "failure_debug_hint": "如果失败，先检查 conflict update 是否把旧值 superseded，再看 Top 3 是否仍含 cn-shanghai。",
+    "failure_category": "stale_conflict",
     "note": "覆盖 active 版本优先，旧值不能污染默认 search。"
   },
   {
@@ -27,6 +28,7 @@
     "evidence_keyword": "程俊豪补充维护",
     "expected_memory_intent": "记录当前项目评测样例负责人，减少反复翻群找 owner 的成本。",
     "failure_debug_hint": "如果失败，先检查 subject 是否被归到负责人，再看 evidence quote 是否丢失。",
+    "failure_category": "wrong_subject_normalization",
     "note": "覆盖最近协作任务的 Warm Memory。"
   },
   {
@@ -42,6 +44,7 @@
     "evidence_keyword": "固定为 2026.4.24",
     "expected_memory_intent": "记录 OpenClaw 版本锁和禁止自动升级规则，避免本地环境漂移。",
     "failure_debug_hint": "如果失败，先检查 workflow 类型和 evidence quote，再看是否被 latest 噪声覆盖。",
+    "failure_category": "keyword_miss",
     "note": "覆盖高频安全规则的 Hot Memory。"
   },
   {
@@ -58,6 +61,7 @@
     "evidence_keyword": "raw events 只用于追溯",
     "expected_memory_intent": "记录默认 search 的安全边界，避免把原始事件直接当作正式答案。",
     "failure_debug_hint": "如果失败，先检查 raw event 是否进入默认答案，再看 active-only 过滤是否失效。",
+    "failure_category": "evidence_missing",
     "note": "覆盖 Cold evidence 不直接成为默认答案。"
   },
   {
@@ -72,6 +76,54 @@
     "evidence_keyword": "只补 benchmarks/copilot_layer_cases.json",
     "expected_memory_intent": "记录当天补充任务边界，避免稳定性补样例时误改核心代码。",
     "failure_debug_hint": "如果失败，先检查 query 是否命中任务边界记忆，再看是否被其他开发计划覆盖。",
+    "failure_category": "keyword_miss",
     "note": "覆盖程俊豪任务边界，避免范围扩散。"
+  },
+  {
+    "case_id": "copilot_recall_keyword_only_demo_path_001",
+    "type": "copilot_recall",
+    "layer_hint": "L1",
+    "events": [
+      "Demo runbook 的主入口固定在 docs/demo-runbook.md，评委演示前先按这个文件走。"
+    ],
+    "query": "Demo runbook 主入口在哪里",
+    "expected_active_value": "docs/demo-runbook.md",
+    "evidence_keyword": "docs/demo-runbook.md",
+    "expected_memory_intent": "记录演示入口文件，避免答辩前临时翻文档目录。",
+    "failure_debug_hint": "如果失败，先检查 keyword_index 是否匹配 Demo runbook 和 docs/demo-runbook.md。",
+    "failure_category": "keyword_miss",
+    "note": "keyword-only：query 和记忆共享明确文件名，应该优先由 keyword_index 命中。"
+  },
+  {
+    "case_id": "copilot_recall_vector_only_review_material_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "评委材料里的自证指标要展示 Recall@3 和 Evidence Coverage，不能只写主观说明。"
+    ],
+    "query": "答辩材料要展示哪些可量化证明",
+    "expected_active_value": "Recall@3 和 Evidence Coverage",
+    "evidence_keyword": "自证指标要展示 Recall@3 和 Evidence Coverage",
+    "expected_memory_intent": "记录评委材料需要量化指标，避免白皮书只写叙述性结论。",
+    "failure_debug_hint": "如果失败，先检查 vector 相似度是否把答辩材料和评委材料连起来，再看 evidence quote 是否完整。",
+    "failure_category": "vector_miss",
+    "note": "vector-only：query 没有直接复用 Recall@3 字面词，应该靠 curated memory embedding 信号补上。"
+  },
+  {
+    "case_id": "copilot_recall_stale_conflict_bitable_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "Bitable 共享任务看板必须直接用 sheets 单元格写入。",
+      "不对，共享任务看板是 Bitable block，必须先解析 wiki 和 sheet metainfo，再用 base record 写入。"
+    ],
+    "query": "共享任务看板应该怎么写入",
+    "expected_active_value": "用 base record 写入",
+    "forbidden_value": "直接用 sheets 单元格写入",
+    "evidence_keyword": "必须先解析 wiki 和 sheet metainfo",
+    "expected_memory_intent": "记录看板写入链路的当前有效规则，避免回到错误的 Sheets 单元格 API。",
+    "failure_debug_hint": "如果失败，先检查旧 sheets 说法是否仍在 Top 3，再看 override intent 是否生效。",
+    "failure_category": "stale_conflict",
+    "note": "stale-conflict：旧写法必须被新 Bitable block 写法覆盖。"
   }
 ]

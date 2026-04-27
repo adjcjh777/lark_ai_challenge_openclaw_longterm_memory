@@ -19,6 +19,8 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
     cases = json.loads(Path(cases_path).read_text(encoding="utf-8"))
     if isinstance(cases, dict) and cases.get("benchmark_type") == "anti_interference":
         return run_anti_interference_benchmark(cases, source_path=cases_path, scope=scope)
+    if isinstance(cases, list) and any(case.get("type") == "copilot_recall" for case in cases):
+        return run_copilot_recall_benchmark(cases, source_path=cases_path, scope=scope)
 
     results = []
 
@@ -100,6 +102,80 @@ def _run_copilot_layer_case(repo: MemoryRepository, case: dict[str, Any], *, sco
     }
 
 
+def run_copilot_recall_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        with tempfile.NamedTemporaryFile(prefix="copilot_recall_benchmark_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+
+            for event in case.get("events", []):
+                repo.remember(scope, event, source_type="benchmark_copilot_recall")
+
+            for index in range(int(case.get("noise_count", 0))):
+                repo.add_noise_event(scope, f"无关飞书群聊噪声 {index}: 今天同步一下普通进展。")
+
+            started = time.perf_counter()
+            response = CopilotService(repository=repo).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": case["query"],
+                        "scope": scope,
+                        "top_k": 3,
+                    }
+                )
+            )
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            conn.close()
+
+        top_results = response.get("results", []) if response.get("ok") else []
+        expected = case.get("expected_active_value", "")
+        forbidden = case.get("forbidden_value")
+        evidence_keyword = case.get("evidence_keyword", "")
+        expected_rank = _copilot_expected_rank(top_results, expected)
+        forbidden_leak = bool(forbidden and any(forbidden in item.get("current_value", "") for item in top_results))
+        evidence_present = _copilot_evidence_present(top_results, evidence_keyword)
+        recall_at_1 = expected_rank == 1
+        recall_at_3 = expected_rank is not None and expected_rank <= 3
+        passed = bool(recall_at_3 and evidence_present and not forbidden_leak)
+
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": case["type"],
+                "query": case["query"],
+                "expected": expected,
+                "forbidden": forbidden,
+                "expected_rank": expected_rank,
+                "recall_at_1": recall_at_1,
+                "recall_at_3": recall_at_3,
+                "evidence_present": evidence_present,
+                "forbidden_leak": forbidden_leak,
+                "passed": passed,
+                "latency_ms": latency_ms,
+                "top_candidates": top_results,
+                "trace": response.get("trace"),
+                "failure_debug_hint": case.get("failure_debug_hint"),
+                "failure_category": case.get("failure_category"),
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_recall",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_recall_metrics(results),
+        "results": results,
+    }
+
+
 def _answer_from_recall(recalled: dict[str, Any] | None) -> str:
     if not recalled:
         return ""
@@ -113,6 +189,25 @@ def _recall_has_evidence(recalled: dict[str, Any] | None) -> bool:
         return True
     evidence = recalled.get("evidence")
     return bool(evidence and evidence[0].get("quote"))
+
+
+def _copilot_expected_rank(top_results: list[dict[str, Any]], expected: str) -> int | None:
+    if not expected:
+        return 1 if top_results else None
+    for index, item in enumerate(top_results, start=1):
+        if expected in str(item.get("current_value") or ""):
+            return index
+    return None
+
+
+def _copilot_evidence_present(top_results: list[dict[str, Any]], evidence_keyword: str) -> bool:
+    if not evidence_keyword:
+        return bool(top_results)
+    for item in top_results:
+        for evidence in item.get("evidence", []):
+            if evidence_keyword in str(evidence.get("quote") or ""):
+                return True
+    return False
 
 
 def run_anti_interference_benchmark(
@@ -422,6 +517,28 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         )
         if total
         else 0.0,
+    }
+
+
+def _copilot_recall_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    recall_at_1 = sum(1 for result in results if result["recall_at_1"])
+    recall_at_3 = sum(1 for result in results if result["recall_at_3"])
+    evidence_present = sum(1 for result in results if result["evidence_present"])
+    forbidden_cases = [result for result in results if result.get("forbidden")]
+    forbidden_leaks = [result for result in forbidden_cases if result["forbidden_leak"]]
+    latencies = sorted(result["latency_ms"] for result in results)
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "query_count": total,
+        "recall_at_1": _ratio(recall_at_1, total),
+        "recall_at_3": _ratio(recall_at_3, total),
+        "evidence_coverage": _ratio(evidence_present, total),
+        "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
     }
 
 

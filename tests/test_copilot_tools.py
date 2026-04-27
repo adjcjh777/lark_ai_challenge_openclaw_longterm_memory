@@ -137,7 +137,7 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual("no_active_memory_with_evidence", result["trace"]["final_reason"])
         self.assertEqual(["L1", "L2", "L3"], result["trace"]["layers"])
 
-    def test_handle_memory_search_uses_repository_fallback(self) -> None:
+    def test_handle_memory_search_uses_hybrid_retrieval_over_repository_data(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)
             init_db(conn)
@@ -167,10 +167,13 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertIn("--canary", result["results"][0]["current_value"])
         self.assertIn(result["results"][0]["layer"], {"L1", "L2"})
         self.assertTrue(result["results"][0]["evidence"][0]["quote"])
+        self.assertIn("matched_via", result["results"][0])
+        self.assertIn("why_ranked", result["results"][0])
         self.assertEqual("L0->L1->L2->L3->merge->rerank->top_k", result["trace"]["strategy"])
-        self.assertEqual("repository_fallback", result["trace"]["backend"])
+        self.assertEqual("hybrid_retrieval", result["trace"]["backend"])
         self.assertIn("L1", result["trace"]["layers"])
-        self.assertTrue(result["trace"]["fallback_used"])
+        self.assertIn("keyword", result["trace"]["stages"])
+        self.assertFalse(result["trace"]["fallback_used"])
 
     def test_handle_memory_search_keeps_tools_layer_thin_with_injected_service(self) -> None:
         class StubService:

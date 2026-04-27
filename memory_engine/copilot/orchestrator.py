@@ -25,7 +25,6 @@ class MemorySearchOrchestrator:
                 continue
 
             layer_result = self.retriever.search_layer(request, layer)
-            step = layer_result.trace_step
             for result in layer_result.results:
                 if result.memory_id in seen_memory_ids:
                     continue
@@ -34,9 +33,10 @@ class MemorySearchOrchestrator:
 
             if len(candidates) >= request.top_k:
                 top_k_satisfied = True
-                if not step.note:
-                    step = replace(step, note="top_k_satisfied_after_layer")
-            steps.append(step)
+                last_step = layer_result.trace_steps[-1]
+                if not last_step.note:
+                    layer_result.trace_steps[-1] = replace(last_step, note="top_k_satisfied_after_layer")
+            steps.extend(layer_result.trace_steps)
 
         ranked = rerank_results(candidates)
         top_results = [replace(result, rank=index) for index, result in enumerate(ranked[: request.top_k], start=1)]
@@ -94,16 +94,17 @@ class MemorySearchOrchestrator:
             note="skipped_after_top_k_satisfied",
             layer_source="adapter_simulated",
             selection_reason="not_queried_top_k_already_satisfied",
+            stage="skipped",
         )
 
     def _final_reason(self, results: object, steps: list[RetrievalTraceStep]) -> str:
         if not results:
             return "no_active_memory_with_evidence"
-        hit_layers = [step.layer for step in steps if step.hit_memory_ids]
-        if MemoryLayer.HOT.value in hit_layers:
+        result_layers = [result.layer for result in results]  # type: ignore[attr-defined]
+        if MemoryLayer.HOT.value in result_layers:
             return "top_k_satisfied_at_L1"
-        if MemoryLayer.WARM.value in hit_layers:
+        if MemoryLayer.WARM.value in result_layers:
             return "fallback_to_L2"
-        if MemoryLayer.COLD.value in hit_layers:
+        if MemoryLayer.COLD.value in result_layers:
             return "deep_trace_layer_filter_L3"
         return "top_k_reranked_with_evidence"

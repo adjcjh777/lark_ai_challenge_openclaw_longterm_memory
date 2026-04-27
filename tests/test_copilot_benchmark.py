@@ -44,6 +44,7 @@ class CopilotBenchmarkTest(unittest.TestCase):
         cases = json.loads(RECALL_CASES.read_text(encoding="utf-8"))
         case_ids = [case["case_id"] for case in cases]
 
+        self.assertGreaterEqual(len(cases), 8)
         self.assertEqual(len(case_ids), len(set(case_ids)))
         for case in cases:
             self.assertTrue(case["query"].strip(), msg=case["case_id"])
@@ -51,6 +52,24 @@ class CopilotBenchmarkTest(unittest.TestCase):
             self.assertTrue(case["evidence_keyword"].strip(), msg=case["case_id"])
             self.assertTrue(case["expected_memory_intent"].strip(), msg=case["case_id"])
             self.assertTrue(case["failure_debug_hint"].strip(), msg=case["case_id"])
+            self.assertIn(
+                case["failure_category"],
+                {"keyword_miss", "vector_miss", "wrong_subject_normalization", "evidence_missing", "stale_conflict"},
+                msg=case["case_id"],
+            )
+
+    def test_recall_benchmark_reports_recall_at_3_and_evidence_coverage(self) -> None:
+        result = run_benchmark(RECALL_CASES)
+        summary = result["summary"]
+
+        self.assertEqual("copilot_recall", result["benchmark_type"])
+        self.assertGreaterEqual(summary["case_count"], 8)
+        self.assertGreaterEqual(summary["recall_at_3"], 0.6)
+        self.assertGreaterEqual(summary["evidence_coverage"], 0.8)
+        self.assertIn("p95_latency_ms", summary)
+        for item in result["results"]:
+            self.assertIn("top_candidates", item)
+            self.assertIn("trace", item)
 
 
 if __name__ == "__main__":

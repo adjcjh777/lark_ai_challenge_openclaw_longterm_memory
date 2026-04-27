@@ -37,6 +37,7 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 | 2026-04-28 | `2026-04-28-implementation-plan.md` | `memory.search` service contract、L0/L1/L2/L3 和 query cascade |
 | 2026-04-28 | `2026-04-28-handoff.md` | 2026-04-28 分层查询、评测脚本硬化完成总结和 2026-04-29 接续说明 |
 | 2026-04-29 | `2026-04-29-implementation-plan.md` | hybrid retrieval、RecallIndex 短索引、Cognee recall/search fallback、curated memory embedding |
+| 2026-04-29 | `2026-04-29-handoff.md` | 2026-04-29 混合召回、Recall@3 评测入口和 2026-04-30 接续说明 |
 | 2026-04-30 | `2026-04-30-implementation-plan.md` | candidate、manual memory、evidence gate、governance、document candidate source |
 | 2026-05-01 | `2026-05-01-implementation-plan.md` | conflict update、versions、Cold evidence、stale leakage、Card/Bitable review surface |
 | 2026-05-02 | `2026-05-02-implementation-plan.md` | prefetch、heartbeat、agent run summary candidate、OpenClaw demo/card dry-run flow |

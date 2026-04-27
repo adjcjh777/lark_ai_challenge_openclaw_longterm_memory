@@ -3,14 +3,16 @@ from __future__ import annotations
 import tempfile
 import unittest
 
+from memory_engine.copilot.embeddings import DeterministicEmbeddingProvider
+from memory_engine.copilot.retrieval import RecallIndexEntry
 from memory_engine.copilot.service import CopilotService
-from memory_engine.copilot.schemas import SearchRequest
+from memory_engine.copilot.schemas import Evidence, SearchRequest
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
 
 class CopilotRetrievalTest(unittest.TestCase):
-    def test_search_trace_shows_l0_l1_and_l2_when_warm_fallback_is_needed(self) -> None:
+    def test_search_trace_shows_l0_and_hybrid_stages_when_warm_fallback_is_needed(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)
             init_db(conn)
@@ -42,12 +44,20 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual("active", response["results"][0]["status"])
         self.assertEqual("L2", response["results"][0]["layer"])
         self.assertIn("程俊豪", response["results"][0]["current_value"])
-        step_layers = [step["layer"] for step in response["trace"]["steps"]]
-        self.assertEqual(["L0", "L1", "L2", "L3"], step_layers)
-        self.assertEqual("no_hot_match_above_threshold", response["trace"]["steps"][1]["note"])
+        self.assertIn("keyword_index", response["results"][0]["matched_via"])
+        self.assertIn("why_ranked", response["results"][0])
+        self.assertEqual(["L1", "L2", "L3"], response["trace"]["layers"])
+        self.assertIn("structured", response["trace"]["stages"])
+        self.assertIn("keyword", response["trace"]["stages"])
+        self.assertIn("vector", response["trace"]["stages"])
+        self.assertIn("cognee", response["trace"]["stages"])
+        self.assertIn("rerank", response["trace"]["stages"])
+        l1_rerank = _trace_step(response, layer="L1", stage="rerank")
+        self.assertEqual("no_hot_match_above_threshold", l1_rerank["note"])
         self.assertEqual("fallback_to_L2", response["trace"]["final_reason"])
-        self.assertEqual("l3_raw_events_blocked_for_default_search", response["trace"]["steps"][3]["note"])
-        self.assertEqual("adapter_simulated", response["trace"]["steps"][2]["layer_source"])
+        l3_structured = _trace_step(response, layer="L3", stage="structured")
+        self.assertEqual("l3_raw_events_blocked_for_default_search", l3_structured["note"])
+        self.assertEqual("adapter_simulated", _trace_step(response, layer="L2", stage="keyword")["layer_source"])
 
     def test_search_layer_filter_can_select_hot_path(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -75,7 +85,8 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual(1, len(response["results"]))
         self.assertEqual("L1", response["results"][0]["layer"])
         self.assertEqual(["L1"], response["trace"]["layers"])
-        self.assertEqual("explicit_layer_filter_adapter_simulated", response["trace"]["steps"][1]["selection_reason"])
+        self.assertIn("keyword_index", response["results"][0]["matched_via"])
+        self.assertTrue(response["results"][0]["why_ranked"]["evidence_complete"])
 
     def test_default_search_trace_keeps_all_layers_after_l1_hit(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -102,9 +113,9 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertTrue(response["ok"])
         self.assertEqual(["L1", "L2", "L3"], response["trace"]["layers"])
         self.assertEqual("top_k_satisfied_at_L1", response["trace"]["final_reason"])
-        self.assertEqual("top_k_satisfied_after_layer", response["trace"]["steps"][1]["note"])
-        self.assertEqual("skipped_after_top_k_satisfied", response["trace"]["steps"][2]["note"])
-        self.assertEqual("skipped_after_top_k_satisfied", response["trace"]["steps"][3]["note"])
+        self.assertEqual("top_k_satisfied_after_layer", _trace_step(response, layer="L1", stage="rerank")["note"])
+        self.assertEqual("skipped_after_top_k_satisfied", _trace_step(response, layer="L2", stage="skipped")["note"])
+        self.assertEqual("skipped_after_top_k_satisfied", _trace_step(response, layer="L3", stage="skipped")["note"])
 
     def test_default_search_does_not_return_candidates_or_raw_l3_events(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -137,7 +148,7 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual([], response["results"])
         self.assertEqual("no_active_memory_with_evidence", response["trace"]["final_reason"])
         self.assertIn("L3", response["trace"]["layers"])
-        self.assertEqual("l3_raw_events_blocked_for_default_search", response["trace"]["steps"][-1]["note"])
+        self.assertEqual("l3_raw_events_blocked_for_default_search", _trace_step(response, layer="L3", stage="structured")["note"])
 
     def test_missing_evidence_candidate_does_not_enter_top_results(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -165,8 +176,82 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertTrue(response["ok"])
         self.assertEqual([], response["results"])
         self.assertEqual("no_active_memory_with_evidence", response["trace"]["final_reason"])
-        self.assertEqual("dropped_missing_evidence", response["trace"]["steps"][1]["note"])
-        self.assertEqual(1, response["trace"]["steps"][1]["dropped_count"])
+        l1_rerank = _trace_step(response, layer="L1", stage="rerank")
+        self.assertEqual("dropped_missing_evidence", l1_rerank["note"])
+        self.assertEqual(1, l1_rerank["dropped_count"])
+
+    def test_cognee_result_missing_provenance_is_backfilled_from_ledger(self) -> None:
+        class FakeCogneeAdapter:
+            is_configured = True
+
+            def __init__(self, memory_id: str) -> None:
+                self.memory_id = memory_id
+
+            def search(self, scope: str, query: str, **kwargs: object) -> list[dict[str, object]]:
+                return [{"memory_id": self.memory_id, "score": 0.91}]
+
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            remembered = repo.remember(
+                "project:feishu_ai_challenge",
+                "OpenClaw 开发版本固定为 2026.4.24，不能主动运行升级命令。",
+                source_type="unit_test",
+            )
+
+            response = CopilotService(
+                repository=repo,
+                cognee_adapter=FakeCogneeAdapter(remembered["memory_id"]),  # type: ignore[arg-type]
+            ).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "OpenClaw 版本锁是多少",
+                        "scope": "project:feishu_ai_challenge",
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertIn("cognee", response["results"][0]["matched_via"])
+        self.assertIn("2026.4.24", response["results"][0]["evidence"][0]["quote"])
+        self.assertIsNone(_trace_step(response, layer="L1", stage="cognee").get("note"))
+
+    def test_recall_index_and_embedding_use_curated_fields_only(self) -> None:
+        entry = RecallIndexEntry(
+            memory_id="mem_1",
+            type="workflow",
+            subject="生产部署",
+            current_value="生产部署必须加 --canary",
+            status="active",
+            layer="L2",
+            version=1,
+            confidence=0.75,
+            importance=0.8,
+            updated_at=1,
+            recall_count=0,
+            evidence=Evidence(source_type="unit_test", source_id="evt_1", quote="生产部署必须加 --canary"),
+            evidence_id="evi_1",
+            summary="发布规则",
+        )
+
+        self.assertIn("type: workflow", entry.index_text)
+        self.assertIn("subject: 生产部署", entry.index_text)
+        self.assertIn("current_value: 生产部署必须加 --canary", entry.index_text)
+        self.assertIn("summary: 发布规则", entry.index_text)
+        self.assertIn("evidence.quote: 生产部署必须加 --canary", entry.index_text)
+        self.assertNotIn("raw_event", entry.index_text)
+
+        embedder = DeterministicEmbeddingProvider(dimension=16)
+        self.assertEqual(embedder.embed_curated_memory(entry.embedding_text()), embedder.embed_curated_memory(entry.embedding_text()))
+
+
+def _trace_step(response: dict[str, object], *, layer: str, stage: str) -> dict[str, object]:
+    for step in response["trace"]["steps"]:  # type: ignore[index]
+        if step["layer"] == layer and step.get("stage") == stage:
+            return step
+    raise AssertionError(f"trace step not found: layer={layer} stage={stage}")
 
 
 if __name__ == "__main__":

@@ -193,6 +193,8 @@ class MemoryResult:
     score: float
     rank: int
     evidence: list[Evidence] = field(default_factory=list)
+    matched_via: list[str] = field(default_factory=list)
+    why_ranked: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_repository_candidate(cls, candidate: dict[str, Any]) -> "MemoryResult":
@@ -213,10 +215,12 @@ class MemoryResult:
             score=float(candidate.get("score") or 0),
             rank=int(candidate.get("rank") or 0),
             evidence=[Evidence.from_repository_source(candidate.get("source"))],
+            matched_via=_matched_via(candidate.get("matched_via")),
+            why_ranked=dict(candidate.get("why_ranked") or {}),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "memory_id": self.memory_id,
             "type": self.type,
             "subject": self.subject,
@@ -228,6 +232,11 @@ class MemoryResult:
             "rank": self.rank,
             "evidence": [item.to_dict() for item in self.evidence],
         }
+        if self.matched_via:
+            result["matched_via"] = list(self.matched_via)
+        if self.why_ranked:
+            result["why_ranked"] = dict(self.why_ranked)
+        return result
 
 
 @dataclass(frozen=True)
@@ -267,6 +276,7 @@ class RetrievalTraceStep:
     layer_source: str | None = None
     selection_reason: str | None = None
     dropped_count: int = 0
+    stage: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -286,6 +296,8 @@ class RetrievalTraceStep:
             result["selection_reason"] = self.selection_reason
         if self.dropped_count:
             result["dropped_count"] = self.dropped_count
+        if self.stage:
+            result["stage"] = self.stage
         return result
 
 
@@ -303,6 +315,10 @@ class RetrievalTrace:
     cognee_available: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        layers: list[str] = []
+        for step in self.steps:
+            if step.layer in MEMORY_LAYERS and step.layer not in layers:
+                layers.append(step.layer)
         return {
             "strategy": self.strategy,
             "query": self.query,
@@ -310,7 +326,8 @@ class RetrievalTrace:
             "requested_top_k": self.requested_top_k,
             "returned_count": self.returned_count,
             "backend": self.backend,
-            "layers": [step.layer for step in self.steps if step.layer != MemoryLayer.WORKING_CONTEXT.value],
+            "layers": layers,
+            "stages": [step.stage for step in self.steps if step.stage],
             "steps": [step.to_dict() for step in self.steps],
             "final_reason": self.final_reason,
             "fallback_used": self.fallback_used,
@@ -592,6 +609,16 @@ def _search_filters(data: dict[str, Any]) -> dict[str, Any]:
     if "status" in filters and filters["status"] not in MEMORY_STATUSES:
         raise ValidationError(f"filters.status must be one of: {', '.join(sorted(MEMORY_STATUSES))}")
     return filters
+
+
+def _matched_via(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return list(value)
+    return []
 
 
 def _top_k(value: Any, *, default: int) -> int:

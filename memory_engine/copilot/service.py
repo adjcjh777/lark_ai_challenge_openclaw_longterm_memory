@@ -31,7 +31,7 @@ class CopilotService:
         if permission_error is not None:
             return permission_error.to_response()
 
-        retriever = LayerAwareRetriever(self._repository())
+        retriever = LayerAwareRetriever(self._repository(), cognee_adapter=self.cognee_adapter)
         orchestrator = MemorySearchOrchestrator(
             retriever,
             cognee_available=self.cognee_adapter is not None and self.cognee_adapter.is_configured,
