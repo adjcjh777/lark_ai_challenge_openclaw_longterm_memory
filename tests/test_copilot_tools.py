@@ -77,6 +77,66 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual("permission_denied", result["error"]["code"])
 
+    def test_handle_memory_search_rejects_unsupported_layer(self) -> None:
+        result = handle_tool_request(
+            "memory.search",
+            {
+                "query": "deployment",
+                "scope": "project:feishu_ai_challenge",
+                "filters": {"layer": "L4"},
+            },
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("validation_error", result["error"]["code"])
+        self.assertIn("filters.layer", result["error"]["message"])
+
+    def test_handle_memory_search_status_filter_does_not_leak_old_values(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "生产部署必须加 --canary --region cn-shanghai",
+                source_type="unit_test",
+            )
+
+            result = handle_tool_request(
+                "memory.search",
+                {
+                    "query": "生产部署参数",
+                    "scope": "project:feishu_ai_challenge",
+                    "filters": {"status": "superseded"},
+                },
+                service=CopilotService(repository=repo),
+            )
+            conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([], result["results"])
+        self.assertEqual("no_active_memory_with_evidence", result["trace"]["final_reason"])
+        self.assertEqual("default_search_excludes_non_active_memory", result["trace"]["steps"][1]["note"])
+
+    def test_handle_memory_search_no_result_keeps_ok_trace_shape(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            result = handle_tool_request(
+                "memory.search",
+                {
+                    "query": "不存在的部署规则",
+                    "scope": "project:feishu_ai_challenge",
+                },
+                service=CopilotService(repository=MemoryRepository(conn)),
+            )
+            conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual([], result["results"])
+        self.assertEqual("no_active_memory_with_evidence", result["trace"]["final_reason"])
+        self.assertEqual(["L1", "L2", "L3"], result["trace"]["layers"])
+
     def test_handle_memory_search_uses_repository_fallback(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)

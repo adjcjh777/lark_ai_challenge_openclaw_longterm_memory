@@ -11,6 +11,8 @@
     "expected_active_value": "ap-shanghai",
     "forbidden_value": "cn-shanghai",
     "evidence_keyword": "生产部署 region 改成 ap-shanghai",
+    "expected_memory_intent": "记录发布规则的当前有效版本，避免旧 region 污染后续部署决策。",
+    "failure_debug_hint": "如果失败，先检查 conflict update 是否把旧值 superseded，再看 Top 3 是否仍含 cn-shanghai。",
     "note": "覆盖 active 版本优先，旧值不能污染默认 search。"
   },
   {
@@ -23,6 +25,8 @@
     "query": "评测样例谁维护",
     "expected_active_value": "程俊豪",
     "evidence_keyword": "程俊豪补充维护",
+    "expected_memory_intent": "记录当前项目评测样例负责人，减少反复翻群找 owner 的成本。",
+    "failure_debug_hint": "如果失败，先检查 subject 是否被归到负责人，再看 evidence quote 是否丢失。",
     "note": "覆盖最近协作任务的 Warm Memory。"
   },
   {
@@ -36,6 +40,8 @@
     "expected_active_value": "2026.4.24",
     "forbidden_value": "latest",
     "evidence_keyword": "固定为 2026.4.24",
+    "expected_memory_intent": "记录 OpenClaw 版本锁和禁止自动升级规则，避免本地环境漂移。",
+    "failure_debug_hint": "如果失败，先检查 workflow 类型和 evidence quote，再看是否被 latest 噪声覆盖。",
     "note": "覆盖高频安全规则的 Hot Memory。"
   },
   {
@@ -50,6 +56,8 @@
     "expected_active_value": "只返回 active memory",
     "forbidden_value": "直接返回 raw events",
     "evidence_keyword": "raw events 只用于追溯",
+    "expected_memory_intent": "记录默认 search 的安全边界，避免把原始事件直接当作正式答案。",
+    "failure_debug_hint": "如果失败，先检查 raw event 是否进入默认答案，再看 active-only 过滤是否失效。",
     "note": "覆盖 Cold evidence 不直接成为默认答案。"
   },
   {
@@ -62,6 +70,8 @@
     "query": "程俊豪今晚要不要改核心代码",
     "expected_active_value": "不用改核心 Python 代码",
     "evidence_keyword": "只补 benchmarks/copilot_layer_cases.json",
+    "expected_memory_intent": "记录当天补充任务边界，避免稳定性补样例时误改核心代码。",
+    "failure_debug_hint": "如果失败，先检查 query 是否命中任务边界记忆，再看是否被其他开发计划覆盖。",
     "note": "覆盖程俊豪任务边界，避免范围扩散。"
   }
 ]

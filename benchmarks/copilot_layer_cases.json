@@ -9,6 +9,7 @@
     "query": "生产部署参数",
     "expected_active_value": "--canary --region ap-shanghai",
     "evidence_keyword": "发布前检查最常问",
+    "failure_debug_hint": "如果失败，优先检查 L1 显式 layer filter 是否返回生产部署规则，再看 evidence quote 是否存在。",
     "layer_reason": "Hot 是最常用的记忆，应该优先走 L1。"
   },
   {
@@ -21,6 +22,7 @@
     "query": "程俊豪今晚补什么",
     "expected_active_value": "copilot_layer_cases",
     "evidence_keyword": "完成后自己在看板勾选",
+    "failure_debug_hint": "如果失败，优先检查 L2 显式 layer filter 是否还能命中近期补充任务。",
     "layer_reason": "Warm 是最近或待处理记忆，适合 L1 不足时 fallback。"
   },
   {
@@ -35,6 +37,7 @@
     "expected_active_value": "B",
     "forbidden_value": "A",
     "evidence_keyword": "统一发给 B",
+    "failure_debug_hint": "如果失败，优先检查旧值 A 是否泄漏，再看 L3 显式 layer filter 是否能返回 active 当前值。",
     "layer_reason": "Cold 是历史或归档证据；默认 search 仍只能直接返回 active 当前值。"
   },
   {
@@ -48,6 +51,7 @@
     "expected_active_value": "check_openclaw_version",
     "forbidden_value": "openclaw update",
     "evidence_keyword": "2026.4.24",
+    "failure_debug_hint": "如果失败，优先检查版本锁规则是否仍在 L1 路径命中，且没有升级命令泄漏。",
     "layer_reason": "Hot 是每天都会触发的安全规则，应该放在 L1 先查。"
   },
   {
@@ -61,6 +65,7 @@
     "expected_active_value": "ollama ps",
     "forbidden_value": "不用检查",
     "evidence_keyword": "qwen3-embedding:0.6b-fp16",
+    "failure_debug_hint": "如果失败，优先检查 Ollama 清理规则是否保留 evidence quote 和模型名。",
     "layer_reason": "Hot 是高频操作守则，避免 Mac mini 长时间占用内存。"
   },
   {
@@ -73,6 +78,7 @@
     "query": "GitHub 首页顶部要放什么",
     "expected_active_value": "当前程俊豪任务入口",
     "evidence_keyword": "可点击链接",
+    "failure_debug_hint": "如果失败，优先检查 README 入口规则是否被错误归类或 evidence 缺失。",
     "layer_reason": "Hot 是打开仓库后马上要遵守的协作入口规则。"
   },
   {
@@ -85,6 +91,7 @@
     "query": "新 Copilot 功能应该先改哪里",
     "expected_active_value": "memory_engine/copilot/",
     "evidence_keyword": "agent_adapters/openclaw/",
+    "failure_debug_hint": "如果失败，优先检查 Copilot-first 开发边界是否被旧 Bot 语义覆盖。",
     "layer_reason": "Hot 是每日开发边界，防止主线又漂回旧 Bot。"
   },
   {
@@ -97,6 +104,7 @@
     "query": "4 月 28 日 handoff 下一步从哪里继续",
     "expected_active_value": "benchmarks/copilot_layer_cases.json",
     "evidence_keyword": "不改核心 Python 代码",
+    "failure_debug_hint": "如果失败，优先检查 handoff 路径和不改核心 Python 的范围边界。",
     "layer_reason": "Warm 是最近交接事项，适合 L2 在 L1 不足时召回。"
   },
   {
@@ -109,6 +117,7 @@
     "query": "检查 recall cases 要看什么",
     "expected_active_value": "真实飞书项目群提问",
     "evidence_keyword": "evidence 关键词",
+    "failure_debug_hint": "如果失败，优先检查 recall fixture 是否缺少真实问题口吻或 evidence 关键词。",
     "layer_reason": "Warm 是当前补充 QA 任务，不属于长期常用规则但近期要处理。"
   },
   {
@@ -121,6 +130,7 @@
     "query": "补充分层 benchmark 完成后要更新哪里",
     "expected_active_value": "飞书挑战赛任务跟进看板",
     "evidence_keyword": "改为已完成",
+    "failure_debug_hint": "如果失败，优先检查看板同步收尾动作是否仍是 Warm 近期任务。",
     "layer_reason": "Warm 是本轮交付的收尾动作，跟当前日期强相关。"
   },
   {
@@ -133,6 +143,7 @@
     "query": "Demo 讲解 search trace 时先展示什么",
     "expected_active_value": "memory.search trace",
     "evidence_keyword": "热记忆、温记忆和冷证据",
+    "failure_debug_hint": "如果失败，优先检查 Demo 文案是否仍能解释 L0/L1/L2/L3。",
     "layer_reason": "Warm 是近期 Demo 文案素材，可能很快会用到但不是常驻规则。"
   },
   {
@@ -146,6 +157,7 @@
     "expected_active_value": "采用 Cognee",
     "forbidden_value": "采用 Mem0",
     "evidence_keyword": "窄 adapter",
+    "failure_debug_hint": "如果失败，优先检查 Cognee 当前决定是否覆盖 Mem0/Graphiti/Zep 旧备选。",
     "layer_reason": "Cold 是选型历史和归档决策，默认答案应返回当前决定而不是旧备选。"
   },
   {
@@ -158,6 +170,7 @@
     "query": "4 月 28 日为什么不迁移 repository schema",
     "expected_active_value": "adapter 模拟",
     "evidence_keyword": "不迁移旧 repository schema",
+    "failure_debug_hint": "如果失败，优先检查 2026-04-28 的实现取舍是否仍写清 adapter 模拟。",
     "layer_reason": "Cold 是实现取舍记录，通常只在复盘或解释风险时需要。"
   },
   {
@@ -170,6 +183,7 @@
     "query": "旧 day 文档什么时候读取",
     "expected_active_value": "新主控计划明确依赖旧能力",
     "evidence_keyword": "docs/archive/legacy-day-docs/",
+    "failure_debug_hint": "如果失败，优先检查旧 day 文档是否被默认读取规则错误提升。",
     "layer_reason": "Cold 是历史资料读取规则，平时不应该抢占当前任务上下文。"
   },
   {
@@ -182,6 +196,7 @@
     "query": "Day7 benchmark report 用多少条 queries",
     "expected_active_value": "50 条 queries",
     "evidence_keyword": "1000 条 raw/noise events",
+    "failure_debug_hint": "如果失败，优先检查 Day7 历史评测报告的数量证据是否完整。",
     "layer_reason": "Cold 是历史评测报告证据，适合答辩或白皮书引用时再查。"
   }
 ]

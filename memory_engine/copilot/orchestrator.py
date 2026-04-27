@@ -17,17 +17,26 @@ class MemorySearchOrchestrator:
         steps = [self._l0_step(request)]
         candidates = []
         seen_memory_ids: set[str] = set()
+        top_k_satisfied = False
 
         for layer in self._layers_for_request(request):
+            if top_k_satisfied:
+                steps.append(self._skipped_step(request, layer))
+                continue
+
             layer_result = self.retriever.search_layer(request, layer)
-            steps.append(layer_result.trace_step)
+            step = layer_result.trace_step
             for result in layer_result.results:
                 if result.memory_id in seen_memory_ids:
                     continue
                 seen_memory_ids.add(result.memory_id)
                 candidates.append(result)
+
             if len(candidates) >= request.top_k:
-                break
+                top_k_satisfied = True
+                if not step.note:
+                    step = replace(step, note="top_k_satisfied_after_layer")
+            steps.append(step)
 
         ranked = rerank_results(candidates)
         top_results = [replace(result, rank=index) for index, result in enumerate(ranked[: request.top_k], start=1)]
@@ -39,7 +48,7 @@ class MemorySearchOrchestrator:
             returned_count=len(top_results),
             backend=self.retriever.backend,
             steps=steps,
-            final_reason=self._final_reason(top_results),
+            final_reason=self._final_reason(top_results, steps),
             fallback_used=self.retriever.backend == "repository_fallback",
             cognee_available=self.cognee_available,
         )
@@ -69,7 +78,32 @@ class MemorySearchOrchestrator:
             elapsed_ms=0.0,
             hit_memory_ids=[],
             note=f"context_fields={','.join(context_fields)}" if context_fields else "no_working_context",
+            layer_source="working_context",
+            selection_reason="request_context_only",
         )
 
-    def _final_reason(self, results: object) -> str:
-        return "top_k_reranked_with_evidence" if results else "no_active_memory_with_evidence"
+    def _skipped_step(self, request: SearchRequest, layer: MemoryLayer) -> RetrievalTraceStep:
+        return RetrievalTraceStep(
+            layer=layer.value,
+            backend=self.retriever.backend,
+            query=request.query,
+            requested_top_k=request.top_k,
+            returned_count=0,
+            elapsed_ms=0.0,
+            hit_memory_ids=[],
+            note="skipped_after_top_k_satisfied",
+            layer_source="adapter_simulated",
+            selection_reason="not_queried_top_k_already_satisfied",
+        )
+
+    def _final_reason(self, results: object, steps: list[RetrievalTraceStep]) -> str:
+        if not results:
+            return "no_active_memory_with_evidence"
+        hit_layers = [step.layer for step in steps if step.hit_memory_ids]
+        if MemoryLayer.HOT.value in hit_layers:
+            return "top_k_satisfied_at_L1"
+        if MemoryLayer.WARM.value in hit_layers:
+            return "fallback_to_L2"
+        if MemoryLayer.COLD.value in hit_layers:
+            return "deep_trace_layer_filter_L3"
+        return "top_k_reranked_with_evidence"

@@ -45,6 +45,9 @@ class CopilotRetrievalTest(unittest.TestCase):
         step_layers = [step["layer"] for step in response["trace"]["steps"]]
         self.assertEqual(["L0", "L1", "L2", "L3"], step_layers)
         self.assertEqual("no_hot_match_above_threshold", response["trace"]["steps"][1]["note"])
+        self.assertEqual("fallback_to_L2", response["trace"]["final_reason"])
+        self.assertEqual("l3_raw_events_blocked_for_default_search", response["trace"]["steps"][3]["note"])
+        self.assertEqual("adapter_simulated", response["trace"]["steps"][2]["layer_source"])
 
     def test_search_layer_filter_can_select_hot_path(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -72,6 +75,36 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual(1, len(response["results"]))
         self.assertEqual("L1", response["results"][0]["layer"])
         self.assertEqual(["L1"], response["trace"]["layers"])
+        self.assertEqual("explicit_layer_filter_adapter_simulated", response["trace"]["steps"][1]["selection_reason"])
+
+    def test_default_search_trace_keeps_all_layers_after_l1_hit(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "生产部署必须加 --canary --region cn-shanghai。",
+                source_type="unit_test",
+            )
+
+            response = CopilotService(repository=repo).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "生产部署参数",
+                        "scope": "project:feishu_ai_challenge",
+                        "top_k": 1,
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(["L1", "L2", "L3"], response["trace"]["layers"])
+        self.assertEqual("top_k_satisfied_at_L1", response["trace"]["final_reason"])
+        self.assertEqual("top_k_satisfied_after_layer", response["trace"]["steps"][1]["note"])
+        self.assertEqual("skipped_after_top_k_satisfied", response["trace"]["steps"][2]["note"])
+        self.assertEqual("skipped_after_top_k_satisfied", response["trace"]["steps"][3]["note"])
 
     def test_default_search_does_not_return_candidates_or_raw_l3_events(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -105,6 +138,35 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual("no_active_memory_with_evidence", response["trace"]["final_reason"])
         self.assertIn("L3", response["trace"]["layers"])
         self.assertEqual("l3_raw_events_blocked_for_default_search", response["trace"]["steps"][-1]["note"])
+
+    def test_missing_evidence_candidate_does_not_enter_top_results(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "生产部署必须加 --canary --region cn-shanghai。",
+                source_type="unit_test",
+            )
+            conn.execute("UPDATE memory_evidence SET quote = NULL")
+            conn.commit()
+
+            response = CopilotService(repository=repo).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "生产部署参数",
+                        "scope": "project:feishu_ai_challenge",
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertEqual([], response["results"])
+        self.assertEqual("no_active_memory_with_evidence", response["trace"]["final_reason"])
+        self.assertEqual("dropped_missing_evidence", response["trace"]["steps"][1]["note"])
+        self.assertEqual(1, response["trace"]["steps"][1]["dropped_count"])
 
 
 if __name__ == "__main__":

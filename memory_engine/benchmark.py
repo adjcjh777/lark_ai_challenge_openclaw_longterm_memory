@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .copilot.schemas import SearchRequest
+from .copilot.service import CopilotService
 from .db import connect, init_db
 from .document_ingestion import ingest_document_source
 from .models import DEFAULT_SCOPE
@@ -32,17 +34,27 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
             for index in range(int(case.get("noise_count", 0))):
                 repo.add_noise_event(scope, f"无关闲聊样例 {index}: 今天同步一下普通进展。")
 
+            expected_layer = case.get("expected_layer")
             started = time.perf_counter()
-            recalled = repo.recall(scope, case["query"])
+            if case.get("type") == "copilot_layer" and expected_layer:
+                recall_result = _run_copilot_layer_case(repo, case, scope=scope)
+                recalled = recall_result["recall"]
+                trace = recall_result["trace"]
+                actual_layer = recall_result["actual_layer"]
+            else:
+                recalled = repo.recall(scope, case["query"])
+                trace = None
+                actual_layer = case.get("layer_hint")
             latency_ms = round((time.perf_counter() - started) * 1000, 3)
 
-            actual = recalled["answer"] if recalled else ""
+            actual = _answer_from_recall(recalled)
             expected = case.get("expected_active_value", "")
             forbidden = case.get("forbidden_value")
-            evidence_present = bool(recalled and recalled.get("source") and recalled["source"].get("quote"))
+            evidence_present = _recall_has_evidence(recalled)
             expected_ok = expected in actual if expected else bool(actual)
             forbidden_ok = forbidden not in actual if forbidden else True
-            passed = bool(expected_ok and forbidden_ok and evidence_present)
+            layer_passed = actual_layer == expected_layer if expected_layer else True
+            passed = bool(expected_ok and forbidden_ok and evidence_present and layer_passed)
 
             results.append(
                 {
@@ -55,7 +67,11 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
                     "passed": passed,
                     "latency_ms": latency_ms,
                     "evidence_present": evidence_present,
+                    "expected_layer": expected_layer,
+                    "actual_layer": actual_layer,
+                    "layer_passed": layer_passed,
                     "recall": recalled,
+                    "trace": trace,
                 }
             )
             conn.close()
@@ -64,6 +80,39 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
         "summary": _metrics(results),
         "results": results,
     }
+
+
+def _run_copilot_layer_case(repo: MemoryRepository, case: dict[str, Any], *, scope: str) -> dict[str, Any]:
+    request = SearchRequest.from_payload(
+        {
+            "query": case["query"],
+            "scope": scope,
+            "top_k": 3,
+            "filters": {"layer": case["expected_layer"]},
+        }
+    )
+    response = CopilotService(repository=repo).search(request)
+    result = response["results"][0] if response.get("results") else None
+    return {
+        "recall": result,
+        "actual_layer": result.get("layer") if result else None,
+        "trace": response.get("trace"),
+    }
+
+
+def _answer_from_recall(recalled: dict[str, Any] | None) -> str:
+    if not recalled:
+        return ""
+    return str(recalled.get("answer") or recalled.get("current_value") or "")
+
+
+def _recall_has_evidence(recalled: dict[str, Any] | None) -> bool:
+    if not recalled:
+        return False
+    if recalled.get("source") and recalled["source"].get("quote"):
+        return True
+    evidence = recalled.get("evidence")
+    return bool(evidence and evidence[0].get("quote"))
 
 
 def run_anti_interference_benchmark(
@@ -356,6 +405,8 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         if result["forbidden"] and result["forbidden"] in result["actual"]
     ]
     evidence_cases = [result for result in results if result["evidence_present"]]
+    layer_cases = [result for result in results if result.get("expected_layer")]
+    layer_passed = [result for result in layer_cases if result.get("layer_passed")]
 
     return {
         "case_count": total,
@@ -363,6 +414,8 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "conflict_accuracy": _ratio(sum(1 for result in conflict_cases if result["passed"]), len(conflict_cases)),
         "stale_leakage_rate": _ratio(len(leaked), len(forbidden_cases)),
         "evidence_coverage": _ratio(len(evidence_cases), total),
+        "layer_case_count": len(layer_cases),
+        "layer_accuracy": _ratio(len(layer_passed), len(layer_cases)) if layer_cases else 0.0,
         "avg_latency_ms": round(
             sum(result["latency_ms"] for result in results) / total,
             3,

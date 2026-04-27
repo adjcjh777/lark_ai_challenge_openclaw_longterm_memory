@@ -7,8 +7,8 @@
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
 | 进入 2026-04-29 hybrid retrieval | [2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md)；[retrieval.py](memory_engine/copilot/retrieval.py)；[benchmark.py](memory_engine/benchmark.py) | 结构化过滤、keyword/FTS、embedding 接口、Recall@3 评测入口 | trace 能看到 structured / keyword / vector / cognee / rerank；不向量化 raw events |
-| 4 月 28 日分层样例已补完 | [2026-04-28 handoff：我的补充任务](docs/plans/2026-04-28-handoff.md#我的补充任务)；[copilot_layer_cases.json](benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 15 条 Hot / Warm / Cold 样例全部通过 benchmark，并用中文说明为什么属于这一层 |
-| 继续检查 recall 评测草稿 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md) | 失败样例备注和 runner 指标 | 问题像真实飞书项目群提问，每条能看出正确答案、证据关键词和可能失败原因 |
+| 4 月 28 日稳定性硬化已完成 | [2026-04-28 handoff：稳定性说明](docs/plans/2026-04-28-handoff.md#仍未完成或仍有风险)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | layer 指标、trace 契约、fixture 自检、错误路径测试 | `copilot_layer_cases.json` 的 15 条样例不只可读，还会校验 `layer_accuracy` |
+| 继续扩展 recall 评测 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md) | 失败样例备注和 Recall@3 指标 | 问题像真实飞书项目群提问，每条能看出正确答案、证据关键词、企业记忆意图和可能失败原因 |
 
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
@@ -23,7 +23,7 @@
 - Cognee 已通过窄 adapter 隔离在 `memory_engine/copilot/cognee_adapter.py`。
 - Cognee 本地 spike 已验证：RightCode 文本模型 + Ollama 本地 embedding 可跑通 `add -> cognify -> search`。
 - 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
-- 新增 `benchmarks/copilot_recall_cases.json`，并把 `benchmarks/copilot_layer_cases.json` 扩到 15 条分层样例；现有 runner 可读取并通过。
+- 新增 `benchmarks/copilot_recall_cases.json`，并把 `benchmarks/copilot_layer_cases.json` 扩到 15 条分层样例；runner 已校验 `layer_accuracy`，fixture 自检会防重复、缺字段和缺失败排查提示。
 
 ## 快速验证
 

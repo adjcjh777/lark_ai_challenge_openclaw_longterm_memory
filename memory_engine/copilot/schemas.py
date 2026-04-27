@@ -264,6 +264,9 @@ class RetrievalTraceStep:
     elapsed_ms: float = 0.0
     hit_memory_ids: list[str] = field(default_factory=list)
     note: str | None = None
+    layer_source: str | None = None
+    selection_reason: str | None = None
+    dropped_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -277,6 +280,12 @@ class RetrievalTraceStep:
         }
         if self.note:
             result["note"] = self.note
+        if self.layer_source:
+            result["layer_source"] = self.layer_source
+        if self.selection_reason:
+            result["selection_reason"] = self.selection_reason
+        if self.dropped_count:
+            result["dropped_count"] = self.dropped_count
         return result
 
 
