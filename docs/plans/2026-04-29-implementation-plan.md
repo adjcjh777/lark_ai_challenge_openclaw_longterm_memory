@@ -7,6 +7,15 @@
 
 实现本地轻量 hybrid retrieval：先结构化过滤，再 keyword / FTS，再 curated memory vector similarity，最后 merge 和 rerank。Cognee recall/search 可以作为一个召回通道，但 provenance 不完整时必须由 Copilot 自己补 evidence；embedding 只覆盖 curated memory，不向量化 raw events。
 
+## MemPalace 转换落点
+
+今天只借鉴 MemPalace 的 closet 思路，不接入 MemPalace 依赖，也不新增 ChromaDB。对应转换为本项目自己的 `RecallIndexEntry`：把每条 active curated memory 压成一条短索引文本，索引文本只包含 `type`、`subject`、`current_value`、`summary` 和 `evidence.quote`，再用 `memory_id` / `evidence_id` 指回 Copilot 自己的记忆和证据。
+
+今天要坚持两条边界：
+
+- RecallIndex 只能作为召回和排序信号，不能挡住 repository fallback 或 Cognee 通道命中的 active memory。
+- raw events、完整聊天记录、真实日志不进入 embedding；只允许通过 evidence pointer 被追溯。
+
 ## 必读上下文
 
 - `AGENTS.md`
@@ -19,13 +28,14 @@
 ## 用户白天主线任务
 
 1. 在 `retrieval.py` 中实现 scope / status / layer / type 结构化过滤。
-2. 实现 keyword 或 FTS 召回，优先匹配 subject、current_value、summary、evidence quote。
-3. 新增 `embeddings.py`，实现 curated memory embedding 接口和本地轻量 fallback。
-4. 把 `CogneeAdapter.search()` 或 `recall()` 接成可选召回通道，结果统一转成 `MemoryResult`。
-5. 对 Cognee 返回缺少 source/provenance 的情况，用 Copilot ledger 里的 evidence metadata 补齐。
-6. 实现 merge + rerank，纳入 importance、recency、confidence、version freshness、layer、evidence completeness。
-7. 扩展 `memory_engine/benchmark.py`，至少支持 `benchmarks/copilot_recall_cases.json` 的 Recall@3 和 Evidence Coverage。
-8. 扩展 `benchmarks/copilot_recall_cases.json`，保持 5-10 条最小可读样例先跑通。
+2. 在 `retrieval.py` 中新增 `RecallIndexEntry` 或等价内部结构，构造 `index_text` 和 evidence pointer。
+3. 实现 keyword 或 FTS 召回，优先匹配 subject、current_value、summary、evidence quote。
+4. 新增 `embeddings.py`，实现 curated memory embedding 接口和本地轻量 fallback。
+5. 把 `CogneeAdapter.search()` 或 `recall()` 接成可选召回通道，结果统一转成 `MemoryResult`。
+6. 对 Cognee 返回缺少 source/provenance 的情况，用 Copilot ledger 里的 evidence metadata 补齐。
+7. 实现 merge + rerank，纳入 importance、recency、confidence、version freshness、layer、evidence completeness。
+8. 扩展 `memory_engine/benchmark.py`，至少支持 `benchmarks/copilot_recall_cases.json` 的 Recall@3 和 Evidence Coverage。
+9. 扩展 `benchmarks/copilot_recall_cases.json`，保持 5-10 条最小可读样例先跑通。
 
 ## 今日做到什么程度
 
@@ -42,13 +52,14 @@
 | 顺序 | 动作 | 文件/位置 | 做到什么程度 | 验收证据 |
 |---|---|---|---|---|
 | 1 | 实现结构化过滤 | `retrieval.py` | scope/status/layer/type 过滤先执行，默认 active | 单测验证 rejected/superseded 不返回 |
-| 2 | 实现 keyword/FTS 召回 | `retrieval.py` | 匹配 subject/current_value/summary/evidence quote | keyword 命中 case 通过 |
-| 3 | 新增 embedding 接口 | `embeddings.py` | 本地轻量实现可 deterministic；字段范围写死为 curated memory | 单测验证 raw_event 字段不参与 |
-| 4 | 接入 Cognee 可选通道 | `cognee_adapter.py`、`retrieval.py` | Cognee 可用则纳入候选，不可用不影响 keyword fallback | fake adapter 单测覆盖 unavailable |
-| 5 | evidence 补齐 | `retrieval.py`、`service.py` | 缺 evidence 的结果降权或不进正式 Top 1 | evidence_missing 测试通过 |
-| 6 | merge + rerank | `retrieval.py` | 合并重复 memory，综合 importance/recency/confidence/layer/evidence | trace 展示各分数来源 |
-| 7 | 扩展 benchmark runner | `memory_engine/benchmark.py` | 支持 `copilot_recall_cases.json` 的 Recall@3、Evidence Coverage | 命令能输出 summary |
-| 8 | 扩展 recall 样例 | `benchmarks/copilot_recall_cases.json` | 先保证 5-10 条高质量样例可跑，再扩展 | benchmark 能跑或缺口写清 |
+| 2 | 构造短索引 | `retrieval.py` | 新增 `RecallIndexEntry` 或等价结构，`index_text` 只来自 curated memory 字段 | 单测验证 raw_event 字段不参与 index |
+| 3 | 实现 keyword/FTS 召回 | `retrieval.py` | 匹配 subject/current_value/summary/evidence quote，输出 `matched_via=keyword_index` | keyword 命中 case 通过 |
+| 4 | 新增 embedding 接口 | `embeddings.py` | 本地轻量实现可 deterministic；字段范围写死为 curated memory | 单测验证 raw_event 字段不参与 embedding |
+| 5 | 接入 Cognee 可选通道 | `cognee_adapter.py`、`retrieval.py` | Cognee 可用则纳入候选，不可用不影响 keyword fallback | fake adapter 单测覆盖 unavailable |
+| 6 | evidence 补齐 | `retrieval.py`、`service.py` | 缺 evidence 的结果降权或不进正式 Top 1 | evidence_missing 测试通过 |
+| 7 | merge + rerank | `retrieval.py` | 合并重复 memory，综合 importance/recency/confidence/layer/evidence，输出 `why_ranked` | trace 展示各分数来源 |
+| 8 | 扩展 benchmark runner | `memory_engine/benchmark.py` | 支持 `copilot_recall_cases.json` 的 Recall@3、Evidence Coverage | 命令能输出 summary |
+| 9 | 扩展 recall 样例 | `benchmarks/copilot_recall_cases.json` | 增加 keyword-only、vector-only、stale-conflict 三类样例 | benchmark 能跑或缺口写清 |
 
 ## 今日不做
 
@@ -84,6 +95,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
 ## 验收标准
 
 - retrieval trace 能看到 structured / keyword / vector / cognee / rerank。
+- trace 能看到 `matched_via` 和 `why_ranked`，至少区分 `keyword_index`、`cognee`、`repository_fallback`。
 - 不 embed 全量 raw events。
 - Recall@3 >= 60% 的第一版目标可测。
 - Evidence Coverage >= 80% 的统计入口成型。

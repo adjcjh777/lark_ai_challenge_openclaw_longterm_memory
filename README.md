@@ -6,7 +6,7 @@
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 进入 2026-04-29 hybrid retrieval | [2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md)；[retrieval.py](memory_engine/copilot/retrieval.py)；[benchmark.py](memory_engine/benchmark.py) | 结构化过滤、keyword/FTS、embedding 接口、Recall@3 评测入口 | trace 能看到 structured / keyword / vector / cognee / rerank；不向量化 raw events |
+| 按 MemPalace 转换方案进入 2026-04-29 hybrid retrieval | [2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md)；[主控 6.4](docs/feishu-memory-copilot-implementation-plan.md#64-mempalace-借鉴的转换接入边界)；[retrieval.py](memory_engine/copilot/retrieval.py)；[benchmark.py](memory_engine/benchmark.py) | `RecallIndexEntry` 短索引、keyword/FTS、embedding 接口、Recall@3 评测入口 | trace 能看到 structured / keyword_index / vector / cognee / rerank，并展示 `matched_via` / `why_ranked`；不向量化 raw events |
 | 4 月 28 日稳定性硬化已完成 | [2026-04-28 handoff：稳定性说明](docs/plans/2026-04-28-handoff.md#仍未完成或仍有风险)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | layer 指标、trace 契约、fixture 自检、错误路径测试 | `copilot_layer_cases.json` 的 15 条样例不只可读，还会校验 `layer_accuracy` |
 | 继续扩展 recall 评测 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md) | 失败样例备注和 Recall@3 指标 | 问题像真实飞书项目群提问，每条能看出正确答案、证据关键词、企业记忆意图和可能失败原因 |
 
@@ -24,6 +24,7 @@
 - Cognee 本地 spike 已验证：RightCode 文本模型 + Ollama 本地 embedding 可跑通 `add -> cognify -> search`。
 - 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
 - 新增 `benchmarks/copilot_recall_cases.json`，并把 `benchmarks/copilot_layer_cases.json` 扩到 15 条分层样例；runner 已校验 `layer_accuracy`，fixture 自检会防重复、缺字段和缺失败排查提示。
+- MemPalace 调研结论已转换为日期计划：只借鉴原文证据、短索引、分层召回、可解释评测，不把 MemPalace 作为新依赖接入。
 
 ## 快速验证
 

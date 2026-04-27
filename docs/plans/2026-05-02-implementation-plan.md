@@ -7,6 +7,15 @@
 
 完成 MVP 第一周闭环：OpenClaw Agent 能在任务前调用 `memory.prefetch` 获取 context pack；heartbeat 能生成 reminder candidate；至少 2 条 OpenClaw E2E demo flow 可复制演示。Card/Bitable 走 dry-run 也必须能展示 evidence、version chain 和 stale/superseded 不泄漏。
 
+## MemPalace 转换落点
+
+今天只借鉴 MemPalace 的 wake-up / diary 思路：Agent 启动或执行任务前先拿最小上下文，任务结束后把“本轮学到什么”变成候选，而不是直接写成 active 记忆。对应到本项目就是 `memory.prefetch` 的 context pack 和 heartbeat / agent run summary candidate。
+
+今天要坚持两条边界：
+
+- `memory.prefetch` 只返回 compact context pack，不把 raw events 大段塞进 Agent 上下文。
+- Agent run summary、heartbeat reminder 都先是 candidate 或 dry-run，不绕过 governance 直接 active 或真实推送。
+
 ## 必读上下文
 
 - `AGENTS.md`
@@ -21,12 +30,13 @@
 
 1. 实现 `memory.prefetch(task, scope, current_context)`，返回 compact context pack。
 2. 新增 `heartbeat.py`，生成 reminder candidate 并通过 importance、relevance、cooldown、permission、sensitive gates。
-3. 创建 `agent_adapters/openclaw/examples/` 下的 demo flow：历史决策查询、任务前 prefetch，目标再补冲突更新。
-4. 补 `tests/test_copilot_prefetch.py` 和 `tests/test_copilot_heartbeat.py`。
-5. 准备 demo dry-run 输出，证明这不是旧 CLI-only 流程。
-6. 让 candidate review card、version card、reminder card 都能从 Copilot service 输出生成 dry-run payload。
-7. 让 Bitable dry-run payload 覆盖 Memory Ledger、Versions、Candidate Review、Benchmark Results、Reminder Candidates。
-8. 扩展 `benchmarks/copilot_prefetch_cases.json` 和 `benchmarks/copilot_heartbeat_cases.json`，至少各有 5 条可读样例。
+3. 增加 agent run summary candidate 的 dry-run 形态：记录任务、使用过的 memory、发现的缺口和可能的新候选，但不直接 active。
+4. 创建 `agent_adapters/openclaw/examples/` 下的 demo flow：历史决策查询、任务前 prefetch，目标再补冲突更新。
+5. 补 `tests/test_copilot_prefetch.py` 和 `tests/test_copilot_heartbeat.py`。
+6. 准备 demo dry-run 输出，证明这不是旧 CLI-only 流程。
+7. 让 candidate review card、version card、reminder card 都能从 Copilot service 输出生成 dry-run payload。
+8. 让 Bitable dry-run payload 覆盖 Memory Ledger、Versions、Candidate Review、Benchmark Results、Reminder Candidates。
+9. 扩展 `benchmarks/copilot_prefetch_cases.json` 和 `benchmarks/copilot_heartbeat_cases.json`，至少各有 5 条可读样例。
 
 ## 今日做到什么程度
 
@@ -45,11 +55,12 @@
 | 1 | 实现 prefetch schema | `schemas.py`、`service.py` | 定义 task/context pack/relevant memory/risk/deadline 字段 | prefetch 单测覆盖字段 |
 | 2 | 实现 prefetch tool | `tools.py` | `memory.prefetch` 调 service，不直接查库 | tools 单测覆盖成功和 scope error |
 | 3 | 新增 heartbeat | `heartbeat.py` | review_due、important_not_recalled、deadline、thread_similarity 四类候选源 | heartbeat 单测覆盖每类 trigger |
-| 4 | 加 reminder gates | `heartbeat.py`、`permissions.py` | importance、relevance、cooldown、scope permission、sensitive redaction | Sensitive Reminder Leakage Rate = 0 |
-| 5 | 接 card dry-run | `feishu_cards.py` | reminder/candidate/version card 均可从 service 输出生成 payload | card 测试或 dry-run 输出 |
-| 6 | 接 Bitable dry-run | `bitable_sync.py` | Reminder Candidates 表 payload 字段完整 | bitable 测试或 dry-run 输出 |
-| 7 | 冻结 examples | `agent_adapters/openclaw/examples/*.json` | 至少历史决策查询、任务前 prefetch 两条可复制输入输出 | examples 可读，字段与 schema 对齐 |
-| 8 | 建专项 benchmark | `copilot_prefetch_cases.json`、`copilot_heartbeat_cases.json` | 各至少 5 条样例，含 sensitive/stale 边界 | runner 或单测能覆盖核心指标 |
+| 4 | 加 agent run summary candidate | `heartbeat.py` 或 `service.py` | 任务结束总结只生成 candidate/dry-run，包含 used_memory_ids、missing_context、new_candidate_hint | 单测验证不直接 active |
+| 5 | 加 reminder gates | `heartbeat.py`、`permissions.py` | importance、relevance、cooldown、scope permission、sensitive redaction | Sensitive Reminder Leakage Rate = 0 |
+| 6 | 接 card dry-run | `feishu_cards.py` | reminder/candidate/version card 均可从 service 输出生成 payload | card 测试或 dry-run 输出 |
+| 7 | 接 Bitable dry-run | `bitable_sync.py` | Reminder Candidates 表 payload 字段完整 | bitable 测试或 dry-run 输出 |
+| 8 | 冻结 examples | `agent_adapters/openclaw/examples/*.json` | 至少历史决策查询、任务前 prefetch 两条可复制输入输出 | examples 可读，字段与 schema 对齐 |
+| 9 | 建专项 benchmark | `copilot_prefetch_cases.json`、`copilot_heartbeat_cases.json` | 各至少 5 条样例，含 sensitive/stale 边界 | runner 或单测能覆盖核心指标 |
 
 ## 今日不做
 
@@ -95,6 +106,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 - Agent Task Context Use Rate >= 70% 的评测入口成型。
 - heartbeat 能输出 reminder candidate。
+- agent run summary 只生成候选或 dry-run 记录，不绕过 governance 自动 active。
 - Sensitive Reminder Leakage Rate = 0。
 - Stale Leakage Rate 可被 conflict / heartbeat / prefetch 评测统计。
 - OpenClaw demo flow 至少覆盖历史决策查询和任务前 prefetch，目标再覆盖冲突更新。

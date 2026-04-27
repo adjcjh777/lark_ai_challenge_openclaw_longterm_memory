@@ -665,6 +665,27 @@ score = keyword_score
 - evidence 缺失的结果不能作为正式 Top 1。
 - scope permission check 在 rerank 前后都要执行一次，避免 merge 时混入越权结果。
 
+### 6.4 MemPalace 借鉴的转换接入边界
+
+2026-04-27 调研结论：MemPalace 可借鉴的是“原文证据 + 短索引 + 分层召回 + 可解释评测”的工程思想，不接入为新运行依赖。Cognee 仍是本项目选定的 memory substrate，Copilot Core 仍自管企业记忆状态、证据、版本、权限和飞书审核面。
+
+转换规则：
+
+- MemPalace 的 drawer 思路转换为本项目的 raw evidence / source quote：原文只做证据源和版本追溯，不作为默认 `memory.search` 当前答案。
+- MemPalace 的 closet 思路转换为 `RecallIndexEntry`：为 curated memory 构造短索引文本，包含 `subject`、`type`、`current_value`、`summary`、`evidence.quote` 和 evidence pointer。
+- MemPalace 的 closet-first search 思路转换为“索引加分不硬过滤”：structured / keyword / vector / Cognee 都是召回通道，最终由 Copilot rerank 和 evidence gate 决定 Top K。
+- MemPalace 的 layer / wake-up 思路转换为本项目 L0/L1/L2/L3 和 `memory.prefetch`，不得暴露 Palace / Wing / Room / Drawer 术语给评委或 OpenClaw 用户。
+- MemPalace 的 benchmark 表达方式可借鉴：明确区分 Recall@3、Evidence Coverage、Current Answer Accuracy、Stale Leakage Rate，不把检索召回率和端到端问答准确率混写。
+
+按日期落地：
+
+| 日期 | 转换目标 | 文件落点 | 验收重点 |
+|---|---|---|---|
+| 2026-04-29 | 将 closet 转成 `RecallIndexEntry` 和 hybrid rerank | `retrieval.py`、`embeddings.py`、`benchmark.py` | trace 能展示 structured / keyword_index / vector / cognee / rerank；不 embed raw events |
+| 2026-04-30 | 将 drawer 转成 evidence gate 和 candidate source | `schemas.py`、`governance.py`、`service.py` | 无 evidence 不可 active；candidate 不进入默认 search |
+| 2026-05-01 | 将 temporal graph 思路转成版本链和 cold evidence | `governance.py`、`retrieval.py`、`feishu_cards.py` | old -> new 可解释；旧值 superseded 后不泄漏 |
+| 2026-05-02 | 将 wake-up / diary 思路转成 prefetch 和 agent run summary candidate | `orchestrator.py`、`heartbeat.py`、`agent_adapters/openclaw/examples/` | Agent 任务前主动拿 context pack；会话总结只进候选或 dry-run |
+
 ## 7. Governance 实施计划
 
 ### 7.1 状态定义
