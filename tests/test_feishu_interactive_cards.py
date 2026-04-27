@@ -19,6 +19,9 @@ from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import LarkCliPublisher
 from memory_engine.feishu_runtime import handle_message_event
+from memory_engine.copilot.service import CopilotService
+from memory_engine.copilot.tools import handle_tool_request
+from memory_engine.repository import MemoryRepository
 
 
 class FakePublisher(LarkCliPublisher):
@@ -76,12 +79,40 @@ def text_payload(message_id: str, text: str) -> dict:
     }
 
 
-def card_action_payload(action: str, memory_id: str, *, candidate_index: int | None = None) -> dict:
+def copilot_context(action: str, *, roles: list[str] | None = None, request_id: str | None = None, trace_id: str | None = None) -> dict:
+    return {
+        "scope": "project:feishu_ai_challenge",
+        "permission": {
+            "request_id": request_id or f"req_{action.replace('.', '_')}",
+            "trace_id": trace_id or f"trace_{action.replace('.', '_')}",
+            "actor": {
+                "user_id": "ou_operator",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": roles if roles is not None else ["member", "reviewer"],
+            },
+            "source_context": {"entrypoint": "feishu_review_surface", "workspace_id": "project:feishu_ai_challenge"},
+            "requested_action": action,
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
+
+
+def card_action_payload(
+    action: str,
+    memory_id: str,
+    *,
+    candidate_index: int | None = None,
+    extra_value: dict | None = None,
+) -> dict:
     value = {
         "memory_engine_action": action,
         "memory_id": memory_id,
         "candidate_id": memory_id,
     }
+    if extra_value:
+        value.update(extra_value)
     if candidate_index is not None:
         value["candidate_index"] = str(candidate_index)
         value["candidate_label"] = f"候选 {candidate_index}"
@@ -214,7 +245,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertNotIn("mem_active", values)
         self.assertEqual("候选 1", action_blocks[0]["actions"][0]["value"]["candidate_label"])
 
-    def test_card_action_event_routes_to_existing_command(self) -> None:
+    def test_card_action_event_routes_to_existing_command_and_fails_closed_without_permission(self) -> None:
         ingest = message_event_from_payload(text_payload("om_ingest_for_card", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))
         self.assertIsNotNone(ingest)
         handle_message_event(self.conn, ingest, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
@@ -228,8 +259,11 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertEqual("confirm", result["command"])
         self.assertIn("send_card", publisher.modes)
+        self.assertFalse(result["tool_result"]["ok"])
+        self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
+        self.assertEqual("missing_permission_context", result["tool_result"]["error"]["details"]["reason_code"])
         status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (row["id"],)).fetchone()["status"]
-        self.assertEqual("active", status)
+        self.assertEqual("candidate", status)
 
     def test_card_action_result_preserves_candidate_label(self) -> None:
         ingest = message_event_from_payload(text_payload("om_ingest_for_card_label", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))
@@ -282,6 +316,156 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("确认保存", [action["label"] for action in payload["buttons"]])
         self.assertEqual("orange", card["header"]["template"])
 
+    def test_copilot_candidate_review_payload_redacts_permission_denied_output(self) -> None:
+        service = CopilotService(repository=MemoryRepository(self.conn))
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：生产部署 region 以后统一改成 ap-shanghai。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": "msg_denied_card",
+                    "actor_id": "ou_operator",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：生产部署 region 以后统一改成 ap-shanghai。",
+                },
+                "current_context": copilot_context("memory.create_candidate"),
+            },
+            service=service,
+        )
+        self.assertTrue(created["ok"])
+
+        denied = handle_tool_request(
+            "memory.confirm",
+            {
+                "candidate_id": created["candidate_id"],
+                "scope": "project:feishu_ai_challenge",
+                "reason": "non-reviewer click",
+                "current_context": copilot_context(
+                    "memory.confirm",
+                    roles=["member"],
+                    request_id="req_denied_review_card",
+                    trace_id="trace_denied_review_card",
+                ),
+            },
+            service=service,
+        )
+
+        payload = candidate_review_payload(denied)
+        card = build_candidate_review_card(denied)
+        rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()["status"]
+
+        self.assertFalse(denied["ok"])
+        self.assertEqual("candidate", status)
+        self.assertEqual("permission_denied", payload["status"])
+        self.assertEqual("req_denied_review_card", payload["request_id"])
+        self.assertEqual("trace_denied_review_card", payload["trace_id"])
+        self.assertEqual("deny", payload["permission_decision"]["decision"])
+        self.assertEqual("review_role_required", payload["permission_decision"]["reason_code"])
+        self.assertEqual([], payload["buttons"])
+        self.assertNotIn("ap-shanghai", rendered)
+        self.assertNotIn("决定：生产部署 region", rendered)
+
+    def test_card_action_review_surface_uses_copilot_bridge_and_fails_closed(self) -> None:
+        service = CopilotService(repository=MemoryRepository(self.conn))
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：Phase 3 review surface 必须走 CopilotService。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": "msg_review_action",
+                    "actor_id": "ou_operator",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：Phase 3 review surface 必须走 CopilotService。",
+                },
+                "current_context": copilot_context("memory.create_candidate"),
+            },
+            service=service,
+        )
+        self.assertTrue(created["ok"])
+
+        event = message_event_from_payload(
+            card_action_payload(
+                "confirm",
+                created["candidate_id"],
+                extra_value={
+                    "review_surface": "copilot_service",
+                    "tool": "memory.confirm",
+                    "scope": "project:feishu_ai_challenge",
+                    "current_context": copilot_context(
+                        "memory.confirm",
+                        roles=["member"],
+                        request_id="req_card_action_denied",
+                        trace_id="trace_card_action_denied",
+                    ),
+                    "reason": "non-reviewer click",
+                },
+            )
+        )
+        self.assertIsNotNone(event)
+
+        result = handle_message_event(self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()["status"]
+        rendered = json.dumps(result["publish"]["card"], ensure_ascii=False)
+
+        self.assertEqual("confirm", result["command"])
+        self.assertFalse(result["tool_result"]["ok"])
+        self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
+        self.assertEqual("review_role_required", result["tool_result"]["bridge"]["permission_decision"]["reason_code"])
+        self.assertEqual("candidate", status)
+        self.assertIn("req_card_action_denied", rendered)
+        self.assertIn("trace_card_action_denied", rendered)
+        self.assertNotIn("Phase 3 review surface 必须走 CopilotService", rendered)
+
+    def test_card_action_without_permission_context_fails_closed(self) -> None:
+        service = CopilotService(repository=MemoryRepository(self.conn))
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：缺少权限上下文的卡片点击不能确认候选。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": "msg_missing_context_action",
+                    "actor_id": "ou_operator",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：缺少权限上下文的卡片点击不能确认候选。",
+                },
+                "current_context": copilot_context("memory.create_candidate"),
+            },
+            service=service,
+        )
+        self.assertTrue(created["ok"])
+
+        event = message_event_from_payload(
+            card_action_payload(
+                "confirm",
+                created["candidate_id"],
+                extra_value={
+                    "review_surface": "copilot_service",
+                    "tool": "memory.confirm",
+                    "scope": "project:feishu_ai_challenge",
+                    "reason": "missing permission context",
+                },
+            )
+        )
+        self.assertIsNotNone(event)
+
+        result = handle_message_event(self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()["status"]
+        rendered = json.dumps(result["publish"]["card"], ensure_ascii=False)
+
+        self.assertEqual("confirm", result["command"])
+        self.assertFalse(result["tool_result"]["ok"])
+        self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
+        self.assertEqual("missing_permission_context", result["tool_result"]["bridge"]["permission_decision"]["reason_code"])
+        self.assertEqual("candidate", status)
+        self.assertNotIn("权限上下文的卡片点击不能确认候选", rendered)
+
     def test_copilot_version_chain_payload_explains_old_value(self) -> None:
         response = {
             "ok": True,
@@ -321,6 +505,44 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("none", payload["state_mutation"])
         self.assertEqual("ver_2", payload["active_version"]["version_id"])
         self.assertIn("superseded", card["elements"][1]["text"]["content"])
+
+    def test_copilot_version_chain_payload_redacts_permission_denied_output(self) -> None:
+        denied = {
+            "ok": False,
+            "error": {
+                "code": "permission_denied",
+                "message": "actor tenant cannot access requested memory scope",
+                "retryable": False,
+                "details": {
+                    "reason_code": "tenant_mismatch",
+                    "request_id": "req_versions_deny",
+                    "trace_id": "trace_versions_deny",
+                    "redacted_fields": ["current_value", "summary", "evidence"],
+                },
+            },
+            "bridge": {
+                "entrypoint": "openclaw_tool",
+                "tool": "memory.explain_versions",
+                "request_id": "req_versions_deny",
+                "trace_id": "trace_versions_deny",
+                "permission_decision": {
+                    "decision": "deny",
+                    "reason_code": "tenant_mismatch",
+                    "requested_action": "memory.explain_versions",
+                },
+            },
+        }
+
+        payload = version_chain_payload(denied)
+        card = build_version_chain_card(denied)
+        rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
+
+        self.assertEqual("permission_denied", payload["status"])
+        self.assertEqual("req_versions_deny", payload["request_id"])
+        self.assertEqual("trace_versions_deny", payload["trace_id"])
+        self.assertEqual("deny", payload["permission_decision"]["decision"])
+        self.assertNotIn("current_value", rendered)
+        self.assertNotIn("evidence quote", rendered)
 
     def test_copilot_reminder_candidate_payload_is_dry_run(self) -> None:
         reminder = {

@@ -139,12 +139,12 @@ Required artifacts:
 - trace/request id output
 
 Checks:
-- [ ] OpenClaw 真实调用本地/seed Copilot service。
-- [ ] response 含 permission decision summary。
+- [x] OpenClaw 真实调用本地/seed Copilot service。
+- [x] response 含 permission decision summary。
 - [x] missing/malformed permission context fail closed。
 - [x] 文档明确不是 Feishu live ingestion。
 
-当前状态：permission fail-closed 已完成；OpenClaw live bridge 仍是下一步。
+当前状态：permission fail-closed 和 OpenClaw live bridge 已完成，见 commit `cb21bc7`。仍不是 Feishu live ingestion。
 
 Commands:
 
@@ -165,10 +165,10 @@ Required artifacts:
 - audit event output
 
 Checks:
-- [ ] UI 只消费 permission-aware service output。
-- [ ] UI 不直接写 active/rejected/superseded。
-- [ ] non-reviewer approve/reject 被拒绝。
-- [ ] Bitable/card payload 不包含未授权 evidence。
+- [x] UI 只消费 permission-aware service output。
+- [x] UI 不直接写 active/rejected/superseded。
+- [x] non-reviewer approve/reject 被拒绝。
+- [x] Bitable/card payload 不包含未授权 evidence。
 
 Commands:
 

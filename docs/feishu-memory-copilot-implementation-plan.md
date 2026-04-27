@@ -56,7 +56,9 @@ OpenClaw CLI 已升级并固定为 `2026.4.24`（`openclaw --version` 显示 `Op
 
 - Phase 1 contract freeze 已完成，事实源位于 `docs/productization/contracts/`。
 - Phase 2 权限前置实现已完成，commit `b6b17b4`：六个 MVP `memory.*` 工具进入 `CopilotService` 统一权限门控，missing/malformed `current_context.permission` fail closed，真实 Feishu document ingestion 在 fetch 前必须通过权限校验。
-- 下一步是 Phase 2 OpenClaw live bridge：让 OpenClaw/本地桥真实调用 seed/local Copilot service，并返回 permission-aware output。仍不接真实 Feishu ingestion。
+- Phase 2 OpenClaw live bridge 已完成，commit `cb21bc7`：`handle_tool_request()` 统一桥接 `memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 到 permission-aware `CopilotService`，并返回 `bridge.request_id`、`bridge.trace_id` 和 `permission_decision`。
+- Phase 3 Feishu UI / Review Surface 已完成本地闭环：Candidate Review card、Version Chain card、Bitable dry-run 和 Feishu card action 消费 service/tool output；permission denied 只展示安全摘要，不泄露未授权 `current_value` 或 evidence。
+- 下一步是 Phase 4 Limited Feishu ingestion：指定飞书来源只进入 candidate pipeline，不自动 active。仍不做 productized live、不做完整 audit table migration。
 
 ### 1.1.2 Cognee / RightCode 本地接入基线
 

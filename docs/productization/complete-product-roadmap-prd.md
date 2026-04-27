@@ -26,7 +26,9 @@ RALPLAN intake 时的仓库事实（历史快照，已被 2026-05-07 Phase 1/Pha
 - RALPLAN 启动前 README 顶部仍把下一步描述为 2026-05-06 提交材料、录屏、QA 和 scope freeze；当前仓库副本已将 README 顶部改为完整产品路线入口（`README.md:7-11`）。
 - SQLite 基础表仍以 `scope_type/scope_id` 为主，`raw_events` 和 `memories` 尚无 `tenant_id`、`organization_id`、`visibility_policy`（`memory_engine/db.py:14-47`）。
 - 2026-05-07 最新状态：`current_context.permission` 已进入 OpenClaw schema；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 已在 `CopilotService` 统一权限门控；missing/malformed permission 已 fail closed；真实 Feishu document ingestion 已在 fetch 前 fail closed。对应提交：`b6b17b4`。
-- 仍未完成：storage migration、audit table、healthcheck、OpenClaw runtime live bridge、Feishu review surface 和 limited Feishu ingestion。
+- Phase 2 OpenClaw live bridge 已完成，commit `cb21bc7`：`handle_tool_request()` 统一桥接六个 MVP `memory.*` 工具到 permission-aware `CopilotService`，并返回 bridge request/trace/permission decision。
+- Phase 3 Feishu UI / Review Surface 已完成本地闭环：card、Bitable dry-run 和 card action 消费 service/tool output，permission denied 不展示未授权 evidence/current_value。
+- 仍未完成：storage migration、audit table、healthcheck、limited Feishu ingestion 和 productized live。
 
 ---
 
@@ -180,7 +182,7 @@ Phase 7   Product QA
 - [x] Architect / Critic 对 contract freeze 无 blocker。
 - [x] README/docs 没有把 Phase 2 写成 Feishu live ingestion。
 
-2026-05-07 补充：Phase 2 权限前置实现已完成，见 [2026-05-07 handoff](../plans/2026-05-07-handoff.md)。这不等于 Phase 2 OpenClaw live bridge 已完成；下一步仍要做 OpenClaw/本地桥真实调用 seed/local Copilot service。
+2026-05-07 补充：Phase 2 权限前置实现、OpenClaw live bridge 和 Phase 3 review surface 均已完成，见 [2026-05-07 handoff](../plans/2026-05-07-handoff.md)。这仍不等于 Feishu live ingestion；下一步进入 Phase 4 limited Feishu ingestion。
 
 ### Phase 2：OpenClaw Live Bridge
 
@@ -190,23 +192,23 @@ Phase 7   Product QA
 
 **Exit gate**：
 - [x] `python3 scripts/check_openclaw_version.py` 通过。
-- [ ] OpenClaw tool 调用 seed/local service 成功。
-- [ ] response 包含 result、evidence、permission decision summary、trace/request id。
+- [x] OpenClaw tool 调用 seed/local service 成功。
+- [x] response 包含 result、evidence、permission decision summary、trace/request id。
 - [x] missing/malformed permission context fail closed。
 - [x] Demo/README 文案明确这不是 Feishu live ingestion。
 
-当前 Phase 2 状态：权限前置实现通过；OpenClaw live bridge 仍未完成。
+当前 Phase 2 状态：权限前置实现和 OpenClaw live bridge 已完成；仍不是 Feishu live ingestion。
 
 ### Phase 3：Feishu UI / Review Surface
 
 **目标**：Feishu card/Bitable/review UI 展示 permission-aware candidate/memory，并通过 service 执行 confirm/reject。
 
 **Exit gate**：
-- [ ] Review surface 只消费 Copilot service 输出。
-- [ ] approve/reject 调用 service，不直接改状态。
-- [ ] 无 reviewer/owner 权限时无法 approve/reject。
-- [ ] UI 文案区分 candidate / active / rejected / superseded。
-- [ ] audit 记录 review action。
+- [x] Review surface 只消费 Copilot service 输出。
+- [x] approve/reject 调用 service，不直接改状态。
+- [x] 无 reviewer/owner 权限时无法 approve/reject。
+- [x] UI 文案区分 candidate / active / rejected / superseded。
+- [ ] audit table 记录 review action（本轮只保留 bridge/request/trace 的审计线索，完整 audit table migration 后续做）。
 
 ### Phase 4：Limited Feishu Ingestion
 

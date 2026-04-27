@@ -95,6 +95,10 @@ def build_update_card(
 def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, Any]:
     """Build a typed review payload from Copilot service output only."""
 
+    bridge = _bridge_payload(candidate_response)
+    if _is_permission_denied(candidate_response, bridge):
+        return _denied_surface_payload("copilot_candidate_review", "候选审核不可用", candidate_response, bridge)
+
     candidate = candidate_response.get("candidate") or {}
     conflict = candidate_response.get("conflict") or candidate.get("conflict") or {}
     evidence = candidate_response.get("evidence") or candidate.get("evidence") or {}
@@ -127,11 +131,16 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
             {"action": "needs_review", "label": "标记需要复核", "required_for_mvp": False, "mode": "dry_run"},
         ],
         "state_mutation": "none",
+        **bridge,
     }
 
 
 def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str, Any]:
     """Build a typed version-chain payload without mutating memory state."""
+
+    bridge = _bridge_payload(explain_versions_response)
+    if _is_permission_denied(explain_versions_response, bridge):
+        return _denied_surface_payload("copilot_version_chain", "记忆版本链不可用", explain_versions_response, bridge)
 
     versions = explain_versions_response.get("versions") or []
     return {
@@ -151,6 +160,7 @@ def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str
             {"action": "needs_review", "label": "标记需要复核", "required_for_mvp": False, "mode": "dry_run"},
         ],
         "state_mutation": "none",
+        **bridge,
     }
 
 
@@ -183,6 +193,9 @@ def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
 
 def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str, Any]:
     payload = candidate_review_payload(candidate_response)
+    if payload.get("status") == "permission_denied":
+        return _permission_denied_card("待确认记忆", payload)
+
     conflict = payload["conflict"]
     fields = [
         ("状态", str(payload.get("status") or "")),
@@ -272,6 +285,9 @@ def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
 
 def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[str, Any]:
     payload = version_chain_payload(explain_versions_response)
+    if payload.get("status") == "permission_denied":
+        return _permission_denied_card("记忆版本链", payload)
+
     version_lines = []
     for item in payload["versions"]:
         marker = "当前" if item.get("is_active") else "旧值"
@@ -311,7 +327,7 @@ def build_card_from_text(text: str) -> dict[str, Any]:
     template = _template_for(card_name, fields.get("状态"))
     core_labels = ("结论", "理由", "状态", "版本", "来源", "是否被覆盖")
     display_fields = [(label, fields[label]) for label in core_labels if fields.get(label)]
-    for label in ("主题", "候选序号", "记忆类型", "memory_id", "版本数量", "处理结果"):
+    for label in ("主题", "候选序号", "记忆类型", "memory_id", "版本数量", "request_id", "trace_id", "处理结果"):
         if fields.get(label):
             display_fields.append((label, fields[label]))
 
@@ -446,6 +462,99 @@ def _button(label: str, button_type: str, value: dict[str, str]) -> dict[str, An
         "text": {"tag": "plain_text", "content": label},
         "type": button_type,
         "value": value,
+    }
+
+
+def _bridge_payload(response: dict[str, Any]) -> dict[str, Any]:
+    bridge = response.get("bridge") if isinstance(response.get("bridge"), dict) else {}
+    decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    error = response.get("error") if isinstance(response.get("error"), dict) else {}
+    details = error.get("details") if isinstance(error.get("details"), dict) else {}
+    request_id = bridge.get("request_id") or details.get("request_id")
+    trace_id = bridge.get("trace_id") or details.get("trace_id")
+    reason_code = decision.get("reason_code") or details.get("reason_code")
+    permission_decision = dict(decision)
+    if not permission_decision and error.get("code") == "permission_denied":
+        permission_decision = {"decision": "deny", "reason_code": reason_code or "permission_denied"}
+    result: dict[str, Any] = {
+        "permission_decision": permission_decision,
+    }
+    if isinstance(request_id, str) and request_id:
+        result["request_id"] = request_id
+    if isinstance(trace_id, str) and trace_id:
+        result["trace_id"] = trace_id
+    if isinstance(reason_code, str) and reason_code:
+        result["permission_reason"] = reason_code
+    return result
+
+
+def _is_permission_denied(response: dict[str, Any], bridge: dict[str, Any]) -> bool:
+    error = response.get("error") if isinstance(response.get("error"), dict) else {}
+    decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    return error.get("code") == "permission_denied" or decision.get("decision") == "deny"
+
+
+def _denied_surface_payload(surface: str, title: str, response: dict[str, Any], bridge: dict[str, Any]) -> dict[str, Any]:
+    error = response.get("error") if isinstance(response.get("error"), dict) else {}
+    details = error.get("details") if isinstance(error.get("details"), dict) else {}
+    reason_code = bridge.get("permission_reason") or details.get("reason_code") or "permission_denied"
+    return {
+        "surface": surface,
+        "title": title,
+        "status": "permission_denied",
+        "candidate_id": details.get("candidate_id"),
+        "memory_id": details.get("memory_id"),
+        "version_id": details.get("version_id"),
+        "type": None,
+        "subject": None,
+        "new_value": None,
+        "summary": None,
+        "evidence": {},
+        "risk_flags": [],
+        "recommended_action": "permission_denied",
+        "conflict": {"has_conflict": False, "old_memory_id": None, "old_value": None, "old_status": None, "reason": None},
+        "buttons": [],
+        "state_mutation": "none",
+        "error": {
+            "code": error.get("code") or "permission_denied",
+            "message": "当前操作者没有权限执行这个审核动作。",
+            "reason_code": reason_code,
+        },
+        **bridge,
+    }
+
+
+def _permission_denied_card(title: str, payload: dict[str, Any]) -> dict[str, Any]:
+    fields = [
+        ("状态", "permission_denied"),
+        ("拒绝原因", str(payload.get("permission_reason") or "permission_denied")),
+    ]
+    if payload.get("request_id"):
+        fields.append(("request_id", str(payload["request_id"])))
+    if payload.get("trace_id"):
+        fields.append(("trace_id", str(payload["trace_id"])))
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "red",
+            "title": {"tag": "plain_text", "content": title},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label not in {"拒绝原因"},
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                ],
+            },
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": "权限不足，已安全拒绝；本卡片不会展示未授权的记忆内容或证据。"},
+            },
+        ],
     }
 
 

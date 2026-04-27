@@ -6,8 +6,8 @@ from pathlib import Path
 
 from memory_engine.bitable_sync import collect_sync_payload, setup_commands, sync_payload, table_schema_spec
 from memory_engine.copilot.permissions import demo_permission_context
-from memory_engine.copilot.schemas import CreateCandidateRequest
 from memory_engine.copilot.service import CopilotService
+from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
@@ -101,36 +101,97 @@ class BitableSyncTest(unittest.TestCase):
     def test_candidate_review_rows_include_conflict_context(self) -> None:
         self.repo.remember("project:feishu_ai_challenge", "生产部署 region 固定 cn-shanghai。", source_type="test")
         service = CopilotService(repository=self.repo)
-        service.create_candidate(
-            CreateCandidateRequest.from_payload(
-                {
-                    "text": "不对，生产部署 region 以后统一改成 ap-shanghai。",
-                    "scope": "project:feishu_ai_challenge",
-                    "source": {
-                        "source_type": "test",
-                        "source_id": "msg_conflict",
-                        "actor_id": "ou_test",
-                        "created_at": "2026-05-01T10:00:00+08:00",
-                        "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
-                    },
-                    "current_context": demo_permission_context(
-                        "memory.create_candidate",
-                        "project:feishu_ai_challenge",
-                        actor_id="ou_test",
-                        entrypoint="unit_test",
-                    ),
-                }
-            )
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "test",
+                    "source_id": "msg_conflict",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-01T10:00:00+08:00",
+                    "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                },
+                "current_context": demo_permission_context(
+                    "memory.create_candidate",
+                    "project:feishu_ai_challenge",
+                    actor_id="ou_test",
+                    entrypoint="unit_test",
+                ),
+            },
+            service=service,
         )
+        self.assertTrue(created["ok"])
 
-        payload = collect_sync_payload(self.conn)
+        payload = collect_sync_payload(self.conn, candidate_review_outputs=[created])
         review = payload["tables"]["candidate_review"]
 
         self.assertEqual(1, len(review["rows"]))
         row = review["rows"][0]
         self.assertIn("ap-shanghai", row[review["fields"].index("new_value")])
         self.assertIn("cn-shanghai", row[review["fields"].index("old_value")])
-        self.assertEqual("review_conflict", row[review["fields"].index("recommended_action")])
+        self.assertEqual("manual_review_conflict", row[review["fields"].index("recommended_action")])
+        self.assertEqual("req_memory_create_candidate", row[review["fields"].index("request_id")])
+        self.assertEqual("trace_memory_create_candidate", row[review["fields"].index("trace_id")])
+        self.assertEqual("allow", row[review["fields"].index("permission_decision")])
+
+    def test_candidate_review_rows_redact_permission_denied_tool_output(self) -> None:
+        service = CopilotService(repository=self.repo)
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：Bitable dry-run 只能展示授权字段。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "test",
+                    "source_id": "msg_denied_bitable",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：Bitable dry-run 只能展示授权字段。",
+                },
+                "current_context": demo_permission_context(
+                    "memory.create_candidate",
+                    "project:feishu_ai_challenge",
+                    actor_id="ou_test",
+                    entrypoint="unit_test",
+                ),
+            },
+            service=service,
+        )
+        denied_context = demo_permission_context(
+            "memory.reject",
+            "project:feishu_ai_challenge",
+            actor_id="ou_member",
+            roles=["member"],
+            entrypoint="unit_test",
+        )
+        denied_context["permission"]["request_id"] = "req_bitable_deny"
+        denied_context["permission"]["trace_id"] = "trace_bitable_deny"
+        denied = handle_tool_request(
+            "memory.reject",
+            {
+                "candidate_id": created["candidate_id"],
+                "scope": "project:feishu_ai_challenge",
+                "current_context": denied_context,
+            },
+            service=service,
+        )
+
+        payload = collect_sync_payload(self.conn, candidate_review_outputs=[denied])
+        review = payload["tables"]["candidate_review"]
+        row = review["rows"][0]
+        rendered = "\n".join(str(value) for value in row)
+
+        self.assertFalse(denied["ok"])
+        self.assertEqual("permission_denied", row[review["fields"].index("status")])
+        self.assertEqual("", row[review["fields"].index("new_value")])
+        self.assertEqual("", row[review["fields"].index("evidence")])
+        self.assertEqual("deny", row[review["fields"].index("permission_decision")])
+        self.assertEqual("review_role_required", row[review["fields"].index("permission_reason")])
+        self.assertEqual("req_bitable_deny", row[review["fields"].index("request_id")])
+        self.assertEqual("trace_bitable_deny", row[review["fields"].index("trace_id")])
+        self.assertNotIn("授权字段", rendered)
 
     def test_schema_spec_includes_review_and_reminder_tables(self) -> None:
         tables = {table["name"]: table for table in table_schema_spec()["tables"]}
@@ -152,7 +213,22 @@ class BitableSyncTest(unittest.TestCase):
             <= benchmark_fields
         )
         candidate_fields = {field["name"] for field in tables["Candidate Review"]["fields"]}
-        self.assertTrue({"status", "subject", "new_value", "old_value", "evidence", "risk_flags", "recommended_action"} <= candidate_fields)
+        self.assertTrue(
+            {
+                "status",
+                "subject",
+                "new_value",
+                "old_value",
+                "evidence",
+                "risk_flags",
+                "recommended_action",
+                "request_id",
+                "trace_id",
+                "permission_decision",
+                "permission_reason",
+            }
+            <= candidate_fields
+        )
         reminder_fields = {field["name"] for field in tables["Reminder Candidates"]["fields"]}
         self.assertTrue({"reminder_id", "memory_id", "subject", "reason", "due_at", "recommended_action"} <= reminder_fields)
 

@@ -12,9 +12,10 @@ from .document_ingestion import ingest_document_source
 from .feishu_cards import build_card_from_text
 from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
 from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
+from .copilot.service import CopilotService
+from .copilot.tools import handle_tool_request
 from .feishu_messages import (
     format_duplicate_reply,
-    format_candidate_action_reply,
     format_help,
     format_health,
     format_ignored_reply,
@@ -290,10 +291,16 @@ def handle_message_event(
             raw_json=event.raw,
             event_time=event.create_time or None,
         )
-        reply = format_candidate_action_reply(
-            repo.confirm_candidate(command.argument),
-            action="确认",
+        tool_result = _handle_review_tool_action(
+            repo,
+            event,
+            tool_name="memory.confirm",
             candidate_id=command.argument,
+            scope=scope,
+        )
+        reply = _format_review_tool_reply(
+            tool_result,
+            action="确认",
             candidate_label=_candidate_label_from_card_action(event),
         )
     elif command.name == "reject":
@@ -306,10 +313,16 @@ def handle_message_event(
             raw_json=event.raw,
             event_time=event.create_time or None,
         )
-        reply = format_candidate_action_reply(
-            repo.reject_candidate(command.argument),
-            action="拒绝",
+        tool_result = _handle_review_tool_action(
+            repo,
+            event,
+            tool_name="memory.reject",
             candidate_id=command.argument,
+            scope=scope,
+        )
+        reply = _format_review_tool_reply(
+            tool_result,
+            action="拒绝",
             candidate_label=_candidate_label_from_card_action(event),
         )
     else:
@@ -331,7 +344,93 @@ def handle_message_event(
         "scope": scope,
         "command": command.name,
         "publish": publish_result,
+        **({"tool_result": tool_result} if command.name in {"confirm", "reject"} else {}),
     }
+
+
+def _handle_review_tool_action(
+    repo: MemoryRepository,
+    event: FeishuMessageEvent,
+    *,
+    tool_name: str,
+    candidate_id: str,
+    scope: str,
+) -> dict[str, Any]:
+    value = _card_action_value(event)
+    current_context = value.get("current_context") if isinstance(value.get("current_context"), dict) else None
+    payload = {
+        "candidate_id": candidate_id,
+        "scope": value.get("scope") if isinstance(value.get("scope"), str) and value.get("scope") else scope,
+        "reason": value.get("reason") if isinstance(value.get("reason"), str) else "Feishu review surface action",
+        "current_context": current_context or {},
+    }
+    service = CopilotService(repository=repo)
+    return handle_tool_request(tool_name, payload, service=service)
+
+
+def _format_review_tool_reply(tool_result: dict[str, Any], *, action: str, candidate_label: str | None = None) -> str:
+    label_line = f"候选序号：{candidate_label}" if candidate_label else None
+    if not tool_result.get("ok"):
+        error = tool_result.get("error") if isinstance(tool_result.get("error"), dict) else {}
+        details = error.get("details") if isinstance(error.get("details"), dict) else {}
+        lines = [
+            f"类型：候选记忆{action}",
+            "卡片：候选确认卡片",
+            "结论：权限不足，已安全拒绝",
+            f"理由：{details.get('reason_code') or error.get('code') or 'permission_denied'}",
+            f"主题：{details.get('candidate_id') or '-'}",
+            "状态：permission_denied",
+            "版本：-",
+            "来源：CopilotService",
+            "是否被覆盖：-",
+            f"request_id：{details.get('request_id') or (tool_result.get('bridge') or {}).get('request_id') or '-'}",
+            f"trace_id：{details.get('trace_id') or (tool_result.get('bridge') or {}).get('trace_id') or '-'}",
+            "处理结果：candidate 状态未改变；未展示未授权内容或证据。",
+        ]
+        if label_line:
+            lines.insert(5, label_line)
+        return "\n".join(["候选记忆审核卡片：权限不足，动作已拒绝。", *lines])
+
+    memory = tool_result.get("memory") if isinstance(tool_result.get("memory"), dict) else {}
+    lines = [
+        f"类型：候选记忆{action}",
+        "卡片：候选确认卡片",
+        f"结论：{memory.get('current_value') or '-'}",
+        f"理由：通过 CopilotService 执行 memory.{_candidate_action_command(action)}，不是直接改 repository 状态",
+        f"主题：{memory.get('subject') or tool_result.get('memory_id')}",
+        f"状态：{memory.get('status') or tool_result.get('status')}",
+        "版本：Phase 3",
+        "来源：CopilotService",
+        f"是否被覆盖：{_overwritten_label(memory.get('status') or tool_result.get('status'))}",
+        f"memory_id：{tool_result.get('memory_id')}",
+        f"处理结果：{tool_result.get('action')}",
+        f"request_id：{(tool_result.get('bridge') or {}).get('request_id') or '-'}",
+        f"trace_id：{(tool_result.get('bridge') or {}).get('trace_id') or '-'}",
+    ]
+    if label_line:
+        lines.insert(5, label_line)
+    return "\n".join([f"候选记忆{action}卡片：{candidate_label + ' ' if candidate_label else ''}候选状态已更新。", *lines])
+
+
+def _card_action_value(event: FeishuMessageEvent) -> dict[str, Any]:
+    raw_event = event.raw.get("event") if isinstance(event.raw.get("event"), dict) else event.raw
+    action = raw_event.get("action") if isinstance(raw_event.get("action"), dict) else {}
+    value = action.get("value") if isinstance(action.get("value"), dict) else {}
+    return dict(value)
+
+
+def _candidate_action_command(action: str) -> str:
+    return "confirm" if action == "确认" else "reject"
+
+
+def _overwritten_label(status: object) -> str:
+    if status == "active":
+        return "否（当前 active 版本）"
+    if status == "rejected":
+        return "是（已拒绝，不进入默认召回）"
+    if status == "superseded":
+        return "是（已被后续版本覆盖）"
+    return "-"
 
 
 def _record_handled_event(repo: MemoryRepository, scope: str, event: FeishuMessageEvent, content: str) -> None:

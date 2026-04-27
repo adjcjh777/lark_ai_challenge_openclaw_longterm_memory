@@ -69,7 +69,7 @@
 
 - 已完成：`agent_adapters/openclaw/memory_tools.schema.json` 要求六个 MVP 工具携带 `current_context.permission`。
 - 已完成：examples 已补 allow/deny/redacted 相关样例。
-- 仍未完成：OpenClaw runtime live bridge 真实调用 seed/local Copilot service；下一步从 `memory_engine/copilot/tools.py` 和 OpenClaw adapter 入口继续。
+- 已完成：OpenClaw/runtime 本地桥通过 `handle_tool_request()` 真实调用 seed/local `CopilotService`，并返回 bridge request/trace/permission decision；仍不是 Feishu live ingestion。
 
 ## 4. Error Format
 

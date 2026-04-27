@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .benchmark import run_benchmark
+from .feishu_cards import candidate_review_payload
 from .models import parse_scope
 
 
@@ -79,6 +80,10 @@ CANDIDATE_REVIEW_FIELDS = [
     "evidence",
     "risk_flags",
     "recommended_action",
+    "request_id",
+    "trace_id",
+    "permission_decision",
+    "permission_reason",
     "updated_at",
 ]
 
@@ -125,6 +130,7 @@ def collect_sync_payload(
     benchmark_json: str | Path | None = None,
     benchmark_cases: str | Path | None = None,
     benchmark_name: str | None = None,
+    candidate_review_outputs: list[dict[str, Any]] | None = None,
     reminder_candidates: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     payload = {
@@ -142,7 +148,7 @@ def collect_sync_payload(
             "candidate_review": {
                 "table": DEFAULT_TABLES["candidate_review"],
                 "fields": CANDIDATE_REVIEW_FIELDS,
-                "rows": candidate_review_rows(conn, scope=scope),
+                "rows": candidate_review_output_rows(candidate_review_outputs or [], scope=scope),
             },
             "benchmark": {
                 "table": DEFAULT_TABLES["benchmark"],
@@ -271,58 +277,37 @@ def version_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
     ]
 
 
-def candidate_review_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
-    where_sql, params = _scope_filter("m", scope)
-    candidate_where = f"{where_sql} AND" if where_sql else "WHERE"
-    rows = conn.execute(
-        f"""
-        SELECT
-          m.id AS memory_id,
-          m.scope_type || ':' || m.scope_id AS scope,
-          m.type,
-          m.subject,
-          m.current_value,
-          m.status,
-          mv.id AS candidate_id,
-          mv.value AS candidate_value,
-          mv.status AS candidate_status,
-          mv.supersedes_version_id,
-          old_mv.value AS old_value,
-          e.quote AS evidence_quote,
-          mv.created_at AS updated_at
-        FROM memories m
-        JOIN memory_versions mv ON mv.memory_id = m.id
-        LEFT JOIN memory_versions old_mv ON old_mv.id = mv.supersedes_version_id
-        LEFT JOIN memory_evidence e ON e.id = (
-          SELECT latest_e.id
-          FROM memory_evidence latest_e
-          WHERE latest_e.memory_id = mv.memory_id
-            AND latest_e.version_id = mv.id
-          ORDER BY latest_e.created_at DESC
-          LIMIT 1
+def candidate_review_output_rows(outputs: list[dict[str, Any]], *, scope: str | None = None) -> list[list[Any]]:
+    rows = []
+    for output in outputs:
+        payload = candidate_review_payload(output)
+        output_scope = payload.get("scope") or output.get("scope")
+        if scope is not None and output_scope != scope:
+            continue
+        permission_decision = payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+        conflict = payload.get("conflict") if isinstance(payload.get("conflict"), dict) else {}
+        rows.append(
+            [
+                payload.get("candidate_id"),
+                payload.get("memory_id"),
+                output_scope,
+                payload.get("type"),
+                payload.get("subject"),
+                payload.get("status"),
+                payload.get("new_value") or "",
+                conflict.get("old_value") or "",
+                evidence.get("quote") or "",
+                ", ".join(payload.get("risk_flags") or []),
+                payload.get("recommended_action"),
+                payload.get("request_id") or "",
+                payload.get("trace_id") or "",
+                permission_decision.get("decision") or "",
+                payload.get("permission_reason") or permission_decision.get("reason_code") or "",
+                _format_ms(int(time.time() * 1000)),
+            ]
         )
-        {candidate_where} mv.status = 'candidate'
-        ORDER BY mv.created_at DESC, mv.id
-        """,
-        params,
-    ).fetchall()
-    return [
-        [
-            row["candidate_id"],
-            row["memory_id"],
-            row["scope"],
-            row["type"],
-            row["subject"],
-            row["candidate_status"],
-            row["candidate_value"],
-            row["old_value"],
-            row["evidence_quote"],
-            "conflict_candidate" if row["supersedes_version_id"] else "",
-            "review_conflict" if row["supersedes_version_id"] else "review_candidate",
-            _format_ms(row["updated_at"]),
-        ]
-        for row in rows
-    ]
+    return rows
 
 
 def reminder_candidate_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
