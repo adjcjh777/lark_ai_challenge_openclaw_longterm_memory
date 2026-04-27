@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .benchmark import run_benchmark
-from .feishu_cards import candidate_review_payload
+from .feishu_cards import candidate_review_payload, reminder_candidate_payload
 from .models import parse_scope
 
 
@@ -97,7 +97,13 @@ REMINDER_CANDIDATE_FIELDS = [
     "status",
     "due_at",
     "evidence",
+    "target_actor",
+    "cooldown",
     "recommended_action",
+    "request_id",
+    "trace_id",
+    "permission_decision",
+    "permission_reason",
     "updated_at",
 ]
 
@@ -313,19 +319,27 @@ def candidate_review_output_rows(outputs: list[dict[str, Any]], *, scope: str | 
 def reminder_candidate_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
     rows = []
     for reminder in reminders:
-        evidence = reminder.get("evidence") if isinstance(reminder.get("evidence"), dict) else {}
+        payload = reminder_candidate_payload(reminder)
+        evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
+        permission_decision = payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
         rows.append(
             [
-                reminder.get("reminder_id"),
-                reminder.get("memory_id"),
-                reminder.get("scope"),
-                reminder.get("subject"),
-                reminder.get("current_value"),
-                reminder.get("reason"),
-                reminder.get("status"),
-                reminder.get("due_at"),
-                evidence.get("quote"),
-                reminder.get("recommended_action"),
+                payload.get("reminder_id"),
+                payload.get("memory_id"),
+                payload.get("scope"),
+                payload.get("subject"),
+                payload.get("current_value") or "",
+                payload.get("reason") or "",
+                payload.get("status"),
+                payload.get("due_at"),
+                evidence.get("quote") or "",
+                _json_cell(payload.get("target_actor") if isinstance(payload.get("target_actor"), dict) else {}),
+                _json_cell(payload.get("cooldown") if isinstance(payload.get("cooldown"), dict) else {}),
+                payload.get("recommended_action"),
+                payload.get("request_id") or "",
+                payload.get("trace_id") or "",
+                permission_decision.get("decision") or "",
+                payload.get("permission_reason") or permission_decision.get("reason_code") or "",
                 _format_ms(int(time.time() * 1000)),
             ]
         )
@@ -632,6 +646,12 @@ def _format_ms(value: int | None) -> str | None:
     if value is None:
         return None
     return datetime.fromtimestamp(value / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _json_cell(value: dict[str, Any]) -> str:
+    if not value:
+        return ""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
 def _chunks(rows: list[list[Any]], size: int) -> list[list[list[Any]]]:

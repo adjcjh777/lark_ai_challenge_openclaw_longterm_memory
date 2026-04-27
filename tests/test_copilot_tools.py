@@ -88,6 +88,45 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertNotIn("results", result)
         self.assertEqual("active", result["parsed_request"]["filters"]["status"])
 
+    def test_validate_tool_request_accepts_heartbeat_payload(self) -> None:
+        result = validate_tool_request(
+            "heartbeat.review_due",
+            {
+                "scope": SCOPE,
+                "current_context": current_context("heartbeat.review_due"),
+                "limit": 3,
+            },
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("heartbeat.review_due", result["tool"])
+        self.assertEqual(3, result["parsed_request"]["limit"])
+
+    def test_handle_heartbeat_review_due_returns_candidate_only_output(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_heartbeat_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(SCOPE, "提交材料截止时间是 2026-05-07，必须提前准备录屏。", source_type="unit_test")
+            result = handle_tool_request(
+                "heartbeat.review_due",
+                {
+                    "scope": SCOPE,
+                    "current_context": current_context("heartbeat.review_due"),
+                },
+                service=CopilotService(repository=repo),
+            )
+            active_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
+            candidate_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"]
+            conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("dry_run", result["status"])
+        self.assertEqual("candidate", result["candidates"][0]["status"])
+        self.assertEqual("none", result["candidates"][0]["state_mutation"])
+        self.assertEqual(1, active_count)
+        self.assertEqual(0, candidate_count)
+
     def test_validate_tool_request_uses_standard_error_shape(self) -> None:
         result = validate_tool_request("memory.search", {"query": "deployment"})
 
@@ -282,6 +321,10 @@ class CopilotToolContractTest(unittest.TestCase):
                 self.called.append("memory.prefetch")
                 return {"ok": True, "context_pack": {"relevant_memories": []}, "state_mutation": "none"}
 
+            def heartbeat_review_due(self, request):
+                self.called.append("heartbeat.review_due")
+                return {"ok": True, "status": "dry_run", "candidates": [], "trace": {"state_mutation": "none"}}
+
         service = StubService()
         payloads = {
             "memory.search": {"query": "部署参数", "scope": SCOPE, "current_context": current_context("memory.search")},
@@ -316,6 +359,10 @@ class CopilotToolContractTest(unittest.TestCase):
                 "task": "生成部署 checklist",
                 "scope": SCOPE,
                 "current_context": current_context("memory.prefetch"),
+            },
+            "heartbeat.review_due": {
+                "scope": SCOPE,
+                "current_context": current_context("heartbeat.review_due"),
             },
         }
 

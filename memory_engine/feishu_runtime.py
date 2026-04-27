@@ -14,6 +14,7 @@ from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
 from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
 from .copilot.service import CopilotService
 from .copilot.tools import handle_tool_request
+from .copilot.permissions import demo_permission_context
 from .feishu_messages import (
     format_duplicate_reply,
     format_help,
@@ -358,11 +359,19 @@ def _handle_review_tool_action(
 ) -> dict[str, Any]:
     value = _card_action_value(event)
     current_context = value.get("current_context") if isinstance(value.get("current_context"), dict) else None
+    if current_context is None and not _has_card_action(event):
+        current_context = demo_permission_context(
+            tool_name,
+            scope,
+            actor_id=event.sender_id or "feishu_runtime",
+            roles=["member", "reviewer"],
+            entrypoint="feishu_runtime",
+        )
     payload = {
         "candidate_id": candidate_id,
         "scope": value.get("scope") if isinstance(value.get("scope"), str) and value.get("scope") else scope,
         "reason": value.get("reason") if isinstance(value.get("reason"), str) else "Feishu review surface action",
-        "current_context": current_context or {},
+        "current_context": current_context,
     }
     service = CopilotService(repository=repo)
     return handle_tool_request(tool_name, payload, service=service)
@@ -417,6 +426,11 @@ def _card_action_value(event: FeishuMessageEvent) -> dict[str, Any]:
     action = raw_event.get("action") if isinstance(raw_event.get("action"), dict) else {}
     value = action.get("value") if isinstance(action.get("value"), dict) else {}
     return dict(value)
+
+
+def _has_card_action(event: FeishuMessageEvent) -> bool:
+    raw_event = event.raw.get("event") if isinstance(event.raw.get("event"), dict) else event.raw
+    return isinstance(raw_event.get("action"), dict)
 
 
 def _candidate_action_command(action: str) -> str:

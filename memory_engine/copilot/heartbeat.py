@@ -8,7 +8,8 @@ from typing import Any
 from memory_engine.models import normalize_subject, parse_scope
 from memory_engine.repository import MemoryRepository
 
-from .permissions import check_scope_access, redact_sensitive_text, sensitive_risk_flags
+from .permissions import REVIEW_ROLES, check_scope_access, redact_sensitive_text, sensitive_risk_flags
+from .schemas import PermissionContext, ValidationError
 
 
 DEFAULT_COOLDOWN_MS = 24 * 60 * 60 * 1000
@@ -27,6 +28,9 @@ class ReminderCandidate:
     status: str = "candidate"
     due_at: str | None = None
     evidence: dict[str, Any] = field(default_factory=dict)
+    target_actor: dict[str, Any] = field(default_factory=dict)
+    cooldown: dict[str, Any] = field(default_factory=dict)
+    permission_trace: dict[str, Any] = field(default_factory=dict)
     recommended_action: str = "review_reminder_candidate"
     risk_flags: list[str] = field(default_factory=list)
     gates: dict[str, bool] = field(default_factory=dict)
@@ -43,6 +47,9 @@ class ReminderCandidate:
             "status": self.status,
             "due_at": self.due_at,
             "evidence": dict(self.evidence),
+            "target_actor": dict(self.target_actor),
+            "cooldown": dict(self.cooldown),
+            "permission_trace": dict(self.permission_trace),
             "recommended_action": self.recommended_action,
             "risk_flags": list(self.risk_flags),
             "gates": dict(self.gates),
@@ -101,14 +108,15 @@ class HeartbeatReminderEngine:
         limit: int = 5,
     ) -> dict[str, Any]:
         context = current_context or {}
-        permission_error = check_scope_access(scope, context)
+        permission_error = check_scope_access(scope, context, action="heartbeat.review_due")
         if permission_error is not None:
             return permission_error.to_response()
+        permission = _permission_from_context(context)
 
         rows = self._active_rows(scope)
         candidates = []
         for row in rows:
-            candidate = self._candidate_for_row(row, scope=scope, context=context)
+            candidate = self._candidate_for_row(row, scope=scope, context=context, permission=permission)
             if candidate is None:
                 continue
             candidates.append(candidate.to_dict())
@@ -124,10 +132,24 @@ class HeartbeatReminderEngine:
                 "sources": ["review_due", "important_not_recalled", "deadline", "thread_similarity"],
                 "gates": ["importance", "relevance", "cooldown", "scope_permission", "sensitive_redaction"],
                 "state_mutation": "none",
+                "request_id": permission.request_id if permission else None,
+                "trace_id": permission.trace_id if permission else None,
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "requested_action": "heartbeat.review_due",
+                },
             },
         }
 
-    def _candidate_for_row(self, row: Any, *, scope: str, context: dict[str, Any]) -> ReminderCandidate | None:
+    def _candidate_for_row(
+        self,
+        row: Any,
+        *,
+        scope: str,
+        context: dict[str, Any],
+        permission: PermissionContext | None,
+    ) -> ReminderCandidate | None:
         trigger = self._trigger(row, context)
         if trigger is None:
             return None
@@ -154,6 +176,25 @@ class HeartbeatReminderEngine:
         if not all(gates.values()):
             return None
 
+        target_actor = _target_actor(permission)
+        cooldown = self._cooldown_trace(row)
+        permission_trace = _permission_trace(permission)
+        status = "candidate"
+        recommended_action = "review_reminder_candidate"
+        if risk_flags and not _can_review_sensitive(permission):
+            status = "withheld"
+            value = ""
+            reason = "敏感提醒已隐藏，需 reviewer 复核。"
+            evidence = {}
+            recommended_action = "permission_denied"
+            permission_trace = _permission_trace(
+                permission,
+                decision="redact",
+                reason_code="sensitive_content_redacted",
+                visible_fields=["subject", "reason", "target_actor", "cooldown"],
+                redacted_fields=["current_value", "evidence"],
+            )
+
         return ReminderCandidate(
             reminder_id=f"rem_{row['memory_id']}_{trigger}",
             memory_id=row["memory_id"],
@@ -162,8 +203,13 @@ class HeartbeatReminderEngine:
             current_value=value,
             reason=reason,
             trigger=trigger,
+            status=status,
             due_at=due_at,
             evidence=evidence,
+            target_actor=target_actor,
+            cooldown=cooldown,
+            permission_trace=permission_trace,
+            recommended_action=recommended_action,
             risk_flags=risk_flags,
             gates=gates,
         )
@@ -239,6 +285,18 @@ class HeartbeatReminderEngine:
             return True
         return int(last_recalled_at) <= self.now_ms - self.cooldown_ms
 
+    def _cooldown_trace(self, row: Any) -> dict[str, Any]:
+        last_recalled_at = row["last_recalled_at"]
+        result: dict[str, Any] = {
+            "cooldown_ms": self.cooldown_ms,
+            "passed": self._cooldown_passed(row),
+        }
+        if last_recalled_at:
+            last_recalled = int(last_recalled_at)
+            result["last_recalled_at"] = last_recalled
+            result["next_allowed_at"] = last_recalled + self.cooldown_ms
+        return result
+
     def _reason(self, trigger: str, row: Any) -> str:
         if trigger == "deadline":
             return "这条记忆像是截止时间或发布风险，任务前先提醒。"
@@ -252,3 +310,58 @@ class HeartbeatReminderEngine:
 def _extract_due_at(text: str) -> str | None:
     match = re.search(r"\b20\d{2}-\d{2}-\d{2}\b", text)
     return match.group(0) if match else None
+
+
+def _permission_from_context(context: dict[str, Any]) -> PermissionContext | None:
+    permission_payload = context.get("permission")
+    if not isinstance(permission_payload, dict):
+        return None
+    try:
+        return PermissionContext.from_payload(permission_payload)
+    except ValidationError:
+        return None
+
+
+def _target_actor(permission: PermissionContext | None) -> dict[str, Any]:
+    if permission is None:
+        return {}
+    actor = permission.actor.to_dict()
+    return {
+        key: value
+        for key, value in actor.items()
+        if key in {"user_id", "open_id", "roles"} and value
+    }
+
+
+def _permission_trace(
+    permission: PermissionContext | None,
+    *,
+    decision: str = "allow",
+    reason_code: str = "scope_access_granted",
+    visible_fields: list[str] | None = None,
+    redacted_fields: list[str] | None = None,
+) -> dict[str, Any]:
+    trace: dict[str, Any] = {
+        "decision": decision,
+        "reason_code": reason_code,
+        "requested_action": "heartbeat.review_due",
+        "visible_fields": list(visible_fields or ["subject", "current_value", "reason", "evidence", "target_actor", "cooldown"]),
+        "redacted_fields": list(redacted_fields or []),
+    }
+    if permission is not None:
+        trace.update(
+            {
+                "request_id": permission.request_id,
+                "trace_id": permission.trace_id,
+                "requested_visibility": permission.requested_visibility,
+                "source_entrypoint": permission.source_context.entrypoint,
+            }
+        )
+    return trace
+
+
+def _can_review_sensitive(permission: PermissionContext | None) -> bool:
+    if permission is None:
+        return False
+    roles = {role.strip().lower() for role in permission.actor.roles}
+    return bool(roles.intersection(REVIEW_ROLES))

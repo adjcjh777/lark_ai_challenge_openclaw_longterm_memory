@@ -8,6 +8,7 @@ from memory_engine.repository import MemoryRepository
 
 from .cognee_adapter import CogneeMemoryAdapter
 from .governance import CopilotGovernance
+from .heartbeat import HeartbeatReminderEngine
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
 from .retrieval import LayerAwareRetriever
@@ -15,6 +16,7 @@ from .schemas import (
     ConfirmRequest,
     CreateCandidateRequest,
     ExplainVersionsRequest,
+    HeartbeatReviewDueRequest,
     PrefetchRequest,
     RejectRequest,
     SearchRequest,
@@ -141,6 +143,16 @@ class CopilotService:
             },
             "state_mutation": "none",
         }
+
+    def heartbeat_review_due(self, request: HeartbeatReviewDueRequest) -> dict[str, object]:
+        permission_error = check_scope_access(request.scope, request.current_context, action="heartbeat.review_due")
+        if permission_error is not None:
+            return permission_error.to_response()
+        return HeartbeatReminderEngine(self._repository()).generate(
+            scope=request.scope,
+            current_context=request.current_context,
+            limit=request.limit,
+        )
 
     def _repository(self) -> MemoryRepository:
         if self.repository is not None:

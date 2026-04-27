@@ -558,6 +558,14 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
             "evidence": {"quote": "提交材料截止时间是 2026-05-07。"},
             "recommended_action": "review_reminder_candidate",
             "risk_flags": [],
+            "target_actor": {"user_id": "ou_test", "roles": ["member", "reviewer"]},
+            "cooldown": {"cooldown_ms": 86400000, "passed": True},
+            "permission_trace": {
+                "request_id": "req_heartbeat_review_due",
+                "trace_id": "trace_heartbeat_review_due",
+                "decision": "allow",
+                "reason_code": "scope_access_granted",
+            },
         }
 
         payload = reminder_candidate_payload(reminder)
@@ -566,7 +574,45 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("copilot_reminder_candidate", payload["surface"])
         self.assertEqual("none", payload["state_mutation"])
         self.assertEqual("deadline", payload["trigger"])
+        self.assertEqual("ou_test", payload["target_actor"]["user_id"])
+        self.assertEqual("req_heartbeat_review_due", payload["request_id"])
+        self.assertEqual("trace_heartbeat_review_due", payload["trace_id"])
         self.assertIn("dry-run", card["elements"][1]["text"]["content"])
+
+    def test_copilot_reminder_card_redacts_withheld_sensitive_payload(self) -> None:
+        reminder = {
+            "reminder_id": "rem_mem_secret_important_not_recalled",
+            "memory_id": "mem_secret",
+            "scope": "project:feishu_ai_challenge",
+            "subject": "OpenAPI 调试风险",
+            "current_value": "OpenAPI 调试风险：api_key=abcdefghi123456789 只能放本地环境。",
+            "reason": "敏感提醒已隐藏，需 reviewer 复核。",
+            "trigger": "important_not_recalled",
+            "status": "withheld",
+            "evidence": {"quote": "OpenAPI 调试风险：api_key=abcdefghi123456789 只能放本地环境。"},
+            "recommended_action": "permission_denied",
+            "risk_flags": ["sensitive_content"],
+            "target_actor": {"user_id": "ou_member", "roles": ["member"]},
+            "cooldown": {"cooldown_ms": 86400000, "passed": True},
+            "permission_trace": {
+                "request_id": "req_sensitive_reminder",
+                "trace_id": "trace_sensitive_reminder",
+                "decision": "redact",
+                "reason_code": "sensitive_content_redacted",
+            },
+        }
+
+        payload = reminder_candidate_payload(reminder)
+        card = build_reminder_candidate_card(reminder)
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertEqual("withheld", payload["status"])
+        self.assertEqual("", payload["current_value"])
+        self.assertEqual({}, payload["evidence"])
+        self.assertEqual("redact", payload["permission_decision"]["decision"])
+        self.assertEqual("req_sensitive_reminder", payload["request_id"])
+        self.assertNotIn("api_key", rendered)
+        self.assertNotIn("abcdefghi123456789", rendered)
 
 
 if __name__ == "__main__":

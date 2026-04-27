@@ -45,6 +45,7 @@ CONFIRM_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_contex
 REJECT_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context"}
 EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived", "current_context"}
 PREFETCH_FIELDS = {"task", "scope", "current_context", "top_k"}
+HEARTBEAT_REVIEW_DUE_FIELDS = {"scope", "current_context", "limit"}
 
 
 class ValidationError(ValueError):
@@ -660,6 +661,30 @@ class PrefetchRequest:
         }
 
 
+@dataclass(frozen=True)
+class HeartbeatReviewDueRequest:
+    scope: str
+    current_context: dict[str, Any] = field(default_factory=dict)
+    limit: int = 5
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "HeartbeatReviewDueRequest":
+        data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, HEARTBEAT_REVIEW_DUE_FIELDS, "heartbeat.review_due")
+        return cls(
+            scope=_require_scope(data),
+            current_context=_optional_object(data, "current_context"),
+            limit=_limit(data.get("limit"), default=5),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scope": self.scope,
+            "current_context": dict(self.current_context),
+            "limit": self.limit,
+        }
+
+
 def _require_object(payload: Any, field_name: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValidationError(f"{field_name} must be an object")
@@ -771,4 +796,16 @@ def _top_k(value: Any, *, default: int) -> int:
         raise ValidationError("top_k must be at least 1")
     if value > MAX_TOP_K:
         raise ValidationError(f"top_k cannot exceed {MAX_TOP_K}")
+    return value
+
+
+def _limit(value: Any, *, default: int) -> int:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValidationError("limit must be an integer")
+    if value < 1:
+        raise ValidationError("limit must be at least 1")
+    if value > MAX_TOP_K:
+        raise ValidationError(f"limit cannot exceed {MAX_TOP_K}")
     return value

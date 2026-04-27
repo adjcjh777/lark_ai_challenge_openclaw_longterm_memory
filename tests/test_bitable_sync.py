@@ -230,7 +230,23 @@ class BitableSyncTest(unittest.TestCase):
             <= candidate_fields
         )
         reminder_fields = {field["name"] for field in tables["Reminder Candidates"]["fields"]}
-        self.assertTrue({"reminder_id", "memory_id", "subject", "reason", "due_at", "recommended_action"} <= reminder_fields)
+        self.assertTrue(
+            {
+                "reminder_id",
+                "memory_id",
+                "subject",
+                "reason",
+                "due_at",
+                "recommended_action",
+                "target_actor",
+                "cooldown",
+                "request_id",
+                "trace_id",
+                "permission_decision",
+                "permission_reason",
+            }
+            <= reminder_fields
+        )
 
     def test_reminder_candidates_can_be_included_in_dry_run_payload(self) -> None:
         reminders = [
@@ -245,6 +261,14 @@ class BitableSyncTest(unittest.TestCase):
                 "due_at": "2026-05-07",
                 "evidence": {"quote": "提交材料截止时间是 2026-05-07。"},
                 "recommended_action": "review_reminder_candidate",
+                "target_actor": {"user_id": "ou_test", "roles": ["member", "reviewer"]},
+                "cooldown": {"cooldown_ms": 86400000, "passed": True},
+                "permission_trace": {
+                    "request_id": "req_heartbeat_review_due",
+                    "trace_id": "trace_heartbeat_review_due",
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                },
             }
         ]
 
@@ -255,6 +279,48 @@ class BitableSyncTest(unittest.TestCase):
         row = table["rows"][0]
         self.assertEqual("rem_mem_1_deadline", row[table["fields"].index("reminder_id")])
         self.assertEqual("review_reminder_candidate", row[table["fields"].index("recommended_action")])
+        self.assertIn("ou_test", row[table["fields"].index("target_actor")])
+        self.assertIn("86400000", row[table["fields"].index("cooldown")])
+        self.assertEqual("req_heartbeat_review_due", row[table["fields"].index("request_id")])
+        self.assertEqual("trace_heartbeat_review_due", row[table["fields"].index("trace_id")])
+        self.assertEqual("allow", row[table["fields"].index("permission_decision")])
+
+    def test_withheld_sensitive_reminder_dry_run_payload_does_not_leak(self) -> None:
+        reminders = [
+            {
+                "reminder_id": "rem_mem_secret_important_not_recalled",
+                "memory_id": "mem_secret",
+                "scope": "project:feishu_ai_challenge",
+                "subject": "OpenAPI 调试风险",
+                "current_value": "OpenAPI 调试风险：api_key=abcdefghi123456789 只能放本地环境。",
+                "reason": "敏感提醒已隐藏，需 reviewer 复核。",
+                "status": "withheld",
+                "evidence": {"quote": "OpenAPI 调试风险：api_key=abcdefghi123456789 只能放本地环境。"},
+                "recommended_action": "permission_denied",
+                "risk_flags": ["sensitive_content"],
+                "target_actor": {"user_id": "ou_member", "roles": ["member"]},
+                "cooldown": {"cooldown_ms": 86400000, "passed": True},
+                "permission_trace": {
+                    "request_id": "req_sensitive_reminder",
+                    "trace_id": "trace_sensitive_reminder",
+                    "decision": "redact",
+                    "reason_code": "sensitive_content_redacted",
+                },
+            }
+        ]
+
+        payload = collect_sync_payload(self.conn, reminder_candidates=reminders)
+        table = payload["tables"]["reminder_candidates"]
+        row = table["rows"][0]
+        rendered = "\n".join(str(value) for value in row)
+
+        self.assertEqual("withheld", row[table["fields"].index("status")])
+        self.assertEqual("", row[table["fields"].index("current_value")])
+        self.assertEqual("", row[table["fields"].index("evidence")])
+        self.assertEqual("redact", row[table["fields"].index("permission_decision")])
+        self.assertEqual("sensitive_content_redacted", row[table["fields"].index("permission_reason")])
+        self.assertNotIn("api_key", rendered)
+        self.assertNotIn("abcdefghi123456789", rendered)
 
 
 def setup_target():

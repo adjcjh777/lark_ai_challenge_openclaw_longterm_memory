@@ -230,6 +230,31 @@ class CopilotPermissionTest(unittest.TestCase):
         self.assert_permission_denied(response, "missing_permission_context")
         self.assertNotIn("context_pack", response)
 
+    def test_heartbeat_missing_permission_context_fails_closed(self) -> None:
+        response = handle_tool_request(
+            "heartbeat.review_due",
+            {
+                "scope": SCOPE,
+                "current_context": {"scope": SCOPE, "intent": "准备初赛提交材料"},
+            },
+        )
+
+        self.assert_permission_denied(response, "missing_permission_context")
+        self.assertNotIn("candidates", response)
+
+    def test_heartbeat_malformed_permission_context_fails_closed(self) -> None:
+        response = handle_tool_request(
+            "heartbeat.review_due",
+            {
+                "scope": SCOPE,
+                "current_context": {"scope": SCOPE, "permission": {"request_id": "req_bad", "trace_id": "trace_bad"}},
+            },
+        )
+
+        self.assert_permission_denied(response, "malformed_permission_context")
+        self.assertEqual("req_bad", response["error"]["details"]["request_id"])
+        self.assertEqual("trace_bad", response["error"]["details"]["trace_id"])
+
     def assert_permission_denied(self, response: dict[str, object], reason_code: str) -> None:
         self.assertFalse(response["ok"])
         error = response["error"]  # type: ignore[index]

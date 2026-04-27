@@ -119,6 +119,21 @@
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
+    },
+    {
+      "name": "heartbeat.review_due",
+      "description": "Generate controlled reminder candidates from active memory without real Feishu push or automatic activation.",
+      "input_schema": {
+        "type": "object",
+        "required": ["scope", "current_context"],
+        "additionalProperties": false,
+        "properties": {
+          "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
+          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
+        }
+      },
+      "output_schema": {"$ref": "#/$defs/tool_output"}
     }
   ],
   "error_schema": {
@@ -210,7 +225,7 @@
         },
         "requested_action": {
           "type": "string",
-          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch"]
+          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch", "heartbeat.review_due"]
         },
         "requested_visibility": {
           "type": "string",
@@ -227,7 +242,7 @@
         "entrypoint": {"const": "openclaw_tool"},
         "tool": {
           "type": "string",
-          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch"]
+          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch", "heartbeat.review_due"]
         },
         "request_id": {"type": "string", "minLength": 1},
         "trace_id": {"type": "string", "minLength": 1},
@@ -240,7 +255,7 @@
             "reason_code": {"type": "string", "minLength": 1},
             "requested_action": {
               "type": "string",
-              "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch"]
+               "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch", "heartbeat.review_due"]
             },
             "requested_visibility": {
               "type": "string",

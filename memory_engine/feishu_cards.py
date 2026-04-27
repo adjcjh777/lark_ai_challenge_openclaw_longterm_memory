@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -167,6 +168,23 @@ def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str
 def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
     """Build a typed reminder payload from heartbeat dry-run output."""
 
+    bridge = _bridge_payload(reminder)
+    if _is_permission_denied(reminder, bridge):
+        denied = _denied_surface_payload("copilot_reminder_candidate", "提醒候选不可用", reminder, bridge)
+        denied["current_value"] = None
+        denied["target_actor"] = {}
+        denied["cooldown"] = {}
+        return denied
+
+    permission_trace = reminder.get("permission_trace") if isinstance(reminder.get("permission_trace"), dict) else {}
+    request_id = permission_trace.get("request_id")
+    trace_id = permission_trace.get("trace_id")
+    permission_decision = {
+        "decision": permission_trace.get("decision") or "allow",
+        "reason_code": permission_trace.get("reason_code") or "scope_access_granted",
+        "requested_action": permission_trace.get("requested_action") or "heartbeat.review_due",
+    }
+    is_withheld = reminder.get("status") == "withheld"
     return {
         "surface": "copilot_reminder_candidate",
         "title": "提醒候选",
@@ -174,12 +192,18 @@ def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
         "memory_id": reminder.get("memory_id"),
         "scope": reminder.get("scope"),
         "subject": reminder.get("subject"),
-        "current_value": reminder.get("current_value"),
+        "current_value": "" if is_withheld else reminder.get("current_value"),
         "reason": reminder.get("reason"),
         "trigger": reminder.get("trigger"),
         "status": reminder.get("status"),
         "due_at": reminder.get("due_at"),
-        "evidence": reminder.get("evidence") or {},
+        "evidence": {} if is_withheld else reminder.get("evidence") or {},
+        "target_actor": reminder.get("target_actor") if isinstance(reminder.get("target_actor"), dict) else {},
+        "cooldown": reminder.get("cooldown") if isinstance(reminder.get("cooldown"), dict) else {},
+        "request_id": request_id,
+        "trace_id": trace_id,
+        "permission_decision": permission_decision,
+        "permission_reason": permission_decision["reason_code"],
         "risk_flags": list(reminder.get("risk_flags") or []),
         "recommended_action": reminder.get("recommended_action") or "review_reminder_candidate",
         "buttons": [
@@ -246,6 +270,8 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
 
 def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
     payload = reminder_candidate_payload(reminder)
+    if payload.get("status") == "permission_denied":
+        return _permission_denied_card("提醒候选", payload)
     fields = [
         ("状态", str(payload.get("status") or "")),
         ("触发原因", str(payload.get("trigger") or "")),
@@ -253,8 +279,14 @@ def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
         ("提醒内容", str(payload.get("current_value") or "")),
         ("为什么提醒", str(payload.get("reason") or "")),
         ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
+        ("目标对象", _format_json(payload.get("target_actor") or {})),
+        ("冷却窗口", _format_json(payload.get("cooldown") or {})),
         ("风险", ", ".join(payload.get("risk_flags") or []) or "无"),
     ]
+    if payload.get("request_id"):
+        fields.append(("request_id", str(payload["request_id"])))
+    if payload.get("trace_id"):
+        fields.append(("trace_id", str(payload["trace_id"])))
     if payload.get("due_at"):
         fields.append(("截止时间", str(payload["due_at"])))
 
@@ -269,7 +301,7 @@ def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
                 "tag": "div",
                 "fields": [
                     {
-                        "is_short": label not in {"提醒内容", "为什么提醒", "证据"},
+                        "is_short": label not in {"提醒内容", "为什么提醒", "证据", "目标对象", "冷却窗口"},
                         "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
                     }
                     for label, value in fields
@@ -463,6 +495,12 @@ def _button(label: str, button_type: str, value: dict[str, str]) -> dict[str, An
         "type": button_type,
         "value": value,
     }
+
+
+def _format_json(value: Any) -> str:
+    if not value:
+        return ""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
 def _bridge_payload(response: dict[str, Any]) -> dict[str, Any]:

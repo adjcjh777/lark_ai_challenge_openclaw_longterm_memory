@@ -8,6 +8,7 @@ from .schemas import (
     CopilotError,
     CreateCandidateRequest,
     ExplainVersionsRequest,
+    HeartbeatReviewDueRequest,
     PrefetchRequest,
     PermissionContext,
     RejectRequest,
@@ -26,6 +27,7 @@ REQUEST_TYPES: dict[str, Callable[[Any], Any]] = {
     "memory.reject": RejectRequest.from_payload,
     "memory.explain_versions": ExplainVersionsRequest.from_payload,
     "memory.prefetch": PrefetchRequest.from_payload,
+    "heartbeat.review_due": HeartbeatReviewDueRequest.from_payload,
 }
 
 
@@ -100,6 +102,8 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
         return _with_bridge_metadata(copilot_service.explain_versions(request), tool_name, request)
     if tool_name == "memory.prefetch":
         return _with_bridge_metadata(copilot_service.prefetch(request), tool_name, request)
+    if tool_name == "heartbeat.review_due":
+        return _with_bridge_metadata(copilot_service.heartbeat_review_due(request), tool_name, request)
 
     return error_response(
         "validation_error",

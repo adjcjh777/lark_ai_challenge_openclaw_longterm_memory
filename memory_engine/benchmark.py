@@ -689,10 +689,12 @@ def run_copilot_heartbeat_benchmark(
         text = json.dumps(candidates, ensure_ascii=False)
         expected_trigger = case.get("expected_trigger")
         expected_subject = case.get("expected_subject", "")
+        expected_status = case.get("expected_status")
         forbidden = case.get("forbidden_value", "")
         expected_found = any(
             (not expected_trigger or item.get("trigger") == expected_trigger)
             and (not expected_subject or expected_subject in str(item.get("subject") or ""))
+            and (not expected_status or item.get("status") == expected_status)
             for item in candidates
             if isinstance(item, dict)
         )
@@ -708,12 +710,14 @@ def run_copilot_heartbeat_benchmark(
                 "expected_output": {
                     "expected_trigger": expected_trigger,
                     "expected_subject": expected_subject,
+                    "expected_status": expected_status,
                     "forbidden_value": forbidden,
                 },
                 "actual_output_summary": {
                     "candidate_count": len(candidates),
                     "expected_found": expected_found,
                     "sensitive_leak": sensitive_leak,
+                    "expected_status": expected_status,
                 },
                 "candidate_count": len(candidates),
                 "expected_found": expected_found,
@@ -753,9 +757,10 @@ def _benchmark_heartbeat_context(case: dict[str, Any], scope: str) -> dict[str, 
     context = dict(case.get("current_context") or {"intent": case.get("intent", "")})
     context.update(
         demo_permission_context(
-            "memory.search",
+            "heartbeat.review_due",
             scope,
             actor_id=str(case.get("actor_id", "benchmark")),
+            roles=case.get("roles") if isinstance(case.get("roles"), list) else None,
             entrypoint="heartbeat",
             metadata=context.get("metadata") if isinstance(context.get("metadata"), dict) else None,
         )

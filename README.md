@@ -8,6 +8,7 @@
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
+| Phase 5 Heartbeat Controlled Reminder 已完成本地闭环：active memory 只生成受控 reminder candidate（提醒候选） | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[heartbeat.py](memory_engine/copilot/heartbeat.py)；[tools.py](memory_engine/copilot/tools.py)；[feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py)；[copilot_heartbeat_cases.json](benchmarks/copilot_heartbeat_cases.json) | `heartbeat.review_due` 工具入口、reason/evidence/target actor/cooldown/permission trace、敏感内容 redacted/withheld、card/Bitable dry-run 安全摘要 | active memory 能生成 candidate；不自动 active；不真实飞书群推送；不是生产调度服务；non-reviewer 看不到敏感 evidence/current_value；Sensitive Reminder Leakage Rate = 0 |
 | Phase 4 Limited Feishu ingestion 已完成本地闭环：指定飞书来源只进入 candidate（待确认记忆）队列 | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[document_ingestion.py](memory_engine/document_ingestion.py)；[Phase 4 OpenClaw example](agent_adapters/openclaw/examples/limited_feishu_ingestion_candidate_only.json) | 指定来源 -> candidate pipeline、权限拒绝样例、candidate-only 证据、request_id/trace_id、source metadata、review surface 可审核 | 真实飞书来源不能自动 active；`document_feishu` 的 `auto_confirm=True` 会被忽略；无权限 actor 看不到未授权内容；这仍不是 productized live 或全量 Feishu workspace ingestion |
 | Phase 3 Feishu UI / Review Surface 已完成本地闭环：card、Bitable dry-run 和 card action 消费 permission-aware service/tool output | [feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py)；[feishu_runtime.py](memory_engine/feishu_runtime.py)；[test_feishu_interactive_cards.py](tests/test_feishu_interactive_cards.py)；[test_bitable_sync.py](tests/test_bitable_sync.py) | Candidate Review card、Version Chain card、Bitable Candidate Review dry-run、permission denied 安全摘要、request_id/trace_id/permission_decision | approve/reject 通过 `CopilotService` / `handle_tool_request`；non-reviewer 被拒绝且 candidate 不变；未授权 payload 不展示 evidence/current_value；这仍不是 Feishu live ingestion |
 | Phase 2 OpenClaw live bridge 已完成，用 OpenClaw/本地桥真实调用 permission-aware Copilot service | [memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json)；[tools.py](memory_engine/copilot/tools.py)；[test_copilot_tools.py](tests/test_copilot_tools.py)；[OpenClaw examples](agent_adapters/openclaw/examples/) | seed/local service bridge、permission-aware tool response、trace/request id、missing/malformed permission fail-closed demo | commit `cb21bc7` 已完成；OpenClaw 版本仍为 `2026.4.24`；`memory.*` 工具通过 service 调用；明确这不是 Feishu live ingestion |
@@ -21,7 +22,7 @@
 
 ## 当前状态
 
-截至 2026-05-07 最新口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 已完成完整产品路线、Phase 1 契约冻结、Phase 2 权限前置实现、Phase 2 OpenClaw live bridge、Phase 3 Feishu UI / Review Surface 和 Phase 4 Limited Feishu ingestion 本地闭环：
+截至 2026-05-07 最新口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 已完成完整产品路线、Phase 1 契约冻结、Phase 2 权限前置实现、Phase 2 OpenClaw live bridge、Phase 3 Feishu UI / Review Surface、Phase 4 Limited Feishu ingestion 和 Phase 5 Heartbeat Controlled Reminder 本地闭环：
 
 - OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
 - OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
@@ -41,18 +42,19 @@
 - Candidate Review card、Version Chain card 和 Bitable dry-run 五类表字段已成型，当前只消费 Copilot service 输出，不直接改状态。
 - `memory.prefetch` 已接入 Copilot service / tools，返回 compact context pack，包含 relevant memory、evidence、risk/deadline、version status 和 trace summary，不带 raw events。
 - `memory_engine/copilot/heartbeat.py` 已生成 heartbeat reminder candidate 和 agent run summary candidate；只做 dry-run，不真实发群，不绕过 governance 自动 active。
-- `benchmarks/copilot_prefetch_cases.json` 已有 6 条样例，`benchmarks/copilot_heartbeat_cases.json` 已有 6 条样例；prefetch runner 输出 Agent Task Context Use Rate，heartbeat runner 输出 Sensitive Reminder Leakage Rate。
+- `benchmarks/copilot_prefetch_cases.json` 已有 6 条样例，`benchmarks/copilot_heartbeat_cases.json` 已有 7 条样例；prefetch runner 输出 Agent Task Context Use Rate，heartbeat runner 输出 Sensitive Reminder Leakage Rate，并覆盖非 reviewer 敏感提醒 withheld。
 - `docs/benchmark-report.md` 已串联 recall、candidate、conflict、layer、prefetch、heartbeat 六类指标，报告包含失败分类、反例说明、PRD 指标映射和 Bitable Benchmark Results dry-run 字段说明。
-- `docs/benchmark-report.md` 已加入 10 条证明力难例：recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 6 条全部通过。
+- `docs/benchmark-report.md` 已加入 10 条证明力难例；当前 runner 样例为 recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 7 条，Phase 5 新增非 reviewer 敏感提醒 withheld 证明。
 - `docs/demo-runbook.md` 已改成 OpenClaw-native 5 分钟演示脚本，覆盖 `memory.search`、`memory.explain_versions`、`memory.prefetch`、heartbeat reminder candidate 和 benchmark 收口。
 - `scripts/demo_seed.py` 已固定 demo dry-run replay：默认使用临时 SQLite，不写飞书生产空间；可用 `--json-output reports/demo_replay.json` 生成本地演示证据。
 - `agent_adapters/openclaw/examples/*.json` 已标注 copyable / schema demo 边界，并和 `memory_tools.schema.json` 的实际 search 输出字段对齐。
 - `docs/memory-definition-and-architecture-whitepaper.md` 已完成初赛可提交初稿，覆盖 Define it / Build it / Prove it、架构边界、状态机、证据链、Demo/Benchmark 证明、局限和复赛路线。
 - Phase 1 contract freeze 已完成：storage、permission、OpenClaw payload、audit、migration、negative permission test plan 均已落到 `docs/productization/contracts/`。
 - Phase 2 权限前置实现已完成：`current_context.permission` 缺失或畸形会 fail closed；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 都经过 `CopilotService` 统一权限门控；真实 Feishu document ingestion 在 fetch 前必须通过权限校验。
-- Phase 2 OpenClaw live bridge 已完成：`handle_tool_request` 统一桥接六个 MVP `memory.*` 工具到 permission-aware `CopilotService`，返回 `bridge.request_id`、`bridge.trace_id` 和 `permission_decision`。
+- Phase 2 OpenClaw live bridge 已完成：`handle_tool_request` 统一桥接 MVP `memory.*` 和 `heartbeat.review_due` 工具到 permission-aware `CopilotService`，返回 `bridge.request_id`、`bridge.trace_id` 和 `permission_decision`。
 - Phase 3 Feishu UI / Review Surface 已完成本地闭环：Candidate Review card、Version Chain card、Bitable dry-run 和 Feishu card action 都消费 service/tool 输出；权限拒绝时只展示安全摘要，不泄露未授权 evidence/current_value。
 - Phase 4 Limited Feishu ingestion 已完成本地闭环：指定 Feishu document source 在授权上下文下进入 candidate；source context document_id 不匹配会在 fetch 前 fail closed；candidate 带 evidence quote、source metadata 和 ingestion trace；真实飞书来源仍不会自动 active。
+- Phase 5 Heartbeat Controlled Reminder 已完成本地闭环：active memory 只生成受控 reminder candidate，输出 reason、evidence、target actor、cooldown 和 permission trace；敏感内容对非 reviewer 只给 withheld/redacted payload；card/Bitable dry-run 不展示未授权 evidence/current_value。本阶段仍不真实推送飞书群消息，不做生产调度服务，也不写成 productized live。
 
 ## 10 分钟快速开始
 
