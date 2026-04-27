@@ -103,47 +103,66 @@
 ## 版本维护与推送规则
 ### 每完成一个可运行闭环、阶段交付或关键文档更新后，必须执行本地验证、提交并推送到远程仓库。
 ### 提交前必须检查 `git status --short`，确认 `.env`、`.omx/`、数据库文件、缓存文件和临时报告不会进入提交。
-### 提交前基础验证
-### 每次关键文档、代码或配置变更提交前至少运行：
+### 提交前先判断改动类型，再选择最小但足够的验证；不要把旧 Day1-Day7 测试当成所有新主线工作的默认主验收。
+### 所有提交前都要运行：
 ```bash
 python3 scripts/check_openclaw_version.py
-python3 -m compileall memory_engine scripts
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+git diff --check
 ```
-### 这三条分别验证 OpenClaw 版本锁、Python 语法/导入基线、旧本地 memory 闭环回归；`day1_cases.json` 仍是保底基线，但不再代表新 Copilot PRD 的全部验收。
-### Cognee / Copilot 新主线相关变更，按触达范围追加专项验证；对应测试或 benchmark 文件尚未创建时，在 commit message 的 `Not-tested:` 中说明缺口，不要假装已覆盖：
+### 只改 AGENTS、README、plan、handoff、白皮书或看板说明时，以上两条通过即可提交；如果文档改动改变了验收命令、依赖锁、OpenClaw/Cognee 约束或 benchmark 口径，再追加对应的专项验证。
+### 触达 Python 代码、脚本、OpenClaw schema、benchmark runner 或测试数据时，追加：
 ```bash
-# OpenClaw schema、工具 handler、Cognee adapter、Copilot schema
+python3 -m compileall memory_engine scripts
+```
+### Cognee / Copilot 新主线相关变更，按触达范围追加现有专项验证；只运行当前仓库已经存在、且本次改动真正覆盖到的测试或 benchmark：
+```bash
+# Copilot schema、OpenClaw tools schema、工具 handler、统一错误格式
 python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
 
-# retrieval、Cognee recall/search adapter、L0-L3 分层召回
-python3 -m unittest tests.test_copilot_retrieval
+# Cognee adapter、本地 spike、embedding provider、fallback 边界
+python3 -m unittest tests.test_copilot_cognee_adapter
+python3 scripts/spike_cognee_local.py --dry-run
+
+# retrieval、memory.search fallback、L0-L3 分层召回或召回 benchmark runner
+python3 -m unittest tests.test_copilot_retrieval tests.test_copilot_benchmark
 python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
-
-# candidate、confirm/reject、conflict update、version chain、stale leakage
-python3 -m unittest tests.test_copilot_governance
-python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
-
-# prefetch、heartbeat reminder、敏感信息门控
-python3 -m unittest tests.test_copilot_prefetch tests.test_copilot_heartbeat
-python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 ```
-### 阶段闭环、提交材料、白皮书或 Demo freeze 前，使用主控计划中的最终验收命令：`python3 -m unittest discover tests`，再跑 `day1_cases`、`day7_anti_interference` 和所有已存在的 `copilot_*_cases.json`。
+### 当前还没有落地的治理、candidate、conflict、prefetch、heartbeat 测试或 benchmark，不要写成强制命令；实现对应文件后，再把它们加入当日计划和本段专项验证。计划中的目标命令可以先写在 `docs/feishu-memory-copilot-implementation-plan.md`，但提交报告必须区分“已运行”和“尚未实现”。
+### 只有触达旧实现 fallback、旧 Bot、旧 CLI、本地 repository、文档摄取、Bitable 同步或历史 benchmark runner 时，才追加 legacy 回归：
+```bash
+# 旧本地 memory 闭环保底，不代表 OpenClaw-native Copilot 的主验收
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+
+# 旧抗干扰、文档摄取、Bot、Bitable 或卡片能力被改到时再跑
+python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json
+python3 -m unittest tests.test_benchmark_day7 tests.test_document_ingestion tests.test_bitable_sync
+python3 -m unittest tests.test_feishu_day3 tests.test_feishu_day5 tests.test_feishu_day6 tests.test_feishu_interactive_cards tests.test_feishu_runtime_logging
+```
+### 每次运行 `scripts/check_embedding_provider.py`、`scripts/spike_cognee_local.py` 或任何真实 Cognee / Ollama embedding 验证后，必须按“本地模型与 Ollama 清理规则”执行 `ollama ps`，必要时只关闭本项目模型，并在最终回复和 commit message 的 `Tested:` / `Not-tested:` 中写清清理状态。
+### 阶段闭环、提交材料、白皮书或 Demo freeze 前，使用主控计划中的最终验收思路，但只运行当前仓库已经存在并且 runner 已实现的命令；缺失项必须写入 `Not-tested:` 或 handoff 风险：
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
+python3 -m compileall memory_engine scripts
+python3 -m unittest discover tests
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json --markdown-output docs/benchmark-report.md
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
+```
+### 未来如果新增 `benchmarks/copilot_candidate_cases.json`、`benchmarks/copilot_conflict_cases.json`、`benchmarks/copilot_prefetch_cases.json` 或 `benchmarks/copilot_heartbeat_cases.json` 并实现 runner，再把对应命令加入最终验收；新增前不得假装这些命令已经可跑。
 ### 只提交与当前任务相关的文件；不要回退或覆盖他人已有改动。
 ### `AGENTS.md` 是项目执行契约，必须进入版本控制；如果被 ignore 规则影响，使用 `git add -f AGENTS.md` 明确纳入本次提交。
 ### commit message 采用“为什么做这次变更”作为首行，并在正文中记录验证情况，例如：
 ```text
-Keep verification aligned with the Cognee-backed Copilot core
+Align verification gates with the OpenClaw-native Copilot stage
 
-Updated the repo execution contract so commits still keep the old local memory baseline, while Cognee/Copilot changes add scope-specific schema, retrieval, governance, prefetch, heartbeat, and benchmark checks.
+Updated the repo execution contract so documentation-only edits, Copilot core changes, Cognee adapter work, benchmark updates, and legacy fallback changes use different verification gates. Day1 remains a fallback regression, not the primary Copilot acceptance test.
 
 Tested: python3 scripts/check_openclaw_version.py
-Tested: python3 -m compileall memory_engine scripts
-Tested: python3 -m memory_engine benchmark run benchmarks/day1_cases.json
-Not-tested: copilot_* benchmark files not created yet
+Tested: git diff --check
+Not-tested: Python/Copilot regression suites not needed for AGENTS-only documentation change
 ```
 ### 提交后推送当前分支到 `origin`：
 ```bash
