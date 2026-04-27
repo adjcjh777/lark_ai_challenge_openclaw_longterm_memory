@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from memory_engine.bitable_sync import collect_sync_payload, setup_commands, sync_payload
+from memory_engine.bitable_sync import collect_sync_payload, setup_commands, sync_payload, table_schema_spec
+from memory_engine.copilot.schemas import CreateCandidateRequest
+from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
@@ -56,7 +58,10 @@ class BitableSyncTest(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertTrue(result["dry_run"])
-        self.assertEqual({"ledger": 1, "versions": 1, "benchmark": 0}, result["tables"])
+        self.assertEqual(
+            {"ledger": 1, "versions": 1, "candidate_review": 0, "benchmark": 0, "reminder_candidates": 0},
+            result["tables"],
+        )
         self.assertEqual(2, len(result["commands"]))
 
     def test_benchmark_summary_row_can_be_included(self) -> None:
@@ -86,6 +91,42 @@ class BitableSyncTest(unittest.TestCase):
         self.assertEqual("project:other", ledger["rows"][0][ledger["fields"].index("scope")])
         self.assertEqual(1, len(versions["rows"]))
         self.assertEqual("project:other", versions["rows"][0][versions["fields"].index("scope")])
+
+    def test_candidate_review_rows_include_conflict_context(self) -> None:
+        self.repo.remember("project:feishu_ai_challenge", "生产部署 region 固定 cn-shanghai。", source_type="test")
+        service = CopilotService(repository=self.repo)
+        service.create_candidate(
+            CreateCandidateRequest.from_payload(
+                {
+                    "text": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                    "scope": "project:feishu_ai_challenge",
+                    "source": {
+                        "source_type": "test",
+                        "source_id": "msg_conflict",
+                        "actor_id": "ou_test",
+                        "created_at": "2026-05-01T10:00:00+08:00",
+                        "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                    },
+                }
+            )
+        )
+
+        payload = collect_sync_payload(self.conn)
+        review = payload["tables"]["candidate_review"]
+
+        self.assertEqual(1, len(review["rows"]))
+        row = review["rows"][0]
+        self.assertIn("ap-shanghai", row[review["fields"].index("new_value")])
+        self.assertIn("cn-shanghai", row[review["fields"].index("old_value")])
+        self.assertEqual("review_conflict", row[review["fields"].index("recommended_action")])
+
+    def test_schema_spec_includes_review_and_reminder_tables(self) -> None:
+        tables = {table["name"]: table for table in table_schema_spec()["tables"]}
+
+        self.assertIn("Candidate Review", tables)
+        self.assertIn("Reminder Candidates", tables)
+        candidate_fields = {field["name"] for field in tables["Candidate Review"]["fields"]}
+        self.assertTrue({"status", "subject", "new_value", "old_value", "evidence", "risk_flags", "recommended_action"} <= candidate_fields)
 
 
 def setup_target():

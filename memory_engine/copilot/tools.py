@@ -92,6 +92,8 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
         return (service or CopilotService()).confirm(request)
     if tool_name == "memory.reject":
         return (service or CopilotService()).reject(request)
+    if tool_name == "memory.explain_versions":
+        return (service or CopilotService()).explain_versions(request)
 
     return error_response(
         "validation_error",

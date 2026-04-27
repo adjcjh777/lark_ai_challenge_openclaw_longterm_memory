@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from memory_engine.copilot.schemas import ConfirmRequest, CreateCandidateRequest, RejectRequest
+from memory_engine.copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, RejectRequest, SearchRequest
 from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
@@ -135,6 +135,40 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertIsNotNone(after)
         assert after is not None
         self.assertIn("ap-shanghai", after["answer"])
+
+    def test_explain_versions_shows_superseded_value_and_evidence(self) -> None:
+        self.repo.remember(SCOPE, "生产部署必须加 --canary --region cn-shanghai。", source_type="unit_test")
+        created = self.service.create_candidate(candidate_request("不对，生产部署 region 以后统一改成 ap-shanghai。"))
+        self.service.confirm(
+            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="确认覆盖")
+        )
+
+        explained = self.service.explain_versions(ExplainVersionsRequest(memory_id=created["memory_id"], scope=SCOPE))
+
+        self.assertTrue(explained["ok"])
+        self.assertEqual("memory.explain_versions", explained["tool"])
+        self.assertEqual("ap-shanghai", explained["active_version"]["value"].split()[-1].rstrip("。"))
+        self.assertEqual(["active", "superseded"], sorted({item["status"] for item in explained["versions"]}))
+        self.assertTrue(all(item["evidence"]["quote"] for item in explained["versions"]))
+        superseded = [item for item in explained["versions"] if item["status"] == "superseded"][0]
+        self.assertIn("cn-shanghai", superseded["value"])
+        self.assertIn("默认 search 不再", superseded["inactive_reason"])
+
+    def test_default_search_does_not_leak_superseded_or_stale_values(self) -> None:
+        self.repo.remember(SCOPE, "生产部署必须加 --canary --region cn-shanghai。", source_type="unit_test")
+        created = self.service.create_candidate(candidate_request("不对，生产部署 region 以后统一改成 ap-shanghai。"))
+        self.service.confirm(
+            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="确认覆盖")
+        )
+        self.conn.execute("UPDATE memories SET status = 'stale' WHERE id LIKE 'mem_nonexistent'")
+        self.conn.commit()
+
+        search = self.service.search(SearchRequest.from_payload({"query": "生产部署 region", "scope": SCOPE, "top_k": 3}))
+
+        self.assertTrue(search["ok"])
+        self.assertTrue(search["results"])
+        self.assertTrue(all(item["status"] == "active" for item in search["results"]))
+        self.assertTrue(all("cn-shanghai" not in item["current_value"] for item in search["results"]))
 
 
 if __name__ == "__main__":

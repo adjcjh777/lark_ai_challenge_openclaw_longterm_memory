@@ -11,6 +11,7 @@ from memory_engine.benchmark import run_benchmark
 LAYER_CASES = Path("benchmarks/copilot_layer_cases.json")
 RECALL_CASES = Path("benchmarks/copilot_recall_cases.json")
 CANDIDATE_CASES = Path("benchmarks/copilot_candidate_cases.json")
+CONFLICT_CASES = Path("benchmarks/copilot_conflict_cases.json")
 
 
 class CopilotBenchmarkTest(unittest.TestCase):
@@ -95,6 +96,31 @@ class CopilotBenchmarkTest(unittest.TestCase):
         self.assertEqual(0, summary["candidate_not_detected"])
         self.assertEqual(0, summary["false_positive_candidate"])
         self.assertEqual(0, summary["evidence_missing"])
+
+    def test_conflict_fixture_has_review_actions_and_forbidden_old_values(self) -> None:
+        cases = json.loads(CONFLICT_CASES.read_text(encoding="utf-8"))
+        case_ids = [case["case_id"] for case in cases]
+
+        self.assertGreaterEqual(len(cases), 10)
+        self.assertEqual(len(case_ids), len(set(case_ids)))
+        for case in cases:
+            self.assertEqual("copilot_conflict", case["type"], msg=case["case_id"])
+            self.assertEqual("confirm", case["expected_action"], msg=case["case_id"])
+            self.assertTrue(case["expected_active_value"].strip(), msg=case["case_id"])
+            self.assertTrue(case["forbidden_value"].strip(), msg=case["case_id"])
+            self.assertTrue(case["expected_reason"].strip(), msg=case["case_id"])
+            self.assertTrue(case["failure_debug_hint"].strip(), msg=case["case_id"])
+
+    def test_conflict_benchmark_reports_accuracy_and_zero_leakage(self) -> None:
+        result = run_benchmark(CONFLICT_CASES)
+        summary = result["summary"]
+
+        self.assertEqual("copilot_conflict", result["benchmark_type"])
+        self.assertGreaterEqual(summary["case_count"], 10)
+        self.assertGreaterEqual(summary["conflict_accuracy"], 0.7)
+        self.assertEqual(0.0, summary["stale_leakage_rate"])
+        self.assertEqual(0.0, summary["superseded_leakage_rate"])
+        self.assertGreaterEqual(summary["evidence_coverage"], 0.8)
 
 
 if __name__ == "__main__":

@@ -92,6 +92,152 @@ def build_update_card(
     return card
 
 
+def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, Any]:
+    """Build a typed review payload from Copilot service output only."""
+
+    candidate = candidate_response.get("candidate") or {}
+    conflict = candidate_response.get("conflict") or candidate.get("conflict") or {}
+    evidence = candidate_response.get("evidence") or candidate.get("evidence") or {}
+    return {
+        "surface": "copilot_candidate_review",
+        "title": "待确认记忆",
+        "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
+        "memory_id": candidate_response.get("memory_id") or candidate.get("memory_id"),
+        "version_id": candidate_response.get("version_id") or candidate.get("version_id"),
+        "status": candidate_response.get("status") or candidate.get("status"),
+        "type": candidate.get("type"),
+        "subject": candidate.get("subject"),
+        "new_value": candidate.get("current_value"),
+        "summary": candidate.get("summary"),
+        "evidence": evidence,
+        "risk_flags": list(candidate_response.get("risk_flags") or candidate.get("risk_flags") or []),
+        "recommended_action": candidate_response.get("recommended_action") or candidate.get("recommended_action"),
+        "conflict": {
+            "has_conflict": bool(conflict.get("has_conflict")),
+            "old_memory_id": conflict.get("old_memory_id"),
+            "old_value": conflict.get("old_value"),
+            "old_status": conflict.get("old_status"),
+            "reason": conflict.get("reason"),
+        },
+        "buttons": [
+            {"action": "confirm", "label": "确认保存", "required_for_mvp": True},
+            {"action": "reject", "label": "拒绝候选", "required_for_mvp": True},
+            {"action": "versions", "label": "查看版本链", "required_for_mvp": False, "mode": "dry_run"},
+            {"action": "source", "label": "查看来源", "required_for_mvp": False, "mode": "dry_run"},
+            {"action": "needs_review", "label": "标记需要复核", "required_for_mvp": False, "mode": "dry_run"},
+        ],
+        "state_mutation": "none",
+    }
+
+
+def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str, Any]:
+    """Build a typed version-chain payload without mutating memory state."""
+
+    versions = explain_versions_response.get("versions") or []
+    return {
+        "surface": "copilot_version_chain",
+        "title": "记忆版本链",
+        "memory_id": explain_versions_response.get("memory_id"),
+        "scope": explain_versions_response.get("scope"),
+        "subject": explain_versions_response.get("subject"),
+        "type": explain_versions_response.get("type"),
+        "status": explain_versions_response.get("status"),
+        "active_version": explain_versions_response.get("active_version"),
+        "versions": versions,
+        "supersedes": explain_versions_response.get("supersedes") or [],
+        "explanation": explain_versions_response.get("explanation"),
+        "buttons": [
+            {"action": "source", "label": "查看来源", "required_for_mvp": False, "mode": "dry_run"},
+            {"action": "needs_review", "label": "标记需要复核", "required_for_mvp": False, "mode": "dry_run"},
+        ],
+        "state_mutation": "none",
+    }
+
+
+def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str, Any]:
+    payload = candidate_review_payload(candidate_response)
+    conflict = payload["conflict"]
+    fields = [
+        ("状态", str(payload.get("status") or "")),
+        ("主题", str(payload.get("subject") or "")),
+        ("新值", str(payload.get("new_value") or "")),
+        ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
+        ("风险", ", ".join(payload.get("risk_flags") or []) or "无"),
+        ("操作建议", str(payload.get("recommended_action") or "")),
+    ]
+    if conflict["has_conflict"]:
+        fields.append(("覆盖旧值", str(conflict.get("old_value") or "")))
+
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "orange" if conflict["has_conflict"] else "turquoise",
+            "title": {"tag": "plain_text", "content": "待确认记忆"},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label not in {"新值", "证据", "覆盖旧值"},
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                ],
+            },
+            {
+                "tag": "action",
+                "actions": [
+                    _button(
+                        "确认保存",
+                        "primary",
+                        {CARD_ACTION_KEY: "confirm", "candidate_id": str(payload.get("candidate_id") or "")},
+                    ),
+                    _button(
+                        "拒绝候选",
+                        "danger",
+                        {CARD_ACTION_KEY: "reject", "candidate_id": str(payload.get("candidate_id") or "")},
+                    ),
+                ],
+            },
+        ],
+    }
+
+
+def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[str, Any]:
+    payload = version_chain_payload(explain_versions_response)
+    version_lines = []
+    for item in payload["versions"]:
+        marker = "当前" if item.get("is_active") else "旧值"
+        inactive = f"；{item['inactive_reason']}" if item.get("inactive_reason") else ""
+        version_lines.append(f"v{item['version']} [{item['status']}] {marker}：{item['value']}{inactive}")
+
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "blue",
+            "title": {"tag": "plain_text", "content": "记忆版本链"},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**主题**\n{payload.get('subject') or ''}"}},
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**状态**\n{payload.get('status') or ''}"}},
+                ],
+            },
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": "\n".join(version_lines)},
+            },
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": str(payload.get("explanation") or "")},
+            },
+        ],
+    }
+
+
 def build_card_from_text(text: str) -> dict[str, Any]:
     fields = _fields_from_text(text)
     card_name = fields.get("卡片") or fields.get("类型") or "企业记忆卡片"

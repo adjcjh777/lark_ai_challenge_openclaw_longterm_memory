@@ -213,7 +213,9 @@ def add_bitable_target_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--base-token", default=os.environ.get("BITABLE_BASE_TOKEN", "app_xxx"), help="Bitable/Base token. Required for non-dry-run sync")
     parser.add_argument("--ledger-table", default=os.environ.get("BITABLE_LEDGER_TABLE", "Memory Ledger"), help="Table ID or table name for current memory rows")
     parser.add_argument("--versions-table", default=os.environ.get("BITABLE_VERSIONS_TABLE", "Memory Versions"), help="Table ID or table name for version rows")
+    parser.add_argument("--candidate-review-table", default=os.environ.get("BITABLE_CANDIDATE_REVIEW_TABLE", "Candidate Review"), help="Table ID or table name for candidate review rows")
     parser.add_argument("--benchmark-table", default=os.environ.get("BITABLE_BENCHMARK_TABLE", "Benchmark Results"), help="Table ID or table name for benchmark rows")
+    parser.add_argument("--reminder-candidates-table", default=os.environ.get("BITABLE_REMINDER_CANDIDATES_TABLE", "Reminder Candidates"), help="Table ID or table name for reminder candidate rows")
     parser.add_argument("--lark-cli", default=os.environ.get("LARK_CLI", "lark-cli"), help="lark-cli executable path")
     parser.add_argument("--profile", default=os.environ.get("LARK_CLI_PROFILE"), help="Optional lark-cli profile")
     parser.add_argument("--as-identity", default=os.environ.get("LARK_CLI_AS"), help="Optional lark-cli identity, for example user or bot")
@@ -224,7 +226,9 @@ def _bitable_target(args) -> BitableTarget:
         base_token=args.base_token,
         ledger_table=args.ledger_table,
         versions_table=args.versions_table,
+        candidate_review_table=args.candidate_review_table,
         benchmark_table=args.benchmark_table,
+        reminder_candidates_table=args.reminder_candidates_table,
         lark_cli=args.lark_cli,
         profile=args.profile,
         as_identity=args.as_identity,

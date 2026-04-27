@@ -241,6 +241,57 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertFalse(rejected["ok"])
         self.assertEqual("candidate_not_confirmable", rejected["error"]["code"])
 
+    def test_handle_explain_versions_returns_active_and_superseded_chain(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            service = CopilotService(repository=repo)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "生产部署 region 固定 cn-shanghai。",
+                source_type="unit_test",
+            )
+            created = handle_tool_request(
+                "memory.create_candidate",
+                {
+                    "text": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                    "scope": "project:feishu_ai_challenge",
+                    "source": {
+                        "source_type": "unit_test",
+                        "source_id": "msg_conflict",
+                        "actor_id": "ou_test",
+                        "created_at": "2026-05-01T10:00:00+08:00",
+                        "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                    },
+                },
+                service=service,
+            )
+            handle_tool_request(
+                "memory.confirm",
+                {
+                    "candidate_id": created["candidate_id"],
+                    "scope": "project:feishu_ai_challenge",
+                    "actor_id": "ou_test",
+                },
+                service=service,
+            )
+            explained = handle_tool_request(
+                "memory.explain_versions",
+                {
+                    "memory_id": created["memory_id"],
+                    "scope": "project:feishu_ai_challenge",
+                },
+                service=service,
+            )
+            conn.close()
+
+        self.assertTrue(explained["ok"])
+        self.assertEqual("memory.explain_versions", explained["tool"])
+        self.assertIn("ap-shanghai", explained["active_version"]["value"])
+        self.assertEqual(["active", "superseded"], sorted({item["status"] for item in explained["versions"]}))
+        self.assertTrue(explained["supersedes"])
+
     def test_examples_only_use_declared_tools(self) -> None:
         supported = set(supported_tool_names())
         example_paths = sorted(EXAMPLES_DIR.glob("*.json"))

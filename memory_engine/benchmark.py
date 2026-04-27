@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .copilot.schemas import CreateCandidateRequest, SearchRequest
+from .copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, SearchRequest
 from .copilot.service import CopilotService
 from .db import connect, init_db
 from .document_ingestion import ingest_document_source
@@ -23,6 +23,8 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
         return run_copilot_recall_benchmark(cases, source_path=cases_path, scope=scope)
     if isinstance(cases, list) and any(case.get("type") == "copilot_candidate" for case in cases):
         return run_copilot_candidate_benchmark(cases, source_path=cases_path, scope=scope)
+    if isinstance(cases, list) and any(case.get("type") == "copilot_conflict" for case in cases):
+        return run_copilot_conflict_benchmark(cases, source_path=cases_path, scope=scope)
 
     results = []
 
@@ -253,6 +255,134 @@ def run_copilot_candidate_benchmark(
     }
 
 
+def run_copilot_conflict_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        with tempfile.NamedTemporaryFile(prefix="copilot_conflict_benchmark_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            service = CopilotService(repository=repo)
+
+            for event in case.get("existing_memories", []):
+                repo.remember(
+                    event.get("scope", scope),
+                    event["content"],
+                    source_type=event.get("source_type", "benchmark_conflict_seed"),
+                    source_id=event.get("source_id"),
+                    created_by="benchmark",
+                )
+
+            started = time.perf_counter()
+            request_payload = {
+                "text": case["text"],
+                "scope": scope,
+                "source": {
+                    "source_type": case.get("source_type", "benchmark_conflict"),
+                    "source_id": case.get("source_id", case["case_id"]),
+                    "actor_id": case.get("actor_id", "benchmark"),
+                    "created_at": case.get("created_at", "2026-05-01T00:00:00+08:00"),
+                    "quote": case.get("quote", case["text"]),
+                },
+            }
+            candidate_response = service.create_candidate(CreateCandidateRequest.from_payload(request_payload))
+            candidate_id = candidate_response.get("candidate_id")
+            confirm_response = None
+            if case.get("expected_action") == "confirm" and candidate_id:
+                confirm_response = service.confirm(
+                    ConfirmRequest(
+                        candidate_id=str(candidate_id),
+                        scope=scope,
+                        actor_id=case.get("actor_id", "benchmark"),
+                        reason=case.get("expected_reason", "benchmark confirm"),
+                    )
+                )
+            search_response = service.search(
+                SearchRequest.from_payload(
+                    {
+                        "query": case["query"],
+                        "scope": scope,
+                        "top_k": 3,
+                    }
+                )
+            )
+            memory_id = candidate_response.get("memory_id")
+            explain_response = (
+                service.explain_versions(
+                    ExplainVersionsRequest(memory_id=str(memory_id), scope=scope)
+                )
+                if memory_id
+                else {"ok": False}
+            )
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            conn.close()
+
+        top_results = search_response.get("results", []) if search_response.get("ok") else []
+        expected = case.get("expected_active_value", "")
+        forbidden = case.get("forbidden_value", "")
+        expected_rank = _copilot_expected_rank(top_results, expected)
+        forbidden_leak = bool(forbidden and any(forbidden in item.get("current_value", "") for item in top_results))
+        version_statuses = {
+            item.get("status")
+            for item in explain_response.get("versions", [])
+            if isinstance(item, dict)
+        }
+        superseded_seen = "superseded" in version_statuses
+        active_seen = "active" in version_statuses
+        conflict_detected = bool((candidate_response.get("conflict") or {}).get("has_conflict")) if candidate_response.get("ok") else False
+        explain_has_evidence = _explain_versions_has_evidence(explain_response)
+        passed = bool(
+            conflict_detected
+            and confirm_response
+            and confirm_response.get("ok")
+            and expected_rank is not None
+            and expected_rank <= 3
+            and not forbidden_leak
+            and superseded_seen
+            and active_seen
+            and explain_has_evidence
+        )
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": case["type"],
+                "text": case["text"],
+                "query": case["query"],
+                "expected_action": case.get("expected_action"),
+                "expected": expected,
+                "forbidden": forbidden,
+                "conflict_detected": conflict_detected,
+                "confirm_ok": bool(confirm_response and confirm_response.get("ok")),
+                "expected_rank": expected_rank,
+                "forbidden_leak": forbidden_leak,
+                "superseded_seen": superseded_seen,
+                "active_seen": active_seen,
+                "explain_has_evidence": explain_has_evidence,
+                "passed": passed,
+                "latency_ms": latency_ms,
+                "candidate_response": candidate_response,
+                "confirm_response": confirm_response,
+                "search_response": search_response,
+                "explain_versions": explain_response,
+                "failure_debug_hint": case.get("failure_debug_hint"),
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_conflict",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_conflict_metrics(results),
+        "results": results,
+    }
+
+
 def _candidate_failure_category(
     *,
     expected_candidate: bool,
@@ -303,6 +433,16 @@ def _copilot_evidence_present(top_results: list[dict[str, Any]], evidence_keywor
             if evidence_keyword in str(evidence.get("quote") or ""):
                 return True
     return False
+
+
+def _explain_versions_has_evidence(response: dict[str, Any]) -> bool:
+    if not response.get("ok"):
+        return False
+    return all(
+        bool((item.get("evidence") or {}).get("quote"))
+        for item in response.get("versions", [])
+        if isinstance(item, dict)
+    )
 
 
 def run_anti_interference_benchmark(
@@ -653,6 +793,31 @@ def _copilot_candidate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "candidate_not_detected": candidate_not_detected,
         "false_positive_candidate": false_positive,
         "evidence_missing": evidence_missing,
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+    }
+
+
+def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    conflict_detected = sum(1 for result in results if result["conflict_detected"])
+    confirm_ok = sum(1 for result in results if result["confirm_ok"])
+    forbidden_cases = [result for result in results if result.get("forbidden")]
+    forbidden_leaks = [result for result in forbidden_cases if result["forbidden_leak"]]
+    superseded_seen = sum(1 for result in results if result["superseded_seen"])
+    explain_evidence = sum(1 for result in results if result["explain_has_evidence"])
+    latencies = sorted(result["latency_ms"] for result in results)
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "conflict_accuracy": _ratio(passed, total),
+        "conflict_detected_rate": _ratio(conflict_detected, total),
+        "confirm_success_rate": _ratio(confirm_ok, total),
+        "superseded_chain_rate": _ratio(superseded_seen, total),
+        "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
+        "superseded_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
+        "evidence_coverage": _ratio(explain_evidence, total),
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
     }

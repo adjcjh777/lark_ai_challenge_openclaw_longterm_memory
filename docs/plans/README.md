@@ -41,6 +41,7 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 | 2026-04-30 | `2026-04-30-implementation-plan.md` | candidate、manual memory、evidence gate、governance、document candidate source |
 | 2026-04-30 | `2026-04-30-handoff.md` | 2026-04-30 候选记忆治理、confirm/reject、candidate benchmark 和 2026-05-01 接续说明 |
 | 2026-05-01 | `2026-05-01-implementation-plan.md` | conflict update、versions、Cold evidence、stale leakage、Card/Bitable review surface |
+| 2026-05-01 | `2026-05-01-handoff.md` | 2026-05-01 冲突更新、版本解释、conflict benchmark、Card/Bitable dry-run 和 2026-05-02 接续说明 |
 | 2026-05-02 | `2026-05-02-implementation-plan.md` | prefetch、heartbeat、agent run summary candidate、OpenClaw demo/card dry-run flow |
 | 2026-05-03 | `2026-05-03-implementation-plan.md` | Benchmark expansion、metrics report、review surface evidence check |
 | 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook、README、OpenClaw examples freeze |

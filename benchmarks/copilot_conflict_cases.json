@@ -1,0 +1,142 @@
+[
+  {
+    "case_id": "conflict_region_override_001",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：生产部署 region 固定 cn-shanghai。"}
+    ],
+    "text": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+    "query": "生产部署 region",
+    "expected_active_value": "ap-shanghai",
+    "forbidden_value": "cn-shanghai",
+    "expected_action": "confirm",
+    "expected_reason": "明确纠错并覆盖旧 region。",
+    "failure_debug_hint": "检查 subject 是否仍归到生产部署，以及 confirm 后旧版本是否 superseded。"
+  },
+  {
+    "case_id": "conflict_canary_override_002",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：生产部署必须加 --canary。"}
+    ],
+    "text": "刚才说错了，生产部署以后必须加 --blue-green，不再用 --canary。",
+    "query": "生产部署参数",
+    "expected_active_value": "--blue-green",
+    "forbidden_value": "规则：生产部署必须加 --canary。",
+    "expected_action": "confirm",
+    "expected_reason": "明确说刚才说错了，应该形成新版本。",
+    "failure_debug_hint": "检查 override intent 和默认 search 旧参数泄漏。"
+  },
+  {
+    "case_id": "conflict_release_owner_003",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "负责人：生产部署发布窗口由后端值班同学维护。"}
+    ],
+    "text": "统一改成：生产部署发布窗口由 SRE 值班同学维护。",
+    "query": "生产部署负责人",
+    "expected_active_value": "SRE",
+    "forbidden_value": "后端值班",
+    "expected_action": "confirm",
+    "expected_reason": "同一生产部署主题的负责人更新。",
+    "failure_debug_hint": "检查 type/subject 归一化是否阻止冲突检测。"
+  },
+  {
+    "case_id": "conflict_bitable_source_004",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：Bitable 只做展示，不写回状态。"}
+    ],
+    "text": "以后统一改成：Bitable 只做审核展示和 dry-run，不作为 source of truth。",
+    "query": "Bitable source of truth",
+    "expected_active_value": "source of truth",
+    "forbidden_value": "不写回状态",
+    "expected_action": "confirm",
+    "expected_reason": "同一 Bitable 记忆的表达被细化更新。",
+    "failure_debug_hint": "检查数据存储主题是否归一到同一 normalized subject。"
+  },
+  {
+    "case_id": "conflict_weekly_recipient_005",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：周报优先发到旧项目群。"}
+    ],
+    "text": "不对，周报以后统一发到飞书挑战赛任务群。",
+    "query": "周报发到哪里",
+    "expected_active_value": "飞书挑战赛任务群",
+    "forbidden_value": "旧项目群",
+    "expected_action": "confirm",
+    "expected_reason": "明确纠正周报去向。",
+    "failure_debug_hint": "检查周报收件人 subject 归一化。"
+  },
+  {
+    "case_id": "conflict_framework_006",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：后端框架采用 FastAPI。"}
+    ],
+    "text": "最终统一：后端框架改成 NestJS，FastAPI 只保留原型参考。",
+    "query": "后端框架",
+    "expected_active_value": "NestJS",
+    "forbidden_value": "采用 FastAPI",
+    "expected_action": "confirm",
+    "expected_reason": "同一技术决策的新结论覆盖旧结论。",
+    "failure_debug_hint": "检查后端框架 subject 和版本链。"
+  },
+  {
+    "case_id": "conflict_benchmark_metric_007",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：Benchmark 报告只写 Recall@1。"}
+    ],
+    "text": "刚才说错了，Benchmark 报告必须同时写 Recall@3 和 Evidence Coverage。",
+    "query": "Benchmark 报告指标",
+    "expected_active_value": "Recall@3",
+    "forbidden_value": "只写 Recall@1",
+    "expected_action": "confirm",
+    "expected_reason": "评测口径更新，旧口径不应再作为当前答案。",
+    "failure_debug_hint": "检查 Benchmark subject 的冲突检测。"
+  },
+  {
+    "case_id": "conflict_openclaw_version_008",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：飞书 OpenClaw 版本固定 2026.4.23。"}
+    ],
+    "text": "以后统一改成：飞书 OpenClaw 版本固定 2026.4.24，不要升级 latest。",
+    "query": "OpenClaw 版本",
+    "expected_active_value": "2026.4.24",
+    "forbidden_value": "2026.4.23",
+    "expected_action": "confirm",
+    "expected_reason": "版本锁更新必须覆盖旧版本号。",
+    "failure_debug_hint": "检查飞书接入 subject 或 fallback subject 是否一致。"
+  },
+  {
+    "case_id": "conflict_deadline_009",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：初赛材料周日晚上提交。"}
+    ],
+    "text": "最终改成：初赛材料周一中午前提交，周日只冻结 Demo。",
+    "query": "初赛材料截止时间",
+    "expected_active_value": "周一中午",
+    "forbidden_value": "周日晚上提交",
+    "expected_action": "confirm",
+    "expected_reason": "截止时间更新，旧时间只能进版本解释。",
+    "failure_debug_hint": "检查截止时间 subject 和默认 search。"
+  },
+  {
+    "case_id": "conflict_permission_010",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：飞书 Bot 可以直接确认所有候选记忆。"}
+    ],
+    "text": "不对，飞书 Bot 只能生成候选记忆，确认保存必须走 Copilot service。",
+    "query": "飞书 Bot 候选确认",
+    "expected_active_value": "Copilot service",
+    "forbidden_value": "直接确认所有候选",
+    "expected_action": "confirm",
+    "expected_reason": "权限边界修正，旧规则不再生效。",
+    "failure_debug_hint": "检查飞书接入 subject 和 explain_versions evidence。"
+  }
+]

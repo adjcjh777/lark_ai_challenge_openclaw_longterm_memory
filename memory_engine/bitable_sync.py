@@ -58,10 +58,41 @@ BENCHMARK_FIELDS = [
     "summary_json",
 ]
 
+CANDIDATE_REVIEW_FIELDS = [
+    "candidate_id",
+    "memory_id",
+    "scope",
+    "type",
+    "subject",
+    "status",
+    "new_value",
+    "old_value",
+    "evidence",
+    "risk_flags",
+    "recommended_action",
+    "updated_at",
+]
+
+REMINDER_CANDIDATE_FIELDS = [
+    "reminder_id",
+    "memory_id",
+    "scope",
+    "subject",
+    "current_value",
+    "reason",
+    "status",
+    "due_at",
+    "evidence",
+    "recommended_action",
+    "updated_at",
+]
+
 DEFAULT_TABLES = {
     "ledger": "Memory Ledger",
     "versions": "Memory Versions",
+    "candidate_review": "Candidate Review",
     "benchmark": "Benchmark Results",
+    "reminder_candidates": "Reminder Candidates",
 }
 
 
@@ -70,7 +101,9 @@ class BitableTarget:
     base_token: str
     ledger_table: str = DEFAULT_TABLES["ledger"]
     versions_table: str = DEFAULT_TABLES["versions"]
+    candidate_review_table: str = DEFAULT_TABLES["candidate_review"]
     benchmark_table: str = DEFAULT_TABLES["benchmark"]
+    reminder_candidates_table: str = DEFAULT_TABLES["reminder_candidates"]
     lark_cli: str = "lark-cli"
     profile: str | None = None
     as_identity: str | None = None
@@ -96,6 +129,11 @@ def collect_sync_payload(
                 "fields": VERSION_FIELDS,
                 "rows": version_rows(conn, scope=scope),
             },
+            "candidate_review": {
+                "table": DEFAULT_TABLES["candidate_review"],
+                "fields": CANDIDATE_REVIEW_FIELDS,
+                "rows": candidate_review_rows(conn, scope=scope),
+            },
             "benchmark": {
                 "table": DEFAULT_TABLES["benchmark"],
                 "fields": BENCHMARK_FIELDS,
@@ -104,6 +142,11 @@ def collect_sync_payload(
                     benchmark_cases=benchmark_cases,
                     benchmark_name=benchmark_name,
                 ),
+            },
+            "reminder_candidates": {
+                "table": DEFAULT_TABLES["reminder_candidates"],
+                "fields": REMINDER_CANDIDATE_FIELDS,
+                "rows": [],
             },
         }
     }
@@ -218,6 +261,60 @@ def version_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
     ]
 
 
+def candidate_review_rows(conn, *, scope: str | None = None) -> list[list[Any]]:
+    where_sql, params = _scope_filter("m", scope)
+    candidate_where = f"{where_sql} AND" if where_sql else "WHERE"
+    rows = conn.execute(
+        f"""
+        SELECT
+          m.id AS memory_id,
+          m.scope_type || ':' || m.scope_id AS scope,
+          m.type,
+          m.subject,
+          m.current_value,
+          m.status,
+          mv.id AS candidate_id,
+          mv.value AS candidate_value,
+          mv.status AS candidate_status,
+          mv.supersedes_version_id,
+          old_mv.value AS old_value,
+          e.quote AS evidence_quote,
+          mv.created_at AS updated_at
+        FROM memories m
+        JOIN memory_versions mv ON mv.memory_id = m.id
+        LEFT JOIN memory_versions old_mv ON old_mv.id = mv.supersedes_version_id
+        LEFT JOIN memory_evidence e ON e.id = (
+          SELECT latest_e.id
+          FROM memory_evidence latest_e
+          WHERE latest_e.memory_id = mv.memory_id
+            AND latest_e.version_id = mv.id
+          ORDER BY latest_e.created_at DESC
+          LIMIT 1
+        )
+        {candidate_where} mv.status = 'candidate'
+        ORDER BY mv.created_at DESC, mv.id
+        """,
+        params,
+    ).fetchall()
+    return [
+        [
+            row["candidate_id"],
+            row["memory_id"],
+            row["scope"],
+            row["type"],
+            row["subject"],
+            row["candidate_status"],
+            row["candidate_value"],
+            row["old_value"],
+            row["evidence_quote"],
+            "conflict_candidate" if row["supersedes_version_id"] else "",
+            "review_conflict" if row["supersedes_version_id"] else "review_candidate",
+            _format_ms(row["updated_at"]),
+        ]
+        for row in rows
+    ]
+
+
 def benchmark_rows(
     *,
     benchmark_json: str | Path | None = None,
@@ -304,7 +401,9 @@ def build_commands(payload: dict[str, Any], target: BitableTarget) -> list[dict[
     table_ids = {
         "ledger": target.ledger_table,
         "versions": target.versions_table,
+        "candidate_review": target.candidate_review_table,
         "benchmark": target.benchmark_table,
+        "reminder_candidates": target.reminder_candidates_table,
     }
     commands = []
     for key, table in payload["tables"].items():
@@ -348,10 +447,22 @@ def table_schema_spec() -> dict[str, Any]:
                 "suggested_views": ["Version status", "By memory_id", "Recently updated"],
             },
             {
+                "name": DEFAULT_TABLES["candidate_review"],
+                "purpose": "候选记忆审核队列，只展示 Copilot service 输出，不直接改变记忆状态。",
+                "fields": _schema_fields(CANDIDATE_REVIEW_FIELDS),
+                "suggested_views": ["Pending review", "Conflict candidates", "By subject"],
+            },
+            {
                 "name": DEFAULT_TABLES["benchmark"],
                 "purpose": "Benchmark 汇总，一行对应一次评测运行。",
                 "fields": _schema_fields(BENCHMARK_FIELDS),
                 "suggested_views": ["Latest runs", "Pass rate trend"],
+            },
+            {
+                "name": DEFAULT_TABLES["reminder_candidates"],
+                "purpose": "Heartbeat reminder 候选队列，本阶段只保留 dry-run 字段设计。",
+                "fields": _schema_fields(REMINDER_CANDIDATE_FIELDS),
+                "suggested_views": ["Pending reminder", "By subject"],
             },
         ]
     }

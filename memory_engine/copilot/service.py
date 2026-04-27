@@ -10,7 +10,7 @@ from .governance import CopilotGovernance
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
 from .retrieval import LayerAwareRetriever
-from .schemas import ConfirmRequest, CreateCandidateRequest, RejectRequest, SearchRequest
+from .schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, RejectRequest, SearchRequest
 
 
 class CopilotService:
@@ -50,6 +50,9 @@ class CopilotService:
 
     def reject(self, request: RejectRequest) -> dict[str, object]:
         return CopilotGovernance(self._repository()).reject(request)
+
+    def explain_versions(self, request: ExplainVersionsRequest) -> dict[str, object]:
+        return CopilotGovernance(self._repository()).explain_versions(request)
 
     def _repository(self) -> MemoryRepository:
         if self.repository is not None:

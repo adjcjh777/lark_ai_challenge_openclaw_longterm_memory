@@ -6,7 +6,13 @@ import unittest
 from pathlib import Path
 
 from memory_engine.db import connect, init_db
-from memory_engine.feishu_cards import build_card_from_text
+from memory_engine.feishu_cards import (
+    build_candidate_review_card,
+    build_card_from_text,
+    build_version_chain_card,
+    candidate_review_payload,
+    version_chain_payload,
+)
 from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import LarkCliPublisher
@@ -237,6 +243,82 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("reject", result["command"])
         field_texts = [field["text"]["content"] for field in result["publish"]["card"]["elements"][0]["fields"]]
         self.assertTrue(any("候选序号" in text and "候选 2" in text for text in field_texts))
+
+    def test_copilot_candidate_review_payload_marks_conflict_without_mutation(self) -> None:
+        response = {
+            "candidate_id": "ver_new",
+            "memory_id": "mem_1",
+            "version_id": "ver_new",
+            "status": "candidate",
+            "recommended_action": "review_conflict",
+            "risk_flags": ["conflict_candidate"],
+            "evidence": {"source_type": "unit_test", "source_id": "msg_1", "quote": "不对，生产部署 region 改成 ap-shanghai。"},
+            "conflict": {
+                "has_conflict": True,
+                "old_memory_id": "mem_1",
+                "old_value": "生产部署 region 固定 cn-shanghai。",
+                "old_status": "active",
+            },
+            "candidate": {
+                "candidate_id": "ver_new",
+                "memory_id": "mem_1",
+                "version_id": "ver_new",
+                "status": "candidate",
+                "type": "workflow",
+                "subject": "生产部署",
+                "current_value": "不对，生产部署 region 改成 ap-shanghai。",
+                "summary": "覆盖旧 region",
+            },
+        }
+
+        payload = candidate_review_payload(response)
+        card = build_candidate_review_card(response)
+
+        self.assertEqual("copilot_candidate_review", payload["surface"])
+        self.assertEqual("none", payload["state_mutation"])
+        self.assertTrue(payload["conflict"]["has_conflict"])
+        self.assertIn("确认保存", [action["label"] for action in payload["buttons"]])
+        self.assertEqual("orange", card["header"]["template"])
+
+    def test_copilot_version_chain_payload_explains_old_value(self) -> None:
+        response = {
+            "ok": True,
+            "memory_id": "mem_1",
+            "scope": "project:feishu_ai_challenge",
+            "subject": "生产部署",
+            "type": "workflow",
+            "status": "active",
+            "active_version": {"version_id": "ver_2", "version": 2, "value": "ap-shanghai", "status": "active"},
+            "versions": [
+                {
+                    "version_id": "ver_1",
+                    "version": 1,
+                    "value": "cn-shanghai",
+                    "status": "superseded",
+                    "is_active": False,
+                    "inactive_reason": "已被后续确认的新版本覆盖，默认 search 不再把它当当前答案。",
+                    "evidence": {"quote": "旧值"},
+                },
+                {
+                    "version_id": "ver_2",
+                    "version": 2,
+                    "value": "ap-shanghai",
+                    "status": "active",
+                    "is_active": True,
+                    "evidence": {"quote": "新值"},
+                },
+            ],
+            "supersedes": [{"version_id": "ver_2", "supersedes_version_id": "ver_1"}],
+            "explanation": "当前有效值是 v2：ap-shanghai。",
+        }
+
+        payload = version_chain_payload(response)
+        card = build_version_chain_card(response)
+
+        self.assertEqual("copilot_version_chain", payload["surface"])
+        self.assertEqual("none", payload["state_mutation"])
+        self.assertEqual("ver_2", payload["active_version"]["version_id"])
+        self.assertIn("superseded", card["elements"][1]["text"]["content"])
 
 
 if __name__ == "__main__":

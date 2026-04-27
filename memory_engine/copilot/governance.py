@@ -16,7 +16,7 @@ from memory_engine.models import (
 from memory_engine.repository import MemoryRepository, new_id, now_ms
 
 from .permissions import sensitive_risk_flags
-from .schemas import ConfirmRequest, CopilotError, CreateCandidateRequest, RejectRequest
+from .schemas import ConfirmRequest, CopilotError, CreateCandidateRequest, ExplainVersionsRequest, RejectRequest
 
 
 _PREFIX_SIGNALS = ("记忆", "规则", "结论", "约束", "风险", "负责人", "决定")
@@ -57,7 +57,13 @@ class CopilotGovernance:
         parsed_scope = parse_scope(request.scope)
         ts = now_ms()
         event_id = self._insert_raw_event(request, extracted.current_value, ts)
-        existing = self._find_existing(parsed_scope.scope_type, parsed_scope.scope_id, extracted.type, extracted.normalized_subject)
+        existing = self._find_existing(
+            parsed_scope.scope_type,
+            parsed_scope.scope_id,
+            extracted.type,
+            extracted.normalized_subject,
+            allow_type_fallback=True,
+        )
 
         with self.repository.conn:
             if existing is None:
@@ -111,6 +117,75 @@ class CopilotGovernance:
             "candidate was not found",
             details={"candidate_id": request.candidate_id},
         ).to_response()
+
+    def explain_versions(self, request: ExplainVersionsRequest) -> dict[str, Any]:
+        memory = self._memory_by_id(request.memory_id)
+        if memory is None:
+            return CopilotError(
+                "memory_not_found",
+                "memory was not found",
+                details={"memory_id": request.memory_id},
+            ).to_response()
+        if not self._memory_scope_matches(memory, request.scope):
+            return self._scope_error(request.scope)
+
+        archived_filter = "" if request.include_archived else "AND mv.status != 'archived'"
+        rows = self.repository.conn.execute(
+            f"""
+            SELECT
+              mv.id AS version_id,
+              mv.version_no,
+              mv.value,
+              mv.reason,
+              mv.status,
+              mv.created_by,
+              mv.created_at,
+              mv.supersedes_version_id,
+              e.source_type AS evidence_source_type,
+              e.quote AS evidence_quote,
+              r.source_id AS evidence_source_id,
+              r.raw_json AS raw_json
+            FROM memory_versions mv
+            LEFT JOIN memory_evidence e ON e.id = (
+              SELECT latest_e.id
+              FROM memory_evidence latest_e
+              WHERE latest_e.memory_id = mv.memory_id
+                AND latest_e.version_id = mv.id
+              ORDER BY latest_e.created_at DESC
+              LIMIT 1
+            )
+            LEFT JOIN raw_events r ON r.id = COALESCE(e.source_event_id, mv.source_event_id)
+            WHERE mv.memory_id = ?
+              {archived_filter}
+            ORDER BY mv.version_no
+            """,
+            (request.memory_id,),
+        ).fetchall()
+
+        active_version_id = memory["active_version_id"]
+        versions = [self._version_payload(row, active_version_id=active_version_id) for row in rows]
+        active_version = next((item for item in versions if item["version_id"] == active_version_id), None)
+        return {
+            "ok": True,
+            "tool": "memory.explain_versions",
+            "memory_id": str(memory["id"]),
+            "scope": request.scope,
+            "subject": str(memory["subject"]),
+            "type": str(memory["type"]),
+            "status": str(memory["status"]),
+            "active_version": active_version,
+            "versions": versions,
+            "supersedes": [
+                {
+                    "version_id": item["version_id"],
+                    "supersedes_version_id": item["supersedes_version_id"],
+                    "reason": "这个版本确认后覆盖了旧值，旧值只保留为版本证据，不再作为当前答案。",
+                }
+                for item in versions
+                if item.get("supersedes_version_id")
+            ],
+            "explanation": self._version_explanation(active_version, versions),
+        }
 
     def _insert_raw_event(self, request: CreateCandidateRequest, content: str, ts: int) -> str:
         parsed_scope = parse_scope(request.scope)
@@ -481,8 +556,16 @@ class CopilotGovernance:
             (new_id("evi"), memory_id, version_id, source_type, event_id, quote, ts),
         )
 
-    def _find_existing(self, scope_type: str, scope_id: str, memory_type: str, normalized_subject: str) -> Any:
-        return self.repository.conn.execute(
+    def _find_existing(
+        self,
+        scope_type: str,
+        scope_id: str,
+        memory_type: str,
+        normalized_subject: str,
+        *,
+        allow_type_fallback: bool = False,
+    ) -> Any:
+        exact = self.repository.conn.execute(
             """
             SELECT *
             FROM memories
@@ -492,6 +575,21 @@ class CopilotGovernance:
               AND normalized_subject = ?
             """,
             (scope_type, scope_id, memory_type, normalized_subject),
+        ).fetchone()
+        if exact is not None or not allow_type_fallback:
+            return exact
+        return self.repository.conn.execute(
+            """
+            SELECT *
+            FROM memories
+            WHERE scope_type = ?
+              AND scope_id = ?
+              AND normalized_subject = ?
+              AND status = 'active'
+            ORDER BY updated_at DESC, id
+            LIMIT 1
+            """,
+            (scope_type, scope_id, normalized_subject),
         ).fetchone()
 
     def _memory_by_id(self, memory_id: str) -> Any:
@@ -506,6 +604,54 @@ class CopilotGovernance:
             (memory_id,),
         ).fetchone()
         return int(row["version_no"])
+
+    def _version_payload(self, row: Any, *, active_version_id: str | None) -> dict[str, Any]:
+        raw_metadata: dict[str, Any] = {}
+        raw_json = row["raw_json"]
+        if raw_json:
+            try:
+                parsed = json.loads(raw_json)
+            except json.JSONDecodeError:
+                parsed = {}
+            if isinstance(parsed, dict):
+                raw_metadata = parsed
+        status = str(row["status"])
+        is_active = row["version_id"] == active_version_id
+        inactive_reason = None
+        if status == "superseded":
+            inactive_reason = "已被后续确认的新版本覆盖，默认 search 不再把它当当前答案。"
+        elif status in {"rejected", "stale", "archived"}:
+            inactive_reason = "不是当前有效版本，只能用于审计或版本解释。"
+        return {
+            "version_id": str(row["version_id"]),
+            "version": int(row["version_no"]),
+            "value": str(row["value"]),
+            "status": status,
+            "is_active": is_active,
+            "supersedes_version_id": row["supersedes_version_id"],
+            "reason": row["reason"],
+            "inactive_reason": inactive_reason,
+            "created_by": row["created_by"],
+            "created_at": int(row["created_at"] or 0),
+            "evidence": {
+                "source_type": row["evidence_source_type"] or "unknown",
+                "source_id": row["evidence_source_id"],
+                "quote": row["evidence_quote"],
+                "document_token": raw_metadata.get("document_token"),
+                "document_title": raw_metadata.get("document_title"),
+            },
+        }
+
+    def _version_explanation(self, active_version: dict[str, Any] | None, versions: list[dict[str, Any]]) -> str:
+        if active_version is None:
+            return "当前没有 active 版本，默认 search 不应返回这条记忆。"
+        superseded_count = sum(1 for item in versions if item["status"] == "superseded")
+        if superseded_count:
+            return (
+                f"当前有效值是 v{active_version['version']}：{active_version['value']}。"
+                f"已有 {superseded_count} 个旧版本失效，旧值只在版本链和证据里保留。"
+            )
+        return f"当前有效值是 v{active_version['version']}：{active_version['value']}。目前没有被覆盖的旧版本。"
 
     def _evidence_error(self, memory_id: str, version_id: str | None) -> dict[str, Any] | None:
         row = self.repository.conn.execute(
