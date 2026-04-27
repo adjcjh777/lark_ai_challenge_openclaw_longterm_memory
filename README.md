@@ -8,7 +8,7 @@
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 下一步进入完整产品 Phase 4：Limited Feishu ingestion，只让指定飞书来源进入 candidate（待确认记忆）队列 | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[document_ingestion.py](memory_engine/document_ingestion.py) | 指定来源 -> candidate pipeline、权限拒绝样例、candidate-only 证据、review surface 可审核 | 真实飞书来源不能自动 active；无权限 actor 看不到未授权内容；失败时保持 dry-run/fixture 口径，不把本阶段说成 productized live |
+| Phase 4 Limited Feishu ingestion 已完成本地闭环：指定飞书来源只进入 candidate（待确认记忆）队列 | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[document_ingestion.py](memory_engine/document_ingestion.py)；[Phase 4 OpenClaw example](agent_adapters/openclaw/examples/limited_feishu_ingestion_candidate_only.json) | 指定来源 -> candidate pipeline、权限拒绝样例、candidate-only 证据、request_id/trace_id、source metadata、review surface 可审核 | 真实飞书来源不能自动 active；`document_feishu` 的 `auto_confirm=True` 会被忽略；无权限 actor 看不到未授权内容；这仍不是 productized live 或全量 Feishu workspace ingestion |
 | Phase 3 Feishu UI / Review Surface 已完成本地闭环：card、Bitable dry-run 和 card action 消费 permission-aware service/tool output | [feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py)；[feishu_runtime.py](memory_engine/feishu_runtime.py)；[test_feishu_interactive_cards.py](tests/test_feishu_interactive_cards.py)；[test_bitable_sync.py](tests/test_bitable_sync.py) | Candidate Review card、Version Chain card、Bitable Candidate Review dry-run、permission denied 安全摘要、request_id/trace_id/permission_decision | approve/reject 通过 `CopilotService` / `handle_tool_request`；non-reviewer 被拒绝且 candidate 不变；未授权 payload 不展示 evidence/current_value；这仍不是 Feishu live ingestion |
 | Phase 2 OpenClaw live bridge 已完成，用 OpenClaw/本地桥真实调用 permission-aware Copilot service | [memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json)；[tools.py](memory_engine/copilot/tools.py)；[test_copilot_tools.py](tests/test_copilot_tools.py)；[OpenClaw examples](agent_adapters/openclaw/examples/) | seed/local service bridge、permission-aware tool response、trace/request id、missing/malformed permission fail-closed demo | commit `cb21bc7` 已完成；OpenClaw 版本仍为 `2026.4.24`；`memory.*` 工具通过 service 调用；明确这不是 Feishu live ingestion |
 | Phase 1 契约冻结和 Phase 2 权限前置实现已完成，可以作为下一步代码事实源 | [2026-05-07 产品化计划](docs/plans/2026-05-07-implementation-plan.md)；[Storage Contract](docs/productization/contracts/storage-contract.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[OpenClaw Payload Contract](docs/productization/contracts/openclaw-payload-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[Migration RFC](docs/productization/contracts/migration-rfc.md)；[Negative Permission Test Plan](docs/productization/contracts/negative-permission-test-plan.md)；[test_copilot_permissions.py](tests/test_copilot_permissions.py) | 六份契约文档、统一权限门控、负例测试、真实 Feishu doc fetch 前 fail closed | commit `a81be0c` 完成 Phase 1 contract freeze；commit `b6b17b4` 完成 permission pre-implementation；51 个专项测试和 124 个全量测试通过；飞书看板已同步 |
@@ -21,7 +21,7 @@
 
 ## 当前状态
 
-截至 2026-05-07 最新口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 已完成完整产品路线、Phase 1 契约冻结、Phase 2 权限前置实现、Phase 2 OpenClaw live bridge 和 Phase 3 Feishu UI / Review Surface，下一步进入 limited Feishu ingestion：
+截至 2026-05-07 最新口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 已完成完整产品路线、Phase 1 契约冻结、Phase 2 权限前置实现、Phase 2 OpenClaw live bridge、Phase 3 Feishu UI / Review Surface 和 Phase 4 Limited Feishu ingestion 本地闭环：
 
 - OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
 - OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
@@ -52,6 +52,7 @@
 - Phase 2 权限前置实现已完成：`current_context.permission` 缺失或畸形会 fail closed；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 都经过 `CopilotService` 统一权限门控；真实 Feishu document ingestion 在 fetch 前必须通过权限校验。
 - Phase 2 OpenClaw live bridge 已完成：`handle_tool_request` 统一桥接六个 MVP `memory.*` 工具到 permission-aware `CopilotService`，返回 `bridge.request_id`、`bridge.trace_id` 和 `permission_decision`。
 - Phase 3 Feishu UI / Review Surface 已完成本地闭环：Candidate Review card、Version Chain card、Bitable dry-run 和 Feishu card action 都消费 service/tool 输出；权限拒绝时只展示安全摘要，不泄露未授权 evidence/current_value。
+- Phase 4 Limited Feishu ingestion 已完成本地闭环：指定 Feishu document source 在授权上下文下进入 candidate；source context document_id 不匹配会在 fetch 前 fail closed；candidate 带 evidence quote、source metadata 和 ingestion trace；真实飞书来源仍不会自动 active。
 
 ## 10 分钟快速开始
 
@@ -74,6 +75,7 @@ sed -n '1,220p' agent_adapters/openclaw/memory_tools.schema.json
 sed -n '1,140p' agent_adapters/openclaw/examples/historical_decision_search.json
 sed -n '1,180p' agent_adapters/openclaw/examples/conflict_update_flow.json
 sed -n '1,160p' agent_adapters/openclaw/examples/task_prefetch_flow.json
+sed -n '1,180p' agent_adapters/openclaw/examples/limited_feishu_ingestion_candidate_only.json
 ```
 
 按 5 分钟脚本演示：

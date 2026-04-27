@@ -12,6 +12,33 @@ from memory_engine.repository import MemoryRepository
 
 
 FIXTURE = Path("tests/fixtures/day5_doc_ingestion_fixture.md")
+SCOPE = "project:feishu_ai_challenge"
+
+
+def permission_context(*, document_id: str = "doc_token") -> dict[str, object]:
+    source_context = {
+        "entrypoint": "limited_feishu_ingestion",
+        "workspace_id": SCOPE,
+    }
+    if document_id:
+        source_context["document_id"] = document_id
+    return {
+        "scope": SCOPE,
+        "permission": {
+            "request_id": "req_limited_feishu_ingestion",
+            "trace_id": "trace_limited_feishu_ingestion",
+            "actor": {
+                "user_id": "ou_ingestion_reviewer",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": ["member", "reviewer"],
+            },
+            "source_context": source_context,
+            "requested_action": "memory.create_candidate",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
 
 
 class DocumentIngestionTest(unittest.TestCase):
@@ -118,6 +145,77 @@ class DocumentIngestionTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["code"], "permission_denied")
         self.assertEqual(result["error"]["details"]["reason_code"], "malformed_permission_context")
+
+    def test_limited_feishu_ingestion_creates_candidate_only_with_source_metadata(self) -> None:
+        with patch(
+            "memory_engine.document_ingestion.fetch_feishu_document_text",
+            return_value="# 飞书来源\n\n- 决定：生产部署必须加 --canary --region cn-shanghai。",
+        ) as fetch:
+            result = ingest_document_source(
+                self.repo,
+                "https://example.feishu.cn/docx/doc_token",
+                current_context=permission_context(document_id="doc_token"),
+                limit=1,
+            )
+
+        fetch.assert_called_once()
+        self.assertTrue(result["ok"])
+        self.assertEqual(1, result["candidate_count"])
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"])
+        self.assertEqual(1, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"])
+
+        candidate = result["candidates"][0]
+        self.assertEqual("created", candidate["action"])
+        self.assertEqual("candidate", candidate["status"])
+        self.assertIn("--canary", candidate["evidence"]["quote"])
+        self.assertEqual("document_feishu", candidate["evidence"]["source_type"])
+        self.assertEqual("doc_token", candidate["evidence"]["source_doc_id"])
+        self.assertEqual("doc_token", candidate["source_metadata"]["document_token"])
+        self.assertEqual("飞书来源", candidate["source_metadata"]["document_title"])
+        self.assertEqual("limited_feishu_ingestion", candidate["source_metadata"]["entrypoint"])
+        self.assertEqual("req_limited_feishu_ingestion", result["ingestion_trace"]["request_id"])
+        self.assertEqual("trace_limited_feishu_ingestion", result["ingestion_trace"]["trace_id"])
+        self.assertEqual("allow", result["ingestion_trace"]["permission_decision"]["decision"])
+        self.assertIsNone(self.repo.recall(SCOPE, "生产部署参数"))
+
+    def test_feishu_ingestion_source_context_mismatch_fails_closed_before_fetch(self) -> None:
+        with patch("memory_engine.document_ingestion.fetch_feishu_document_text") as fetch:
+            result = ingest_document_source(
+                self.repo,
+                "doc_token",
+                current_context=permission_context(document_id="other_doc"),
+                limit=1,
+            )
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("source_context_mismatch", result["error"]["details"]["reason_code"])
+        self.assertEqual("req_limited_feishu_ingestion", result["error"]["details"]["request_id"])
+        self.assertEqual("trace_limited_feishu_ingestion", result["error"]["details"]["trace_id"])
+        rendered = str(result)
+        self.assertNotIn("--canary", rendered)
+        self.assertNotIn("candidates", result)
+        self.assertNotIn("document", result)
+
+    def test_feishu_ingestion_missing_document_id_fails_closed_before_fetch(self) -> None:
+        with patch("memory_engine.document_ingestion.fetch_feishu_document_text") as fetch:
+            result = ingest_document_source(
+                self.repo,
+                "doc_token",
+                current_context=permission_context(document_id=""),
+                limit=1,
+            )
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("source_context_mismatch", result["error"]["details"]["reason_code"])
+        self.assertEqual("missing_document_id", result["error"]["details"]["source_context_error"])
+        self.assertEqual("req_limited_feishu_ingestion", result["error"]["details"]["request_id"])
+        self.assertEqual("trace_limited_feishu_ingestion", result["error"]["details"]["trace_id"])
+        self.assertNotIn("candidates", result)
+        self.assertNotIn("document", result)
 
     def test_day5_ingestion_benchmark(self) -> None:
         result = run_document_ingestion_benchmark("benchmarks/day5_ingestion_cases.json")

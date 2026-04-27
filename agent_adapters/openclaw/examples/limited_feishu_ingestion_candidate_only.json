@@ -1,0 +1,56 @@
+{
+  "name": "limited_feishu_ingestion_candidate_only",
+  "description": "Phase 4 limited Feishu ingestion example: a designated Feishu document source may create a candidate, but it must not become active automatically.",
+  "execution_mode": "schema_demo_candidate_only",
+  "runtime_note": "This example mirrors the Phase 4 candidate-only contract. It is not productized live ingestion and does not fetch a full Feishu workspace.",
+  "demo_fallback": "python3 -m unittest tests.test_document_ingestion tests.test_copilot_tools",
+  "steps": [
+    {
+      "tool": "memory.create_candidate",
+      "arguments": {
+        "text": "Decision: production deployment must use --canary --region cn-shanghai.",
+        "scope": "project:feishu_ai_challenge",
+        "source": {
+          "source_type": "document_feishu",
+          "source_id": "doc_demo_phase4#candidate-1",
+          "actor_id": "user_demo_reviewer",
+          "created_at": "2026-05-07T10:00:00+08:00",
+          "quote": "Decision: production deployment must use --canary --region cn-shanghai.",
+          "source_doc_id": "doc_demo_phase4"
+        },
+        "current_context": {
+          "scope": "project:feishu_ai_challenge",
+          "permission": {
+            "request_id": "req_demo_limited_feishu_ingestion",
+            "trace_id": "trace_demo_limited_feishu_ingestion",
+            "actor": {
+              "user_id": "user_demo_reviewer",
+              "tenant_id": "tenant:demo",
+              "organization_id": "org:demo",
+              "roles": ["member", "reviewer"]
+            },
+            "source_context": {
+              "entrypoint": "limited_feishu_ingestion",
+              "workspace_id": "project:feishu_ai_challenge",
+              "document_id": "doc_demo_phase4"
+            },
+            "requested_action": "memory.create_candidate",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
+        },
+        "auto_confirm": true
+      }
+    }
+  ],
+  "expected_output": {
+    "ok": true,
+    "action": "created",
+    "status": "candidate",
+    "auto_confirm_ignored": true,
+    "candidate_only_reason": "feishu_source_candidate_only",
+    "must_not_create": ["active memory"],
+    "each_step_must_include": ["bridge.request_id", "bridge.trace_id", "bridge.permission_decision"]
+  },
+  "safety_boundary": "Phase 4 only allows specified Feishu source -> candidate pipeline. Full workspace ingestion, automatic active promotion, and productized live deployment are out of scope."
+}

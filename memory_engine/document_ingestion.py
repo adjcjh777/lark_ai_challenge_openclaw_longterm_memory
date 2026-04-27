@@ -10,7 +10,7 @@ from typing import Any
 from .models import DECISION_WORDS, DEFAULT_SCOPE, OVERRIDE_WORDS, PREFERENCE_WORDS, WORKFLOW_WORDS, contains_any
 from .repository import MemoryRepository
 from .copilot.permissions import check_scope_access, demo_permission_context
-from .copilot.schemas import CreateCandidateRequest
+from .copilot.schemas import CopilotError, CreateCandidateRequest
 from .copilot.service import CopilotService
 
 
@@ -34,10 +34,14 @@ def ingest_document_source(
     limit: int = 12,
 ) -> dict[str, Any]:
     is_local_fixture = Path(url_or_token).expanduser().exists()
+    feishu_token = None if is_local_fixture else document_token_from_url(url_or_token)
     if not is_local_fixture:
         permission_error = check_scope_access(scope, current_context, action="memory.create_candidate")
         if permission_error is not None:
             return permission_error.to_response()
+        source_error = _check_feishu_source_context(feishu_token or "", current_context)
+        if source_error is not None:
+            return source_error.to_response()
 
     document = load_document_source(
         url_or_token,
@@ -65,7 +69,9 @@ def ingest_document_source(
                 "current_context": _document_current_context(document, scope, current_context),
             }
         )
-        results.append(service.create_candidate(request))
+        response = service.create_candidate(request)
+        response["source_metadata"] = _source_metadata(document, current_context)
+        results.append(response)
 
     created = [result for result in results if result.get("action") in {"created", "candidate_conflict"}]
     duplicates = [result for result in results if result.get("action") == "duplicate"]
@@ -76,6 +82,7 @@ def ingest_document_source(
             "title": document.title,
             "source_type": document.source_type,
         },
+        "ingestion_trace": _ingestion_trace(document, current_context),
         "candidate_count": len(created),
         "duplicate_count": len(duplicates),
         "candidates": results,
@@ -172,14 +179,83 @@ def _content_from_lark_fetch_output(output: str) -> str:
 def document_token_from_url(url_or_token: str) -> str:
     stripped = url_or_token.strip()
     for pattern in (
-        r"/docx/([A-Za-z0-9]+)",
-        r"/docs/([A-Za-z0-9]+)",
-        r"[?&]token=([A-Za-z0-9]+)",
+        r"/docx/([A-Za-z0-9_-]+)",
+        r"/docs/([A-Za-z0-9_-]+)",
+        r"[?&]token=([A-Za-z0-9_-]+)",
     ):
         match = re.search(pattern, stripped)
         if match:
             return match.group(1)
     return stripped
+
+
+def _check_feishu_source_context(token: str, current_context: dict[str, Any] | None) -> CopilotError | None:
+    permission = (current_context or {}).get("permission") if isinstance(current_context, dict) else None
+    source_context = permission.get("source_context") if isinstance(permission, dict) else None
+    document_id = source_context.get("document_id") if isinstance(source_context, dict) else None
+    if document_id == token:
+        return None
+
+    details: dict[str, Any] = {
+        "reason_code": "source_context_mismatch",
+        "action": "memory.create_candidate",
+        "requested_document_id": token,
+        "source_context_error": "document_id_mismatch" if document_id else "missing_document_id",
+        "visible_fields": [],
+        "redacted_fields": ["current_value", "summary", "evidence"],
+    }
+    if document_id:
+        details["permission_document_id"] = document_id
+    request_id = permission.get("request_id") if isinstance(permission, dict) else None
+    trace_id = permission.get("trace_id") if isinstance(permission, dict) else None
+    if isinstance(request_id, str):
+        details["request_id"] = request_id
+    if isinstance(trace_id, str):
+        details["trace_id"] = trace_id
+    return CopilotError(
+        "permission_denied",
+        "permission source_context.document_id does not match requested Feishu source",
+        details=details,
+    )
+
+
+def _source_metadata(document: DocumentSource, current_context: dict[str, Any] | None) -> dict[str, Any]:
+    _, source_context = _permission_parts(current_context)
+    return {
+        "source_type": document.source_type,
+        "document_token": document.token,
+        "document_title": document.title,
+        "entrypoint": source_context.get("entrypoint"),
+        "document_id": source_context.get("document_id"),
+    }
+
+
+def _ingestion_trace(document: DocumentSource, current_context: dict[str, Any] | None) -> dict[str, Any]:
+    permission, source_context = _permission_parts(current_context)
+    trace: dict[str, Any] = {
+        "source_metadata": _source_metadata(document, current_context),
+        "permission_decision": {
+            "decision": "allow",
+            "reason_code": "scope_access_granted",
+            "requested_action": permission.get("requested_action") or "memory.create_candidate",
+            "source_entrypoint": source_context.get("entrypoint") or document.source_type,
+        },
+    }
+    request_id = permission.get("request_id")
+    trace_id = permission.get("trace_id")
+    if isinstance(request_id, str):
+        trace["request_id"] = request_id
+    if isinstance(trace_id, str):
+        trace["trace_id"] = trace_id
+    return trace
+
+
+def _permission_parts(current_context: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    permission = (current_context or {}).get("permission") if isinstance(current_context, dict) else {}
+    permission = permission if isinstance(permission, dict) else {}
+    source_context = permission.get("source_context")
+    source_context = source_context if isinstance(source_context, dict) else {}
+    return permission, source_context
 
 
 def extract_candidate_quotes(text: str, *, limit: int = 12) -> list[str]:

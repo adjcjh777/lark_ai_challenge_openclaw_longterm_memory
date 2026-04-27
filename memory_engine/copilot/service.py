@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from memory_engine.db import connect, init_db
@@ -52,6 +53,10 @@ class CopilotService:
         permission_error = check_scope_access(request.scope, request.current_context, action="memory.create_candidate")
         if permission_error is not None:
             return permission_error.to_response()
+        auto_confirm_ignored = False
+        if request.auto_confirm and _is_real_feishu_source(request.source.source_type):
+            request = replace(request, auto_confirm=False)
+            auto_confirm_ignored = True
         if request.auto_confirm:
             confirm_permission_error = check_scope_access(
                 request.scope,
@@ -60,7 +65,11 @@ class CopilotService:
             )
             if confirm_permission_error is not None:
                 return confirm_permission_error.to_response()
-        return CopilotGovernance(self._repository()).create_candidate(request)
+        response = CopilotGovernance(self._repository()).create_candidate(request)
+        if auto_confirm_ignored:
+            response["auto_confirm_ignored"] = True
+            response["candidate_only_reason"] = "feishu_source_candidate_only"
+        return response
 
     def confirm(self, request: ConfirmRequest) -> dict[str, object]:
         permission_error = check_scope_access(request.scope, request.current_context, action="memory.confirm")
@@ -160,6 +169,11 @@ def _context_for_action(context: dict[str, object], action: str) -> dict[str, ob
             next_permission["request_id"] = f"{next_permission['request_id']}:{action.rsplit('.', 1)[-1]}"
         next_context["permission"] = next_permission
     return next_context
+
+
+def _is_real_feishu_source(source_type: str) -> bool:
+    normalized = source_type.strip().lower()
+    return normalized.startswith("feishu_") or normalized in {"document_feishu", "lark_doc", "lark_bitable"}
 
 
 def _prefetch_query(task: str, context: dict[str, object]) -> str:

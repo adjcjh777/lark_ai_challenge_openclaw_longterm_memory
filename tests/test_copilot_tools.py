@@ -355,6 +355,42 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual("trace_bad_permission", result["bridge"]["trace_id"])
         self.assert_error_output_matches_schema(result)
 
+    def test_feishu_source_auto_confirm_is_ignored_and_stays_candidate(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            service = CopilotService(repository=MemoryRepository(conn))
+
+            result = handle_tool_request(
+                "memory.create_candidate",
+                {
+                    "text": "决定：生产部署必须加 --canary --region cn-shanghai。",
+                    "scope": SCOPE,
+                    "source": {
+                        "source_type": "document_feishu",
+                        "source_id": "doc_token#candidate-1",
+                        "actor_id": "ou_test",
+                        "created_at": "2026-05-07T10:00:00+08:00",
+                        "quote": "决定：生产部署必须加 --canary --region cn-shanghai。",
+                        "source_doc_id": "doc_token",
+                    },
+                    "auto_confirm": True,
+                    "current_context": current_context("memory.create_candidate"),
+                },
+                service=service,
+            )
+            active_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
+            candidate_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"]
+            conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("created", result["action"])
+        self.assertEqual("candidate", result["status"])
+        self.assertTrue(result["auto_confirm_ignored"])
+        self.assertEqual("feishu_source_candidate_only", result["candidate_only_reason"])
+        self.assertEqual(0, active_count)
+        self.assertEqual(1, candidate_count)
+
     def test_handle_tool_request_omits_schema_unsafe_malformed_permission_fields(self) -> None:
         result = handle_tool_request(
             "memory.search",
