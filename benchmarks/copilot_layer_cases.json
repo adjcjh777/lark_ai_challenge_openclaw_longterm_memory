@@ -36,5 +36,152 @@
     "forbidden_value": "A",
     "evidence_keyword": "统一发给 B",
     "layer_reason": "Cold 是历史或归档证据；默认 search 仍只能直接返回 active 当前值。"
+  },
+  {
+    "case_id": "copilot_layer_hot_openclaw_version_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "OpenClaw 开发版本固定为 2026.4.24，任何验收前都先跑 check_openclaw_version。"
+    ],
+    "query": "OpenClaw 验收前先跑什么",
+    "expected_active_value": "check_openclaw_version",
+    "forbidden_value": "openclaw update",
+    "evidence_keyword": "2026.4.24",
+    "layer_reason": "Hot 是每天都会触发的安全规则，应该放在 L1 先查。"
+  },
+  {
+    "case_id": "copilot_layer_hot_ollama_cleanup_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "跑完 Cognee 或 embedding 验证后必须执行 ollama ps，并停止本项目拉起的 qwen3-embedding:0.6b-fp16。"
+    ],
+    "query": "embedding 验证后怎么清理 Ollama",
+    "expected_active_value": "ollama ps",
+    "forbidden_value": "不用检查",
+    "evidence_keyword": "qwen3-embedding:0.6b-fp16",
+    "layer_reason": "Hot 是高频操作守则，避免 Mac mini 长时间占用内存。"
+  },
+  {
+    "case_id": "copilot_layer_hot_readme_entry_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "README 顶部必须放当前程俊豪任务入口，并用可点击链接指向日期计划、handoff 和具体 benchmark 文件。"
+    ],
+    "query": "GitHub 首页顶部要放什么",
+    "expected_active_value": "当前程俊豪任务入口",
+    "evidence_keyword": "可点击链接",
+    "layer_reason": "Hot 是打开仓库后马上要遵守的协作入口规则。"
+  },
+  {
+    "case_id": "copilot_layer_hot_no_bot_handler_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "新 Copilot 功能优先进入 memory_engine/copilot/ 和 agent_adapters/openclaw/，不要从旧 Feishu Bot handler 开始。"
+    ],
+    "query": "新 Copilot 功能应该先改哪里",
+    "expected_active_value": "memory_engine/copilot/",
+    "evidence_keyword": "agent_adapters/openclaw/",
+    "layer_reason": "Hot 是每日开发边界，防止主线又漂回旧 Bot。"
+  },
+  {
+    "case_id": "copilot_layer_warm_handoff_next_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 handoff 写明下一步从 benchmarks/copilot_layer_cases.json 继续补样例，不改核心 Python 代码。"
+    ],
+    "query": "4 月 28 日 handoff 下一步从哪里继续",
+    "expected_active_value": "benchmarks/copilot_layer_cases.json",
+    "evidence_keyword": "不改核心 Python 代码",
+    "layer_reason": "Warm 是最近交接事项，适合 L2 在 L1 不足时召回。"
+  },
+  {
+    "case_id": "copilot_layer_warm_recall_review_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "检查 copilot_recall_cases.json 时，要确认每个问题像真实飞书项目群提问，并且能看出正确答案和 evidence 关键词。"
+    ],
+    "query": "检查 recall cases 要看什么",
+    "expected_active_value": "真实飞书项目群提问",
+    "evidence_keyword": "evidence 关键词",
+    "layer_reason": "Warm 是当前补充 QA 任务，不属于长期常用规则但近期要处理。"
+  },
+  {
+    "case_id": "copilot_layer_warm_board_sync_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "完成 2026-04-28 补充任务后，要把飞书挑战赛任务跟进看板里的补充分层 benchmark 任务改为已完成。"
+    ],
+    "query": "补充分层 benchmark 完成后要更新哪里",
+    "expected_active_value": "飞书挑战赛任务跟进看板",
+    "evidence_keyword": "改为已完成",
+    "layer_reason": "Warm 是本轮交付的收尾动作，跟当前日期强相关。"
+  },
+  {
+    "case_id": "copilot_layer_warm_demo_script_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "Demo 讲解时先展示 memory.search trace，再解释 L0 是当前任务上下文，L1/L2/L3 是热记忆、温记忆和冷证据。"
+    ],
+    "query": "Demo 讲解 search trace 时先展示什么",
+    "expected_active_value": "memory.search trace",
+    "evidence_keyword": "热记忆、温记忆和冷证据",
+    "layer_reason": "Warm 是近期 Demo 文案素材，可能很快会用到但不是常驻规则。"
+  },
+  {
+    "case_id": "copilot_layer_cold_cognee_decision_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "早期讨论过 Mem0、Graphiti 和 Zep，后来决定本项目 memory 系统核心采用 Cognee，并通过窄 adapter 接入。"
+    ],
+    "query": "为什么现在用 Cognee 做 memory 核心",
+    "expected_active_value": "采用 Cognee",
+    "forbidden_value": "采用 Mem0",
+    "evidence_keyword": "窄 adapter",
+    "layer_reason": "Cold 是选型历史和归档决策，默认答案应返回当前决定而不是旧备选。"
+  },
+  {
+    "case_id": "copilot_layer_cold_repository_schema_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "2026-04-28 不迁移旧 repository schema，layer 字段先由 LayerAwareRetriever adapter 模拟。"
+    ],
+    "query": "4 月 28 日为什么不迁移 repository schema",
+    "expected_active_value": "adapter 模拟",
+    "evidence_keyword": "不迁移旧 repository schema",
+    "layer_reason": "Cold 是实现取舍记录，通常只在复盘或解释风险时需要。"
+  },
+  {
+    "case_id": "copilot_layer_cold_archive_reference_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "旧 day 文档已经归档到 docs/archive/legacy-day-docs/，只有新主控计划明确依赖旧能力时才按需读取。"
+    ],
+    "query": "旧 day 文档什么时候读取",
+    "expected_active_value": "新主控计划明确依赖旧能力",
+    "evidence_keyword": "docs/archive/legacy-day-docs/",
+    "layer_reason": "Cold 是历史资料读取规则，平时不应该抢占当前任务上下文。"
+  },
+  {
+    "case_id": "copilot_layer_cold_day7_report_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "Day7 benchmark report 使用 50 条 curated memories、1000 条 raw/noise events 和 50 条 queries 自证抗干扰召回。"
+    ],
+    "query": "Day7 benchmark report 用多少条 queries",
+    "expected_active_value": "50 条 queries",
+    "evidence_keyword": "1000 条 raw/noise events",
+    "layer_reason": "Cold 是历史评测报告证据，适合答辩或白皮书引用时再查。"
   }
 ]

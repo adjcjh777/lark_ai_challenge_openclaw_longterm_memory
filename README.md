@@ -6,9 +6,9 @@
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 补分层评测样例 | [2026-04-28 handoff：我的补充任务](docs/plans/2026-04-28-handoff.md#我的补充任务)；[copilot_layer_cases.json](benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 补到 15 条 Hot / Warm / Cold 样例，并用中文说明为什么属于这一层 |
-| 检查 recall 评测草稿 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-28 plan](docs/plans/2026-04-28-implementation-plan.md) | 问题清单或补充 PR | 确认问题像真实飞书项目群提问，每条能看出正确答案和证据关键词 |
-| 复核 search trace 可读性 | [tests/test_copilot_retrieval.py](tests/test_copilot_retrieval.py)；[memory_engine/copilot/orchestrator.py](memory_engine/copilot/orchestrator.py) | 字段问题清单 | 能看懂 L0 / L1 / L2 / L3 每步是什么意思；不清楚的字段直接记录到 handoff |
+| 进入 2026-04-29 hybrid retrieval | [2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md)；[retrieval.py](memory_engine/copilot/retrieval.py)；[benchmark.py](memory_engine/benchmark.py) | 结构化过滤、keyword/FTS、embedding 接口、Recall@3 评测入口 | trace 能看到 structured / keyword / vector / cognee / rerank；不向量化 raw events |
+| 4 月 28 日分层样例已补完 | [2026-04-28 handoff：我的补充任务](docs/plans/2026-04-28-handoff.md#我的补充任务)；[copilot_layer_cases.json](benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 15 条 Hot / Warm / Cold 样例全部通过 benchmark，并用中文说明为什么属于这一层 |
+| 继续检查 recall 评测草稿 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-29 plan](docs/plans/2026-04-29-implementation-plan.md) | 失败样例备注和 runner 指标 | 问题像真实飞书项目群提问，每条能看出正确答案、证据关键词和可能失败原因 |
 
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
@@ -23,7 +23,7 @@
 - Cognee 已通过窄 adapter 隔离在 `memory_engine/copilot/cognee_adapter.py`。
 - Cognee 本地 spike 已验证：RightCode 文本模型 + Ollama 本地 embedding 可跑通 `add -> cognify -> search`。
 - 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
-- 新增 `benchmarks/copilot_recall_cases.json` 和 `benchmarks/copilot_layer_cases.json` 最小草稿，现有 runner 可读取。
+- 新增 `benchmarks/copilot_recall_cases.json`，并把 `benchmarks/copilot_layer_cases.json` 扩到 15 条分层样例；现有 runner 可读取并通过。
 
 ## 快速验证
 
