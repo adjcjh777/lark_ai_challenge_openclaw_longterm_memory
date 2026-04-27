@@ -2,28 +2,28 @@
 
 ## 给队友先看这个：当前任务
 
-如果你只打开 GitHub 首页，先从这里开始。今晚主要补评测样例和检查可读性，不需要改核心 Python 代码，也不用接真实飞书权限。完成后在飞书共享看板里自己勾选 `完成情况-赵阳`；程俊豪这边不会代勾。
+如果你只打开 GitHub 首页，先从这里开始。今晚主要补 `copilot_layer_cases` 分层评测样例，不需要改核心 Python 代码，也不用接真实飞书权限。完成后在飞书共享看板里自己勾选 `完成情况-赵阳`；程俊豪这边不会代勾。
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 准备 recall 评测草稿 | [2026-04-27 handoff：队友晚上补位任务](docs/plans/2026-04-27-handoff.md#队友晚上补位任务)；[新建 copilot_recall_cases.json](https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory/new/main?filename=benchmarks/copilot_recall_cases.json) | `benchmarks/copilot_recall_cases.json` | 10 条真实项目问题，每条包含 `query`、`expected`、`evidence_keyword` |
-| 准备分层评测样例 | [2026-04-28 plan：队友晚上补位任务](docs/plans/2026-04-28-implementation-plan.md#队友晚上补位任务)；[新建 copilot_layer_cases.json](https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory/new/main?filename=benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 15 条 Hot / Warm / Cold 样例，并用中文说明为什么属于这一层 |
-| 检查 Windows embedding 配置 | [队友 Windows 配置文档](docs/reference/teammate-windows-cognee-embedding-setup.md) | 文档批注或修正 PR | Windows 队友能照着安装 Ollama、拉取模型，并知道怎么验证 |
-| 检查 OpenClaw 示例字段 | [historical_decision_search.json](agent_adapters/openclaw/examples/historical_decision_search.json)、[conflict_update_flow.json](agent_adapters/openclaw/examples/conflict_update_flow.json)、[task_prefetch_flow.json](agent_adapters/openclaw/examples/task_prefetch_flow.json) | 字段问题清单或修正 PR | 不懂的字段直接标注；确认示例能和 [memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json) 对上 |
+| 补分层评测样例 | [2026-04-28 handoff：队友晚上补位任务](docs/plans/2026-04-28-handoff.md#队友晚上补位任务)；[copilot_layer_cases.json](benchmarks/copilot_layer_cases.json) | `benchmarks/copilot_layer_cases.json` | 补到 15 条 Hot / Warm / Cold 样例，并用中文说明为什么属于这一层 |
+| 检查 recall 评测草稿 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[2026-04-28 plan](docs/plans/2026-04-28-implementation-plan.md) | 问题清单或补充 PR | 确认问题像真实飞书项目群提问，每条能看出正确答案和证据关键词 |
+| 复核 search trace 可读性 | [tests/test_copilot_retrieval.py](tests/test_copilot_retrieval.py)；[memory_engine/copilot/orchestrator.py](memory_engine/copilot/orchestrator.py) | 字段问题清单 | 能看懂 L0 / L1 / L2 / L3 每步是什么意思；不懂的字段直接标注 |
 
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
 ## 当前状态
 
-截至 2026-04-27，项目已完成 2026-04-26 和 2026-04-27 两天任务：
+截至 2026-04-28，项目已完成 2026-04-26 至 2026-04-28 三天任务：
 
 - OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
 - OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
 - Copilot Core 第一批骨架已建立：`memory_engine/copilot/`。
-- `memory.search` 已有最小 service/tool contract，并可通过旧 `MemoryRepository` fallback 返回 active memory with evidence。
+- `memory.search` 已从最小 fallback 升级为 L0 / L1 / L2 / L3 query cascade：工具层薄封装，service 调 orchestrator，trace 能解释每层检索和 fallback。
 - Cognee 已通过窄 adapter 隔离在 `memory_engine/copilot/cognee_adapter.py`。
 - Cognee 本地 spike 已验证：RightCode 文本模型 + Ollama 本地 embedding 可跑通 `add -> cognify -> search`。
 - 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
+- 新增 `benchmarks/copilot_recall_cases.json` 和 `benchmarks/copilot_layer_cases.json` 最小草稿，现有 runner 可读取。
 
 ## 快速验证
 
@@ -38,7 +38,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 Copilot contract 验证：
 
 ```bash
-python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_cognee_adapter
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_retrieval tests.test_copilot_cognee_adapter
 ```
 
 Embedding provider 验证：
@@ -69,6 +69,7 @@ ollama stop qwen3-embedding:0.6b-fp16
 - `docs/plans/2026-04-27-implementation-plan.md`
 - `docs/plans/2026-04-27-handoff.md`
 - `docs/plans/2026-04-28-implementation-plan.md`
+- `docs/plans/2026-04-28-handoff.md`
 
 ## 主架构边界
 

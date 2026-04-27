@@ -6,6 +6,7 @@ from memory_engine.copilot.schemas import (
     CandidateSource,
     Evidence,
     MemoryResult,
+    MemoryLayer,
     CopilotError,
     CreateCandidateRequest,
     PrefetchRequest,
@@ -13,6 +14,7 @@ from memory_engine.copilot.schemas import (
     ConfirmRequest,
     SearchRequest,
     ValidationError,
+    WorkingContext,
 )
 
 
@@ -27,6 +29,37 @@ class CopilotSchemaTest(unittest.TestCase):
 
         self.assertEqual(3, request.top_k)
         self.assertEqual({"status": "active"}, request.filters)
+        self.assertEqual({}, request.current_context.to_dict())
+
+    def test_working_context_preserves_supported_fields(self) -> None:
+        context = WorkingContext.from_payload(
+            {
+                "session_id": "sess_1",
+                "chat_id": "chat_1",
+                "task_id": "task_1",
+                "scope": "project:feishu_ai_challenge",
+                "user_id": "ou_user",
+                "intent": "查生产部署参数",
+                "thread_topic": "发布前检查",
+                "allowed_scopes": ["project:feishu_ai_challenge"],
+                "metadata": {"source": "unit_test"},
+            }
+        )
+
+        payload = context.to_dict()
+
+        self.assertEqual("sess_1", payload["session_id"])
+        self.assertEqual("chat_1", payload["chat_id"])
+        self.assertEqual("task_1", payload["task_id"])
+        self.assertEqual(["project:feishu_ai_challenge"], payload["allowed_scopes"])
+        self.assertEqual({"source": "unit_test"}, payload["metadata"])
+
+    def test_working_context_rejects_unknown_fields(self) -> None:
+        with self.assertRaises(ValidationError):
+            WorkingContext.from_payload({"session_id": "sess_1", "unexpected": "value"})
+
+    def test_memory_layer_search_order_excludes_l0(self) -> None:
+        self.assertEqual([MemoryLayer.HOT, MemoryLayer.WARM, MemoryLayer.COLD], MemoryLayer.search_layers())
 
     def test_search_request_rejects_unknown_fields(self) -> None:
         with self.assertRaises(ValidationError):
@@ -175,6 +208,7 @@ class CopilotSchemaTest(unittest.TestCase):
         self.assertEqual("workflow", payload["type"])
         self.assertEqual("生产部署必须加 --canary --region cn-shanghai", payload["current_value"])
         self.assertEqual("active", payload["status"])
+        self.assertEqual("L2", payload["layer"])
         self.assertEqual(2, payload["version"])
         self.assertEqual(121.0, payload["score"])
         self.assertEqual([Evidence("benchmark", "evt_1", "生产部署必须加 --canary --region cn-shanghai").to_dict()], payload["evidence"])

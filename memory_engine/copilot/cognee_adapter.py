@@ -148,6 +148,7 @@ class CogneeMemoryAdapter:
                 subject=str(metadata.get("subject") or item.get("subject") or "Cognee result"),
                 current_value=str(item.get("current_value") or item.get("text") or item.get("content") or ""),
                 status=str(status),
+                layer=str(metadata.get("layer") or item.get("layer") or "L2"),
                 version=metadata.get("version") or item.get("version"),
                 score=float(item.get("score") or metadata.get("score") or 0),
                 rank=rank,

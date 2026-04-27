@@ -105,9 +105,26 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual("active", result["results"][0]["status"])
         self.assertEqual("生产部署", result["results"][0]["subject"])
         self.assertIn("--canary", result["results"][0]["current_value"])
+        self.assertIn(result["results"][0]["layer"], {"L1", "L2"})
         self.assertTrue(result["results"][0]["evidence"][0]["quote"])
-        self.assertEqual("repository.recall_candidates", result["trace"]["strategy"])
+        self.assertEqual("L0->L1->L2->L3->merge->rerank->top_k", result["trace"]["strategy"])
+        self.assertEqual("repository_fallback", result["trace"]["backend"])
+        self.assertIn("L1", result["trace"]["layers"])
         self.assertTrue(result["trace"]["fallback_used"])
+
+    def test_handle_memory_search_keeps_tools_layer_thin_with_injected_service(self) -> None:
+        class StubService:
+            def search(self, request):
+                return {"ok": True, "query": request.query, "scope": request.scope, "results": [], "trace": {"strategy": "stub"}}
+
+        result = handle_tool_request(
+            "memory.search",
+            {"query": "部署参数", "scope": "project:feishu_ai_challenge"},
+            service=StubService(),  # type: ignore[arg-type]
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("stub", result["trace"]["strategy"])
 
     def test_examples_only_use_declared_tools(self) -> None:
         supported = set(supported_tool_names())

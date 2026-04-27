@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from typing import Any, Callable
 
-from .permissions import check_scope_access
 from .schemas import (
     ConfirmRequest,
     CopilotError,
@@ -70,13 +69,6 @@ def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
 
 
 def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService | None = None) -> dict[str, Any]:
-    if tool_name == "memory.search":
-        if not isinstance(payload, dict) or not payload.get("scope"):
-            return error_response("scope_required", "scope is required", details={"tool": tool_name})
-        permission_error = check_scope_access(payload.get("scope"), payload.get("current_context"))
-        if permission_error is not None:
-            return permission_error.to_response()
-
     parser = REQUEST_TYPES.get(tool_name)
     if parser is None:
         return error_response(
@@ -88,6 +80,8 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
     try:
         request = parser(payload)
     except ValidationError as exc:
+        if tool_name == "memory.search" and str(exc) == "scope is required":
+            return error_response("scope_required", "scope is required", details={"tool": tool_name})
         return error_response("validation_error", str(exc), details={"tool": tool_name})
 
     if tool_name == "memory.search":

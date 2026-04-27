@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 from memory_engine.models import parse_scope
@@ -13,6 +14,17 @@ DEFAULT_PREFETCH_TOP_K = 5
 MEMORY_TYPES = {"decision", "deadline", "owner", "workflow", "risk", "document", "preference"}
 MEMORY_STATUSES = {"candidate", "active", "superseded", "rejected", "stale", "archived"}
 MEMORY_LAYERS = {"L1", "L2", "L3"}
+WORKING_CONTEXT_FIELDS = {
+    "session_id",
+    "chat_id",
+    "task_id",
+    "scope",
+    "user_id",
+    "intent",
+    "thread_topic",
+    "allowed_scopes",
+    "metadata",
+}
 
 ERROR_CODES = {
     "scope_required",
@@ -38,6 +50,24 @@ class ValidationError(ValueError):
     """Raised when an OpenClaw tool payload does not match the Copilot contract."""
 
 
+class MemoryLayer(str, Enum):
+    WORKING_CONTEXT = "L0"
+    HOT = "L1"
+    WARM = "L2"
+    COLD = "L3"
+
+    @classmethod
+    def search_layers(cls) -> list["MemoryLayer"]:
+        return [cls.HOT, cls.WARM, cls.COLD]
+
+    @classmethod
+    def from_filter(cls, value: str) -> "MemoryLayer":
+        for layer in cls.search_layers():
+            if layer.value == value:
+                return layer
+        raise ValidationError(f"filters.layer must be one of: {', '.join(sorted(MEMORY_LAYERS))}")
+
+
 @dataclass(frozen=True)
 class CopilotError:
     code: str
@@ -57,6 +87,59 @@ class CopilotError:
                 "details": dict(self.details),
             },
         }
+
+
+@dataclass(frozen=True)
+class WorkingContext:
+    session_id: str | None = None
+    chat_id: str | None = None
+    task_id: str | None = None
+    scope: str | None = None
+    user_id: str | None = None
+    intent: str | None = None
+    thread_topic: str | None = None
+    allowed_scopes: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Any | None) -> "WorkingContext":
+        if payload is None:
+            return cls()
+        data = _require_object(payload, "current_context")
+        _reject_unknown_fields(data, WORKING_CONTEXT_FIELDS, "current_context")
+        allowed_scopes = data.get("allowed_scopes", [])
+        if allowed_scopes is None:
+            allowed_scopes = []
+        if not isinstance(allowed_scopes, list) or not all(isinstance(item, str) for item in allowed_scopes):
+            raise ValidationError("current_context.allowed_scopes must be a list of scope strings")
+        metadata = data.get("metadata", {})
+        if metadata is None:
+            metadata = {}
+        if not isinstance(metadata, dict):
+            raise ValidationError("current_context.metadata must be an object")
+        return cls(
+            session_id=_optional_string(data, "session_id"),
+            chat_id=_optional_string(data, "chat_id"),
+            task_id=_optional_string(data, "task_id"),
+            scope=_optional_string(data, "scope"),
+            user_id=_optional_string(data, "user_id"),
+            intent=_optional_string(data, "intent"),
+            thread_topic=_optional_string(data, "thread_topic"),
+            allowed_scopes=list(allowed_scopes),
+            metadata=dict(metadata),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key in ("session_id", "chat_id", "task_id", "scope", "user_id", "intent", "thread_topic"):
+            value = getattr(self, key)
+            if value:
+                result[key] = value
+        if self.allowed_scopes:
+            result["allowed_scopes"] = list(self.allowed_scopes)
+        if self.metadata:
+            result["metadata"] = dict(self.metadata)
+        return result
 
 
 @dataclass(frozen=True)
@@ -105,6 +188,7 @@ class MemoryResult:
     subject: str
     current_value: str
     status: str
+    layer: str
     version: int | None
     score: float
     rank: int
@@ -115,12 +199,16 @@ class MemoryResult:
         status = str(candidate.get("status") or "")
         if status not in MEMORY_STATUSES:
             raise ValidationError(f"unsupported memory status from repository: {status}")
+        layer = str(candidate.get("layer") or MemoryLayer.WARM.value)
+        if layer not in MEMORY_LAYERS:
+            raise ValidationError(f"unsupported memory layer from repository: {layer}")
         return cls(
             memory_id=str(candidate["memory_id"]),
             type=str(candidate["type"]),
             subject=str(candidate["subject"]),
             current_value=str(candidate.get("answer") or ""),
             status=status,
+            layer=layer,
             version=candidate.get("version"),
             score=float(candidate.get("score") or 0),
             rank=int(candidate.get("rank") or 0),
@@ -134,6 +222,7 @@ class MemoryResult:
             "subject": self.subject,
             "current_value": self.current_value,
             "status": self.status,
+            "layer": self.layer,
             "version": self.version,
             "score": self.score,
             "rank": self.rank,
@@ -166,12 +255,41 @@ class CandidateMemory:
 
 
 @dataclass(frozen=True)
-class RecallTrace:
+class RetrievalTraceStep:
+    layer: str
+    backend: str
+    query: str
+    requested_top_k: int
+    returned_count: int
+    elapsed_ms: float = 0.0
+    hit_memory_ids: list[str] = field(default_factory=list)
+    note: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "layer": self.layer,
+            "backend": self.backend,
+            "query": self.query,
+            "requested_top_k": self.requested_top_k,
+            "returned_count": self.returned_count,
+            "elapsed_ms": self.elapsed_ms,
+            "hit_memory_ids": list(self.hit_memory_ids),
+        }
+        if self.note:
+            result["note"] = self.note
+        return result
+
+
+@dataclass(frozen=True)
+class RetrievalTrace:
     strategy: str
     query: str
     scope: str
     requested_top_k: int
     returned_count: int
+    backend: str
+    steps: list[RetrievalTraceStep] = field(default_factory=list)
+    final_reason: str = "top_k_reranked_with_evidence"
     fallback_used: bool = False
     cognee_available: bool | None = None
 
@@ -182,9 +300,16 @@ class RecallTrace:
             "scope": self.scope,
             "requested_top_k": self.requested_top_k,
             "returned_count": self.returned_count,
+            "backend": self.backend,
+            "layers": [step.layer for step in self.steps if step.layer != MemoryLayer.WORKING_CONTEXT.value],
+            "steps": [step.to_dict() for step in self.steps],
+            "final_reason": self.final_reason,
             "fallback_used": self.fallback_used,
             "cognee_available": self.cognee_available,
         }
+
+
+RecallTrace = RetrievalTrace
 
 
 @dataclass(frozen=True)
@@ -193,7 +318,7 @@ class SearchResponse:
     scope: str
     top_k: int
     results: list[MemoryResult]
-    trace: RecallTrace
+    trace: RetrievalTrace
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -251,7 +376,7 @@ class SearchRequest:
     scope: str
     top_k: int = DEFAULT_SEARCH_TOP_K
     filters: dict[str, Any] = field(default_factory=lambda: {"status": "active"})
-    current_context: dict[str, Any] = field(default_factory=dict)
+    current_context: WorkingContext = field(default_factory=WorkingContext)
 
     @classmethod
     def from_payload(cls, payload: Any) -> "SearchRequest":
@@ -266,7 +391,7 @@ class SearchRequest:
             scope=scope,
             top_k=_top_k(data.get("top_k"), default=DEFAULT_SEARCH_TOP_K),
             filters=filters,
-            current_context=_optional_object(data, "current_context"),
+            current_context=WorkingContext.from_payload(data.get("current_context")),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -275,7 +400,7 @@ class SearchRequest:
             "scope": self.scope,
             "top_k": self.top_k,
             "filters": dict(self.filters),
-            "current_context": dict(self.current_context),
+            "current_context": self.current_context.to_dict(),
         }
 
 

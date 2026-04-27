@@ -1,0 +1,67 @@
+[
+  {
+    "case_id": "copilot_recall_deploy_region_001",
+    "type": "copilot_recall",
+    "layer_hint": "L1",
+    "events": [
+      "生产部署必须加 --canary --region cn-shanghai。",
+      "不对，生产部署 region 改成 ap-shanghai，以后都按新规则。"
+    ],
+    "query": "生产部署 region 现在是什么",
+    "expected_active_value": "ap-shanghai",
+    "forbidden_value": "cn-shanghai",
+    "evidence_keyword": "生产部署 region 改成 ap-shanghai",
+    "note": "覆盖 active 版本优先，旧值不能污染默认 search。"
+  },
+  {
+    "case_id": "copilot_recall_benchmark_owner_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "Benchmark 评测样例由赵阳晚上补位维护，程俊豪负责白天主线代码。"
+    ],
+    "query": "评测样例谁维护",
+    "expected_active_value": "赵阳",
+    "evidence_keyword": "赵阳晚上补位维护",
+    "note": "覆盖最近协作任务的 Warm Memory。"
+  },
+  {
+    "case_id": "copilot_recall_openclaw_version_001",
+    "type": "copilot_recall",
+    "layer_hint": "L1",
+    "events": [
+      "OpenClaw 开发版本固定为 2026.4.24，不能主动运行升级命令。"
+    ],
+    "query": "OpenClaw 版本锁是多少",
+    "expected_active_value": "2026.4.24",
+    "forbidden_value": "latest",
+    "evidence_keyword": "固定为 2026.4.24",
+    "note": "覆盖高频安全规则的 Hot Memory。"
+  },
+  {
+    "case_id": "copilot_recall_raw_event_exclusion_001",
+    "type": "copilot_recall",
+    "layer_hint": "L3",
+    "events": [
+      "默认 search 只返回 active memory，raw events 只用于追溯和补证据。"
+    ],
+    "noise_count": 20,
+    "query": "默认 search 会不会直接返回 raw events",
+    "expected_active_value": "只返回 active memory",
+    "forbidden_value": "直接返回 raw events",
+    "evidence_keyword": "raw events 只用于追溯",
+    "note": "覆盖 Cold evidence 不直接成为默认答案。"
+  },
+  {
+    "case_id": "copilot_recall_team_task_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "赵阳今晚只补 benchmarks/copilot_layer_cases.json，不用改核心 Python 代码。"
+    ],
+    "query": "赵阳今晚要不要改核心代码",
+    "expected_active_value": "不用改核心 Python 代码",
+    "evidence_keyword": "只补 benchmarks/copilot_layer_cases.json",
+    "note": "覆盖队友任务边界，避免范围扩散。"
+  }
+]

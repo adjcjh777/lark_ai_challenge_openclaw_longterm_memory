@@ -1,0 +1,40 @@
+[
+  {
+    "case_id": "copilot_layer_hot_deploy_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "生产部署必须加 --canary --region ap-shanghai，这是发布前检查最常问的规则。"
+    ],
+    "query": "生产部署参数",
+    "expected_active_value": "--canary --region ap-shanghai",
+    "evidence_keyword": "发布前检查最常问",
+    "layer_reason": "Hot 是最常用的记忆，应该优先走 L1。"
+  },
+  {
+    "case_id": "copilot_layer_warm_teammate_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "赵阳今晚补 copilot_layer_cases 分层场景，完成后自己在看板勾选。"
+    ],
+    "query": "赵阳今晚补什么",
+    "expected_active_value": "copilot_layer_cases",
+    "evidence_keyword": "完成后自己在看板勾选",
+    "layer_reason": "Warm 是最近或待处理记忆，适合 L1 不足时 fallback。"
+  },
+  {
+    "case_id": "copilot_layer_cold_versions_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "以后周报统一发给 A。",
+      "不对，以后周报统一发给 B。"
+    ],
+    "query": "周报发给谁",
+    "expected_active_value": "B",
+    "forbidden_value": "A",
+    "evidence_keyword": "统一发给 B",
+    "layer_reason": "Cold 是历史或归档证据；默认 search 仍只能直接返回 active 当前值。"
+  }
+]
