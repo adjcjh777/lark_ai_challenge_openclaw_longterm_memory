@@ -12,6 +12,31 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
 
+SCOPE = "project:feishu_ai_challenge"
+
+
+def current_context(*, intent: str = "生产部署") -> dict[str, object]:
+    return {
+        "scope": SCOPE,
+        "intent": intent,
+        "allowed_scopes": [SCOPE],
+        "permission": {
+            "request_id": "req_memory_prefetch",
+            "trace_id": "trace_memory_prefetch",
+            "actor": {
+                "user_id": "ou_test",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": ["member", "reviewer"],
+            },
+            "source_context": {"entrypoint": "unit_test", "workspace_id": SCOPE},
+            "requested_action": "memory.prefetch",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
+
+
 class CopilotPrefetchTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -37,12 +62,8 @@ class CopilotPrefetchTest(unittest.TestCase):
             "memory.prefetch",
             {
                 "task": "生成生产部署 checklist",
-                "scope": "project:feishu_ai_challenge",
-                "current_context": {
-                    "scope": "project:feishu_ai_challenge",
-                    "intent": "准备今天的生产部署 checklist",
-                    "allowed_scopes": ["project:feishu_ai_challenge"],
-                },
+                "scope": SCOPE,
+                "current_context": current_context(intent="准备今天的生产部署 checklist"),
                 "top_k": 5,
             },
             service=self.service,
@@ -63,7 +84,7 @@ class CopilotPrefetchTest(unittest.TestCase):
             "memory.prefetch",
             {
                 "task": "生成生产部署 checklist",
-                "scope": "project:feishu_ai_challenge",
+                "scope": SCOPE,
                 "current_context": {"scope": "project:other"},
             },
             service=self.service,
@@ -80,8 +101,8 @@ class CopilotPrefetchTest(unittest.TestCase):
             "memory.prefetch",
             {
                 "task": "生成生产部署 checklist",
-                "scope": "project:feishu_ai_challenge",
-                "current_context": {"intent": "生产部署 region 和发布参数"},
+                "scope": SCOPE,
+                "current_context": current_context(intent="生产部署 region 和发布参数"),
             },
             service=self.service,
         )

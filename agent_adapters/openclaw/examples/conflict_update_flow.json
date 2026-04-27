@@ -18,6 +18,27 @@
           "quote": "Correction: production deployment region is ap-shanghai from now on.",
           "source_chat_id": "chat_demo_project"
         },
+        "current_context": {
+          "scope": "project:feishu_ai_challenge",
+          "permission": {
+            "request_id": "req_demo_create_candidate",
+            "trace_id": "trace_demo_conflict",
+            "actor": {
+              "user_id": "user_demo_owner",
+              "tenant_id": "tenant:demo",
+              "organization_id": "org:demo",
+              "roles": ["member", "reviewer"]
+            },
+            "source_context": {
+              "entrypoint": "openclaw",
+              "workspace_id": "project:feishu_ai_challenge",
+              "chat_id": "chat_demo_project"
+            },
+            "requested_action": "memory.create_candidate",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
+        },
         "auto_confirm": false
       }
     },
@@ -27,7 +48,28 @@
         "candidate_id": "<candidate_id_from_step_1>",
         "scope": "project:feishu_ai_challenge",
         "actor_id": "user_demo_owner",
-        "reason": "Confirmed in project chat"
+        "reason": "Confirmed in project chat",
+        "current_context": {
+          "scope": "project:feishu_ai_challenge",
+          "permission": {
+            "request_id": "req_demo_confirm",
+            "trace_id": "trace_demo_conflict",
+            "actor": {
+              "user_id": "user_demo_owner",
+              "tenant_id": "tenant:demo",
+              "organization_id": "org:demo",
+              "roles": ["member", "reviewer"]
+            },
+            "source_context": {
+              "entrypoint": "openclaw",
+              "workspace_id": "project:feishu_ai_challenge",
+              "chat_id": "chat_demo_project"
+            },
+            "requested_action": "memory.confirm",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
+        }
       }
     },
     {
@@ -35,7 +77,28 @@
       "arguments": {
         "memory_id": "<memory_id_from_step_2>",
         "scope": "project:feishu_ai_challenge",
-        "include_archived": false
+        "include_archived": false,
+        "current_context": {
+          "scope": "project:feishu_ai_challenge",
+          "permission": {
+            "request_id": "req_demo_explain_versions",
+            "trace_id": "trace_demo_conflict",
+            "actor": {
+              "user_id": "user_demo_owner",
+              "tenant_id": "tenant:demo",
+              "organization_id": "org:demo",
+              "roles": ["member", "reviewer"]
+            },
+            "source_context": {
+              "entrypoint": "openclaw",
+              "workspace_id": "project:feishu_ai_challenge",
+              "chat_id": "chat_demo_project"
+            },
+            "requested_action": "memory.explain_versions",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
+        }
       }
     }
   ],

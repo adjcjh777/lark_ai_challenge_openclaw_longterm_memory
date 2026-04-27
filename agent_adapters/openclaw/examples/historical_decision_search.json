@@ -19,7 +19,24 @@
           "scope": "project:feishu_ai_challenge",
           "intent": "answer a historical decision question",
           "thread_topic": "production deployment",
-          "allowed_scopes": ["project:feishu_ai_challenge"]
+          "allowed_scopes": ["project:feishu_ai_challenge"],
+          "permission": {
+            "request_id": "req_demo_search_allow",
+            "trace_id": "trace_demo_search_allow",
+            "actor": {
+              "user_id": "user_demo_reviewer",
+              "tenant_id": "tenant:demo",
+              "organization_id": "org:demo",
+              "roles": ["member", "reviewer"]
+            },
+            "source_context": {
+              "entrypoint": "openclaw",
+              "workspace_id": "project:feishu_ai_challenge"
+            },
+            "requested_action": "memory.search",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
         }
       }
     }

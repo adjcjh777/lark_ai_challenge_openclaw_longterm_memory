@@ -13,6 +13,26 @@ from memory_engine.repository import MemoryRepository
 SCOPE = "project:feishu_ai_challenge"
 
 
+def current_context(action: str) -> dict[str, object]:
+    return {
+        "scope": SCOPE,
+        "permission": {
+            "request_id": f"req_{action.replace('.', '_')}",
+            "trace_id": f"trace_{action.replace('.', '_')}",
+            "actor": {
+                "user_id": "ou_test",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": ["member", "reviewer"],
+            },
+            "source_context": {"entrypoint": "unit_test", "workspace_id": SCOPE},
+            "requested_action": action,
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
+
+
 def candidate_request(text: str, *, auto_confirm: bool = False) -> CreateCandidateRequest:
     payload = {
         "text": text,
@@ -24,6 +44,7 @@ def candidate_request(text: str, *, auto_confirm: bool = False) -> CreateCandida
             "created_at": "2026-04-30T10:00:00+08:00",
             "quote": text,
         },
+        "current_context": current_context("memory.create_candidate"),
         "auto_confirm": auto_confirm,
     }
     return CreateCandidateRequest.from_payload(payload)
@@ -54,7 +75,13 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertIsNone(inactive)
 
         confirmed = self.service.confirm(
-            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="人工确认")
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
         )
 
         self.assertTrue(confirmed["ok"])
@@ -70,7 +97,13 @@ class CopilotGovernanceTest(unittest.TestCase):
         created = self.service.create_candidate(candidate_request("规则：OpenClaw 固定 2026.4.24，不要随意升级。"))
 
         rejected = self.service.reject(
-            RejectRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="测试拒绝")
+            RejectRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="测试拒绝",
+                current_context=current_context("memory.reject"),
+            )
         )
 
         self.assertTrue(rejected["ok"])
@@ -104,7 +137,13 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.conn.commit()
 
         confirmed = self.service.confirm(
-            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="缺证据")
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="缺证据",
+                current_context=current_context("memory.confirm"),
+            )
         )
 
         self.assertFalse(confirmed["ok"])
@@ -125,7 +164,13 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertIn("cn-shanghai", before["answer"])
 
         confirmed = self.service.confirm(
-            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="确认覆盖")
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="确认覆盖",
+                current_context=current_context("memory.confirm"),
+            )
         )
 
         self.assertTrue(confirmed["ok"])
@@ -140,10 +185,22 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.repo.remember(SCOPE, "生产部署必须加 --canary --region cn-shanghai。", source_type="unit_test")
         created = self.service.create_candidate(candidate_request("不对，生产部署 region 以后统一改成 ap-shanghai。"))
         self.service.confirm(
-            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="确认覆盖")
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="确认覆盖",
+                current_context=current_context("memory.confirm"),
+            )
         )
 
-        explained = self.service.explain_versions(ExplainVersionsRequest(memory_id=created["memory_id"], scope=SCOPE))
+        explained = self.service.explain_versions(
+            ExplainVersionsRequest(
+                memory_id=created["memory_id"],
+                scope=SCOPE,
+                current_context=current_context("memory.explain_versions"),
+            )
+        )
 
         self.assertTrue(explained["ok"])
         self.assertEqual("memory.explain_versions", explained["tool"])
@@ -158,12 +215,27 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.repo.remember(SCOPE, "生产部署必须加 --canary --region cn-shanghai。", source_type="unit_test")
         created = self.service.create_candidate(candidate_request("不对，生产部署 region 以后统一改成 ap-shanghai。"))
         self.service.confirm(
-            ConfirmRequest(candidate_id=created["candidate_id"], scope=SCOPE, actor_id="ou_test", reason="确认覆盖")
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="确认覆盖",
+                current_context=current_context("memory.confirm"),
+            )
         )
         self.conn.execute("UPDATE memories SET status = 'stale' WHERE id LIKE 'mem_nonexistent'")
         self.conn.commit()
 
-        search = self.service.search(SearchRequest.from_payload({"query": "生产部署 region", "scope": SCOPE, "top_k": 3}))
+        search = self.service.search(
+            SearchRequest.from_payload(
+                {
+                    "query": "生产部署 region",
+                    "scope": SCOPE,
+                    "top_k": 3,
+                    "current_context": current_context("memory.search"),
+                }
+            )
+        )
 
         self.assertTrue(search["ok"])
         self.assertTrue(search["results"])

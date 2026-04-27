@@ -11,6 +11,31 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
 
+SCOPE = "project:feishu_ai_challenge"
+
+
+def current_context(**values: str) -> dict[str, object]:
+    context: dict[str, object] = {
+        "scope": SCOPE,
+        "permission": {
+            "request_id": "req_heartbeat_search",
+            "trace_id": "trace_heartbeat_search",
+            "actor": {
+                "user_id": "ou_test",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": ["member", "reviewer"],
+            },
+            "source_context": {"entrypoint": "heartbeat", "workspace_id": SCOPE},
+            "requested_action": "memory.search",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
+    context.update(values)
+    return context
+
+
 class CopilotHeartbeatTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -31,8 +56,8 @@ class CopilotHeartbeatTest(unittest.TestCase):
         )
 
         result = HeartbeatReminderEngine(self.repo).generate(
-            scope="project:feishu_ai_challenge",
-            current_context={"intent": "准备初赛提交材料"},
+            scope=SCOPE,
+            current_context=current_context(intent="准备初赛提交材料"),
         )
 
         self.assertTrue(result["ok"])
@@ -48,8 +73,8 @@ class CopilotHeartbeatTest(unittest.TestCase):
         )
 
         result = HeartbeatReminderEngine(self.repo, review_due_ms=999999999999).generate(
-            scope="project:feishu_ai_challenge",
-            current_context={"thread_topic": "Demo 讲解词"},
+            scope=SCOPE,
+            current_context=current_context(thread_topic="Demo 讲解词"),
         )
 
         self.assertTrue(result["ok"])
@@ -64,8 +89,8 @@ class CopilotHeartbeatTest(unittest.TestCase):
         )
 
         result = HeartbeatReminderEngine(self.repo).generate(
-            scope="project:feishu_ai_challenge",
-            current_context={"intent": "OpenAPI 调试"},
+            scope=SCOPE,
+            current_context=current_context(intent="OpenAPI 调试"),
         )
 
         serialized = json.dumps(result, ensure_ascii=False)

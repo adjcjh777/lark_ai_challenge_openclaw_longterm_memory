@@ -1,0 +1,42 @@
+{
+  "name": "permission_denied_search",
+  "description": "Show the fail-closed response shape when an actor from another tenant tries to search project memory.",
+  "execution_mode": "copyable_openclaw_tool_call",
+  "demo_fallback": "python3 -m unittest tests.test_copilot_permissions",
+  "steps": [
+    {
+      "tool": "memory.search",
+      "arguments": {
+        "query": "production deployment region",
+        "scope": "project:feishu_ai_challenge",
+        "current_context": {
+          "scope": "project:feishu_ai_challenge",
+          "permission": {
+            "request_id": "req_demo_search_deny",
+            "trace_id": "trace_demo_search_deny",
+            "actor": {
+              "user_id": "user_other_tenant",
+              "tenant_id": "tenant:other",
+              "organization_id": "org:demo",
+              "roles": ["member"]
+            },
+            "source_context": {
+              "entrypoint": "openclaw",
+              "workspace_id": "project:feishu_ai_challenge"
+            },
+            "requested_action": "memory.search",
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
+        }
+      }
+    }
+  ],
+  "expected_output": {
+    "ok": false,
+    "error_code": "permission_denied",
+    "reason_code": "tenant_mismatch",
+    "must_not_include": ["current_value", "evidence"]
+  },
+  "benchmark_evidence": "docs/productization/contracts/negative-permission-test-plan.md"
+}

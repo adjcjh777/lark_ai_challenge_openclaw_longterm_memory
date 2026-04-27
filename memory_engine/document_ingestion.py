@@ -9,6 +9,7 @@ from typing import Any
 
 from .models import DECISION_WORDS, DEFAULT_SCOPE, OVERRIDE_WORDS, PREFERENCE_WORDS, WORKFLOW_WORDS, contains_any
 from .repository import MemoryRepository
+from .copilot.permissions import check_scope_access, demo_permission_context
 from .copilot.schemas import CreateCandidateRequest
 from .copilot.service import CopilotService
 
@@ -26,11 +27,18 @@ def ingest_document_source(
     url_or_token: str,
     *,
     scope: str = DEFAULT_SCOPE,
+    current_context: dict[str, Any] | None = None,
     lark_cli: str = "lark-cli",
     profile: str | None = None,
     as_identity: str | None = None,
     limit: int = 12,
 ) -> dict[str, Any]:
+    is_local_fixture = Path(url_or_token).expanduser().exists()
+    if not is_local_fixture:
+        permission_error = check_scope_access(scope, current_context, action="memory.create_candidate")
+        if permission_error is not None:
+            return permission_error.to_response()
+
     document = load_document_source(
         url_or_token,
         lark_cli=lark_cli,
@@ -54,10 +62,7 @@ def ingest_document_source(
                     "quote": quote,
                     "source_doc_id": document.token,
                 },
-                "current_context": {
-                    "document_token": document.token,
-                    "document_title": document.title,
-                },
+                "current_context": _document_current_context(document, scope, current_context),
             }
         )
         results.append(service.create_candidate(request))
@@ -75,6 +80,25 @@ def ingest_document_source(
         "duplicate_count": len(duplicates),
         "candidates": results,
     }
+
+
+def _document_current_context(
+    document: DocumentSource,
+    scope: str,
+    current_context: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if current_context is not None:
+        context = dict(current_context)
+    else:
+        context = demo_permission_context(
+            "memory.create_candidate",
+            scope,
+            actor_id="document_ingestion",
+            entrypoint="document_ingestion_fixture",
+        )
+    context.setdefault("document_token", document.token)
+    context.setdefault("document_title", document.title)
+    return context
 
 
 def load_document_source(

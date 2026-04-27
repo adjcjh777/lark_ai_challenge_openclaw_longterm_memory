@@ -1,0 +1,48 @@
+{
+  "name": "redacted_versions_flow",
+  "description": "Schema example for a version-chain request whose evidence may be redacted by permission policy.",
+  "execution_mode": "schema_demo_redaction_case",
+  "runtime_note": "The current Phase 2 pre-implementation path denies private non-owner access. A later source-level redaction policy can return ok=true with redacted fields using the same current_context.permission shape.",
+  "demo_fallback": "python3 -m unittest tests.test_copilot_permissions",
+  "steps": [
+    {
+      "tool": "memory.explain_versions",
+      "arguments": {
+        "memory_id": "mem_demo_private",
+        "scope": "project:feishu_ai_challenge",
+        "include_archived": false,
+        "current_context": {
+          "scope": "project:feishu_ai_challenge",
+          "permission": {
+            "request_id": "req_demo_explain_redact",
+            "trace_id": "trace_demo_explain_redact",
+            "actor": {
+              "user_id": "user_demo_member",
+              "tenant_id": "tenant:demo",
+              "organization_id": "org:demo",
+              "roles": ["member"]
+            },
+            "source_context": {
+              "entrypoint": "openclaw",
+              "workspace_id": "project:feishu_ai_challenge"
+            },
+            "requested_action": "memory.explain_versions",
+            "requested_visibility": "private",
+            "timestamp": "2026-05-07T00:00:00+08:00"
+          }
+        }
+      }
+    }
+  ],
+  "expected_output": {
+    "ok": false,
+    "error_code": "permission_denied",
+    "reason_code": "visibility_private_non_owner",
+    "future_redaction_shape": {
+      "decision": "redact",
+      "visible_fields": ["subject", "summary"],
+      "redacted_fields": ["current_value", "evidence.quote"]
+    }
+  },
+  "benchmark_evidence": "docs/productization/contracts/permission-contract.md#4-permission-decision"
+}

@@ -13,6 +13,27 @@ from memory_engine.repository import MemoryRepository
 
 SCHEMA_PATH = Path("agent_adapters/openclaw/memory_tools.schema.json")
 EXAMPLES_DIR = Path("agent_adapters/openclaw/examples")
+SCOPE = "project:feishu_ai_challenge"
+
+
+def current_context(action: str, *, roles: list[str] | None = None) -> dict[str, object]:
+    return {
+        "scope": SCOPE,
+        "permission": {
+            "request_id": f"req_{action.replace('.', '_')}",
+            "trace_id": f"trace_{action.replace('.', '_')}",
+            "actor": {
+                "user_id": "ou_test",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": roles if roles is not None else ["member", "reviewer"],
+            },
+            "source_context": {"entrypoint": "openclaw", "workspace_id": SCOPE},
+            "requested_action": action,
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
 
 
 class CopilotToolContractTest(unittest.TestCase):
@@ -20,6 +41,7 @@ class CopilotToolContractTest(unittest.TestCase):
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         schema_tools = sorted(tool["name"] for tool in schema["tools"])
 
+        self.assertEqual("2026-05-07", schema["version"])
         self.assertEqual("2026.4.24", schema["openclaw_version"])
         self.assertEqual(supported_tool_names(), schema_tools)
 
@@ -32,14 +54,22 @@ class CopilotToolContractTest(unittest.TestCase):
 
         prefetch_context = tools["memory.prefetch"]["properties"]["current_context"]
         self.assertEqual(1, prefetch_context["minProperties"])
+        self.assertEqual("#/$defs/current_context", prefetch_context["$ref"])
+
+        for tool_name in supported_tool_names():
+            self.assertIn("current_context", tools[tool_name]["required"])
+
+        current_context = schema["$defs"]["current_context"]
+        self.assertEqual(["permission"], current_context["required"])
 
     def test_validate_tool_request_accepts_search_payload(self) -> None:
         result = validate_tool_request(
             "memory.search",
             {
                 "query": "production deployment region",
-                "scope": "project:feishu_ai_challenge",
+                "scope": SCOPE,
                 "top_k": 3,
+                "current_context": current_context("memory.search"),
             },
         )
 
@@ -106,7 +136,8 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.search",
                 {
                     "query": "生产部署参数",
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
+                    "current_context": current_context("memory.search"),
                     "filters": {"status": "superseded"},
                 },
                 service=CopilotService(repository=repo),
@@ -126,7 +157,8 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.search",
                 {
                     "query": "不存在的部署规则",
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
+                    "current_context": current_context("memory.search"),
                 },
                 service=CopilotService(repository=MemoryRepository(conn)),
             )
@@ -152,8 +184,9 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.search",
                 {
                     "query": "生产部署参数",
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
                     "top_k": 3,
+                    "current_context": current_context("memory.search"),
                 },
                 service=CopilotService(repository=repo),
             )
@@ -237,7 +270,7 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.create_candidate",
                 {
                     "text": "决定：生产部署必须加 --canary --region cn-shanghai。",
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
                     "source": {
                         "source_type": "unit_test",
                         "source_id": "msg_1",
@@ -245,6 +278,7 @@ class CopilotToolContractTest(unittest.TestCase):
                         "created_at": "2026-04-30T10:00:00+08:00",
                         "quote": "决定：生产部署必须加 --canary --region cn-shanghai。",
                     },
+                    "current_context": current_context("memory.create_candidate"),
                 },
                 service=service,
             )
@@ -255,9 +289,10 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.confirm",
                 {
                     "candidate_id": created["candidate_id"],
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
                     "actor_id": "ou_test",
                     "reason": "单测确认",
+                    "current_context": current_context("memory.confirm"),
                 },
                 service=service,
             )
@@ -268,9 +303,10 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.reject",
                 {
                     "candidate_id": created["candidate_id"],
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
                     "actor_id": "ou_test",
                     "reason": "重复拒绝",
+                    "current_context": current_context("memory.reject"),
                 },
                 service=service,
             )
@@ -294,7 +330,7 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.create_candidate",
                 {
                     "text": "不对，生产部署 region 以后统一改成 ap-shanghai。",
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
                     "source": {
                         "source_type": "unit_test",
                         "source_id": "msg_conflict",
@@ -302,6 +338,7 @@ class CopilotToolContractTest(unittest.TestCase):
                         "created_at": "2026-05-01T10:00:00+08:00",
                         "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
                     },
+                    "current_context": current_context("memory.create_candidate"),
                 },
                 service=service,
             )
@@ -309,8 +346,9 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.confirm",
                 {
                     "candidate_id": created["candidate_id"],
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
                     "actor_id": "ou_test",
+                    "current_context": current_context("memory.confirm"),
                 },
                 service=service,
             )
@@ -318,7 +356,8 @@ class CopilotToolContractTest(unittest.TestCase):
                 "memory.explain_versions",
                 {
                     "memory_id": created["memory_id"],
-                    "scope": "project:feishu_ai_challenge",
+                    "scope": SCOPE,
+                    "current_context": current_context("memory.explain_versions"),
                 },
                 service=service,
             )

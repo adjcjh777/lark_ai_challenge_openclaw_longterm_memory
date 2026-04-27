@@ -37,7 +37,7 @@ class CopilotService:
         self.cognee_adapter = cognee_adapter
 
     def search(self, request: SearchRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context.to_dict())
+        permission_error = check_scope_access(request.scope, request.current_context.to_dict(), action="memory.search")
         if permission_error is not None:
             return permission_error.to_response()
 
@@ -49,22 +49,39 @@ class CopilotService:
         return orchestrator.search(request).to_dict()
 
     def create_candidate(self, request: CreateCandidateRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context)
+        permission_error = check_scope_access(request.scope, request.current_context, action="memory.create_candidate")
         if permission_error is not None:
             return permission_error.to_response()
+        if request.auto_confirm:
+            confirm_permission_error = check_scope_access(
+                request.scope,
+                _context_for_action(request.current_context, "memory.confirm"),
+                action="memory.confirm",
+            )
+            if confirm_permission_error is not None:
+                return confirm_permission_error.to_response()
         return CopilotGovernance(self._repository()).create_candidate(request)
 
     def confirm(self, request: ConfirmRequest) -> dict[str, object]:
+        permission_error = check_scope_access(request.scope, request.current_context, action="memory.confirm")
+        if permission_error is not None:
+            return permission_error.to_response()
         return CopilotGovernance(self._repository()).confirm(request)
 
     def reject(self, request: RejectRequest) -> dict[str, object]:
+        permission_error = check_scope_access(request.scope, request.current_context, action="memory.reject")
+        if permission_error is not None:
+            return permission_error.to_response()
         return CopilotGovernance(self._repository()).reject(request)
 
     def explain_versions(self, request: ExplainVersionsRequest) -> dict[str, object]:
+        permission_error = check_scope_access(request.scope, request.current_context, action="memory.explain_versions")
+        if permission_error is not None:
+            return permission_error.to_response()
         return CopilotGovernance(self._repository()).explain_versions(request)
 
     def prefetch(self, request: PrefetchRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context)
+        permission_error = check_scope_access(request.scope, request.current_context, action="memory.prefetch")
         if permission_error is not None:
             return permission_error.to_response()
 
@@ -73,7 +90,7 @@ class CopilotService:
             scope=request.scope,
             top_k=request.top_k,
             filters={"status": "active"},
-            current_context=WorkingContext.from_payload(_working_context_only(request.current_context) or None),
+            current_context=WorkingContext.from_payload(_context_for_internal_search(request.current_context) or None),
         )
         search_response = self.search(search_request)
         if not search_response.get("ok"):
@@ -127,6 +144,22 @@ class CopilotService:
 
 def _working_context_only(context: dict[str, object]) -> dict[str, object]:
     return {key: value for key, value in context.items() if key in WORKING_CONTEXT_FIELDS}
+
+
+def _context_for_internal_search(context: dict[str, object]) -> dict[str, object]:
+    return _context_for_action(_working_context_only(context), "memory.search")
+
+
+def _context_for_action(context: dict[str, object], action: str) -> dict[str, object]:
+    next_context = dict(context)
+    permission = next_context.get("permission")
+    if isinstance(permission, dict):
+        next_permission = dict(permission)
+        next_permission["requested_action"] = action
+        if isinstance(next_permission.get("request_id"), str):
+            next_permission["request_id"] = f"{next_permission['request_id']}:{action.rsplit('.', 1)[-1]}"
+        next_context["permission"] = next_permission
+    return next_context
 
 
 def _prefetch_query(task: str, context: dict[str, object]) -> str:

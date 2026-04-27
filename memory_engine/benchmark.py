@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .copilot.heartbeat import HeartbeatReminderEngine
+from .copilot.permissions import demo_permission_context
 from .copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, PrefetchRequest, SearchRequest
 from .copilot.service import CopilotService
 from .db import connect, init_db
@@ -118,6 +119,7 @@ def _run_copilot_layer_case(repo: MemoryRepository, case: dict[str, Any], *, sco
             "scope": scope,
             "top_k": 3,
             "filters": {"layer": case["expected_layer"]},
+            "current_context": demo_permission_context("memory.search", scope),
         }
     )
     response = CopilotService(repository=repo).search(request)
@@ -238,6 +240,7 @@ def run_copilot_recall_benchmark(
                         "query": case["query"],
                         "scope": scope,
                         "top_k": 3,
+                        "current_context": demo_permission_context("memory.search", scope),
                     }
                 )
             )
@@ -333,6 +336,7 @@ def run_copilot_candidate_benchmark(
                     "created_at": case.get("created_at", "2026-04-30T00:00:00+08:00"),
                     "quote": case.get("quote", case["text"]),
                 },
+                "current_context": demo_permission_context("memory.create_candidate", scope, actor_id=case.get("actor_id", "benchmark")),
             }
             if case.get("auto_confirm") is not None:
                 request_payload["auto_confirm"] = case["auto_confirm"]
@@ -427,6 +431,7 @@ def run_copilot_conflict_benchmark(
                     "created_at": case.get("created_at", "2026-05-01T00:00:00+08:00"),
                     "quote": case.get("quote", case["text"]),
                 },
+                "current_context": demo_permission_context("memory.create_candidate", scope, actor_id=case.get("actor_id", "benchmark")),
             }
             candidate_response = service.create_candidate(CreateCandidateRequest.from_payload(request_payload))
             candidate_id = candidate_response.get("candidate_id")
@@ -438,6 +443,11 @@ def run_copilot_conflict_benchmark(
                         scope=scope,
                         actor_id=case.get("actor_id", "benchmark"),
                         reason=case.get("expected_reason", "benchmark confirm"),
+                        current_context=demo_permission_context(
+                            "memory.confirm",
+                            scope,
+                            actor_id=case.get("actor_id", "benchmark"),
+                        ),
                     )
                 )
             search_response = service.search(
@@ -446,13 +456,22 @@ def run_copilot_conflict_benchmark(
                         "query": case["query"],
                         "scope": scope,
                         "top_k": 3,
+                        "current_context": demo_permission_context("memory.search", scope, actor_id=case.get("actor_id", "benchmark")),
                     }
                 )
             )
             memory_id = candidate_response.get("memory_id")
             explain_response = (
                 service.explain_versions(
-                    ExplainVersionsRequest(memory_id=str(memory_id), scope=scope)
+                    ExplainVersionsRequest(
+                        memory_id=str(memory_id),
+                        scope=scope,
+                        current_context=demo_permission_context(
+                            "memory.explain_versions",
+                            scope,
+                            actor_id=case.get("actor_id", "benchmark"),
+                        ),
+                    )
                 )
                 if memory_id
                 else {"ok": False}
@@ -571,7 +590,7 @@ def run_copilot_prefetch_benchmark(
                     {
                         "task": case["task"],
                         "scope": scope,
-                        "current_context": case.get("current_context") or {"intent": case["task"]},
+                        "current_context": _benchmark_prefetch_context(case, scope),
                         "top_k": case.get("top_k", 5),
                     }
                 )
@@ -660,7 +679,7 @@ def run_copilot_heartbeat_benchmark(
                 cooldown_ms=case.get("cooldown_ms", 24 * 60 * 60 * 1000),
             ).generate(
                 scope=scope,
-                current_context=case.get("current_context") or {"intent": case.get("intent", "")},
+                current_context=_benchmark_heartbeat_context(case, scope),
                 limit=case.get("limit", 5),
             )
             latency_ms = round((time.perf_counter() - started) * 1000, 3)
@@ -715,6 +734,33 @@ def run_copilot_heartbeat_benchmark(
         "summary": _copilot_heartbeat_metrics(results),
         "results": results,
     }
+
+
+def _benchmark_prefetch_context(case: dict[str, Any], scope: str) -> dict[str, Any]:
+    context = dict(case.get("current_context") or {"intent": case["task"]})
+    context.update(
+        demo_permission_context(
+            "memory.prefetch",
+            scope,
+            actor_id=str(case.get("actor_id", "benchmark")),
+            metadata=context.get("metadata") if isinstance(context.get("metadata"), dict) else None,
+        )
+    )
+    return context
+
+
+def _benchmark_heartbeat_context(case: dict[str, Any], scope: str) -> dict[str, Any]:
+    context = dict(case.get("current_context") or {"intent": case.get("intent", "")})
+    context.update(
+        demo_permission_context(
+            "memory.search",
+            scope,
+            actor_id=str(case.get("actor_id", "benchmark")),
+            entrypoint="heartbeat",
+            metadata=context.get("metadata") if isinstance(context.get("metadata"), dict) else None,
+        )
+    )
+    return context
 
 
 def _candidate_failure_category(

@@ -80,6 +80,7 @@ class CopilotGovernance:
                 scope=request.scope,
                 actor_id=request.source.actor_id,
                 reason="auto_confirm requested after governance checks",
+                current_context=_context_for_auto_confirm(request.current_context),
             )
             confirmed = self.confirm(confirm_request)
             if confirmed.get("ok"):
@@ -703,6 +704,18 @@ def _has_candidate_signal(text: str) -> bool:
     if contains_any(stripped, DECISION_WORDS + WORKFLOW_WORDS + PREFERENCE_WORDS + OVERRIDE_WORDS):
         return True
     return any(stripped.startswith(f"{prefix}:") or stripped.startswith(f"{prefix}：") for prefix in _PREFIX_SIGNALS)
+
+
+def _context_for_auto_confirm(current_context: dict[str, Any]) -> dict[str, Any]:
+    context = dict(current_context)
+    permission = context.get("permission")
+    if isinstance(permission, dict):
+        confirm_permission = dict(permission)
+        confirm_permission["requested_action"] = "memory.confirm"
+        if isinstance(confirm_permission.get("request_id"), str):
+            confirm_permission["request_id"] = f"{confirm_permission['request_id']}:confirm"
+        context["permission"] = confirm_permission
+    return context
 
 
 def _recommended_action(risk_flags: list[str], conflict: dict[str, Any]) -> str:

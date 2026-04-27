@@ -24,6 +24,7 @@ WORKING_CONTEXT_FIELDS = {
     "thread_topic",
     "allowed_scopes",
     "metadata",
+    "permission",
 }
 
 ERROR_CODES = {
@@ -40,9 +41,9 @@ SOURCE_FIELDS = {"source_type", "source_id", "actor_id", "created_at", "quote", 
 SEARCH_FIELDS = {"query", "scope", "top_k", "filters", "current_context"}
 SEARCH_FILTER_FIELDS = {"type", "layer", "status"}
 CREATE_CANDIDATE_FIELDS = {"text", "scope", "source", "current_context", "auto_confirm"}
-CONFIRM_FIELDS = {"candidate_id", "scope", "actor_id", "reason"}
-REJECT_FIELDS = {"candidate_id", "scope", "actor_id", "reason"}
-EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived"}
+CONFIRM_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context"}
+REJECT_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context"}
+EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived", "current_context"}
 PREFETCH_FIELDS = {"task", "scope", "current_context", "top_k"}
 
 
@@ -100,6 +101,7 @@ class WorkingContext:
     thread_topic: str | None = None
     allowed_scopes: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    permission: Any = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Any | None) -> "WorkingContext":
@@ -117,6 +119,7 @@ class WorkingContext:
             metadata = {}
         if not isinstance(metadata, dict):
             raise ValidationError("current_context.metadata must be an object")
+        permission = data.get("permission", {})
         return cls(
             session_id=_optional_string(data, "session_id"),
             chat_id=_optional_string(data, "chat_id"),
@@ -127,6 +130,7 @@ class WorkingContext:
             thread_topic=_optional_string(data, "thread_topic"),
             allowed_scopes=list(allowed_scopes),
             metadata=dict(metadata),
+            permission=dict(permission) if isinstance(permission, dict) else permission,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,7 +143,112 @@ class WorkingContext:
             result["allowed_scopes"] = list(self.allowed_scopes)
         if self.metadata:
             result["metadata"] = dict(self.metadata)
+        if self.permission:
+            result["permission"] = dict(self.permission) if isinstance(self.permission, dict) else self.permission
         return result
+
+
+@dataclass(frozen=True)
+class PermissionActor:
+    user_id: str | None
+    open_id: str | None
+    tenant_id: str
+    organization_id: str
+    roles: list[str]
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "PermissionActor":
+        data = _require_object(payload, "current_context.permission.actor")
+        user_id = _optional_string(data, "user_id")
+        open_id = _optional_string(data, "open_id")
+        if not user_id and not open_id:
+            raise ValidationError("current_context.permission.actor.user_id or open_id is required")
+        roles = data.get("roles")
+        if not isinstance(roles, list) or not roles or not all(isinstance(item, str) and item.strip() for item in roles):
+            raise ValidationError("current_context.permission.actor.roles must be a non-empty list of strings")
+        return cls(
+            user_id=user_id,
+            open_id=open_id,
+            tenant_id=_require_string(data, "tenant_id"),
+            organization_id=_require_string(data, "organization_id"),
+            roles=[item.strip() for item in roles],
+        )
+
+    def primary_id(self) -> str:
+        return self.user_id or self.open_id or ""
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {
+            "tenant_id": self.tenant_id,
+            "organization_id": self.organization_id,
+            "roles": list(self.roles),
+        }
+        if self.user_id:
+            result["user_id"] = self.user_id
+        if self.open_id:
+            result["open_id"] = self.open_id
+        return result
+
+
+@dataclass(frozen=True)
+class PermissionSourceContext:
+    entrypoint: str
+    workspace_id: str | None = None
+    chat_id: str | None = None
+    document_id: str | None = None
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "PermissionSourceContext":
+        data = _require_object(payload, "current_context.permission.source_context")
+        return cls(
+            entrypoint=_require_string(data, "entrypoint"),
+            workspace_id=_optional_string(data, "workspace_id"),
+            chat_id=_optional_string(data, "chat_id"),
+            document_id=_optional_string(data, "document_id"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = {"entrypoint": self.entrypoint}
+        for key in ("workspace_id", "chat_id", "document_id"):
+            value = getattr(self, key)
+            if value:
+                result[key] = value
+        return result
+
+
+@dataclass(frozen=True)
+class PermissionContext:
+    request_id: str
+    trace_id: str
+    actor: PermissionActor
+    source_context: PermissionSourceContext
+    requested_action: str
+    requested_visibility: str
+    timestamp: str
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "PermissionContext":
+        data = _require_object(payload, "current_context.permission")
+        return cls(
+            request_id=_require_string(data, "request_id"),
+            trace_id=_require_string(data, "trace_id"),
+            actor=PermissionActor.from_payload(data.get("actor")),
+            source_context=PermissionSourceContext.from_payload(data.get("source_context")),
+            requested_action=_require_string(data, "requested_action"),
+            requested_visibility=_require_string(data, "requested_visibility"),
+            timestamp=_require_string(data, "timestamp"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "request_id": self.request_id,
+            "trace_id": self.trace_id,
+            "actor": self.actor.to_dict(),
+            "source_context": self.source_context.to_dict(),
+            "requested_action": self.requested_action,
+            "requested_visibility": self.requested_visibility,
+            "timestamp": self.timestamp,
+        }
 
 
 @dataclass(frozen=True)
@@ -466,16 +575,19 @@ class ConfirmRequest:
     scope: str
     actor_id: str
     reason: str | None = None
+    current_context: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Any) -> "ConfirmRequest":
         data = _require_object(payload, "payload")
         _reject_unknown_fields(data, CONFIRM_FIELDS, "memory.confirm")
+        current_context = _optional_object(data, "current_context")
         return cls(
             candidate_id=_require_string(data, "candidate_id"),
             scope=_require_scope(data),
-            actor_id=_require_string(data, "actor_id"),
+            actor_id=_optional_string(data, "actor_id") or _actor_id_from_context(current_context) or "",
             reason=_optional_string(data, "reason"),
+            current_context=current_context,
         )
 
 
@@ -485,16 +597,19 @@ class RejectRequest:
     scope: str
     actor_id: str
     reason: str | None = None
+    current_context: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Any) -> "RejectRequest":
         data = _require_object(payload, "payload")
         _reject_unknown_fields(data, REJECT_FIELDS, "memory.reject")
+        current_context = _optional_object(data, "current_context")
         return cls(
             candidate_id=_require_string(data, "candidate_id"),
             scope=_require_scope(data),
-            actor_id=_require_string(data, "actor_id"),
+            actor_id=_optional_string(data, "actor_id") or _actor_id_from_context(current_context) or "",
             reason=_optional_string(data, "reason"),
+            current_context=current_context,
         )
 
 
@@ -503,6 +618,7 @@ class ExplainVersionsRequest:
     memory_id: str
     scope: str
     include_archived: bool = False
+    current_context: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: Any) -> "ExplainVersionsRequest":
@@ -512,6 +628,7 @@ class ExplainVersionsRequest:
             memory_id=_require_string(data, "memory_id"),
             scope=_require_scope(data),
             include_archived=_optional_bool(data, "include_archived", default=False),
+            current_context=_optional_object(data, "current_context"),
         )
 
 
@@ -617,6 +734,22 @@ def _search_filters(data: dict[str, Any]) -> dict[str, Any]:
     if "status" in filters and filters["status"] not in MEMORY_STATUSES:
         raise ValidationError(f"filters.status must be one of: {', '.join(sorted(MEMORY_STATUSES))}")
     return filters
+
+
+def _actor_id_from_context(current_context: dict[str, Any]) -> str | None:
+    permission = current_context.get("permission")
+    if not isinstance(permission, dict):
+        return None
+    actor = permission.get("actor")
+    if not isinstance(actor, dict):
+        return None
+    user_id = actor.get("user_id")
+    if isinstance(user_id, str) and user_id.strip():
+        return user_id.strip()
+    open_id = actor.get("open_id")
+    if isinstance(open_id, str) and open_id.strip():
+        return open_id.strip()
+    return None
 
 
 def _matched_via(value: Any) -> list[str]:

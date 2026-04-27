@@ -96,6 +96,29 @@ class DocumentIngestionTest(unittest.TestCase):
         )
         self.assertIn("生产部署必须加", text)
 
+    def test_feishu_ingestion_missing_permission_fails_closed_before_fetch(self) -> None:
+        with patch("memory_engine.document_ingestion.fetch_feishu_document_text") as fetch:
+            result = ingest_document_source(self.repo, "doc_token", limit=1)
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "permission_denied")
+        self.assertEqual(result["error"]["details"]["reason_code"], "missing_permission_context")
+
+    def test_feishu_ingestion_malformed_permission_fails_closed_before_fetch(self) -> None:
+        with patch("memory_engine.document_ingestion.fetch_feishu_document_text") as fetch:
+            result = ingest_document_source(
+                self.repo,
+                "doc_token",
+                current_context={"permission": {"request_id": "req_malformed"}},
+                limit=1,
+            )
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "permission_denied")
+        self.assertEqual(result["error"]["details"]["reason_code"], "malformed_permission_context")
+
     def test_day5_ingestion_benchmark(self) -> None:
         result = run_document_ingestion_benchmark("benchmarks/day5_ingestion_cases.json")
 

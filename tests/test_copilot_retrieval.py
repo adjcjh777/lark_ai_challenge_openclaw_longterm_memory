@@ -12,6 +12,29 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
 
+SCOPE = "project:feishu_ai_challenge"
+
+
+def current_context(action: str = "memory.search") -> dict[str, object]:
+    return {
+        "scope": SCOPE,
+        "permission": {
+            "request_id": f"req_{action.replace('.', '_')}",
+            "trace_id": f"trace_{action.replace('.', '_')}",
+            "actor": {
+                "user_id": "ou_test",
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "roles": ["member", "reviewer"],
+            },
+            "source_context": {"entrypoint": "unit_test", "workspace_id": SCOPE},
+            "requested_action": action,
+            "requested_visibility": "team",
+            "timestamp": "2026-05-07T00:00:00+08:00",
+        },
+    }
+
+
 class CopilotRetrievalTest(unittest.TestCase):
     def test_search_trace_shows_l0_and_hybrid_stages_when_warm_fallback_is_needed(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -34,6 +57,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                             "chat_id": "chat_1",
                             "task_id": "task_1",
                             "scope": "project:feishu_ai_challenge",
+                            "permission": current_context()["permission"],
                         },
                     }
                 )
@@ -76,6 +100,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                     {
                         "query": "生产部署参数",
                         "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
                         "filters": {"layer": "L1"},
                     }
                 )
@@ -106,6 +131,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                         "query": "生产部署参数",
                         "scope": "project:feishu_ai_challenge",
                         "top_k": 1,
+                        "current_context": current_context(),
                     }
                 )
             )
@@ -140,6 +166,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                         "query": "验收标准",
                         "scope": "project:feishu_ai_challenge",
                         "top_k": 3,
+                        "current_context": current_context(),
                     }
                 )
             )
@@ -169,6 +196,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                     {
                         "query": "生产部署参数",
                         "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
                     }
                 )
             )
@@ -209,6 +237,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                     {
                         "query": "OpenClaw 版本锁是多少",
                         "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
                     }
                 )
             )
@@ -251,6 +280,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                     {
                         "query": "完全不同的 Cognee 外部答案",
                         "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
                     }
                 )
             )
@@ -292,6 +322,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                     {
                         "query": "OpenClaw 版本锁是多少",
                         "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
                     }
                 )
             )
@@ -331,6 +362,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                         {
                             "query": "OpenClaw 版本锁是多少",
                             "scope": "project:feishu_ai_challenge",
+                            "current_context": current_context(),
                         }
                     )
                 )

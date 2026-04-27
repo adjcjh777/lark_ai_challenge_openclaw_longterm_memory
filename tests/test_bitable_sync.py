@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from memory_engine.bitable_sync import collect_sync_payload, setup_commands, sync_payload, table_schema_spec
+from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.schemas import CreateCandidateRequest
 from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
@@ -112,6 +113,12 @@ class BitableSyncTest(unittest.TestCase):
                         "created_at": "2026-05-01T10:00:00+08:00",
                         "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
                     },
+                    "current_context": demo_permission_context(
+                        "memory.create_candidate",
+                        "project:feishu_ai_challenge",
+                        actor_id="ou_test",
+                        entrypoint="unit_test",
+                    ),
                 }
             )
         )

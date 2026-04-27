@@ -10,6 +10,7 @@ from memory_engine.copilot.schemas import (
     CopilotError,
     CreateCandidateRequest,
     PrefetchRequest,
+    PermissionContext,
     ExplainVersionsRequest,
     ConfirmRequest,
     SearchRequest,
@@ -43,6 +44,20 @@ class CopilotSchemaTest(unittest.TestCase):
                 "thread_topic": "发布前检查",
                 "allowed_scopes": ["project:feishu_ai_challenge"],
                 "metadata": {"source": "unit_test"},
+                "permission": {
+                    "request_id": "req_1",
+                    "trace_id": "trace_1",
+                    "actor": {
+                        "user_id": "ou_user",
+                        "tenant_id": "tenant:demo",
+                        "organization_id": "org:demo",
+                        "roles": ["member", "reviewer"],
+                    },
+                    "source_context": {"entrypoint": "openclaw", "workspace_id": "project:feishu_ai_challenge"},
+                    "requested_action": "memory.search",
+                    "requested_visibility": "team",
+                    "timestamp": "2026-05-07T00:00:00+08:00",
+                },
             }
         )
 
@@ -53,6 +68,47 @@ class CopilotSchemaTest(unittest.TestCase):
         self.assertEqual("task_1", payload["task_id"])
         self.assertEqual(["project:feishu_ai_challenge"], payload["allowed_scopes"])
         self.assertEqual({"source": "unit_test"}, payload["metadata"])
+        self.assertEqual("req_1", payload["permission"]["request_id"])
+
+    def test_permission_context_parses_contract_shape(self) -> None:
+        context = PermissionContext.from_payload(
+            {
+                "request_id": "req_1",
+                "trace_id": "trace_1",
+                "actor": {
+                    "open_id": "ou_user",
+                    "tenant_id": "tenant:demo",
+                    "organization_id": "org:demo",
+                    "roles": ["member"],
+                },
+                "source_context": {"entrypoint": "openclaw", "workspace_id": "project:feishu_ai_challenge"},
+                "requested_action": "memory.search",
+                "requested_visibility": "team",
+                "timestamp": "2026-05-07T00:00:00+08:00",
+            }
+        )
+
+        self.assertEqual("ou_user", context.actor.primary_id())
+        self.assertEqual(["member"], context.actor.roles)
+        self.assertEqual("project:feishu_ai_challenge", context.source_context.workspace_id)
+
+    def test_permission_context_requires_actor_identity(self) -> None:
+        with self.assertRaises(ValidationError):
+            PermissionContext.from_payload(
+                {
+                    "request_id": "req_1",
+                    "trace_id": "trace_1",
+                    "actor": {
+                        "tenant_id": "tenant:demo",
+                        "organization_id": "org:demo",
+                        "roles": ["member"],
+                    },
+                    "source_context": {"entrypoint": "openclaw"},
+                    "requested_action": "memory.search",
+                    "requested_visibility": "team",
+                    "timestamp": "2026-05-07T00:00:00+08:00",
+                }
+            )
 
     def test_working_context_rejects_unknown_fields(self) -> None:
         with self.assertRaises(ValidationError):
