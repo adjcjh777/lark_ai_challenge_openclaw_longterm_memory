@@ -86,6 +86,12 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
 
     if tool_name == "memory.search":
         return (service or CopilotService()).search(request)
+    if tool_name == "memory.create_candidate":
+        return (service or CopilotService()).create_candidate(request)
+    if tool_name == "memory.confirm":
+        return (service or CopilotService()).confirm(request)
+    if tool_name == "memory.reject":
+        return (service or CopilotService()).reject(request)
 
     return error_response(
         "validation_error",

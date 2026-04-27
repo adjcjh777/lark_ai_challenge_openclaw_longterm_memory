@@ -4,20 +4,21 @@
 
 从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
 
-进度说明：2026-04-29 的混合召回切片已完成，当前可以从 2026-04-30 的候选记忆和治理计划继续。不要回头重做 2026-04-29 的 RecallIndex、keyword/vector 召回和 Recall@3 评测入口，除非验证失败。
+进度说明：2026-04-30 的候选记忆和治理切片已完成，当前可以从 2026-05-01 的冲突更新、版本解释和 review surface 计划继续。不要回头重做 2026-04-30 的 `memory.create_candidate`、`memory.confirm`、`memory.reject` 和 candidate benchmark，除非验证失败。
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 继续进入 2026-04-30 候选记忆与治理 | [2026-04-30 plan](docs/plans/2026-04-30-implementation-plan.md)；[service.py](memory_engine/copilot/service.py)；[tools.py](memory_engine/copilot/tools.py)；[schemas.py](memory_engine/copilot/schemas.py) | `memory.create_candidate`、`memory.confirm`、`memory.reject`、evidence gate、candidate benchmark 最小入口 | 手动记忆和自动候选都走治理层；candidate（待确认记忆）没有证据不能变成 active |
+| 继续进入 2026-05-01 冲突更新、版本解释和 review surface | [2026-05-01 plan](docs/plans/2026-05-01-implementation-plan.md)；[2026-04-30 handoff](docs/plans/2026-04-30-handoff.md)；[governance.py](memory_engine/copilot/governance.py)；[feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py) | old -> new 冲突更新、`memory.explain_versions`、candidate review card / version card、Bitable dry-run 字段设计 | 旧值进入 superseded 后不再作为默认 search 当前答案；版本解释能说清新旧值和 evidence |
+| 2026-04-30 候选记忆治理已完成 | [2026-04-30 handoff](docs/plans/2026-04-30-handoff.md)；[governance.py](memory_engine/copilot/governance.py)；[copilot_candidate_cases.json](benchmarks/copilot_candidate_cases.json)；[test_copilot_governance.py](tests/test_copilot_governance.py) | `memory.create_candidate`、`memory.confirm`、`memory.reject`、evidence gate、30 条 candidate benchmark | candidate 默认不进入 search；confirm 后才 active；reject 后不召回；Candidate Precision = 1.0 |
 | 2026-04-29 混合召回已完成 | [2026-04-29 handoff](docs/plans/2026-04-29-handoff.md)；[retrieval.py](memory_engine/copilot/retrieval.py)；[embeddings.py](memory_engine/copilot/embeddings.py)；[copilot_recall_cases.json](benchmarks/copilot_recall_cases.json) | `RecallIndexEntry` 短索引、keyword_index、curated vector、Cognee 可选通道、Recall@3 评测入口 | trace 能看到 structured / keyword / vector / cognee / rerank，结果展示 `matched_via` / `why_ranked`；不向量化 raw events |
 | 4 月 28 日稳定性硬化已完成 | [2026-04-28 handoff：稳定性说明](docs/plans/2026-04-28-handoff.md#仍未完成或仍有风险)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | 分层指标、trace 契约、fixture 自检、错误路径测试 | `copilot_layer_cases.json` 的 15 条样例不只可读，还会校验 `layer_accuracy` |
-| recall 评测后续自查 | [copilot_recall_cases.json](benchmarks/copilot_recall_cases.json)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | 失败样例备注、Recall@3 指标、Evidence Coverage（证据覆盖率） | 问题像真实飞书项目群提问，每条能看出正确答案、证据关键词、企业记忆意图和可能失败原因 |
+| candidate 评测后续自查 | [copilot_candidate_cases.json](benchmarks/copilot_candidate_cases.json)；[test_copilot_benchmark.py](tests/test_copilot_benchmark.py) | 30 条候选识别样例、Candidate Precision（候选识别准确率）、失败分类 | 每条能看出原文、正确处理、白话原因和是否应该进入待确认记忆 |
 
 飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
 
 ## 当前状态
 
-截至 2026-04-29，项目已完成 2026-04-26 至 2026-04-29 四天任务：
+截至 2026-04-30，项目已完成 2026-04-26 至 2026-04-30 五天任务：
 
 - OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
 - OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
@@ -30,6 +31,8 @@
 - MemPalace 调研结论已转换为日期计划：只借鉴原文证据、短索引、分层召回、可解释评测，不把 MemPalace 作为新依赖接入。
 - `memory.search` 已升级为 hybrid retrieval：先做 structured filter，再走 keyword_index、curated memory vector、可选 Cognee 通道，最后 merge/rerank；结果带 `matched_via` 和 `why_ranked`。
 - `benchmarks/copilot_recall_cases.json` 已扩到 8 条，覆盖 keyword-only、vector-only、stale-conflict，runner 输出 Recall@3 和 Evidence Coverage。
+- `memory.create_candidate`、`memory.confirm`、`memory.reject` 已接入 Copilot governance；手动记忆、自动候选和文档抽取都先进入 candidate（待确认记忆）路径，缺 evidence 不能升级为 active。
+- 新增 `benchmarks/copilot_candidate_cases.json`，30 条样例覆盖 15 条应该记、15 条不应该记，runner 输出 Candidate Precision、candidate_not_detected、false_positive_candidate 和 evidence_missing。
 - `docs/demo-runbook.md` 和 `docs/benchmark-report.md` 仍保留旧 demo / 旧 benchmark 证明材料，按 2026-05-03 至 2026-05-04 计划再系统更新；当前不要把它们当成 OpenClaw Copilot 最终材料。
 
 ## 快速验证
@@ -80,6 +83,8 @@ ollama stop qwen3-embedding:0.6b-fp16
 - `docs/plans/2026-04-29-implementation-plan.md`
 - `docs/plans/2026-04-29-handoff.md`
 - `docs/plans/2026-04-30-implementation-plan.md`
+- `docs/plans/2026-04-30-handoff.md`
+- `docs/plans/2026-05-01-implementation-plan.md`
 
 ## 主架构边界
 

@@ -9,6 +9,8 @@ from typing import Any
 
 from .models import DECISION_WORDS, DEFAULT_SCOPE, OVERRIDE_WORDS, PREFERENCE_WORDS, WORKFLOW_WORDS, contains_any
 from .repository import MemoryRepository
+from .copilot.schemas import CreateCandidateRequest
+from .copilot.service import CopilotService
 
 
 @dataclass(frozen=True)
@@ -37,21 +39,30 @@ def ingest_document_source(
     )
     candidates = extract_candidate_quotes(document.text, limit=limit)
     results = []
+    service = CopilotService(repository=repo)
     for index, quote in enumerate(candidates, start=1):
         source_id = f"{document.token}#candidate-{index}"
-        results.append(
-            repo.add_candidate(
-                scope,
-                quote,
-                source_type=document.source_type,
-                source_id=source_id,
-                document_token=document.token,
-                document_title=document.title,
-                quote=quote,
-            )
+        request = CreateCandidateRequest.from_payload(
+            {
+                "text": quote,
+                "scope": scope,
+                "source": {
+                    "source_type": document.source_type,
+                    "source_id": source_id,
+                    "actor_id": "document_ingestion",
+                    "created_at": "document_ingestion",
+                    "quote": quote,
+                    "source_doc_id": document.token,
+                },
+                "current_context": {
+                    "document_token": document.token,
+                    "document_title": document.title,
+                },
+            }
         )
+        results.append(service.create_candidate(request))
 
-    created = [result for result in results if result.get("action") == "created"]
+    created = [result for result in results if result.get("action") in {"created", "candidate_conflict"}]
     duplicates = [result for result in results if result.get("action") == "duplicate"]
     return {
         "ok": True,

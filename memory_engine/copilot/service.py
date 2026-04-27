@@ -6,10 +6,11 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
 from .cognee_adapter import CogneeMemoryAdapter
+from .governance import CopilotGovernance
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
 from .retrieval import LayerAwareRetriever
-from .schemas import SearchRequest
+from .schemas import ConfirmRequest, CreateCandidateRequest, RejectRequest, SearchRequest
 
 
 class CopilotService:
@@ -37,6 +38,18 @@ class CopilotService:
             cognee_available=self.cognee_adapter is not None and self.cognee_adapter.is_configured,
         )
         return orchestrator.search(request).to_dict()
+
+    def create_candidate(self, request: CreateCandidateRequest) -> dict[str, object]:
+        permission_error = check_scope_access(request.scope, request.current_context)
+        if permission_error is not None:
+            return permission_error.to_response()
+        return CopilotGovernance(self._repository()).create_candidate(request)
+
+    def confirm(self, request: ConfirmRequest) -> dict[str, object]:
+        return CopilotGovernance(self._repository()).confirm(request)
+
+    def reject(self, request: RejectRequest) -> dict[str, object]:
+        return CopilotGovernance(self._repository()).reject(request)
 
     def _repository(self) -> MemoryRepository:
         if self.repository is not None:

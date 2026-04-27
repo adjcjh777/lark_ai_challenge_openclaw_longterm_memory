@@ -10,6 +10,7 @@ from memory_engine.benchmark import run_benchmark
 
 LAYER_CASES = Path("benchmarks/copilot_layer_cases.json")
 RECALL_CASES = Path("benchmarks/copilot_recall_cases.json")
+CANDIDATE_CASES = Path("benchmarks/copilot_candidate_cases.json")
 
 
 class CopilotBenchmarkTest(unittest.TestCase):
@@ -70,6 +71,30 @@ class CopilotBenchmarkTest(unittest.TestCase):
         for item in result["results"]:
             self.assertIn("top_candidates", item)
             self.assertIn("trace", item)
+
+    def test_candidate_fixture_has_balanced_plain_language_reasons(self) -> None:
+        cases = json.loads(CANDIDATE_CASES.read_text(encoding="utf-8"))
+        case_ids = [case["case_id"] for case in cases]
+        expected = Counter(case["expected_candidate"] for case in cases)
+
+        self.assertEqual(30, len(cases))
+        self.assertEqual(len(case_ids), len(set(case_ids)))
+        self.assertEqual({True: 15, False: 15}, dict(expected))
+        for case in cases:
+            self.assertEqual("copilot_candidate", case["type"], msg=case["case_id"])
+            self.assertTrue(case["text"].strip(), msg=case["case_id"])
+            self.assertTrue(case["expected_reason"].strip(), msg=case["case_id"])
+
+    def test_candidate_benchmark_reports_precision_and_failures(self) -> None:
+        result = run_benchmark(CANDIDATE_CASES)
+        summary = result["summary"]
+
+        self.assertEqual("copilot_candidate", result["benchmark_type"])
+        self.assertEqual(30, summary["case_count"])
+        self.assertGreaterEqual(summary["candidate_precision"], 0.6)
+        self.assertEqual(0, summary["candidate_not_detected"])
+        self.assertEqual(0, summary["false_positive_candidate"])
+        self.assertEqual(0, summary["evidence_missing"])
 
 
 if __name__ == "__main__":

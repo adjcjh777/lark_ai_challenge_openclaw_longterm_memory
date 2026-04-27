@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .copilot.schemas import SearchRequest
+from .copilot.schemas import CreateCandidateRequest, SearchRequest
 from .copilot.service import CopilotService
 from .db import connect, init_db
 from .document_ingestion import ingest_document_source
@@ -21,6 +21,8 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
         return run_anti_interference_benchmark(cases, source_path=cases_path, scope=scope)
     if isinstance(cases, list) and any(case.get("type") == "copilot_recall" for case in cases):
         return run_copilot_recall_benchmark(cases, source_path=cases_path, scope=scope)
+    if isinstance(cases, list) and any(case.get("type") == "copilot_candidate" for case in cases):
+        return run_copilot_candidate_benchmark(cases, source_path=cases_path, scope=scope)
 
     results = []
 
@@ -174,6 +176,99 @@ def run_copilot_recall_benchmark(
         "summary": _copilot_recall_metrics(results),
         "results": results,
     }
+
+
+def run_copilot_candidate_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        with tempfile.NamedTemporaryFile(prefix="copilot_candidate_benchmark_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+
+            for event in case.get("existing_memories", []):
+                repo.remember(scope, event["content"], source_type="benchmark_candidate_seed")
+
+            started = time.perf_counter()
+            request_payload = {
+                "text": case["text"],
+                "scope": scope,
+                "source": {
+                    "source_type": case.get("source_type", "benchmark_candidate"),
+                    "source_id": case.get("source_id", case["case_id"]),
+                    "actor_id": case.get("actor_id", "benchmark"),
+                    "created_at": case.get("created_at", "2026-04-30T00:00:00+08:00"),
+                    "quote": case.get("quote", case["text"]),
+                },
+            }
+            if case.get("auto_confirm") is not None:
+                request_payload["auto_confirm"] = case["auto_confirm"]
+            response = CopilotService(repository=repo).create_candidate(CreateCandidateRequest.from_payload(request_payload))
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            conn.close()
+
+        candidate = response.get("candidate") if response.get("ok") else None
+        candidate_created = bool(candidate and response.get("action") in {"created", "candidate_conflict", "auto_confirmed"})
+        expected_candidate = bool(case.get("expected_candidate"))
+        evidence_present = bool(candidate and (candidate.get("evidence") or {}).get("quote"))
+        failure_category = _candidate_failure_category(
+            expected_candidate=expected_candidate,
+            candidate_created=candidate_created,
+            evidence_present=evidence_present,
+            response=response,
+        )
+        passed = failure_category is None
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": case["type"],
+                "text": case["text"],
+                "expected_candidate": expected_candidate,
+                "candidate_created": candidate_created,
+                "expected_reason": case.get("expected_reason"),
+                "actual_action": response.get("action") if response.get("ok") else None,
+                "candidate_id": (candidate or {}).get("candidate_id"),
+                "risk_flags": response.get("risk_flags") if response.get("ok") else [],
+                "conflict": response.get("conflict") if response.get("ok") else {},
+                "evidence_present": evidence_present,
+                "failure_category": failure_category or case.get("failure_category"),
+                "passed": passed,
+                "latency_ms": latency_ms,
+                "response": response,
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_candidate",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_candidate_metrics(results),
+        "results": results,
+    }
+
+
+def _candidate_failure_category(
+    *,
+    expected_candidate: bool,
+    candidate_created: bool,
+    evidence_present: bool,
+    response: dict[str, Any],
+) -> str | None:
+    if expected_candidate and not candidate_created:
+        if response.get("error", {}).get("code") == "validation_error":
+            return "evidence_missing"
+        return "candidate_not_detected"
+    if not expected_candidate and candidate_created:
+        return "false_positive_candidate"
+    if candidate_created and not evidence_present:
+        return "evidence_missing"
+    return None
 
 
 def _answer_from_recall(recalled: dict[str, Any] | None) -> str:
@@ -537,6 +632,27 @@ def _copilot_recall_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "recall_at_3": _ratio(recall_at_3, total),
         "evidence_coverage": _ratio(evidence_present, total),
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+    }
+
+
+def _copilot_candidate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    true_positive = sum(1 for result in results if result["expected_candidate"] and result["candidate_created"])
+    false_positive = sum(1 for result in results if not result["expected_candidate"] and result["candidate_created"])
+    candidate_not_detected = sum(1 for result in results if result["failure_category"] == "candidate_not_detected")
+    evidence_missing = sum(1 for result in results if result["failure_category"] == "evidence_missing")
+    latencies = sorted(result["latency_ms"] for result in results)
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "expected_candidate_count": sum(1 for result in results if result["expected_candidate"]),
+        "candidate_precision": _ratio(true_positive, true_positive + false_positive),
+        "candidate_not_detected": candidate_not_detected,
+        "false_positive_candidate": false_positive,
+        "evidence_missing": evidence_missing,
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
     }

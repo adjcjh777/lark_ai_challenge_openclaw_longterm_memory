@@ -1,0 +1,217 @@
+[
+  {
+    "case_id": "cand_should_001",
+    "type": "copilot_candidate",
+    "text": "决定：生产部署必须加 --canary --region cn-shanghai。",
+    "expected_candidate": true,
+    "expected_reason": "这是发布规则，会影响后续部署动作。"
+  },
+  {
+    "case_id": "cand_should_002",
+    "type": "copilot_candidate",
+    "text": "以后周报统一发给 ops-weekly@example.com，并抄送项目群。",
+    "expected_candidate": true,
+    "expected_reason": "这是团队后续要重复使用的沟通规则。"
+  },
+  {
+    "case_id": "cand_should_003",
+    "type": "copilot_candidate",
+    "text": "负责人：后端发布窗口由 Alice 维护。",
+    "expected_candidate": true,
+    "expected_reason": "这是负责人信息，后续排查和交接会用到。"
+  },
+  {
+    "case_id": "cand_should_004",
+    "type": "copilot_candidate",
+    "text": "风险：飞书 Bot 超时后不要重复发送 fallback。",
+    "expected_candidate": true,
+    "expected_reason": "这是线上体验风险，需要保留为待确认记忆。"
+  },
+  {
+    "case_id": "cand_should_005",
+    "type": "copilot_candidate",
+    "text": "团队偏好：评测报告优先给中文摘要，再给机器可读 JSON。",
+    "expected_candidate": true,
+    "expected_reason": "这是交付偏好，影响后续文档输出。"
+  },
+  {
+    "case_id": "cand_should_006",
+    "type": "copilot_candidate",
+    "text": "不对，生产部署 region 改成 ap-shanghai。",
+    "existing_memories": [
+      {
+        "content": "生产部署必须加 --canary --region cn-shanghai。"
+      }
+    ],
+    "expected_candidate": true,
+    "expected_reason": "这是同一主题的新值，应该进入冲突候选而不是直接覆盖。"
+  },
+  {
+    "case_id": "cand_should_007",
+    "type": "copilot_candidate",
+    "text": "发布流程必须先跑 git diff --check，再跑当天专项测试。",
+    "expected_candidate": true,
+    "expected_reason": "这是可执行流程约束。"
+  },
+  {
+    "case_id": "cand_should_008",
+    "type": "copilot_candidate",
+    "text": "最终采用 Cognee 作为 memory substrate，其他方案只保留参考。",
+    "expected_candidate": true,
+    "expected_reason": "这是架构选型决定。"
+  },
+  {
+    "case_id": "cand_should_009",
+    "type": "copilot_candidate",
+    "text": "规则：OpenClaw 固定 2026.4.24，除非明确升级不要改版本。",
+    "expected_candidate": true,
+    "expected_reason": "这是版本锁定规则。"
+  },
+  {
+    "case_id": "cand_should_010",
+    "type": "copilot_candidate",
+    "text": "规则：白皮书初稿截止周日 20:00 前交付。",
+    "expected_candidate": true,
+    "expected_reason": "这是明确交付截止时间。"
+  },
+  {
+    "case_id": "cand_should_011",
+    "type": "copilot_candidate",
+    "text": "约束：文档 ingestion 只能生成 candidate，不能直接写 active memory。",
+    "expected_candidate": true,
+    "expected_reason": "这是系统行为边界。"
+  },
+  {
+    "case_id": "cand_should_012",
+    "type": "copilot_candidate",
+    "text": "结论：默认不向量化 raw events，只向量化 curated memory。",
+    "expected_candidate": true,
+    "expected_reason": "这是召回架构结论。"
+  },
+  {
+    "case_id": "cand_should_013",
+    "type": "copilot_candidate",
+    "text": "记忆：Demo 录屏优先展示 memory.search，再展示 confirm/reject。",
+    "expected_candidate": true,
+    "expected_reason": "这是后续 demo 编排线索。"
+  },
+  {
+    "case_id": "cand_should_014",
+    "type": "copilot_candidate",
+    "text": "规则：临时测试 app_secret=abc123456789 只可放本地调试。",
+    "expected_candidate": true,
+    "expected_reason": "这是高风险内容，应该进人工复核候选而不是自动确认。"
+  },
+  {
+    "case_id": "cand_should_015",
+    "type": "copilot_candidate",
+    "text": "以后 README 顶部必须放当天入口和 handoff 链接。",
+    "expected_candidate": true,
+    "expected_reason": "这是仓库协作规则。"
+  },
+  {
+    "case_id": "cand_skip_001",
+    "type": "copilot_candidate",
+    "text": "大家下午三点喝咖啡。",
+    "expected_candidate": false,
+    "expected_reason": "这是闲聊，不影响后续工作。"
+  },
+  {
+    "case_id": "cand_skip_002",
+    "type": "copilot_candidate",
+    "text": "今天同步一下普通进展，暂无特殊事项。",
+    "expected_candidate": false,
+    "expected_reason": "没有长期规则、决定或负责人信息。"
+  },
+  {
+    "case_id": "cand_skip_003",
+    "type": "copilot_candidate",
+    "text": "收到，晚点看。",
+    "expected_candidate": false,
+    "expected_reason": "只是响应，不是可复用记忆。"
+  },
+  {
+    "case_id": "cand_skip_004",
+    "type": "copilot_candidate",
+    "text": "这个页面截图看起来挺清楚。",
+    "expected_candidate": false,
+    "expected_reason": "这是一次性观感，不需要沉淀。"
+  },
+  {
+    "case_id": "cand_skip_005",
+    "type": "copilot_candidate",
+    "text": "会议开始了，大家进一下。",
+    "expected_candidate": false,
+    "expected_reason": "短期提醒，不是长程协作记忆。"
+  },
+  {
+    "case_id": "cand_skip_006",
+    "type": "copilot_candidate",
+    "text": "我这边网络有点慢。",
+    "expected_candidate": false,
+    "expected_reason": "临时状态，没有后续复用价值。"
+  },
+  {
+    "case_id": "cand_skip_007",
+    "type": "copilot_candidate",
+    "text": "先休息十分钟。",
+    "expected_candidate": false,
+    "expected_reason": "临时安排，不需要进入候选队列。"
+  },
+  {
+    "case_id": "cand_skip_008",
+    "type": "copilot_candidate",
+    "text": "这个表格第二列好像有点宽。",
+    "expected_candidate": false,
+    "expected_reason": "一次性 UI 观察，不是项目记忆。"
+  },
+  {
+    "case_id": "cand_skip_009",
+    "type": "copilot_candidate",
+    "text": "明早我可能晚一点到。",
+    "expected_candidate": false,
+    "expected_reason": "个人临时状态，不属于企业记忆。"
+  },
+  {
+    "case_id": "cand_skip_010",
+    "type": "copilot_candidate",
+    "text": "刚才那条消息发重复了。",
+    "expected_candidate": false,
+    "expected_reason": "消息噪声，不应成为候选。"
+  },
+  {
+    "case_id": "cand_skip_011",
+    "type": "copilot_candidate",
+    "text": "这个名字我再想想。",
+    "expected_candidate": false,
+    "expected_reason": "没有形成明确结论。"
+  },
+  {
+    "case_id": "cand_skip_012",
+    "type": "copilot_candidate",
+    "text": "刚刚本地风扇声音有点大。",
+    "expected_candidate": false,
+    "expected_reason": "临时机器状态，不是项目规则。"
+  },
+  {
+    "case_id": "cand_skip_013",
+    "type": "copilot_candidate",
+    "text": "这段描述还可以再润色一下。",
+    "expected_candidate": false,
+    "expected_reason": "模糊反馈，不是可执行长期记忆。"
+  },
+  {
+    "case_id": "cand_skip_014",
+    "type": "copilot_candidate",
+    "text": "我刚把窗口移到左边了。",
+    "expected_candidate": false,
+    "expected_reason": "个人操作记录，没有团队复用价值。"
+  },
+  {
+    "case_id": "cand_skip_015",
+    "type": "copilot_candidate",
+    "text": "这条先放着，回头再说。",
+    "expected_candidate": false,
+    "expected_reason": "没有明确事实或决策，不能沉淀。"
+  }
+]

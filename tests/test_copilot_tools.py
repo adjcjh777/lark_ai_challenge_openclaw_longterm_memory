@@ -189,6 +189,58 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("stub", result["trace"]["strategy"])
 
+    def test_handle_candidate_confirm_reject_tools(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            service = CopilotService(repository=MemoryRepository(conn))
+
+            created = handle_tool_request(
+                "memory.create_candidate",
+                {
+                    "text": "决定：生产部署必须加 --canary --region cn-shanghai。",
+                    "scope": "project:feishu_ai_challenge",
+                    "source": {
+                        "source_type": "unit_test",
+                        "source_id": "msg_1",
+                        "actor_id": "ou_test",
+                        "created_at": "2026-04-30T10:00:00+08:00",
+                        "quote": "决定：生产部署必须加 --canary --region cn-shanghai。",
+                    },
+                },
+                service=service,
+            )
+            self.assertTrue(created["ok"])
+            self.assertEqual("candidate", created["candidate"]["status"])
+
+            confirmed = handle_tool_request(
+                "memory.confirm",
+                {
+                    "candidate_id": created["candidate_id"],
+                    "scope": "project:feishu_ai_challenge",
+                    "actor_id": "ou_test",
+                    "reason": "单测确认",
+                },
+                service=service,
+            )
+            self.assertTrue(confirmed["ok"])
+            self.assertEqual("active", confirmed["memory"]["status"])
+
+            rejected = handle_tool_request(
+                "memory.reject",
+                {
+                    "candidate_id": created["candidate_id"],
+                    "scope": "project:feishu_ai_challenge",
+                    "actor_id": "ou_test",
+                    "reason": "重复拒绝",
+                },
+                service=service,
+            )
+            conn.close()
+
+        self.assertFalse(rejected["ok"])
+        self.assertEqual("candidate_not_confirmable", rejected["error"]["code"])
+
     def test_examples_only_use_declared_tools(self) -> None:
         supported = set(supported_tool_names())
         example_paths = sorted(EXAMPLES_DIR.glob("*.json"))
