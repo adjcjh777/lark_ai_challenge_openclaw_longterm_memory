@@ -1304,6 +1304,13 @@ git diff --check
 
 - 先确认初赛提交材料仍可提交；如有提交 blocker，先修 blocker。
 - 如果提交闭环安全，开始冻结 Phase 1 契约：storage、permission、OpenClaw payload、audit、migration、negative permission cases。
+- 契约文档统一落到 `docs/productization/contracts/`：
+  - `storage-contract.md`
+  - `permission-contract.md`
+  - `openclaw-payload-contract.md`
+  - `audit-observability-contract.md`
+  - `migration-rfc.md`
+  - `negative-permission-test-plan.md`
 - 明确首版 OpenClaw payload 兼容方案：优先 `current_context.permission`，除非明确需要顶层 `permission_context`。
 - 明确所有 action 的 fail-closed 行为：`memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、heartbeat。
 - 更新飞书共享看板中的 2026-05-07 程俊豪 Phase 1 任务。

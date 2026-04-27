@@ -12,6 +12,19 @@
 4. 判断做对：后续 executor 能按契约写代码，不再争论字段名、权限上下文和 fail-closed 行为。
 5. 遇到问题记录：缺字段、旧 benchmark 兼容风险、OpenClaw schema 兼容风险、lark-cli/Feishu 权限风险。
 
+## 本轮 Phase 1 契约冻结进展
+
+已新增并作为后续实现事实源的契约文档：
+
+- [Storage Contract](../productization/contracts/storage-contract.md)：冻结 tenant / organization / visibility-aware 存储字段和兼容迁移边界。
+- [Permission Contract](../productization/contracts/permission-contract.md)：冻结 permission context、permission decision、redaction 和 fail-closed 行为。
+- [OpenClaw Payload Contract](../productization/contracts/openclaw-payload-contract.md)：冻结首版 `current_context.permission` 兼容方案。
+- [Audit & Observability Contract](../productization/contracts/audit-observability-contract.md)：冻结审计事件、指标和敏感日志边界。
+- [Migration RFC](../productization/contracts/migration-rfc.md)：冻结旧 `scope_type/scope_id` 到 tenant-aware 存储的幂等迁移策略。
+- [Negative Permission Test Plan](../productization/contracts/negative-permission-test-plan.md)：冻结后续权限反例测试清单。
+
+当前阶段仍是 **contract freeze**，不是代码实现；下一步应先做 review / architect sign-off，再把这些文档转成 `tests/test_copilot_permissions.py`、schema 更新和 migration dry-run。
+
 ## 当日目标
 
 在不破坏初赛提交缓冲的前提下，启动完整产品 **Phase 1：Storage + Permission Contract Freeze**。
@@ -96,6 +109,12 @@
 
 - `docs/productization/complete-product-roadmap-prd.md`
 - `docs/productization/complete-product-roadmap-test-spec.md`
+- `docs/productization/contracts/storage-contract.md`
+- `docs/productization/contracts/permission-contract.md`
+- `docs/productization/contracts/openclaw-payload-contract.md`
+- `docs/productization/contracts/audit-observability-contract.md`
+- `docs/productization/contracts/migration-rfc.md`
+- `docs/productization/contracts/negative-permission-test-plan.md`
 - `docs/feishu-memory-copilot-implementation-plan.md`
 - `docs/plans/2026-05-07-implementation-plan.md`
 - `README.md`

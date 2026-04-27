@@ -67,7 +67,13 @@ Fallback:
 Required artifacts:
 - `docs/productization/complete-product-roadmap-prd.md`
 - `docs/productization/complete-product-roadmap-test-spec.md`
-- storage/permission/openclaw/audit/migration/negative-test sections or standalone RFC files
+- Phase 1 standalone contract files：
+  - [storage-contract.md](contracts/storage-contract.md)
+  - [permission-contract.md](contracts/permission-contract.md)
+  - [openclaw-payload-contract.md](contracts/openclaw-payload-contract.md)
+  - [audit-observability-contract.md](contracts/audit-observability-contract.md)
+  - [migration-rfc.md](contracts/migration-rfc.md)
+  - [negative-permission-test-plan.md](contracts/negative-permission-test-plan.md)
 
 Checks:
 - [ ] RFC 写清 dry-run、seed/local service real call、limited ingestion、productized live 区别。
@@ -83,12 +89,12 @@ git diff --check
 ### Phase 1：Storage + Permission Contract Freeze
 
 Required artifacts:
-- storage contract
-- permission contract
-- OpenClaw payload contract
-- audit/observability contract
-- migration RFC
-- negative permission test plan
+- [storage contract](contracts/storage-contract.md)
+- [permission contract](contracts/permission-contract.md)
+- [OpenClaw payload contract](contracts/openclaw-payload-contract.md)
+- [audit/observability contract](contracts/audit-observability-contract.md)
+- [migration RFC](contracts/migration-rfc.md)
+- [negative permission test plan](contracts/negative-permission-test-plan.md)
 
 Checks:
 - [ ] `tenant_id` / `organization_id` / `visibility_policy` 字段语义冻结。
@@ -100,6 +106,15 @@ Checks:
 
 Commands:
 
+Docs-only freeze:
+
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
+```
+
+进入代码实现并触达 Python/schema/test 后追加：
+
 ```bash
 python3 scripts/check_openclaw_version.py
 git diff --check
@@ -108,7 +123,7 @@ python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
 ```
 
 Pass/fail:
-- Pass：所有 contract artifacts 完成，schema/tests 反映冻结字段，missing permission context fail closed。
+- Pass：contract freeze 文档完成；进入实现后，schema/tests 反映冻结字段，missing permission context fail closed。
 - Fail：仍只做 scope/allowed_scopes 级别权限，或 confirm/reject/explain 不受权限矩阵约束。
 
 Fallback:
