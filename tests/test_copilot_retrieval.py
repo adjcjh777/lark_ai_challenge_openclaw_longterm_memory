@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import unittest
 
@@ -216,6 +217,130 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertTrue(response["ok"])
         self.assertIn("cognee", response["results"][0]["matched_via"])
         self.assertIn("2026.4.24", response["results"][0]["evidence"][0]["quote"])
+        self.assertIsNone(_trace_step(response, layer="L1", stage="cognee").get("note"))
+
+    def test_cognee_only_result_without_ledger_match_is_dropped(self) -> None:
+        class FakeCogneeAdapter:
+            is_configured = True
+
+            def search(self, scope: str, query: str, **kwargs: object) -> list[dict[str, object]]:
+                return [
+                    {
+                        "memory_id": "cognee_external_1",
+                        "current_value": "这条只有 Cognee 文本，没有 Copilot ledger evidence pointer。",
+                        "score": 0.99,
+                        "evidence": [{"quote": "Cognee 自带 quote 不能当作 Copilot 证据"}],
+                    }
+                ]
+
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "OpenClaw 开发版本固定为 2026.4.24，不能主动运行升级命令。",
+                source_type="unit_test",
+            )
+
+            response = CopilotService(
+                repository=repo,
+                cognee_adapter=FakeCogneeAdapter(),  # type: ignore[arg-type]
+            ).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "完全不同的 Cognee 外部答案",
+                        "scope": "project:feishu_ai_challenge",
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertFalse(any(result["memory_id"] == "cognee_external_1" for result in response["results"]))
+        self.assertEqual(
+            "cognee_unmatched_ledger_results_dropped:1",
+            _trace_step(response, layer="L1", stage="cognee")["note"],
+        )
+
+    def test_async_cognee_search_is_normalized_in_sync_service_path(self) -> None:
+        class AsyncCogneeAdapter:
+            is_configured = True
+
+            def __init__(self, memory_id: str) -> None:
+                self.memory_id = memory_id
+
+            async def search(self, scope: str, query: str, **kwargs: object) -> list[dict[str, object]]:
+                await asyncio.sleep(0)
+                return [{"memory_id": self.memory_id, "score": 0.91}]
+
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            remembered = repo.remember(
+                "project:feishu_ai_challenge",
+                "OpenClaw 开发版本固定为 2026.4.24，不能主动运行升级命令。",
+                source_type="unit_test",
+            )
+
+            response = CopilotService(
+                repository=repo,
+                cognee_adapter=AsyncCogneeAdapter(remembered["memory_id"]),  # type: ignore[arg-type]
+            ).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "OpenClaw 版本锁是多少",
+                        "scope": "project:feishu_ai_challenge",
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertIn("cognee", response["results"][0]["matched_via"])
+        self.assertIsNone(_trace_step(response, layer="L1", stage="cognee").get("note"))
+
+    def test_async_cognee_search_is_normalized_with_running_event_loop(self) -> None:
+        class AsyncCogneeAdapter:
+            is_configured = True
+
+            def __init__(self, memory_id: str) -> None:
+                self.memory_id = memory_id
+
+            async def search(self, scope: str, query: str, **kwargs: object) -> list[dict[str, object]]:
+                await asyncio.sleep(0)
+                return [{"memory_id": self.memory_id, "score": 0.88}]
+
+        async def run_search() -> dict[str, object]:
+            with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+                conn = connect(tmp.name)
+                init_db(conn)
+                repo = MemoryRepository(conn)
+                remembered = repo.remember(
+                    "project:feishu_ai_challenge",
+                    "OpenClaw 开发版本固定为 2026.4.24，不能主动运行升级命令。",
+                    source_type="unit_test",
+                )
+
+                response = CopilotService(
+                    repository=repo,
+                    cognee_adapter=AsyncCogneeAdapter(remembered["memory_id"]),  # type: ignore[arg-type]
+                ).search(
+                    SearchRequest.from_payload(
+                        {
+                            "query": "OpenClaw 版本锁是多少",
+                            "scope": "project:feishu_ai_challenge",
+                        }
+                    )
+                )
+                conn.close()
+                return response
+
+        response = asyncio.run(run_search())
+
+        self.assertTrue(response["ok"])
+        self.assertIn("cognee", response["results"][0]["matched_via"])
         self.assertIsNone(_trace_step(response, layer="L1", stage="cognee").get("note"))
 
     def test_recall_index_and_embedding_use_curated_fields_only(self) -> None:

@@ -119,7 +119,7 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertEqual("unit_test", results[0]["evidence"][0]["source_type"])
         self.assertIn("--canary", results[0]["evidence"][0]["quote"])
         self.assertEqual("search", client.calls[-1][0])
-        self.assertEqual("生产部署参数", client.calls[-1][1][1])
+        self.assertIn("生产部署参数", client.calls[-1][1])
 
     def test_adapter_normalizes_async_search_results(self) -> None:
         class AsyncSearchClient(FakeCogneeClient):

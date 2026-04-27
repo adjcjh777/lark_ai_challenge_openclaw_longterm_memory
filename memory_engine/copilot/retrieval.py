@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
+import threading
 import time
 from dataclasses import dataclass, replace
 from typing import Any
@@ -342,10 +345,14 @@ class LayerAwareRetriever:
         except Exception as exc:
             return [], f"cognee_unavailable:{exc.__class__.__name__}"
 
-        if hasattr(raw_results, "__await__"):
-            return [], "cognee_async_result_not_used_in_sync_path"
+        if inspect.isawaitable(raw_results):
+            try:
+                raw_results = _run_awaitable_sync(raw_results)
+            except Exception as exc:
+                return [], f"cognee_unavailable:{exc.__class__.__name__}"
 
         results = []
+        dropped_unmatched = 0
         for rank, item in enumerate(raw_results or [], start=1):
             if not isinstance(item, dict):
                 continue
@@ -362,24 +369,9 @@ class LayerAwareRetriever:
                 )
                 continue
 
-            evidence_items = item.get("evidence") if isinstance(item.get("evidence"), list) else []
-            evidence = Evidence.from_repository_source(evidence_items[0] if evidence_items else {})
-            results.append(
-                MemoryResult(
-                    memory_id=memory_id or f"cognee_rank_{rank}",
-                    type=str(item.get("type") or "document"),
-                    subject=str(item.get("subject") or "Cognee result"),
-                    current_value=str(item.get("current_value") or item.get("answer") or ""),
-                    status=str(item.get("status") or "active"),
-                    layer=str(item.get("layer") or MemoryLayer.WARM.value),
-                    version=item.get("version"),
-                    score=float(item.get("score") or 0) * 100,
-                    rank=rank,
-                    evidence=[evidence],
-                    matched_via=["cognee"],
-                    why_ranked={"cognee_score": float(item.get("score") or 0) * 100, "provenance": "cognee_only"},
-                )
-            )
+            dropped_unmatched += 1
+        if dropped_unmatched:
+            return results, f"cognee_unmatched_ledger_results_dropped:{dropped_unmatched}"
         return results, None
 
     def _merge_and_rerank(
@@ -536,3 +528,36 @@ def _recency_score(now_ms: int, updated_at: int) -> float:
         return 0.0
     age_days = max((now_ms - updated_at) / 86_400_000, 0.0)
     return max(0.0, 10.0 - age_days)
+
+
+def _event_loop_is_running() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+async def _await_value(awaitable: Any) -> Any:
+    return await awaitable
+
+
+def _run_awaitable_sync(awaitable: Any) -> Any:
+    if not _event_loop_is_running():
+        return asyncio.run(_await_value(awaitable))
+
+    result: dict[str, Any] = {}
+    error: dict[str, BaseException] = {}
+
+    def runner() -> None:
+        try:
+            result["value"] = asyncio.run(_await_value(awaitable))
+        except BaseException as exc:  # pragma: no cover - re-raised in caller thread
+            error["exc"] = exc
+
+    thread = threading.Thread(target=runner, name="copilot-cognee-await", daemon=True)
+    thread.start()
+    thread.join()
+    if "exc" in error:
+        raise error["exc"]
+    return result.get("value")
