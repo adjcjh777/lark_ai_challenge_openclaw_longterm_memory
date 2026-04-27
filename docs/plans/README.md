@@ -48,5 +48,6 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 | 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook、README、OpenClaw examples freeze |
 | 2026-05-04 | `2026-05-04-handoff.md` | 2026-05-04 Demo runbook、README 快速开始、demo dry-run 和 2026-05-05 接续说明 |
 | 2026-05-05 | `2026-05-05-implementation-plan.md` | 白皮书、architecture proof、competition narrative |
+| 2026-05-05 | `2026-05-05-handoff.md` | 2026-05-05 Memory 定义与架构白皮书初稿和 2026-05-06 接续说明 |
 | 2026-05-06 | `2026-05-06-implementation-plan.md` | 提交材料、录屏、QA、scope freeze |
 | 2026-05-07 | `2026-05-07-implementation-plan.md` | 最终验证、提交缓冲、push |

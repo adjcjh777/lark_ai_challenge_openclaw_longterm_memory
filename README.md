@@ -4,11 +4,12 @@
 
 从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
 
-进度说明：2026-05-04 的 Demo runbook、README 快速开始、OpenClaw examples freeze 和 demo dry-run 数据已经固定。下一步从 2026-05-05 白皮书开始，把 Memory 定义、架构边界、Demo 证据和 Benchmark 证明整理成初赛可提交材料；不要临时扩大到真实飞书生产写入或新工具功能。
+进度说明：2026-05-05 的《Memory 定义与架构白皮书》初稿已经完成，OpenClaw / Copilot Core / Cognee / Feishu / Bitable/Card 的边界、Demo 证据和 Benchmark 证明已经串起来。下一步从 2026-05-06 提交材料、录屏、QA 和 scope freeze 开始，只修阻塞问题，不再临时扩大到真实飞书生产写入或新工具功能。
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 继续进入 2026-05-05 白皮书初稿 | [2026-05-05 plan](docs/plans/2026-05-05-implementation-plan.md)；[2026-05-04 handoff](docs/plans/2026-05-04-handoff.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md)；[PRD](docs/feishu-memory-copilot-prd.md) | `docs/memory-definition-and-architecture-whitepaper.md` 初稿 | 能回答 Define it / Build it / Prove it；讲清 OpenClaw、Copilot Core、Cognee、Feishu、Bitable/Card 的边界；不把项目写成 Cognee API wrapper |
+| 继续进入 2026-05-06 提交材料、录屏、QA 和 scope freeze | [2026-05-06 plan](docs/plans/2026-05-06-implementation-plan.md)；[2026-05-05 handoff](docs/plans/2026-05-05-handoff.md)；[whitepaper](docs/memory-definition-and-architecture-whitepaper.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md) | `docs/submission-checklist.md`、录屏分镜、截图清单、全流程 QA 结果 | 三大交付物可逐项验收；README/runbook/report/whitepaper 表述一致；只修提交阻塞，不新增未验证功能 |
+| 2026-05-05 白皮书初稿已完成 | [2026-05-05 handoff](docs/plans/2026-05-05-handoff.md)；[2026-05-05 plan](docs/plans/2026-05-05-implementation-plan.md)；[whitepaper](docs/memory-definition-and-architecture-whitepaper.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md) | Memory 定义与架构白皮书可提交初稿 | 能回答 Define it / Build it / Prove it；讲清 OpenClaw、Copilot Core、Cognee、Feishu、Bitable/Card 的边界；没有把未完成 live 能力写成已完成 |
 | 2026-05-04 Demo 固定和 README 快速开始已完成 | [2026-05-04 handoff](docs/plans/2026-05-04-handoff.md)；[2026-05-04 plan](docs/plans/2026-05-04-implementation-plan.md)；[demo-runbook.md](docs/demo-runbook.md)；[demo_seed.py](scripts/demo_seed.py)；[OpenClaw examples](agent_adapters/openclaw/examples/)；[memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json) | 5 分钟 Demo runbook、README 快速开始、OpenClaw examples freeze、demo dry-run replay | 新读者能按 README / runbook 复现历史决策召回、冲突更新、prefetch 和 heartbeat dry-run；OpenClaw runtime 不稳时有 schema examples + CLI/dry-run 兜底 |
 | 2026-05-03 Benchmark Report 和指标自证已完成 | [2026-05-03 handoff](docs/plans/2026-05-03-handoff.md)；[2026-05-03 plan](docs/plans/2026-05-03-implementation-plan.md)；[benchmark.py](memory_engine/benchmark.py)；[benchmark-report.md](docs/benchmark-report.md)；[bitable_sync.py](memory_engine/bitable_sync.py) | Copilot recall / candidate / conflict / layer / prefetch / heartbeat 指标报告、10 条难例、失败分类、反例说明、评委可读 Benchmark Report | Recall@3 = 1.0；Candidate Precision = 1.0；Conflict Accuracy = 1.0；Context Use = 1.0；Sensitive Reminder Leakage Rate = 0；Bitable dry-run 字段能承载指标 |
 | 2026-05-02 prefetch、heartbeat 和 OpenClaw demo dry-run 已完成 | [2026-05-02 handoff](docs/plans/2026-05-02-handoff.md)；[2026-05-02 plan](docs/plans/2026-05-02-implementation-plan.md)；[service.py](memory_engine/copilot/service.py)；[heartbeat.py](memory_engine/copilot/heartbeat.py)；[task_prefetch_flow.json](agent_adapters/openclaw/examples/task_prefetch_flow.json)；[copilot_prefetch_cases.json](benchmarks/copilot_prefetch_cases.json)；[copilot_heartbeat_cases.json](benchmarks/copilot_heartbeat_cases.json) | `memory.prefetch` context pack、heartbeat reminder candidate、agent run summary candidate、OpenClaw demo flow、reminder card / Bitable dry-run | Agent 任务前能主动拿到相关记忆、evidence 和风险提示；reminder 只生成 candidate/dry-run，不真实骚扰用户；Sensitive Reminder Leakage Rate = 0 |
@@ -22,7 +23,7 @@
 
 ## 当前状态
 
-截至 2026-05-04，项目已完成 2026-04-26 至 2026-05-02 第一周 MVP 闭环、2026-05-03 Benchmark Report 和 2026-05-04 Demo 固定：
+截至 2026-05-05，项目已完成 2026-04-26 至 2026-05-02 第一周 MVP 闭环、2026-05-03 Benchmark Report、2026-05-04 Demo 固定和 2026-05-05 Memory 定义与架构白皮书初稿：
 
 - OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
 - OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
@@ -48,6 +49,7 @@
 - `docs/demo-runbook.md` 已改成 OpenClaw-native 5 分钟演示脚本，覆盖 `memory.search`、`memory.explain_versions`、`memory.prefetch`、heartbeat reminder candidate 和 benchmark 收口。
 - `scripts/demo_seed.py` 已固定 demo dry-run replay：默认使用临时 SQLite，不写飞书生产空间；可用 `--json-output reports/demo_replay.json` 生成本地演示证据。
 - `agent_adapters/openclaw/examples/*.json` 已标注 copyable / schema demo 边界，并和 `memory_tools.schema.json` 的实际 search 输出字段对齐。
+- `docs/memory-definition-and-architecture-whitepaper.md` 已完成初赛可提交初稿，覆盖 Define it / Build it / Prove it、架构边界、状态机、证据链、Demo/Benchmark 证明、局限和复赛路线。
 
 ## 10 分钟快速开始
 
@@ -160,6 +162,8 @@ ollama stop qwen3-embedding:0.6b-fp16
 - `docs/plans/2026-05-04-implementation-plan.md`
 - `docs/plans/2026-05-04-handoff.md`
 - `docs/plans/2026-05-05-implementation-plan.md`
+- `docs/plans/2026-05-05-handoff.md`
+- `docs/plans/2026-05-06-implementation-plan.md`
 
 ## 主架构边界
 
@@ -231,7 +235,9 @@ scripts/start_feishu_bot.sh --dry-run
 - 2026-04-29 handoff：`docs/plans/2026-04-29-handoff.md`
 - 2026-05-04 Demo runbook：`docs/demo-runbook.md`
 - 2026-05-04 handoff：`docs/plans/2026-05-04-handoff.md`
-- 下一执行计划：`docs/plans/2026-05-05-implementation-plan.md`
+- 2026-05-05 白皮书：`docs/memory-definition-and-architecture-whitepaper.md`
+- 2026-05-05 handoff：`docs/plans/2026-05-05-handoff.md`
+- 下一执行计划：`docs/plans/2026-05-06-implementation-plan.md`
 - Windows embedding 配置：`docs/reference/local-windows-cognee-embedding-setup.md`
 - 旧资料归档：`docs/archive/`
 - 长期参考资料：`docs/reference/`
