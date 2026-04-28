@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from memory_engine.db import SCHEMA_VERSION, init_db
 from memory_engine.repository import MemoryRepository
+from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest
 
 from .permissions import demo_permission_context
 from .service import CopilotService
@@ -46,6 +47,7 @@ def run_copilot_healthcheck(
         "openclaw_version": _check_openclaw_version(openclaw_version_reader),
         "copilot_service": _check_copilot_service(),
         "openclaw_schema": _check_openclaw_schema(repo_root / OPENCLAW_SCHEMA_FILE.relative_to(ROOT)),
+        "openclaw_native_registry": _check_openclaw_native_registry(),
         "storage_schema": _check_storage_schema(),
         "permission_contract": _check_permission_contract(),
         "cognee_adapter": _check_cognee_adapter(),
@@ -161,6 +163,40 @@ def _check_openclaw_schema(path: Path) -> dict[str, Any]:
             "error_type": type(exc).__name__,
             "error": str(exc),
             "next_step": "修复 OpenClaw tool schema JSON 后再运行 healthcheck。",
+        }
+
+
+def _check_openclaw_native_registry() -> dict[str, Any]:
+    try:
+        manifest = openclaw_plugin_manifest()
+        tools = [tool["name"] for tool in manifest["tools"]]
+        plugin_dir = ROOT / manifest["plugin_dir"]
+        files_exist = all(
+            (plugin_dir / filename).exists()
+            for filename in ("package.json", "openclaw.plugin.json", "index.js")
+        )
+        status = "pass" if files_exist and tools else "warning"
+        return {
+            "status": status,
+            "plugin_id": manifest["plugin_id"],
+            "plugin_dir": manifest["plugin_dir"],
+            "tool_count": len(tools),
+            "tools": sorted(tools),
+            "install_command": manifest["install_command"],
+            "enable_command": manifest["enable_command"],
+            "boundary": manifest["runtime_boundary"],
+            "next_step": (
+                ""
+                if status == "pass"
+                else "补齐 agent_adapters/openclaw/plugin 下的 package.json、openclaw.plugin.json 和 index.js。"
+            ),
+        }
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "next_step": "修复 OpenClaw native tool registry artifact 后再运行 healthcheck。",
         }
 
 

@@ -7,13 +7,13 @@
 
 1. 今天做的是 Phase E：把 README、Demo runbook、Benchmark Report、白皮书和产品化 handoff 的说法对齐，避免把还没完成的能力说成已经上线。
 2. 我接下来从 [full-copilot-next-execution-doc.md](full-copilot-next-execution-doc.md) 和 [PRD gap tasks](prd-completion-audit-and-gap-tasks.md) 继续；不要回到 2026-05-05 及以前的日期计划。
-3. 本轮交付的是交付物审查和口径修正，不是新增生产部署、长期服务或 OpenClaw first-class 工具注册。
+3. 本轮交付的是交付物审查和口径修正，不是新增生产部署、长期服务；后续 first-class OpenClaw 工具注册已另有 [first-class tools handoff](first-class-openclaw-tools-handoff.md)。
 4. 判断做对：材料里能清楚区分 demo replay、受控测试群 sandbox、OpenClaw Agent runtime 受控证据、Phase D live embedding gate 和 productized live。
-5. 遇到问题记录：发现“生产上线”“全量接入”“长期 embedding 服务”“first-class 原生工具已完成”等表述时，必须写明证据路径或降级为未完成风险。
+5. 遇到问题记录：发现“生产上线”“全量接入”“长期 embedding 服务”“Feishu websocket running 已完成”等表述时，必须写明证据路径或降级为未完成风险。
 
 ## 本阶段做了什么
 
-- 更新 [README.md](../../README.md)：顶部任务改为 Phase E 已完成，并把后续风险收敛到 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live。
+- 更新 [README.md](../../README.md)：顶部任务改为 Phase E 已完成；后续 first-class registry 已补本机证据，剩余风险收敛到 OpenClaw Feishu websocket running 证据和 productized live。
 - 更新 [full-copilot-next-execution-doc.md](full-copilot-next-execution-doc.md)：把 Phase E 状态改为已完成，并写清下一步不是继续重复 demo，而是按需推进更强产品化能力。
 - 更新 [prd-completion-audit-and-gap-tasks.md](prd-completion-audit-and-gap-tasks.md)：把 no-overclaim 审查从未完成项移到已完成项，并把后续未完成项拆成可执行任务。
 - 更新 [benchmark-report.md](../benchmark-report.md) 和 [memory-definition-and-architecture-whitepaper.md](../memory-definition-and-architecture-whitepaper.md)：heartbeat 样例数统一为 7；白皮书更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实。
@@ -25,7 +25,7 @@
 |---|---|---|
 | Demo / replay | 本地 demo replay 和 examples 可复现 5 个核心步骤 | 不能说这是生产 live |
 | 飞书接入 | 受控旧测试群 live sandbox 已接入新的 `CopilotService` 路径 | 不能说全量 Feishu workspace ingestion 或生产推送已完成 |
-| OpenClaw runtime | Phase B 已有 OpenClaw Agent runtime 受控证据，run `b252f11e-b49d-495c-a14f-0b823a888a5e` 跑通三条 flow | 不能说 `memory.*` 已是 OpenClaw first-class 原生工具，也不能说 Feishu websocket 已 running |
+| OpenClaw runtime | Phase B 已有 OpenClaw Agent runtime 受控证据，run `b252f11e-b49d-495c-a14f-0b823a888a5e` 跑通三条 flow；后续 first-class registry 已补本机插件证据 | 不能说 Feishu websocket 已 running |
 | Embedding | Phase D live embedding gate 已真实调用 `ollama/qwen3-embedding:0.6b-fp16` 并返回 1024 维 | 不能说长期 embedding 服务或 productized live 已完成 |
 | Governance | candidate、confirm/reject、audit、权限 fail-closed 已进入 Copilot Core | 不能说完整多租户后台、审计 UI 或生产运维已完成 |
 
@@ -67,7 +67,6 @@ ollama ps
 
 | 任务 | 负责人 | 位置 | 完成标准 |
 |---|---|---|---|
-| 评估 `memory.*` first-class OpenClaw 原生工具注册 | 程俊豪 | `agent_adapters/openclaw/`、OpenClaw runtime evidence | `memory.*` 出现在 OpenClaw Agent 原生工具列表，并保留 permission / trace 元数据 |
 | 补 OpenClaw Feishu websocket running 证据 | 程俊豪 | [feishu-staging-runbook.md](feishu-staging-runbook.md)、[openclaw-runtime-evidence.md](openclaw-runtime-evidence.md) | `openclaw health --json` 显示 Feishu channel running，且没有 lark-cli listener 冲突 |
 | 设计 productized live 长期运行方案 | 程俊豪 | 后续 productization handoff | 写清部署、监控、回滚、权限后台、审计 UI 和运维交接；本阶段不用做 |
 

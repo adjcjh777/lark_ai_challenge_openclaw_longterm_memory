@@ -1,0 +1,15 @@
+{
+  "name": "@feishu-memory-copilot/openclaw-plugin",
+  "version": "2026.5.8",
+  "private": true,
+  "description": "OpenClaw native tool registry for Feishu Memory Copilot memory.* tools.",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "engines": {
+    "openclaw": "2026.4.24"
+  }
+}

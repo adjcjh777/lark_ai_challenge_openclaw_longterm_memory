@@ -24,7 +24,7 @@
 
 ## 后续任务顺序
 
-### 1. P0：评估并实现 `memory.*` first-class OpenClaw 原生工具注册
+### 1. P0：评估并实现 `memory.*` first-class OpenClaw 原生工具注册（已完成本机 registry 证据）
 
 要做什么：让 `memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、`heartbeat.review_due` 出现在 OpenClaw Agent 原生工具列表，而不是只通过 `exec` 跑仓库证据脚本。
 
@@ -40,11 +40,18 @@
 
 完成标准：
 
-- OpenClaw Agent runtime 的工具清单里能看到 `memory.*` 和 `heartbeat.review_due`。
-- Agent 可以直接调用这些工具，不需要要求它先用 `exec` 执行证据脚本。
+- OpenClaw 本机插件清单能看到 `memory.*` 和 `heartbeat.review_due`。
+- Agent 可通过 first-class plugin tool 调用 Python runner，再进入 `handle_tool_request()` / `CopilotService`，不再只要求它先用 `exec` 执行证据脚本。
 - 每次 tool call 都保留 `request_id`、`trace_id`、`permission_decision`。
 - missing / malformed permission 仍 fail closed。
 - 文档明确：first-class tool registry 不等于 Feishu production live。
+
+已完成证据：
+
+- 新增 `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/tool_registry.py`、`memory_engine/copilot/openclaw_tool_runner.py` 和 `tests/test_openclaw_tool_registry.py`。
+- `openclaw plugins install --link --dangerously-force-unsafe-install ./agent_adapters/openclaw/plugin` 通过。因为插件需要用 Node `child_process` 调 Python runner，所以安装时需要 unsafe install override。
+- `openclaw plugins enable feishu-memory-copilot` 通过。
+- `openclaw plugins inspect feishu-memory-copilot --json` 读回 `toolNames=["memory.search","memory.create_candidate","memory.confirm","memory.reject","memory.explain_versions","memory.prefetch","heartbeat.review_due"]`。
 
 建议验证：
 

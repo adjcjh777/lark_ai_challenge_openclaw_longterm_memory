@@ -16,9 +16,9 @@
 
 | 问题 | 当前判断 | 证据 | 不能 overclaim 的边界 |
 |---|---|---|---|
-| 是否完成 MVP 构建？ | 已完成可演示、可本地复现、可评测的 MVP 闭环；Phase A storage/audit 本地迁移和 Phase B runtime 受控证据已完成。 | `python3 scripts/check_demo_readiness.py --json` 通过；5 个 demo replay step 全部 pass；benchmark 六类能力全部有 runner；`python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass`、`audit_smoke.status=pass`；OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过三条 flow。 | 不是生产部署；不是完整多租户后台；不宣称 `memory.*` 已注册成 OpenClaw first-class 原生工具。 |
+| 是否完成 MVP 构建？ | 已完成可演示、可本地复现、可评测的 MVP 闭环；Phase A storage/audit 本地迁移、Phase B runtime 受控证据和 first-class OpenClaw tool registry 本机证据已完成。 | `python3 scripts/check_demo_readiness.py --json` 通过；5 个 demo replay step 全部 pass；benchmark 六类能力全部有 runner；`python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass`、`audit_smoke.status=pass`、`openclaw_native_registry.status=pass`；OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过三条 flow；`openclaw plugins inspect feishu-memory-copilot --json` 读回 7 个 `toolNames`。 | 不是生产部署；不是完整多租户后台；不宣称 Feishu websocket running。 |
 | Feishu Memory Copilot 是否接入飞书？ | 已接入受控旧飞书测试群 live sandbox，真实群消息会进入新 Copilot live 路径。 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py`；handoff 记录 `/health`、`/remember`、`/confirm`、普通 @ 提问四步。 | 不是全量 Feishu workspace ingestion；不是生产推送；真实 ID 不进入仓库。 |
-| 是否接入 OpenClaw 做完整产品形态测试？ | 已完成 OpenClaw tool schema、examples、本地 bridge、demo replay、受控 live bridge、Agent runtime 受控验收和 live embedding gate；达到 demo/pre-production 产品形态。 | `agent_adapters/openclaw/memory_tools.schema.json` 有 7 个工具；`handle_tool_request()` 统一到 `CopilotService`；healthcheck 的 schema/service/smoke tests 通过；Phase B evidence 记录真实 `openclaw agent` run id；Phase D gate 真实返回 1024 维 embedding。 | 还缺生产安装包、长期运行监控；`memory.*` first-class tool registry 不在本次完成声明内。 |
+| 是否接入 OpenClaw 做完整产品形态测试？ | 已完成 OpenClaw tool schema、examples、本地 bridge、demo replay、受控 live bridge、Agent runtime 受控验收、first-class tool registry 本机证据和 live embedding gate；达到 demo/pre-production 产品形态。 | `agent_adapters/openclaw/memory_tools.schema.json` 有 7 个工具；`handle_tool_request()` 统一到 `CopilotService`；healthcheck 的 schema/service/smoke/registry tests 通过；Phase B evidence 记录真实 `openclaw agent` run id；`feishu-memory-copilot` 插件读回 7 个 toolNames；Phase D gate 真实返回 1024 维 embedding。 | 还缺 OpenClaw Feishu websocket running、生产安装包和长期运行监控。 |
 
 ## PRD 要求完成度核对
 
@@ -31,7 +31,7 @@
 | `memory.prefetch` 给 Agent 任务前上下文包 | 完成 | `benchmarks/copilot_prefetch_cases.json`：6 条，Agent Task Context Use Rate = 1.0，Evidence Coverage = 1.0；Phase B runtime evidence 已跑 `task_prefetch_context_pack`。 | 后续扩大真实任务表达样例，不删除失败样例。 |
 | Heartbeat 主动提醒 | MVP 原型完成 | `benchmarks/copilot_heartbeat_cases.json`：7 条，Sensitive Reminder Leakage Rate = 0.0；只生成 reminder candidate。 | 不做真实群推送，直到权限、频率和审计闭环完成。 |
 | Feishu card / Bitable review surface | 本地闭环完成 | `tests/test_feishu_interactive_cards.py`、`tests/test_bitable_sync.py`；card/Bitable dry-run 消费 service/tool 输出；Phase A 已补 audit table。 | 接真实 card action 前还需补 staging runbook 和可交接流程。 |
-| OpenClaw E2E flows >= 2 | 受控 runtime 证据完成 | demo replay 5 step pass；OpenClaw schema 7 tools；examples 覆盖 search、version、prefetch、heartbeat、permission denied；Phase B OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用证据脚本，三条 Copilot flow 全部 `ok=true`。 | 后续如果要更强产品形态，可把 `memory.*` 注册成 OpenClaw first-class 原生工具；当前不宣称已经完成该注册。 |
+| OpenClaw E2E flows >= 2 | 受控 runtime 证据和 first-class registry 本机证据完成 | demo replay 5 step pass；OpenClaw schema 7 tools；examples 覆盖 search、version、prefetch、heartbeat、permission denied；Phase B OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用证据脚本，三条 Copilot flow 全部 `ok=true`；`openclaw plugins inspect feishu-memory-copilot --json` 读回 7 个 `toolNames`。 | 后续还需真实飞书消息进入 OpenClaw Agent 再自然选择 memory tool 的端到端证据；当前不宣称 Feishu websocket running。 |
 | Evaluation report | 完成 MVP 报告 | `docs/benchmark-report.md` 覆盖 recall、candidate、conflict、layer、prefetch、heartbeat。 | 复赛前扩样例规模和真实飞书项目群表达。 |
 | 生产部署和长期运行 | 未完成 | README、handoff、healthcheck 都明确声明不是 productized live。 | 进入后续产品化任务，不在 MVP 阶段冒称完成。 |
 
@@ -66,8 +66,9 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 |---|---|---|---|---|---|
 | 补 storage migration 和 audit table | P0 | 程俊豪 | 2026-04-28 | `memory_engine/db.py`、`memory_engine/copilot/service.py`、`memory_engine/copilot/healthcheck.py`、[Phase A handoff](phase-a-storage-audit-handoff.md) | 数据库有 `tenant_id`、`organization_id`、`visibility_policy` 和 `memory_audit_events`；healthcheck 不再报 storage warning；确认/拒绝/权限拒绝、limited ingestion candidate、heartbeat candidate 都有审计记录。 |
 | 补 Feishu 单监听 staging 流程 | P0 | 程俊豪 | 2026-04-28 | `scripts/check_feishu_listener_singleton.py`、`memory_engine/feishu_listener_guard.py`、[Feishu staging runbook](feishu-staging-runbook.md)、[single listener handoff](feishu-single-listener-handoff.md) | OpenClaw Feishu websocket、Copilot lark-cli sandbox、legacy fallback 三选一；repo 内启动脚本和 direct CLI 启动前都会做 singleton preflight；冲突时记录 pid、kind、command。 |
-| 补真实 OpenClaw Agent runtime 验收记录 | P0 | 程俊豪 | 2026-04-28 | `scripts/openclaw_runtime_evidence.py`、[Phase B evidence](openclaw-runtime-evidence.md)、[Phase B handoff](phase-b-openclaw-runtime-handoff.md) | OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过；三条 flow：`memory.search`、`memory.create_candidate + memory.confirm`、`memory.prefetch` 都有 request_id、trace_id、permission_decision=allow；边界写清不是 production live、不是全量 Feishu ingestion、不是 first-class tool registry。 |
+| 补真实 OpenClaw Agent runtime 验收记录 | P0 | 程俊豪 | 2026-04-28 | `scripts/openclaw_runtime_evidence.py`、[Phase B evidence](openclaw-runtime-evidence.md)、[Phase B handoff](phase-b-openclaw-runtime-handoff.md) | OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过；三条 flow：`memory.search`、`memory.create_candidate + memory.confirm`、`memory.prefetch` 都有 request_id、trace_id、permission_decision=allow；边界写清不是 production live、不是全量 Feishu ingestion。 |
 | 验证 live Cognee / Ollama embedding，不再只做 configuration-only | P1 | 程俊豪 | 2026-04-28 | `scripts/check_live_embedding_gate.py`、`scripts/check_embedding_provider.py`、`scripts/spike_cognee_local.py`、[Phase D handoff](phase-d-live-embedding-handoff.md) | 真实 provider 检查通过；`ollama/qwen3-embedding:0.6b-fp16` 返回 1024 维；Cognee dry-run adapter 路径通过；每次运行后 `ollama ps` 无本项目模型驻留。 |
+| 实现 `memory.*` first-class OpenClaw 原生工具注册 | P0 | 程俊豪 | 2026-04-28 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/tool_registry.py`、`memory_engine/copilot/openclaw_tool_runner.py`、[first-class tools handoff](first-class-openclaw-tools-handoff.md) | `feishu-memory-copilot` 插件可安装启用；`openclaw plugins inspect feishu-memory-copilot --json` 读回 7 个 `toolNames`；runner 调用仍进入 `handle_tool_request()` / `CopilotService` 并保留 bridge metadata。 |
 
 ## 仍未完成任务拆分
 
@@ -77,7 +78,6 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 | 任务 | 优先级 | 负责人 | 截止建议 | 文件/页面位置 | 完成标准 |
 |---|---|---|---|---|---|
-| 评估 `memory.*` first-class OpenClaw 原生工具注册 | P1 | 程俊豪 | 待定 | `agent_adapters/openclaw/`、OpenClaw runtime evidence、`docs/productization/full-copilot-next-execution-doc.md` | `memory.*` 出现在 OpenClaw Agent 原生工具列表；有 request_id、trace_id、permission_decision；文档仍区分 first-class tool registry 与 Feishu production live。 |
 | 补 OpenClaw Feishu websocket running 证据 | P1 | 程俊豪 | 待定 | `docs/productization/feishu-staging-runbook.md`、`docs/productization/openclaw-runtime-evidence.md` | `openclaw health --json` 显示 Feishu channel running；同一个 bot 没有 lark-cli listener 冲突；真实 ID 不写仓库。 |
 | 设计 productized live 长期运行方案 | P2 | 程俊豪 | 待定 | `docs/productization/full-copilot-next-execution-doc.md` 或后续 handoff | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界；本阶段不把它写成已完成。 |
 
@@ -85,7 +85,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 | 任务 | 优先级 | 负责人 | 完成时间 | 文件/页面位置 | 完成标准 |
 |---|---|---|---|---|---|
-| 做 no-overclaim 交付物审查 | P1 | 程俊豪 | 2026-04-28 | `README.md`、`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md`、[Phase E handoff](phase-e-no-overclaim-handoff.md) | 所有材料统一口径：已完成 demo/pre-production、受控测试群 sandbox、OpenClaw Agent runtime 受控证据和 Phase D live embedding gate；未完成生产部署、全量 ingestion、多租户后台、长期 embedding 服务、OpenClaw first-class 工具注册和 productized live。 |
+| 做 no-overclaim 交付物审查 | P1 | 程俊豪 | 2026-04-28 | `README.md`、`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md`、[Phase E handoff](phase-e-no-overclaim-handoff.md) | 所有材料统一口径：已完成 demo/pre-production、受控测试群 sandbox、OpenClaw Agent runtime 受控证据和 Phase D live embedding gate；后续 first-class registry 已补本机证据；未完成生产部署、全量 ingestion、多租户后台、长期 embedding 服务、Feishu websocket running 和 productized live。 |
 
 ## 对外汇报口径
 

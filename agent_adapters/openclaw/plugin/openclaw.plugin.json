@@ -1,0 +1,13 @@
+{
+  "id": "feishu-memory-copilot",
+  "name": "Feishu Memory Copilot",
+  "description": "Registers first-class OpenClaw tools for Feishu Memory Copilot memory governance.",
+  "version": "2026.5.8",
+  "kind": "tool",
+  "main": "./index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

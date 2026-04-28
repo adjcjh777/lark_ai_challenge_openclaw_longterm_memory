@@ -5,7 +5,7 @@
 
 ## 先看这个
 
-1. 当前项目已经完成 demo / pre-production 级别闭环，后续重点不是重复证明 MVP 能跑，而是补齐上线前的 OpenClaw 原生工具、飞书 websocket、真实权限、生产存储、审计和运维能力。
+1. 当前项目已经完成 demo / pre-production 级别闭环和 OpenClaw 原生工具注册本机证据，后续重点不是重复证明 MVP 能跑，而是补齐上线前的飞书 websocket、真实权限、生产存储、审计和运维能力。
 2. 初期构建、OMX 规划和后期打磨文档分开阅读；不要从旧 day 文档里倒推当前任务。
 3. 当前代码和 `docs/productization/full-copilot-next-execution-doc.md` 是事实源；历史计划只作为证据和背景。
 4. 本项目目前由 Codex 完成主要代码和文档修改，人类接手时优先读产品指南和待办清单，再看具体代码。
@@ -83,6 +83,7 @@
 | [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md) | 后续工作流和测试流，每个任务完成前后按这里收口。 |
 | [productization/feishu-staging-runbook.md](productization/feishu-staging-runbook.md) | 飞书 staging 和单监听规则。 |
 | [productization/openclaw-runtime-evidence.md](productization/openclaw-runtime-evidence.md) | OpenClaw Agent runtime 受控证据和仍未完成边界。 |
+| [productization/first-class-openclaw-tools-handoff.md](productization/first-class-openclaw-tools-handoff.md) | `memory.*` first-class OpenClaw 原生工具注册本机证据。 |
 | [productization/phase-e-no-overclaim-handoff.md](productization/phase-e-no-overclaim-handoff.md) | 当前 no-overclaim 审查完成证据。 |
 
 ### 4. 契约和参考资料

@@ -13,7 +13,7 @@
 1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate；Phase E 已完成 no-overclaim 交付物审查。当前最大的后续产品化缺口是：是否把 `memory.*` 注册成 OpenClaw first-class 原生工具，以及是否继续补 OpenClaw Feishu websocket running 证据和 productized live。
+4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate；Phase E 已完成 no-overclaim 交付物审查；后期打磨 P0 已补 `memory.*` first-class OpenClaw 原生工具注册本机证据。当前最大的后续产品化缺口是：继续补 OpenClaw Feishu websocket running 证据、真实权限映射和 productized live。
 5. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
 6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
 
@@ -61,11 +61,11 @@ docs/productization/feishu-single-listener-handoff.md
 - Phase D live embedding gate：`python3 scripts/check_live_embedding_gate.py --json` 已真实调用 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维，并确认清理后无本项目 Ollama 模型驻留；healthcheck 仍保留 configuration-only，不把它写成长期 embedding 服务。
 - Demo readiness：`python3 scripts/check_demo_readiness.py --json` 已可通过。
 - Benchmark：recall、candidate、conflict、layer、prefetch、heartbeat 六类 runner 已有。
-- Phase E no-overclaim 审查：README、Demo runbook、Benchmark Report、白皮书、产品化主控和 handoff 口径已对齐；heartbeat 样例数统一为 7；白皮书已更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实；仍不宣称生产部署、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台或 `memory.*` first-class OpenClaw 原生工具注册。
+- Phase E no-overclaim 审查：README、Demo runbook、Benchmark Report、白皮书、产品化主控和 handoff 口径已对齐；heartbeat 样例数统一为 7；白皮书已更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实；仍不宣称生产部署、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台或 Feishu websocket running。
+- First-class OpenClaw 原生工具注册：`agent_adapters/openclaw/plugin/` 已提供 `feishu-memory-copilot` 插件；`openclaw plugins inspect feishu-memory-copilot --json` 已读回 7 个 `toolNames`；插件调用 `memory_engine.copilot.openclaw_tool_runner` 后进入 `handle_tool_request()` / `CopilotService`。
 
 仍未完成：
 
-- `memory.*` first-class OpenClaw 原生工具注册：本阶段已证明 Agent runtime -> `exec` -> evidence script -> `handle_tool_request()`，但不宣称 `memory.*` 已出现在 OpenClaw Agent `systemPromptReport.tools.entries` 中。
 - OpenClaw Feishu websocket running 证据：`openclaw health --json` 当前显示 Feishu channel configured/enabled 且 credential probe OK，但 `running=false`。
 - productized live：没有生产部署、长期运行监控、完整多租户后台。
 
@@ -152,7 +152,7 @@ ollama ps
 
 ## Phase B：真实 OpenClaw Agent Runtime 验收
 
-状态：已完成受控闭环，详见 [Phase B runtime evidence](openclaw-runtime-evidence.md) 和 [Phase B handoff](phase-b-openclaw-runtime-handoff.md)。边界：这证明 OpenClaw Agent runtime 可以通过 `exec` 调用仓库证据脚本进入 `handle_tool_request()` / `CopilotService`；不宣称 `memory.*` 已注册成 OpenClaw first-class 原生工具，也不宣称 Feishu websocket 已 running。
+状态：已完成受控闭环，详见 [Phase B runtime evidence](openclaw-runtime-evidence.md) 和 [Phase B handoff](phase-b-openclaw-runtime-handoff.md)。边界：这证明 OpenClaw Agent runtime 可以通过 `exec` 调用仓库证据脚本进入 `handle_tool_request()` / `CopilotService`；后续 first-class registry 已补本机插件证据；仍不宣称 Feishu websocket 已 running。
 
 目标：把 OpenClaw 产品形态从 schema/local bridge/replay 推到真实 runtime 证据。
 
@@ -177,7 +177,7 @@ docs/productization/feishu-staging-runbook.md
    - 候选确认：Agent 调用 `memory.create_candidate` 后再确认或拒绝。
    - 任务前上下文：Agent 调用 `memory.prefetch` 后生成 checklist / plan / report。
 4. 已完成：每条记录输入、输出、tool、request_id、trace_id、permission_decision、失败回退。
-5. 已完成：边界写清，不冒称 production live、first-class tool registry 或 Feishu websocket running。
+5. 已完成：边界写清，不冒称 production live 或 Feishu websocket running；first-class tool registry 已在后续 handoff 中补齐本机插件证据。
 
 验收命令：
 
@@ -292,7 +292,7 @@ git diff --check
 
 ## Phase E：Product QA + No-overclaim 审查
 
-状态：已完成，详见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。下一步只有在明确继续产品化时，才评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live。
+状态：已完成，详见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。后续已完成 `memory.*` first-class OpenClaw 原生工具注册本机证据；下一步只有在明确继续产品化时，才推进 OpenClaw Feishu websocket running 证据、真实权限映射和 productized live。
 
 目标：让所有交付物讲同一个产品故事。
 
@@ -314,7 +314,7 @@ docs/plans/*handoff.md
 - 已完成：不把 live sandbox 写成生产部署。
 - 已完成：不把 limited ingestion 写成全量 workspace ingestion。
 - 已完成：不把 configuration-only embedding 写成 live embedding 已通过；当前可说 Phase D live embedding gate 已单独通过。
-- 已完成：不把 local bridge 写成真实 OpenClaw runtime；当前可说 Phase B 已有 OpenClaw Agent runtime 受控证据，但仍不是 first-class tool registry。
+- 已完成：不把 local bridge 写成真实 OpenClaw runtime；当前可说 Phase B 已有 OpenClaw Agent runtime 受控证据，且后续已补 first-class tool registry 本机插件证据。
 - 已完成：不把 candidate-only 写成自动 active。
 
 验收命令：
@@ -417,7 +417,7 @@ Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agen
 
 目标：
 1. 不要重复执行 Phase E 文档审查；先读取 Phase E handoff 和当前 README 顶部任务。
-2. 若用户明确继续产品化，优先评估 `memory.*` first-class OpenClaw 原生工具注册。
+2. 若用户明确继续产品化，优先补 OpenClaw Feishu websocket running 证据。
 3. 若做 OpenClaw Feishu websocket running 证据，先跑单监听检查，保证同一个 bot 只有一个监听入口。
 4. 若做 productized live 方案，先写部署、监控、回滚、权限后台、审计 UI 和运维边界，不要直接写成已经上线。
 

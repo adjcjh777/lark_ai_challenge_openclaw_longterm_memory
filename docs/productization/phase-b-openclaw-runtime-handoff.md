@@ -16,8 +16,8 @@
 - 新增 [scripts/openclaw_runtime_evidence.py](../../scripts/openclaw_runtime_evidence.py)：用临时 SQLite 跑 `memory.search`、`memory.create_candidate + memory.confirm`、`memory.prefetch` 三条 Phase B flow。
 - 新增 [tests/test_openclaw_runtime_evidence.py](../../tests/test_openclaw_runtime_evidence.py)：锁住三条 flow 的工具名、成功状态、request/trace 元数据和 candidate -> active 状态变化。
 - 新增 [openclaw-runtime-evidence.md](openclaw-runtime-evidence.md)：记录 OpenClaw ping、Agent runtime run id、三条 flow 和边界说明。
-- 更新 README 顶部任务区：Phase B 已有 runtime evidence；Phase D 已补 live embedding gate；Phase E no-overclaim 审查已完成，后续按需评估 `memory.*` first-class OpenClaw 原生工具注册。
-- 更新产品化主控文档和 PRD gap tasks：把真实 OpenClaw runtime 验收从未完成项移到已完成项，同时保留 first-class tool registry 和 Feishu websocket 的风险边界。
+- 更新 README 顶部任务区：Phase B 已有 runtime evidence；Phase D 已补 live embedding gate；Phase E no-overclaim 审查已完成；后续又补齐 `memory.*` first-class OpenClaw 原生工具注册本机证据。
+- 更新产品化主控文档和 PRD gap tasks：把真实 OpenClaw runtime 验收从未完成项移到已完成项，同时保留 Feishu websocket 的风险边界。
 
 ## 怎么复现
 
@@ -62,12 +62,12 @@ python3 -m unittest tests.test_openclaw_runtime_evidence
 建议备注：
 
 ```text
-OpenClaw Agent runtime run b252f11e-b49d-495c-a14f-0b823a888a5e 已通过；Agent 使用 exec 调用 scripts/openclaw_runtime_evidence.py，三条 Copilot flow ok=true：memory.search、memory.create_candidate+memory.confirm、memory.prefetch；均保留 request_id、trace_id、permission_decision=allow。验证：check_openclaw_version、listener singleton、openclaw health、tests.test_openclaw_runtime_evidence。边界：不是生产部署；不是全量 Feishu ingestion；memory.* 仍未宣称为 OpenClaw first-class tool registry；Feishu websocket health running=false。
+OpenClaw Agent runtime run b252f11e-b49d-495c-a14f-0b823a888a5e 已通过；Agent 使用 exec 调用 scripts/openclaw_runtime_evidence.py，三条 Copilot flow ok=true：memory.search、memory.create_candidate+memory.confirm、memory.prefetch；均保留 request_id、trace_id、permission_decision=allow。后续 first-class registry 已补：openclaw plugins inspect feishu-memory-copilot --json 可读回 7 个 toolNames。验证：check_openclaw_version、listener singleton、openclaw health、tests.test_openclaw_runtime_evidence、tests.test_openclaw_tool_registry。边界：不是生产部署；不是全量 Feishu ingestion；Feishu websocket health running=false。
 ```
 
 ## 还没做
 
-- `memory.*` 还没有在本机 OpenClaw Agent `systemPromptReport.tools.entries` 中作为 first-class 原生工具出现；本阶段证据路径是 Agent runtime -> `exec` -> 证据脚本 -> `handle_tool_request()` -> `CopilotService`。
+- `memory.*` first-class registry 已补本机插件证据；更进一步的真实飞书消息 -> OpenClaw Agent -> 自动选择 memory tool 端到端证据仍未完成。
 - OpenClaw Feishu websocket 没有证明已经 owns bot；health 当前显示 `running=false`。
 - Live Cognee / Ollama embedding gate 已在 Phase D 完成；见 [phase-d-live-embedding-handoff.md](phase-d-live-embedding-handoff.md)。
 - No-overclaim 审查仍要继续检查 README、runbook、benchmark report 和白皮书。

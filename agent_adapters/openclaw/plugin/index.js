@@ -1,0 +1,94 @@
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import { jsonResult } from "openclaw/plugin-sdk/core";
+
+const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(PLUGIN_DIR, "../../..");
+const SCHEMA_PATH = resolve(REPO_ROOT, "agent_adapters/openclaw/memory_tools.schema.json");
+const PYTHON = process.env.FEISHU_MEMORY_COPILOT_PYTHON || "python3";
+
+function loadToolSpecs() {
+  const raw = readFileSync(SCHEMA_PATH, "utf8");
+  const schema = JSON.parse(raw);
+  if (!Array.isArray(schema.tools)) {
+    throw new Error("memory_tools.schema.json must contain a tools array");
+  }
+  return schema.tools;
+}
+
+function createTool(toolSpec) {
+  return {
+    name: toolSpec.name,
+    label: toolSpec.name,
+    description: toolSpec.description,
+    parameters: toolSpec.input_schema,
+    execute: async (_toolCallId, rawParams) => {
+      const output = await runPythonTool(toolSpec.name, rawParams || {});
+      return jsonResult(output);
+    },
+  };
+}
+
+async function runPythonTool(toolName, payload) {
+  const envelope = {
+    tool: toolName,
+    payload,
+    db_path: process.env.FEISHU_MEMORY_COPILOT_DB || undefined,
+  };
+  const child = spawn(PYTHON, ["-m", "memory_engine.copilot.openclaw_tool_runner"], {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  child.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
+  child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+
+  child.stdin.end(JSON.stringify(envelope));
+
+  const exitCode = await new Promise((resolveExit) => {
+    child.on("close", resolveExit);
+  });
+  const stdout = Buffer.concat(stdoutChunks).toString("utf8").trim();
+  const stderr = Buffer.concat(stderrChunks).toString("utf8").trim();
+
+  if (exitCode !== 0) {
+    throw new Error(`Feishu Memory Copilot tool runner failed for ${toolName}: ${stderr || stdout || exitCode}`);
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Feishu Memory Copilot tool runner returned invalid JSON for ${toolName}: ${String(error)}`);
+  }
+}
+
+export default definePluginEntry({
+  id: "feishu-memory-copilot",
+  name: "Feishu Memory Copilot",
+  description: "First-class OpenClaw memory tools backed by CopilotService.",
+  kind: "tool",
+  register(api) {
+    api.registerTool(() => {
+      const specs = loadToolSpecs();
+      return specs.map(createTool);
+    }, {
+      names: [
+        "memory.search",
+        "memory.create_candidate",
+        "memory.confirm",
+        "memory.reject",
+        "memory.explain_versions",
+        "memory.prefetch",
+        "heartbeat.review_due",
+      ],
+    });
+  },
+});

@@ -2,7 +2,7 @@
 
 日期：2026-04-28  
 阶段：Phase B 真实 OpenClaw Agent Runtime 验收  
-结论：已完成受控 runtime 验收；仍不宣称生产部署、全量飞书空间接入或 `memory.*` 已注册成 OpenClaw 原生工具列表。
+结论：已完成受控 runtime 验收；后续已补 `memory.*` first-class OpenClaw 原生工具注册本机证据；仍不宣称生产部署、全量飞书空间接入或 Feishu websocket running。
 
 ## 先看这个
 
@@ -10,7 +10,7 @@
 2. 真实 OpenClaw Agent 已通过 `exec` 工具运行仓库内证据脚本，脚本再进入 `handle_tool_request()` 和 `CopilotService`。
 3. 三条必需 flow 已通过：历史决策召回、candidate 创建后确认、任务前 `memory.prefetch`。
 4. 判断做对：每条 flow 都有 `request_id`、`trace_id` 和 `permission_decision.decision=allow`。
-5. 遇到问题记录：OpenClaw Feishu websocket 当前 health 显示 `running=false`，所以这次不宣称 OpenClaw websocket 已 owns bot；Feishu 测试群仍走既有 live sandbox 证据。
+5. 遇到问题记录：OpenClaw Feishu websocket 当前 health 仍没有 `running=true` 证据，所以这次不宣称 OpenClaw websocket 已 owns bot；Feishu 测试群仍走既有 live sandbox 证据。
 
 ## 执行前检查
 
@@ -74,9 +74,29 @@ openclaw agent --agent main --message '你在 /Users/junhaocheng/feishu_ai_chall
 ## 边界
 
 - 这次证明的是：OpenClaw Agent runtime 可以执行仓库证据脚本，脚本通过正式 `handle_tool_request()` 进入 `CopilotService`，三条 PRD flow 均有权限和 trace 元数据。
-- 这次不证明：`memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.prefetch` 已经作为 first-class OpenClaw 原生工具出现在 Agent `systemPromptReport.tools.entries` 中。
+- 后续已补证明：`feishu-memory-copilot` 插件可在本机 OpenClaw 中安装、启用并读回 7 个 `toolNames`，见 [first-class-openclaw-tools-handoff.md](first-class-openclaw-tools-handoff.md)。
 - 这次不证明：OpenClaw Feishu websocket 已经 owns `Feishu Memory Engine bot`；`openclaw health --json` 当前显示 Feishu channel `running=false`。
 - 这次不写真实飞书生产空间；真实飞书数据仍必须 candidate-only，confirm/reject 仍必须走 `CopilotService` / `handle_tool_request()`。
+
+## First-class Tool Registry Evidence
+
+后期打磨 P0 已补齐 OpenClaw 原生工具注册 artifact：
+
+```bash
+openclaw plugins install --link --dangerously-force-unsafe-install ./agent_adapters/openclaw/plugin
+openclaw plugins enable feishu-memory-copilot
+openclaw plugins inspect feishu-memory-copilot --json
+```
+
+读回结果：
+
+- `id=feishu-memory-copilot`
+- `status=loaded`
+- `enabled=true`
+- `activated=true`
+- `toolNames=["memory.search","memory.create_candidate","memory.confirm","memory.reject","memory.explain_versions","memory.prefetch","heartbeat.review_due"]`
+
+说明：插件使用 Node `child_process` 调用 Python runner 进入 `memory_engine.copilot.openclaw_tool_runner`，因此本机安装时使用了 OpenClaw unsafe install override。这是本仓库受控源码，不等于生产部署，也不等于 Feishu websocket running。
 
 ## 本阶段验证
 
@@ -87,6 +107,7 @@ openclaw health --json --timeout 5000
 python3 scripts/openclaw_runtime_evidence.py --json-output reports/openclaw_runtime_evidence_local.json
 openclaw agent --agent main --message '你在 /Users/junhaocheng/feishu_ai_challenge。请用 exec 工具运行这个命令：python3 scripts/openclaw_runtime_evidence.py --json-output reports/openclaw_runtime_evidence_agent.json。然后只基于命令输出，用中文列出三条 flow 的 name、tool、ok、request_id、trace_id、permission_decision.decision。不要修改文件。' --json --timeout 120
 python3 -m unittest tests.test_openclaw_runtime_evidence
+python3 -m unittest tests.test_openclaw_tool_registry
 ```
 
 结果：

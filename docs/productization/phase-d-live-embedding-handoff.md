@@ -71,7 +71,7 @@ python3 -m compileall scripts memory_engine
 - 已完成长期 embedding 服务。
 - 已完成 productized live。
 - 已全量接入 Feishu workspace。
-- `memory.*` 已注册为 OpenClaw first-class 原生工具。
+- OpenClaw Feishu websocket 已 running。
 
 ## 飞书共享看板
 
@@ -88,7 +88,7 @@ Phase D live embedding gate 已通过：python3 scripts/check_live_embedding_gat
 
 ## 下一步从哪里开始
 
-Phase E：Product QA + No-overclaim 审查已完成。后续若继续产品化，优先评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live。
+Phase E：Product QA + No-overclaim 审查已完成。后续 first-class OpenClaw 原生工具注册已补本机证据。若继续产品化，优先补 OpenClaw Feishu websocket running 证据和 productized live。
 
 直接入口：
 
