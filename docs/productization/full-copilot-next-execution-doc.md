@@ -1,0 +1,424 @@
+# 完整可用 Copilot 后续执行文档
+
+日期：2026-04-28  
+当前目标：从“初赛 MVP 已完成”升级为“做出完整、可用、可治理、可审计的 Feishu Memory Copilot”。  
+适用方式：可以直接复制整份文档给下一轮 Codex / OpenClaw / 执行 agent 使用。
+
+## 一句话目标
+
+我们现在不再满足于“初赛完成 MVP”。接下来要把 Feishu Memory Copilot 做成一个完整可用的产品：OpenClaw Agent 能在真实任务中调用企业记忆，飞书里能完成受控搜索、候选确认、版本解释、任务前上下文预取和提醒候选审核，Copilot Core 有权限、证据、状态机、审计和健康检查闭环。
+
+## 先看这个
+
+1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
+2. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
+3. 当前最大的产品化缺口是：storage migration、audit table、真实 OpenClaw Agent runtime 验收、Feishu staging runbook、live Cognee/Ollama embedding 验证、no-overclaim 交付物审查。
+4. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
+5. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
+
+## 必读文件
+
+执行前按顺序读取：
+
+```text
+AGENTS.md
+README.md
+docs/productization/prd-completion-audit-and-gap-tasks.md
+docs/productization/complete-product-roadmap-prd.md
+docs/productization/complete-product-roadmap-test-spec.md
+docs/productization/contracts/storage-contract.md
+docs/productization/contracts/permission-contract.md
+docs/productization/contracts/audit-observability-contract.md
+docs/productization/contracts/openclaw-payload-contract.md
+docs/productization/contracts/migration-rfc.md
+docs/productization/contracts/negative-permission-test-plan.md
+docs/plans/2026-04-28-handoff.md
+docs/plans/2026-05-08-demo-readiness-handoff.md
+```
+
+如果这些文件与当前代码冲突，以当前代码和本执行文档的产品化目标为准；旧 Day1-Day7 文档只作 reference，不要回到 CLI-first / Bot-first 主线。
+
+## 当前事实基线
+
+已经完成：
+
+- `memory.search`：active-only、Top K、evidence、L0/L1/L2/L3 trace、hybrid retrieval。
+- `memory.create_candidate`：候选识别、低价值内容过滤、evidence gate、risk flags。
+- `memory.confirm` / `memory.reject`：通过 Copilot governance 状态机处理。
+- `memory.explain_versions`：冲突更新、active/superseded 版本链解释。
+- `memory.prefetch`：任务前 compact context pack，不带 raw events。
+- `heartbeat.review_due`：只生成 reminder candidate，不真实推送，不自动 active。
+- OpenClaw schema：`agent_adapters/openclaw/memory_tools.schema.json`，当前 7 个工具。
+- Feishu live sandbox：真实测试群消息进入 `memory_engine/copilot/feishu_live.py -> handle_tool_request() -> CopilotService`。
+- Demo readiness：`python3 scripts/check_demo_readiness.py --json` 已可通过。
+- Benchmark：recall、candidate、conflict、layer、prefetch、heartbeat 六类 runner 已有。
+
+仍未完成：
+
+- 生产级 storage migration：`tenant_id`、`organization_id`、`visibility_policy` 仍未真正迁入数据库事实源。
+- audit table：confirm/reject/permission deny/ingestion/heartbeat 还没有完整审计表。
+- 真实 OpenClaw Agent runtime 证据：已有 schema、examples、local bridge，但还缺独立 runtime 验收记录。
+- Feishu staging runbook：测试群 sandbox 已有，但还需整理成稳定 staging 操作手册。
+- live embedding gate：healthcheck 目前只做 configuration-only，真实 Cognee/Ollama embedding 还不是默认门禁。
+- productized live：没有生产部署、长期运行监控、完整多租户后台。
+
+## 产品完成定义
+
+“完整可用 Copilot”在本阶段不是大而全企业后台，而是满足以下条件：
+
+1. OpenClaw Agent 能真实调用 `memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、`heartbeat.review_due`。
+2. 飞书测试/预发布环境中能完成：查询当前有效结论、创建候选记忆、人工确认/拒绝、查看版本链、任务前上下文预取、提醒候选审核。
+3. Copilot Core 是唯一事实源：任何入口都不能直接改 repository 状态，必须经过 `CopilotService` / `handle_tool_request()`。
+4. 每条 active memory 都有 evidence；没有 evidence 的内容不能成为可信结论。
+5. 每次确认、拒绝、权限拒绝、真实 ingestion、提醒生成都有 audit record。
+6. 权限缺失或畸形必须 fail closed，不允许 fallback 到宽松默认。
+7. README、runbook、benchmark report、whitepaper、handoff 和飞书看板口径一致。
+
+## 执行总原则
+
+- 先补产品化硬缺口，再加新功能。
+- 先写测试和 healthcheck，再改核心状态。
+- 先走 Copilot Core，再接飞书 UI / OpenClaw runtime。
+- 真实飞书来源只进 candidate，不自动 active。
+- 所有外部副作用必须有日志、审计和可撤回路径。
+- 每完成一个阶段，都同步 README、handoff、飞书任务看板，并 commit + push。
+
+## Phase A：Storage Migration + Audit Table
+
+目标：让 Copilot Core 具备产品级事实源，不再只有 legacy scope。
+
+主要文件：
+
+```text
+memory_engine/db.py
+memory_engine/repository.py
+memory_engine/copilot/service.py
+memory_engine/copilot/governance.py
+memory_engine/copilot/permissions.py
+memory_engine/copilot/healthcheck.py
+tests/test_copilot_permissions.py
+tests/test_copilot_healthcheck.py
+docs/productization/contracts/storage-contract.md
+docs/productization/contracts/audit-observability-contract.md
+```
+
+必须完成：
+
+1. 新增或迁移字段：`tenant_id`、`organization_id`、`visibility_policy`。
+2. 新增 audit table，至少记录：
+   - `audit_id`
+   - `event_type`
+   - `tool_name`
+   - `memory_id`
+   - `candidate_id`
+   - `actor_id`
+   - `tenant_id`
+   - `organization_id`
+   - `scope`
+   - `permission_decision`
+   - `request_id`
+   - `trace_id`
+   - `created_at`
+3. `memory.confirm`、`memory.reject`、permission denied、limited ingestion、heartbeat candidate 都写 audit record。
+4. `scripts/check_copilot_health.py --json` 不再把 storage schema 报为 warning。
+5. 旧数据能兼容读取；不要破坏现有 benchmark。
+
+验收命令：
+
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_permissions tests.test_copilot_healthcheck
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
+python3 scripts/check_copilot_health.py --json
+ollama ps
+```
+
+完成标准：
+
+- healthcheck 中 `storage_schema.status=pass`。
+- audit smoke test 能证明 confirm/reject/deny 都有记录。
+- 所有旧 Copilot tests 仍通过。
+
+## Phase B：真实 OpenClaw Agent Runtime 验收
+
+目标：把 OpenClaw 产品形态从 schema/local bridge/replay 推到真实 runtime 证据。
+
+主要文件：
+
+```text
+agent_adapters/openclaw/memory_tools.schema.json
+agent_adapters/openclaw/feishu_memory_copilot.skill.md
+agent_adapters/openclaw/examples/*.json
+memory_engine/copilot/tools.py
+docs/demo-runbook.md
+docs/productization/openclaw-runtime-evidence.md
+```
+
+必须完成：
+
+1. 新增 `docs/productization/openclaw-runtime-evidence.md`。
+2. 在真实 OpenClaw Agent runtime 中至少跑通 3 条：
+   - 历史决策召回：Agent 调用 `memory.search`。
+   - 候选确认：Agent 调用 `memory.create_candidate` 后再确认或拒绝。
+   - 任务前上下文：Agent 调用 `memory.prefetch` 后生成 checklist / plan / report。
+3. 每条记录输入、输出、tool、request_id、trace_id、permission_decision、失败回退。
+4. 如果真实 runtime 不稳定，写清失败原因、fallback 到 examples/local bridge 的证据，但不能冒称已完成 runtime。
+
+验收命令：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 scripts/check_demo_readiness.py --json
+python3 -m unittest tests.test_copilot_tools tests.test_demo_seed tests.test_demo_readiness
+git diff --check
+ollama ps
+```
+
+完成标准：
+
+- runtime evidence 文档可给评委或队友复现。
+- 至少 3 条真实 runtime flow 有证据。
+- README 不再只依赖 local bridge 表述。
+
+## Phase C：Feishu Staging Runbook
+
+目标：把受控飞书测试群 live sandbox 变成可复现、可交接、可停止的 staging 流程。
+
+主要文件：
+
+```text
+scripts/start_copilot_feishu_live.sh
+memory_engine/copilot/feishu_live.py
+memory_engine/cli.py
+docs/reference/local-lark-cli-setup.md
+docs/productization/feishu-staging-runbook.md
+tests/test_copilot_feishu_live.py
+```
+
+必须完成：
+
+1. 新增 `docs/productization/feishu-staging-runbook.md`。
+2. 写清如何设置 allowlist 群聊、reviewer、日志路径、启动命令、停止命令。
+3. 写清测试顺序：
+   - `/health`
+   - `/remember ...`
+   - `/confirm <candidate_id>`
+   - 普通 @ 提问触发 `memory.search`
+   - `/reject <candidate_id>`
+   - 权限失败样例
+4. 明确真实 chat_id、open_id、token 只保存在本机环境，不写仓库。
+5. 所有真实飞书来源仍 candidate-only，不自动 active。
+
+验收命令：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 -m unittest tests.test_copilot_feishu_live
+python3 -m compileall memory_engine scripts
+git diff --check
+ollama ps
+```
+
+完成标准：
+
+- 新机器/新 agent 能按 runbook 启动 staging。
+- 权限不足、群聊不在 allowlist、非 reviewer 操作都有明确行为。
+- README 和 handoff 不写成全量 Feishu workspace ingestion。
+
+## Phase D：Live Cognee / Ollama Embedding Gate
+
+目标：把 embedding 从 configuration-only warning 推进到可选 live check，并保持可清理。
+
+主要文件：
+
+```text
+scripts/check_embedding_provider.py
+scripts/spike_cognee_local.py
+memory_engine/copilot/cognee_adapter.py
+memory_engine/copilot/embedding-provider.lock
+docs/reference/local-windows-cognee-embedding-setup.md
+```
+
+必须完成：
+
+1. 明确 live embedding check 与 fallback check 的区别。
+2. 真实运行 provider 检查时必须执行 `ollama ps`。
+3. 如果拉起 `qwen3-embedding:0.6b-fp16` 或其他本项目模型，验证结束后必须停止，除非文档写明保留原因。
+4. healthcheck 继续允许 configuration-only，但 productized readiness 要有 live embedding gate 的结果。
+
+验收命令：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 scripts/check_embedding_provider.py
+python3 scripts/spike_cognee_local.py --dry-run
+ollama ps
+git diff --check
+```
+
+完成标准：
+
+- 成功时记录 live provider 维度、模型名、endpoint。
+- 失败时记录 fallback 和原因。
+- 最终 `ollama ps` 无本项目模型驻留，或文档写明为什么保留。
+
+## Phase E：Product QA + No-overclaim 审查
+
+目标：让所有交付物讲同一个产品故事。
+
+主要文件：
+
+```text
+README.md
+docs/demo-runbook.md
+docs/benchmark-report.md
+docs/memory-definition-and-architecture-whitepaper.md
+docs/productization/prd-completion-audit-and-gap-tasks.md
+docs/productization/full-copilot-next-execution-doc.md
+docs/plans/*handoff.md
+```
+
+必须检查：
+
+- 不把 replay 写成 live。
+- 不把 live sandbox 写成生产部署。
+- 不把 limited ingestion 写成全量 workspace ingestion。
+- 不把 configuration-only embedding 写成 live embedding 已通过。
+- 不把 local bridge 写成真实 OpenClaw runtime，除非 Phase B 已补证据。
+- 不把 candidate-only 写成自动 active。
+
+验收命令：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 scripts/check_demo_readiness.py --json
+python3 scripts/check_copilot_health.py --json
+git diff --check
+ollama ps
+```
+
+完成标准：
+
+- README、runbook、benchmark report、whitepaper、handoff 口径一致。
+- 每个未完成项都有下一步任务入口。
+- 飞书共享看板与 README 顶部任务一致。
+
+## 每轮执行前固定动作
+
+每次新阶段开始前先做：
+
+```bash
+date '+%Y-%m-%d %H:%M:%S %Z'
+git status --short
+python3 scripts/check_openclaw_version.py
+```
+
+然后读取：
+
+```text
+AGENTS.md
+README.md
+docs/productization/full-copilot-next-execution-doc.md
+docs/productization/prd-completion-audit-and-gap-tasks.md
+当前阶段相关 contract / runbook / handoff
+```
+
+如果工作树有 `.obsidian/` 或 `docs/pr-reviews/` 未跟踪，默认视为用户/历史产物，不要删除，不要提交，除非用户明确要求。
+
+## 每轮完成后固定动作
+
+每个阶段完成后必须：
+
+1. 更新 README 顶部任务区。
+2. 更新当前 handoff 或新增阶段 handoff。
+3. 更新飞书共享任务看板：
+   - 完成项：`状态=已完成`，`完成情况-程俊豪=true`。
+   - 后续项：`状态=待启动`，`完成情况-程俊豪=false`。
+4. 运行对应验证命令。
+5. 运行 `ollama ps` 并记录清理状态。
+6. 提交并推送：
+
+```bash
+git status --short
+python3 scripts/check_openclaw_version.py
+git diff --check
+git add <本阶段相关文件>
+git commit
+git push origin HEAD
+```
+
+commit message 必须用 Lore protocol，首行写“为什么做这次变更”，并记录 `Tested:` / `Not-tested:`。
+
+## 可以直接复制给下一轮 agent 的执行提示词
+
+```text
+你现在接手 /Users/junhaocheng/feishu_ai_challenge。
+
+当前目标已经从“初赛完成 MVP”升级为“做出完整、可用、可治理、可审计的 Feishu Memory Copilot”。不要重复做 MVP demo，不要回到 CLI-first / Bot-first 主线。
+
+执行前先确认当前日期、git status、OpenClaw 版本：
+date '+%Y-%m-%d %H:%M:%S %Z'
+git status --short
+python3 scripts/check_openclaw_version.py
+
+然后按顺序读取：
+AGENTS.md
+README.md
+docs/productization/full-copilot-next-execution-doc.md
+docs/productization/prd-completion-audit-and-gap-tasks.md
+docs/productization/complete-product-roadmap-prd.md
+docs/productization/complete-product-roadmap-test-spec.md
+docs/productization/contracts/storage-contract.md
+docs/productization/contracts/permission-contract.md
+docs/productization/contracts/audit-observability-contract.md
+docs/productization/contracts/openclaw-payload-contract.md
+docs/productization/contracts/migration-rfc.md
+docs/productization/contracts/negative-permission-test-plan.md
+docs/plans/2026-04-28-handoff.md
+docs/plans/2026-05-08-demo-readiness-handoff.md
+
+优先执行 Phase A：Storage Migration + Audit Table。
+
+目标：
+1. 补齐 tenant_id、organization_id、visibility_policy 的存储/迁移兼容。
+2. 新增 audit table。
+3. 让 memory.confirm、memory.reject、permission denied、limited ingestion、heartbeat candidate 都写 audit record。
+4. 让 python3 scripts/check_copilot_health.py --json 不再报 storage_schema warning。
+
+必须遵守：
+- Copilot Core 是事实源，所有入口必须走 CopilotService / handle_tool_request。
+- 真实飞书来源只进入 candidate，不能自动 active。
+- 缺失或畸形 permission 必须 fail closed。
+- 不要把 demo replay、dry-run、测试群 sandbox 写成 productized live。
+- 不要改 OpenClaw 版本，保持 2026.4.24。
+
+建议文件：
+memory_engine/db.py
+memory_engine/repository.py
+memory_engine/copilot/service.py
+memory_engine/copilot/governance.py
+memory_engine/copilot/permissions.py
+memory_engine/copilot/healthcheck.py
+tests/test_copilot_permissions.py
+tests/test_copilot_healthcheck.py
+tests/test_copilot_tools.py
+
+验收命令：
+python3 scripts/check_openclaw_version.py
+git diff --check
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_permissions tests.test_copilot_healthcheck
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
+python3 scripts/check_copilot_health.py --json
+ollama ps
+
+完成后：
+1. 更新 README 顶部任务区。
+2. 更新或新增 handoff。
+3. 同步飞书共享任务看板。
+4. git status --short 确认只提交相关文件。
+5. 用 Lore protocol commit 并 push origin HEAD。
+6. 最终报告写清：改了哪些文件、验证结果、Ollama 清理状态、仍未完成的风险。
+```
