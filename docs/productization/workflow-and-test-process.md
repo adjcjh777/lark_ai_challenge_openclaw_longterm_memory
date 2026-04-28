@@ -232,7 +232,7 @@ python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json
 
 遇到下面情况要停下来写清风险，不要硬说完成：
 
-- `openclaw health --json` 的 Feishu channel 仍是 `running=false`。
+- `openclaw channels status --probe --json` 和 gateway 日志都不能证明 Feishu websocket running；如果只是 `openclaw health --json` 总览 running 字段异常，把它记录为 health 一致性 warning，不要直接写成失败或成功。
 - `memory.*` 没有出现在 OpenClaw 原生工具列表。
 - lark-cli / Feishu API 权限失败，无法写真实空间。
 - Cognee 或 Ollama 不可用，只能走 repository fallback。

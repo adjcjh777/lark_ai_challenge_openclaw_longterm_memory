@@ -88,7 +88,7 @@ Phase D live embedding gate 已通过：python3 scripts/check_live_embedding_gat
 
 ## 下一步从哪里开始
 
-Phase E：Product QA + No-overclaim 审查已完成。后续 first-class OpenClaw 原生工具注册已补本机证据。若继续产品化，优先补 OpenClaw Feishu websocket running 证据和 productized live。
+Phase E：Product QA + No-overclaim 审查已完成。后续 first-class OpenClaw 原生工具注册和 OpenClaw Feishu websocket running 本机 staging 证据已补。若继续产品化，优先补真实权限映射、Feishu Agent tool routing 和 productized live。
 
 直接入口：
 

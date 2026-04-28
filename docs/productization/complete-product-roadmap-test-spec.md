@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`；后续 first-class OpenClaw 原生工具注册已补本机证据，见 `docs/productization/first-class-openclaw-tools-handoff.md`。后续若继续推进，优先补 OpenClaw Feishu websocket running 证据和 productized live；当前不宣称这些已经完成。
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`；后续 first-class OpenClaw 原生工具注册已补本机证据，见 `docs/productization/first-class-openclaw-tools-handoff.md`；OpenClaw Feishu websocket running 本机 staging 证据已补，见 `docs/productization/openclaw-feishu-websocket-handoff.md`。后续若继续推进，优先补真实权限映射、Feishu Agent tool routing 和 productized live；当前不宣称这些已经完成。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
@@ -106,7 +106,7 @@ Checks:
 - [x] Negative cases 进入测试计划。
 - [x] Architect/Critic 无 blocker。
 
-2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；Phase B 真实 OpenClaw Agent runtime 受控证据也已完成；后续 first-class OpenClaw 原生工具注册已补本机证据；仍不宣称 Feishu websocket 已 running。
+2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；Phase B 真实 OpenClaw Agent runtime 受控证据也已完成；后续 first-class OpenClaw 原生工具注册和 Feishu websocket staging running 证据已补；仍不宣称 production live 或真实 Feishu DM 已稳定进入本项目 first-class `memory.*` tool routing。
 
 Commands:
 
@@ -146,7 +146,7 @@ Checks:
 - [x] missing/malformed permission context fail closed。
 - [x] 文档明确不是 Feishu live ingestion。
 
-当前状态：permission fail-closed 和 OpenClaw live bridge 已完成，见 commit `cb21bc7`。Phase B runtime evidence 已补：OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用证据脚本，三条 Copilot flow 全部 `ok=true`。后续 first-class OpenClaw 原生工具注册已补本机证据。仍不是 Feishu live ingestion，也不宣称 Feishu websocket 已 running。
+当前状态：permission fail-closed 和 OpenClaw live bridge 已完成，见 commit `cb21bc7`。Phase B runtime evidence 已补：OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用证据脚本，三条 Copilot flow 全部 `ok=true`。后续 first-class OpenClaw 原生工具注册和 Feishu websocket staging running 证据已补。本阶段仍不是生产 Feishu live ingestion；真实 Feishu DM 到本项目 first-class `memory.*` tool routing 仍需继续验收。
 
 Commands:
 

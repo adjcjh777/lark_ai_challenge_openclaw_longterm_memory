@@ -64,11 +64,11 @@ git diff --check
 ollama ps
 ```
 
-### 2. P0：补 OpenClaw Feishu websocket running 证据
+### 2. P0：补 OpenClaw Feishu websocket running 证据（已完成本机 staging 证据）
 
 要做什么：让 OpenClaw Feishu websocket 单独接管 `Feishu Memory Engine bot`，并证明没有 lark-cli sandbox 或 legacy listener 同时消费同一个 bot。
 
-为什么要做：当前 `openclaw health --json` 显示 Feishu channel configured/enabled 且 credential probe OK，但 `running=false`。上线前必须证明真实飞书消息能走 OpenClaw Agent runtime。
+为什么要做：上线前必须证明真实飞书消息能走 OpenClaw Agent runtime，并且同一个 bot 没有被 lark-cli sandbox 或 legacy listener 同时消费。
 
 主要位置：
 
@@ -80,18 +80,28 @@ ollama ps
 完成标准：
 
 - `python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket` 通过。
-- `openclaw health --json --timeout 5000` 显示 Feishu channel `running=true`。
-- 真实测试群消息进入 OpenClaw Agent，再调用 memory tool。
+- `openclaw channels status --probe --json` 显示 Feishu channel 和 default account `running=true`。
+- gateway 日志能看到 websocket start、真实 inbound message、dispatching to agent、dispatch complete。
+- 真实测试消息进入 OpenClaw Agent；如果 Agent 没有自然调用本项目 first-class `memory.*` 工具，要记录为后续 routing 风险。
 - 同一时间没有 `copilot-feishu listen`、legacy `feishu listen` 或 direct `lark-cli event +subscribe` 冲突。
 - 真实 chat_id、open_id、token 不写入仓库。
+
+已完成证据：
+
+- 新增 `scripts/check_openclaw_feishu_websocket.py`，聚合单监听检查、`openclaw channels status --probe --json`、`openclaw health --json --timeout 5000` 和 Feishu channel 日志，输出脱敏后的 staging 证据。
+- 新增 `tests/test_openclaw_feishu_websocket_evidence.py`，覆盖 `channels.status` running、`health` running 字段不一致时的 warning、以及飞书 ID 脱敏。
+- `python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45` 返回 `ok=true`，`pass=4`，`warning=1`，`fail=0`；`channels_status.channel_running=true`、`account_running=true`、`probe_ok=true`。
+- 真实 DM 进入 OpenClaw Feishu session，gateway 日志显示 `received message`、`dispatching to agent`、`dispatch complete`。
+- 边界：OpenClaw 2026.4.24 的 `openclaw health --json` 总览仍把 Feishu running 报为 `false`，本阶段以 `channels.status` 和 gateway 日志作为 running 证据，并把不一致写为 warning。
+- 边界：真实 DM 当前触发的是 OpenClaw 内置 `memory_search`，不是本项目 first-class `memory.search` runner；后续另开 Feishu Agent tool routing 任务。
 
 建议验证：
 
 ```bash
 python3 scripts/check_openclaw_version.py
 python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
-openclaw health --json --timeout 5000
-python3 -m unittest tests.test_feishu_listener_guard tests.test_copilot_feishu_live
+python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
+python3 -m unittest tests.test_openclaw_feishu_websocket_evidence tests.test_feishu_listener_guard
 git diff --check
 ollama ps
 ```

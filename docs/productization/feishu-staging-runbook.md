@@ -1,7 +1,7 @@
 # Feishu Staging Runbook
 
 日期：2026-04-28  
-状态：已补单监听测试流程；仍不是生产部署、全量 Feishu workspace ingestion 或 productized live。
+状态：已补单监听测试流程和 OpenClaw Feishu websocket running 本机 staging 证据；仍不是生产部署、全量 Feishu workspace ingestion 或 productized live。
 
 ## 先看这个
 
@@ -9,7 +9,8 @@
 2. 当前推荐产品化路线是 OpenClaw-native；如果 OpenClaw Feishu websocket 已接管 bot，就不要再启动 `lark-cli event +subscribe`、`scripts/start_copilot_feishu_live.sh` 或 `scripts/start_feishu_bot.sh`。
 3. 如果需要用仓库内 lark-cli sandbox 做回归，只能启动新的 `scripts/start_copilot_feishu_live.sh`；旧 `scripts/start_feishu_bot.sh` 只保留为 legacy fallback。
 4. 真实群聊 ID、open_id、token 和 app secret 只放本机环境变量或 lark-cli/OpenClaw 配置，不写入仓库。
-5. 遇到监听冲突时，先停止多余监听，再重跑 preflight；不要靠同时开多个监听“碰运气”验收。
+5. OpenClaw 2026.4.24 中 `openclaw health --json` 的 Feishu running 总览字段可能仍为 `false`；当前 running 证据以 `openclaw channels status --probe --json` 和 gateway 日志为准，并把不一致写为 warning。
+6. 遇到监听冲突时，先停止多余监听，再重跑 preflight；不要靠同时开多个监听“碰运气”验收。
 
 ## 单监听模式
 
@@ -31,6 +32,7 @@ python3 scripts/check_openclaw_version.py
 
 ```bash
 python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
+python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
 ```
 
 如果准备让仓库内 Copilot lark-cli sandbox 接管 bot：
@@ -52,26 +54,35 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener legacy-lar
 - 直接运行的 `lark-cli event +subscribe`
 - 命令行可识别的 OpenClaw Feishu / Lark websocket 进程
 
-如果只看到 `openclaw-gateway`，脚本会给 warning：进程列表无法判断该 gateway 是否已经启用 Feishu websocket。此时按人工事实决定：如果 OpenClaw 正在接收同一个 bot 的飞书事件，就不要再启动仓库内 lark-cli 监听。
+如果只看到 `openclaw-gateway`，单监听脚本会给 warning：进程列表无法判断该 gateway 是否已经启用 Feishu websocket。此时继续运行 `scripts/check_openclaw_feishu_websocket.py`，用 `channels.status`、credential probe 和 Feishu channel logs 判断是否真的 running；如果 OpenClaw 正在接收同一个 bot 的飞书事件，就不要再启动仓库内 lark-cli 监听。
 
 ## 推荐测试顺序
 
 ### A. OpenClaw Feishu websocket owns the bot
 
-用于 Phase B 真实 OpenClaw Agent runtime 证据。
+用于 OpenClaw-native 真实入口验收和后期打磨 staging 证据。
 
 1. 运行单监听检查：
 
 ```bash
 python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
+python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
 ```
 
 2. 确认没有 legacy `memory_engine feishu listen`、`memory_engine copilot-feishu listen` 或直接 `lark-cli event +subscribe`。
-3. 在 OpenClaw Agent 里跑三条 flow：
+3. 检查 `check_openclaw_feishu_websocket.py` 结果：
+   - `ok=true`
+   - `channels_status.channel_running=true`
+   - `channels_status.account_running=true`
+   - `channels_status.probe_ok=true`
+   - `feishu_logs.missing_required_events=[]`
+4. 在 OpenClaw Agent 里跑三条 flow：
    - 历史决策召回：触发 `memory.search`。
    - 候选确认：触发 `memory.create_candidate`，再触发 `memory.confirm` 或 `memory.reject`。
    - 任务前上下文：触发 `memory.prefetch`，让 Agent 输出 checklist / plan / report。
-4. 把每条 flow 的 input、output、tool、request_id、trace_id、permission_decision 和失败回退写入 `docs/productization/openclaw-runtime-evidence.md`。
+5. 把每条 flow 的 input、output、tool、request_id、trace_id、permission_decision 和失败回退写入 `docs/productization/openclaw-runtime-evidence.md` 或对应 handoff。
+
+已知边界：2026-04-28 本机 staging 证据中，真实 DM 已进入 OpenClaw Agent dispatch，但工具调用落到 OpenClaw 内置 `memory_search`，还不是本项目 first-class `memory.search` runner。这个不影响 websocket running 证据，但不能写成 Feishu DM 已完成项目 `memory.*` tool routing。
 
 ### B. Copilot lark-cli sandbox owns the bot
 
