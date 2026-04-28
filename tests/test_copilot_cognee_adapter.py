@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from memory_engine.copilot.cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter
+from memory_engine.copilot.cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter, curated_memory_document
 
 
 class FakeCogneeClient:
@@ -83,6 +83,51 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", kwargs["dataset_name"])
         self.assertEqual("生产部署必须加 --canary", args[0])
 
+    def test_sync_curated_memory_adds_ledger_metadata_then_cognifies(self) -> None:
+        client = FakeCogneeClient()
+        adapter = CogneeMemoryAdapter(client=client)
+        memory = {
+            "memory_id": "mem_1",
+            "version_id": "ver_1",
+            "version": 1,
+            "type": "workflow",
+            "subject": "生产部署",
+            "current_value": "生产部署必须加 --canary --region cn-shanghai",
+            "summary": "确认后的生产部署规则",
+            "status": "active",
+            "evidence": {
+                "source_type": "unit_test",
+                "source_id": "evt_1",
+                "quote": "决定：生产部署必须加 --canary --region cn-shanghai。",
+            },
+        }
+
+        result = adapter.sync_curated_memory("project:feishu_ai_challenge", memory)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(["add", "cognify"], [call[0] for call in client.calls])
+        add_args, add_kwargs = client.calls[0][1], client.calls[0][2]
+        self.assertIn("current_value: 生产部署必须加 --canary", add_args[0])
+        self.assertNotIn("raw_json", add_args[0])
+        self.assertEqual("mem_1", add_kwargs["metadata"]["memory_id"])
+        self.assertEqual("copilot_ledger", add_kwargs["metadata"]["provenance"])
+        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", client.calls[1][2]["dataset_name"])
+
+    def test_curated_memory_document_uses_only_curated_fields(self) -> None:
+        document = curated_memory_document(
+            {
+                "type": "decision",
+                "subject": "评审流程",
+                "current_value": "候选记忆必须人工确认",
+                "raw_json": {"token": "should_not_leak"},
+                "evidence": {"quote": "决定：候选记忆必须人工确认。"},
+            }
+        )
+
+        self.assertIn("current_value: 候选记忆必须人工确认", document)
+        self.assertIn("evidence_quote: 决定：候选记忆必须人工确认。", document)
+        self.assertNotIn("should_not_leak", document)
+
     def test_remember_candidate_text_falls_back_to_add_when_sdk_lacks_remember(self) -> None:
         class LegacyCogneeClient:
             def __init__(self) -> None:
@@ -142,6 +187,19 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertTrue(result["dry_run"])
         self.assertFalse(result["deleted"])
         self.assertEqual([], client.calls)
+
+    def test_sync_memory_withdrawal_forgets_memory_in_scope_dataset(self) -> None:
+        client = FakeCogneeClient()
+        adapter = CogneeMemoryAdapter(client=client)
+
+        result = adapter.sync_memory_withdrawal("project:feishu_ai_challenge", "mem_1", reason="rejected")
+
+        self.assertTrue(result["ok"])
+        method, args, kwargs = client.calls[-1]
+        self.assertEqual("forget", method)
+        self.assertEqual(("mem_1",), args)
+        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", kwargs["dataset_name"])
+        self.assertEqual({"reason": "rejected"}, kwargs["metadata"])
 
 
 if __name__ == "__main__":

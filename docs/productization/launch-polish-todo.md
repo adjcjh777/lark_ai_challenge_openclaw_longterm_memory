@@ -229,7 +229,7 @@ git diff --check
 ollama ps
 ```
 
-### 6. P1：让 Cognee 真正进入主路径
+### 6. P1：让 Cognee 真正进入主路径（已完成本地可控闭环）
 
 要做什么：把 Cognee 从可用 adapter / live gate，推进为可控、可回退、可观测的 memory substrate。
 
@@ -245,10 +245,19 @@ ollama ps
 
 完成标准：
 
-- dataset 命名、add/cognify/search、增量更新、删除和撤权同步有固定流程。
-- Cognee result 必须能匹配本地 ledger；未匹配结果不能进入正式 answer。
-- Cognee 不可用时 repository fallback 清楚可见。
-- live embedding gate 和 healthcheck 的边界清楚：配置检查、真实 provider 检查、长期服务三者不混用。
+- 已完成：dataset 命名、add/cognify/search、增量更新、删除和撤权同步有固定流程。
+- 已完成：confirm 后只把 curated memory fields 和 ledger metadata 同步给 Cognee，不向量化全部 raw events。
+- 已完成：Cognee result 必须能匹配本地 ledger；未匹配结果不能进入正式 answer。
+- 已完成：Cognee 不可用或同步失败时 repository fallback 清楚可见，主流程不崩溃。
+- 已完成：live embedding gate 和 healthcheck 的边界清楚：配置检查、真实 provider 检查、长期服务三者不混用。
+- 边界：本阶段不是长期 embedding 服务，不是 productized live。
+
+已完成证据：
+
+- `memory_engine/copilot/cognee_adapter.py` 新增 `sync_curated_memory()` 和 `sync_memory_withdrawal()`，固定 add -> cognify、forget 撤回和 scoped dataset 命名。
+- `memory_engine/copilot/service.py` 在 `memory.confirm` 成功后写入 `cognee_sync` 状态；在 `memory.reject` 成功后同步 withdrawal；失败时返回 `fallback_used` 并保留 repository ledger。
+- `memory_engine/copilot/retrieval.py` 已要求 Cognee result 匹配本地 ledger；未匹配结果只进入 trace note。
+- 新增 [Cognee 主路径 handoff](cognee-main-path-handoff.md)。
 
 建议验证：
 

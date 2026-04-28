@@ -92,6 +92,71 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertEqual("active", recalled["status"])
         self.assertIn("--canary", recalled["answer"])
         self.assertIn("生产部署必须加", recalled["source"]["quote"])
+        self.assertEqual("skipped", confirmed["cognee_sync"]["status"])
+        self.assertEqual("repository_ledger", confirmed["cognee_sync"]["fallback"])
+
+    def test_confirmed_memory_syncs_curated_payload_to_configured_cognee(self) -> None:
+        class FakeCogneeAdapter:
+            is_configured = True
+
+            def __init__(self) -> None:
+                self.synced: list[tuple[str, dict[str, object]]] = []
+
+            def sync_curated_memory(self, scope: str, memory: dict[str, object]) -> dict[str, object]:
+                self.synced.append((scope, memory))
+                return {
+                    "ok": True,
+                    "dataset_name": "feishu_memory_copilot_project_feishu_ai_challenge",
+                    "memory_id": memory["memory_id"],
+                    "version": memory["version"],
+                }
+
+        adapter = FakeCogneeAdapter()
+        service = CopilotService(repository=self.repo, cognee_adapter=adapter)  # type: ignore[arg-type]
+        created = service.create_candidate(candidate_request("决定：生产部署必须加 --canary --region cn-shanghai。"))
+
+        confirmed = service.confirm(
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+
+        self.assertTrue(confirmed["ok"])
+        self.assertEqual("pass", confirmed["cognee_sync"]["status"])
+        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", confirmed["cognee_sync"]["dataset_name"])
+        self.assertEqual(1, len(adapter.synced))
+        _, synced_memory = adapter.synced[0]
+        self.assertEqual("active", synced_memory["status"])
+        self.assertEqual("unit_test", synced_memory["evidence"]["source_type"])
+
+    def test_cognee_sync_failure_keeps_confirmed_memory_in_repository_fallback(self) -> None:
+        class FailingCogneeAdapter:
+            is_configured = True
+
+            def sync_curated_memory(self, scope: str, memory: dict[str, object]) -> dict[str, object]:
+                raise RuntimeError("cognee down")
+
+        service = CopilotService(repository=self.repo, cognee_adapter=FailingCogneeAdapter())  # type: ignore[arg-type]
+        created = service.create_candidate(candidate_request("决定：Benchmark 报告必须保留 evidence coverage。"))
+
+        confirmed = service.confirm(
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+
+        self.assertTrue(confirmed["ok"])
+        self.assertEqual("fallback_used", confirmed["cognee_sync"]["status"])
+        self.assertEqual("repository_ledger", confirmed["cognee_sync"]["fallback"])
+        self.assertIsNotNone(self.repo.recall(SCOPE, "Benchmark 报告 evidence"))
 
     def test_reject_keeps_candidate_out_of_recall(self) -> None:
         created = self.service.create_candidate(candidate_request("规则：OpenClaw 固定 2026.4.24，不要随意升级。"))
@@ -108,7 +173,41 @@ class CopilotGovernanceTest(unittest.TestCase):
 
         self.assertTrue(rejected["ok"])
         self.assertEqual("rejected", rejected["action"])
+        self.assertEqual("skipped", rejected["cognee_sync"]["status"])
         self.assertIsNone(self.repo.recall(SCOPE, "OpenClaw 版本"))
+
+    def test_reject_with_configured_cognee_withdraws_candidate_from_dataset(self) -> None:
+        class FakeCogneeAdapter:
+            is_configured = True
+
+            def __init__(self) -> None:
+                self.withdrawn: list[tuple[str, str, dict[str, object]]] = []
+
+            def sync_memory_withdrawal(self, scope: str, memory_id: str, **metadata: object) -> dict[str, object]:
+                self.withdrawn.append((scope, memory_id, metadata))
+                return {
+                    "ok": True,
+                    "dataset_name": "feishu_memory_copilot_project_feishu_ai_challenge",
+                    "memory_id": memory_id,
+                }
+
+        adapter = FakeCogneeAdapter()
+        service = CopilotService(repository=self.repo, cognee_adapter=adapter)  # type: ignore[arg-type]
+        created = service.create_candidate(candidate_request("规则：OpenClaw 固定 2026.4.24，不要随意升级。"))
+
+        rejected = service.reject(
+            RejectRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="测试拒绝",
+                current_context=current_context("memory.reject"),
+            )
+        )
+
+        self.assertTrue(rejected["ok"])
+        self.assertEqual("pass", rejected["cognee_sync"]["status"])
+        self.assertEqual([(SCOPE, created["memory_id"], {"candidate_id": created["candidate_id"], "action": "rejected", "provenance": "copilot_ledger"})], adapter.withdrawn)
 
     def test_low_signal_text_is_ignored(self) -> None:
         result = self.service.create_candidate(candidate_request("大家下午三点喝咖啡。"))

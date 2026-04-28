@@ -117,6 +117,8 @@ class CopilotService:
         if permission_denied is not None:
             return permission_denied
         response = CopilotGovernance(self._repository()).confirm(request)
+        if response.get("ok"):
+            response["cognee_sync"] = self._sync_confirmed_memory_to_cognee(request.scope, response)
         self._record_audit(
             "memory.confirm",
             request.scope,
@@ -140,6 +142,8 @@ class CopilotService:
         if permission_denied is not None:
             return permission_denied
         response = CopilotGovernance(self._repository()).reject(request)
+        if response.get("ok"):
+            response["cognee_sync"] = self._sync_withdrawn_memory_from_cognee(request.scope, response)
         self._record_audit(
             "memory.reject",
             request.scope,
@@ -321,6 +325,55 @@ class CopilotService:
         )
         with repo.conn:
             repo.record_audit_event(**audit)
+
+    def _sync_confirmed_memory_to_cognee(self, scope: str, response: dict[str, object]) -> dict[str, object]:
+        if self.cognee_adapter is None or not self.cognee_adapter.is_configured:
+            return {"status": "skipped", "reason": "cognee_adapter_unavailable", "fallback": "repository_ledger"}
+        memory = response.get("memory")
+        if not isinstance(memory, dict):
+            return {"status": "skipped", "reason": "memory_payload_missing", "fallback": "repository_ledger"}
+        try:
+            result = self.cognee_adapter.sync_curated_memory(scope, memory)
+        except Exception as exc:
+            return {
+                "status": "fallback_used",
+                "reason": f"cognee_sync_failed:{exc.__class__.__name__}",
+                "fallback": "repository_ledger",
+            }
+        return {
+            "status": "pass",
+            "dataset_name": result.get("dataset_name"),
+            "memory_id": result.get("memory_id"),
+            "version": result.get("version"),
+            "fallback": None,
+        }
+
+    def _sync_withdrawn_memory_from_cognee(self, scope: str, response: dict[str, object]) -> dict[str, object]:
+        if self.cognee_adapter is None or not self.cognee_adapter.is_configured:
+            return {"status": "skipped", "reason": "cognee_adapter_unavailable", "fallback": "repository_ledger"}
+        memory_id = response.get("memory_id")
+        if not isinstance(memory_id, str) or not memory_id:
+            return {"status": "skipped", "reason": "memory_id_missing", "fallback": "repository_ledger"}
+        try:
+            result = self.cognee_adapter.sync_memory_withdrawal(
+                scope,
+                memory_id,
+                candidate_id=response.get("candidate_id"),
+                action=response.get("action"),
+                provenance="copilot_ledger",
+            )
+        except Exception as exc:
+            return {
+                "status": "fallback_used",
+                "reason": f"cognee_withdrawal_failed:{exc.__class__.__name__}",
+                "fallback": "repository_ledger",
+            }
+        return {
+            "status": "pass",
+            "dataset_name": result.get("dataset_name"),
+            "memory_id": result.get("memory_id"),
+            "fallback": None,
+        }
 
 
 def _working_context_only(context: dict[str, object]) -> dict[str, object]:

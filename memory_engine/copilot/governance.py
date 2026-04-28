@@ -481,6 +481,8 @@ class CopilotGovernance:
         }
 
     def _status_response(self, action: str, memory: Any, *, candidate_id: str) -> dict[str, Any]:
+        evidence = self._latest_evidence(str(memory["id"]), memory["active_version_id"])
+        version = self._version_no(str(memory["id"]))
         return {
             "ok": True,
             "action": action,
@@ -494,7 +496,30 @@ class CopilotGovernance:
                 "current_value": str(memory["current_value"]),
                 "status": str(memory["status"]),
                 "version_id": memory["active_version_id"],
+                "version": version,
+                "summary": memory["reason"],
+                "evidence": evidence,
             },
+        }
+
+    def _latest_evidence(self, memory_id: str, version_id: str | None) -> dict[str, Any]:
+        row = self.repository.conn.execute(
+            """
+            SELECT source_type, source_event_id, quote
+            FROM memory_evidence
+            WHERE memory_id = ?
+              AND version_id IS ?
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (memory_id, version_id),
+        ).fetchone()
+        if row is None:
+            return {"source_type": "unknown", "source_id": None, "quote": None}
+        return {
+            "source_type": row["source_type"],
+            "source_id": row["source_event_id"],
+            "quote": row["quote"],
         }
 
     def _candidate_payload(

@@ -74,6 +74,36 @@ class CogneeMemoryAdapter:
             return self.remember(scope, content, metadata=metadata)
         return self.add_raw_event(scope, content, **metadata)
 
+    def sync_curated_memory(self, scope: str, memory: dict[str, Any]) -> dict[str, Any]:
+        """Upsert a Copilot-owned active memory into the scope dataset.
+
+        Cognee is an optional recall channel, so this method sends only curated
+        memory fields plus ledger metadata. Raw event payloads stay in SQLite.
+        """
+
+        document = curated_memory_document(memory)
+        metadata = _curated_memory_metadata(memory)
+        add_result = self.add(scope, document, metadata=metadata)
+        cognify_result = self.cognify(scope)
+        return {
+            "ok": True,
+            "dataset_name": self.dataset_for_scope(scope),
+            "memory_id": metadata.get("memory_id"),
+            "version": metadata.get("version"),
+            "document": document,
+            "add_result": add_result,
+            "cognify_result": cognify_result,
+        }
+
+    def sync_memory_withdrawal(self, scope: str, memory_id: str, **metadata: Any) -> dict[str, Any]:
+        result = self.forget(scope, memory_id, metadata=metadata)
+        return {
+            "ok": True,
+            "dataset_name": self.dataset_for_scope(scope),
+            "memory_id": memory_id,
+            "result": result,
+        }
+
     def delete_scope(self, scope: str, *, dry_run: bool = True) -> dict[str, Any]:
         dataset_name = self.dataset_for_scope(scope)
         if dry_run:
@@ -165,3 +195,35 @@ class CogneeMemoryAdapter:
 
     async def _normalize_async_search_results(self, raw_results: Any) -> list[dict[str, Any]]:
         return self._normalize_search_results(await raw_results)
+
+
+def curated_memory_document(memory: dict[str, Any]) -> str:
+    evidence = memory.get("evidence") if isinstance(memory.get("evidence"), dict) else {}
+    parts = [
+        f"type: {memory.get('type') or 'unknown'}",
+        f"subject: {memory.get('subject') or 'unknown'}",
+        f"current_value: {memory.get('current_value') or ''}",
+    ]
+    summary = memory.get("summary") or memory.get("reason")
+    if summary:
+        parts.append(f"summary: {summary}")
+    quote = evidence.get("quote") if isinstance(evidence, dict) else None
+    if quote:
+        parts.append(f"evidence_quote: {quote}")
+    return "\n".join(str(part) for part in parts)
+
+
+def _curated_memory_metadata(memory: dict[str, Any]) -> dict[str, Any]:
+    evidence = memory.get("evidence") if isinstance(memory.get("evidence"), dict) else {}
+    return {
+        "memory_id": memory.get("memory_id"),
+        "version_id": memory.get("version_id"),
+        "version": memory.get("version"),
+        "status": memory.get("status"),
+        "type": memory.get("type"),
+        "subject": memory.get("subject"),
+        "source_type": evidence.get("source_type") if isinstance(evidence, dict) else None,
+        "source_id": evidence.get("source_id") if isinstance(evidence, dict) else None,
+        "quote": evidence.get("quote") if isinstance(evidence, dict) else None,
+        "provenance": "copilot_ledger",
+    }

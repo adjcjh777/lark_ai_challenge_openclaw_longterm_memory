@@ -59,6 +59,7 @@ docs/productization/feishu-single-listener-handoff.md
 - Feishu 单监听 preflight：`scripts/check_feishu_listener_singleton.py` 会在 repo 内 lark-cli listener 启动前拦截 legacy / copilot / direct lark-cli / 可识别 OpenClaw websocket 冲突；OpenClaw websocket、Copilot lark-cli sandbox、legacy fallback 三选一。
 - Phase B OpenClaw Agent runtime evidence：`openclaw agent --agent main` run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用 `scripts/openclaw_runtime_evidence.py`，三条 Copilot flow 全部 `ok=true`，并保留 request_id、trace_id、permission_decision。
 - Phase D live embedding gate：`python3 scripts/check_live_embedding_gate.py --json` 已真实调用 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维，并确认清理后无本项目 Ollama 模型驻留；healthcheck 仍保留 configuration-only，不把它写成长期 embedding 服务。
+- Cognee 主路径本地闭环：`memory.confirm` 成功后会把 curated memory fields 和 ledger metadata 通过 adapter add -> cognify 同步给 Cognee；`memory.reject` 会走 adapter withdrawal；Cognee 不可用或同步失败时返回 repository fallback；retrieval 已过滤未匹配本地 ledger 的 Cognee result。详见 [Cognee 主路径 handoff](cognee-main-path-handoff.md)。
 - Demo readiness：`python3 scripts/check_demo_readiness.py --json` 已可通过。
 - Benchmark：recall、candidate、conflict、layer、prefetch、heartbeat 六类 runner 已有。
 - Phase E no-overclaim 审查：README、Demo runbook、Benchmark Report、白皮书、产品化主控和 handoff 口径已对齐；heartbeat 样例数统一为 7；白皮书已更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实；后续又补齐 first-class registry 和 websocket staging 证据；仍不宣称生产部署、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台或 productized live。
