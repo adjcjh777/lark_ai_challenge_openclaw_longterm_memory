@@ -9,7 +9,7 @@
 2. 我接下来从 `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/tool_registry.py` 和 `memory_engine/copilot/openclaw_tool_runner.py` 开始。
 3. 要交付的是本机可安装、可启用、可读回 `toolNames` 的 OpenClaw 插件；它调用 Python runner 后仍进入 `handle_tool_request()` 和 `CopilotService`。
 4. 判断做对：`openclaw plugins inspect feishu-memory-copilot --json` 能看到 7 个工具名；单测和 healthcheck 都能验证 registry 与 schema / handler 一致。
-5. 遇到问题记录：后续已补 OpenClaw Feishu websocket running 本机 staging 证据；真实 Feishu DM 仍未稳定进入本项目 first-class `memory.search` runner，不能写成 production live。
+5. 遇到问题记录：后续已补 OpenClaw Feishu websocket running 本机 staging 证据和本地 Agent `fmc_*` 工具调用验证；真实 Feishu DM 仍未补齐进入本项目 `fmc_*` / `memory.*` 工具链路的 live E2E 证据，不能写成 production live。
 
 ## 已完成
 
@@ -55,5 +55,5 @@ openclaw plugins inspect feishu-memory-copilot --json
 ## 还没做
 
 - OpenClaw Feishu websocket running 本机 staging 证据已在 [openclaw-feishu-websocket-handoff.md](openclaw-feishu-websocket-handoff.md) 补齐：`channels.status` 和 gateway 日志显示 running，`openclaw health` running 字段不一致保留为 warning。
-- 真实飞书消息进入 OpenClaw Agent 后自然选择这些本项目原生工具的端到端证据还没完成；当前真实 DM 触发的是 OpenClaw 内置 `memory_search`。
+- 真实飞书消息进入 OpenClaw Agent 后自然选择这些本项目原生工具的 live E2E 证据还没完成；后续已补本地 Agent `fmc_*` 工具调用验证，但仍需用真实 DM 重新读回 tool call。
 - 这不是生产部署、全量 Feishu workspace ingestion、长期 embedding 服务或 productized live。

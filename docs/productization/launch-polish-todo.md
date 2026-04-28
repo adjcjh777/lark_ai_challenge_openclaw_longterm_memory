@@ -82,7 +82,7 @@ ollama ps
 - `python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket` 通过。
 - `openclaw channels status --probe --json` 显示 Feishu channel 和 default account `running=true`。
 - gateway 日志能看到 websocket start、真实 inbound message、dispatching to agent、dispatch complete。
-- 真实测试消息进入 OpenClaw Agent；如果 Agent 没有自然调用本项目 first-class `memory.*` 工具，要记录为后续 routing 风险。
+- 真实测试消息进入 OpenClaw Agent；如果 Agent 没有自然调用本项目 first-class `fmc_*` 工具，要记录为后续 live DM routing 风险。
 - 同一时间没有 `copilot-feishu listen`、legacy `feishu listen` 或 direct `lark-cli event +subscribe` 冲突。
 - 真实 chat_id、open_id、token 不写入仓库。
 
@@ -93,7 +93,7 @@ ollama ps
 - `python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45` 返回 `ok=true`，`pass=4`，`warning=1`，`fail=0`；`channels_status.channel_running=true`、`account_running=true`、`probe_ok=true`。
 - 真实 DM 进入 OpenClaw Feishu session，gateway 日志显示 `received message`、`dispatching to agent`、`dispatch complete`。
 - 边界：OpenClaw 2026.4.24 的 `openclaw health --json` 总览仍把 Feishu running 报为 `false`，本阶段以 `channels.status` 和 gateway 日志作为 running 证据，并把不一致写为 warning。
-- 边界：真实 DM 当前触发的是 OpenClaw 内置 `memory_search`，不是本项目 first-class `memory.search` runner；后续另开 Feishu Agent tool routing 任务。
+- 边界：后续已补本地 Agent `fmc_*` 工具调用验证，但这不等于真实飞书 DM live E2E；后续仍要用真实 DM、gateway 日志和 tool call 读回证明消息稳定进入本项目 `fmc_*` -> `memory.*` -> `CopilotService` 链路。
 
 建议验证：
 

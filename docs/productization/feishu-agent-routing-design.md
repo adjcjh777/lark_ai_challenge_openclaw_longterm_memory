@@ -1,7 +1,7 @@
 # Feishu Agent Tool Routing 设计
 
 日期：2026-04-28
-状态：方案设计（未完成生产上线）
+状态：方案设计（本地 Agent `fmc_*` 工具路由已补，真实飞书 DM live E2E 仍待验收）
 适用范围：Feishu Agent Tool Routing 问题分析、routing 方案、fallback 方案
 
 ---
@@ -10,7 +10,9 @@
 
 ### 1.1 当前问题
 
-**核心问题**：真实 Feishu DM 触发的是 OpenClaw 内置 `memory_search`，而不是本项目 first-class `memory.search` runner。
+**历史核心问题**：2026-04-28 websocket staging 证据中，真实 Feishu DM 触发的是 OpenClaw 内置 `memory_search`，而不是本项目 first-class 工具。
+
+**当前边界**：后续已补本地 Agent `fmc_*` 工具调用验证，`fmc_*` 会翻译到 Python 侧 `memory.*` 并进入 `CopilotService`；但还缺真实飞书 DM live E2E 证据，不能写成真实 DM 已稳定路由到本项目工具。
 
 ### 1.2 问题详情
 
@@ -28,7 +30,7 @@
 User DM (@Bot question)
   -> OpenClaw Gateway
   -> Agent Runtime
-  -> OpenClaw 内置 memory_search（不经过 CopilotService）
+  -> OpenClaw 内置 memory_search（不经过 CopilotService，该路径是历史 staging 问题）
   -> 返回结果
 
 期望流程（正确）：
@@ -36,7 +38,8 @@ User DM (@Bot question)
   -> OpenClaw Gateway
   -> Agent Runtime
   -> Tool Router
-  -> memory.search（经过 handle_tool_request -> CopilotService）
+  -> fmc_memory_search（OpenClaw-facing tool）
+  -> memory.search（Python-side tool，经过 handle_tool_request -> CopilotService）
   -> 返回结果
 ```
 

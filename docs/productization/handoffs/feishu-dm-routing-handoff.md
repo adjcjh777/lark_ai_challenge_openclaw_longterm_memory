@@ -1,7 +1,7 @@
 # TODO-1 Handoff: 打通真实飞书 DM 到 first-class memory.* tool routing
 
 日期：2026-04-28
-状态：✅ 完成
+状态：部分完成（本地 Agent `fmc_*` 工具路由已完成；真实飞书 DM live E2E 待验收）
 负责人：程俊豪
 
 ---
@@ -10,7 +10,7 @@
 
 ### 根因诊断
 
-发现并解决了两个关键问题：
+发现并解决了本地 Agent 工具路由中的关键问题：
 
 1. **工具名包含点号 (`.`)**：OpenAI API 要求工具名匹配 `^[a-zA-Z0-9_-]+$`，但我们的工具名如 `memory.search` 包含点号，导致 API 拒绝工具注册。
 
@@ -105,15 +105,16 @@ OK
 ### 可以说
 
 - ✅ 插件工具已成功注册到 OpenClaw Agent
-- ✅ Agent 使用 `fmc_memory_search` 而非内置 `memory_search`
-- ✅ 端到端链路通顺：Agent → plugin → Python runner → CopilotService
+- ✅ 本地 OpenClaw Agent 测试中可见并可调用 `fmc_memory_search`
+- ✅ 本地链路通顺：Agent → plugin → Python runner → CopilotService
 - ✅ Bridge metadata (request_id, trace_id, permission_decision) 正确保留
 - ✅ 所有 7 个工具路径已验证
 
 ### 不能说
 
 - ❌ 不能说"生产部署已完成"——这只是本地开发环境验证
-- ❌ 不能说"全量飞书接入"——只测试了 Agent 工具调用，未测试真实飞书 DM 端到端
+- ❌ 不能说"全量飞书接入"——只测试了本地 Agent 工具调用，未测试真实飞书 DM 端到端
+- ❌ 不能说"真实 Feishu DM 已稳定路由到本项目工具"——还缺真实 DM、gateway 日志和 tool call 读回证据
 - ❌ 不能说"性能已优化"——未做性能测试
 
 ---

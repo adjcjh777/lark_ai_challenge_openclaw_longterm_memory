@@ -33,7 +33,7 @@
 - 长期运行监控（当前只有 healthcheck）。
 - 完整多租户后台。
 - 生产级 card action 长期运行。
-- 真实 Feishu DM 到本项目 first-class `memory.*` tool routing。
+- 真实 Feishu DM 到本项目 first-class `fmc_*` / `memory.*` tool routing 的 live E2E 证据。
 - 生产安装包和部署流程。
 - 回滚和灾备方案。
 

@@ -25,7 +25,7 @@
 |---|---|---|
 | Demo / replay | 本地 demo replay 和 examples 可复现 5 个核心步骤 | 不能说这是生产 live |
 | 飞书接入 | 受控旧测试群 live sandbox 已接入新的 `CopilotService` 路径 | 不能说全量 Feishu workspace ingestion 或生产推送已完成 |
-| OpenClaw runtime | Phase B 已有 OpenClaw Agent runtime 受控证据，run `b252f11e-b49d-495c-a14f-0b823a888a5e` 跑通三条 flow；后续 first-class registry 和 Feishu websocket staging running 证据已补 | 不能说生产 live 或真实 Feishu DM 已稳定进入本项目 first-class `memory.*` tools |
+| OpenClaw runtime | Phase B 已有 OpenClaw Agent runtime 受控证据，run `b252f11e-b49d-495c-a14f-0b823a888a5e` 跑通三条 flow；后续 first-class registry、Agent 本地 `fmc_*` 工具调用验证和 Feishu websocket staging running 证据已补 | 不能说生产 live 或真实 Feishu DM 已稳定进入本项目 first-class `fmc_*` / `memory.*` tools |
 | Embedding | Phase D live embedding gate 已真实调用 `ollama/qwen3-embedding:0.6b-fp16` 并返回 1024 维 | 不能说长期 embedding 服务或 productized live 已完成 |
 | Governance | candidate、confirm/reject、audit、权限 fail-closed 已进入 Copilot Core | 不能说完整多租户后台、审计 UI 或生产运维已完成 |
 
@@ -67,7 +67,7 @@ ollama ps
 
 | 任务 | 负责人 | 位置 | 完成标准 |
 |---|---|---|---|
-| 打通真实 Feishu DM 到本项目 first-class `memory.*` tool routing | 程俊豪 | [openclaw-feishu-websocket-handoff.md](openclaw-feishu-websocket-handoff.md)、[first-class-openclaw-tools-handoff.md](first-class-openclaw-tools-handoff.md) | 真实 Feishu DM 进入 OpenClaw Agent 后自然选择本项目 `memory.search` / `memory.prefetch` 等工具，并进入 `handle_tool_request()` |
+| 补真实 Feishu DM 到本项目 first-class 工具的 live E2E 证据 | 程俊豪 | [openclaw-feishu-websocket-handoff.md](openclaw-feishu-websocket-handoff.md)、[first-class-openclaw-tools-handoff.md](first-class-openclaw-tools-handoff.md)、[feishu-dm-routing-handoff.md](feishu-dm-routing-handoff.md) | 在已完成本地 Agent `fmc_*` 工具调用验证的基础上，真实 Feishu DM 进入 OpenClaw Agent 后自然选择本项目 `fmc_memory_search` / `fmc_memory_prefetch` 等工具，并进入 `handle_tool_request()` |
 | 设计 productized live 长期运行方案 | 程俊豪 | 后续 productization handoff | 写清部署、监控、回滚、权限后台、审计 UI 和运维交接；本阶段不用做 |
 
 ## 飞书共享看板

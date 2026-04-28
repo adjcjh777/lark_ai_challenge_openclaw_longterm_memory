@@ -1,16 +1,22 @@
 # TODO-1: 打通真实飞书 DM 到 first-class memory.* tool routing
 
 日期：2026-04-28
-状态：✅ 完成
+状态：部分完成（本地 Agent `fmc_*` 工具路由已补；真实飞书 DM live E2E 待验收）
 负责人：程俊豪
 
 ---
 
 ## 1. 目标
 
-让真实飞书 DM 进入 OpenClaw Agent 后，Agent 自然选择本项目的 `memory.search`、`memory.create_candidate` 等 first-class 工具，而不是 OpenClaw 内置的 `memory_search`。
+让真实飞书 DM 进入 OpenClaw Agent 后，Agent 自然选择本项目的 OpenClaw-facing `fmc_memory_search`、`fmc_memory_create_candidate` 等 first-class 工具，再由插件翻译到 Python 侧 `memory.search`、`memory.create_candidate`，而不是走 OpenClaw 内置的 `memory_search`。
 
-**完成标准**：真实飞书 DM → OpenClaw Agent → `memory.search` → `handle_tool_request()` → `CopilotService` → 返回结果，回复中保留 `request_id`、`trace_id`、`permission_decision`。
+**最终完成标准**：真实飞书 DM → OpenClaw Agent → `fmc_memory_search` 等项目工具 → `memory.search` 等 Python 侧工具 → `handle_tool_request()` → `CopilotService` → 返回结果，回复中保留 `request_id`、`trace_id`、`permission_decision`。
+
+## 当前事实口径
+
+截至 2026-04-29，本 TODO 的前置工程链路已经补齐：插件工具使用 `fmc_*` 名称注册，`scripts/check_feishu_dm_routing.py` 和 `tests/test_feishu_dm_routing.py` 能验证本地 Agent 可见 `fmc_*` 工具、插件到 Python runner 的翻译、bridge metadata 和 `CopilotService` 调用链路。
+
+但真实飞书 DM live E2E 还不能写成完成：当前仓库没有读回“真实飞书 DM 触发 OpenClaw Agent 后选择 `fmc_memory_search` / `fmc_memory_prefetch` 等本项目工具”的最终证据。后续必须用真实 DM、gateway 日志和 tool call 输出补齐这一步。
 
 ---
 
@@ -26,9 +32,16 @@
 | OpenClaw Feishu websocket running | 完成 | `openclaw channels status --probe --json` 显示 running，gateway 日志有 `dispatching to agent` |
 | 真实 DM 进入 OpenClaw Agent dispatch | 完成 | gateway 日志记录 `received message` → `dispatching to agent` → `dispatch complete` |
 
-### 2.2 未完成的部分（即本 TODO 要解决的问题）
+### 2.2 已补齐的中间层
 
-**核心问题**：OpenClaw Agent 收到真实飞书 DM 后，选择的是内置 `memory_search`，而非本项目注册的 `memory.search`。
+- OpenClaw-facing 工具名已改为 `fmc_*`，避免 OpenAI / OpenClaw 工具名点号限制。
+- 插件已把 `fmc_*` 翻译到 Python 侧 `memory.*`。
+- `tools.alsoAllow` 和本地 Agent 工具可见性已有诊断脚本覆盖。
+- 本地 Agent 调用 `fmc_memory_search`、Python runner、bridge metadata 和权限上下文已有自动化测试覆盖。
+
+### 2.3 未完成的部分
+
+**核心问题**：还缺真实飞书 DM 场景下的最终读回证据，证明 OpenClaw Agent 收到真实飞书 DM 后选择的是本项目 `fmc_memory_search` 等工具，而非内置 `memory_search`。
 
 **可能原因**（需要实际验证）：
 
@@ -38,26 +51,26 @@
 4. **插件工具未在 Agent tool list 中暴露**：插件已注册，但 OpenClaw Agent runtime 可能未将插件工具加入 Agent 的可用工具列表。
 5. **Skill 文件未被 Agent 加载**：`feishu_memory_copilot.skill.md` 已存在，但 Agent 可能未读取它来指导 tool selection。
 
-### 2.3 当前数据流（问题路径）
+### 2.4 历史问题路径
 
 ```text
 真实飞书 DM
   → OpenClaw Feishu websocket (running)
   → OpenClaw Agent dispatch
-  → Agent 选择内置 memory_search ← 问题在这里
+  → Agent 选择内置 memory_search ← 历史 websocket staging 证据中记录的问题
   → OpenClaw 内置实现（不经过本项目 CopilotService）
   → 返回结果（无 request_id/trace_id/permission_decision）
 ```
 
-### 2.4 目标数据流
+### 2.5 目标数据流
 
 ```text
 真实飞书 DM
   → OpenClaw Feishu websocket (running)
   → OpenClaw Agent dispatch
-  → Agent 选择 memory.search（本项目 first-class tool）
+  → Agent 选择 fmc_memory_search（本项目 first-class tool）
   → plugin/index.js → runPythonTool()
-  → memory_engine.copilot.openclaw_tool_runner → handle_tool_request()
+  → memory_engine.copilot.openclaw_tool_runner → memory.search → handle_tool_request()
   → CopilotService → permissions/governance/retrieval/audit
   → 返回结果（含 request_id/trace_id/permission_decision）
 ```

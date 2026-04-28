@@ -43,4 +43,4 @@ python3 -m unittest tests.test_copilot_permissions tests.test_copilot_feishu_liv
 
 这也不代表全量 Feishu workspace ingestion 已完成。真实飞书来源仍只进入 candidate，不能自动 active。
 
-真实 Feishu DM 到本项目 first-class `memory.*` tool routing 仍未完成，仍是后续任务。
+真实 Feishu DM 到本项目 first-class `fmc_*` / `memory.*` tool routing 的 live E2E 仍未完成，仍是后续任务。
