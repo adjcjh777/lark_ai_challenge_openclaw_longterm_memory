@@ -108,6 +108,31 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("natural_prefetch", invocation.reason)
         self.assertEqual(SCOPE, invocation.payload["scope"])
 
+    def test_permission_context_maps_real_feishu_tenant_org_and_chat(self) -> None:
+        event = message_event_from_payload(payload("om_live_real_perm", "生产部署 region 是什么？"))
+        self.assertIsNotNone(event)
+
+        with patch.dict(
+            os.environ,
+            {
+                "COPILOT_FEISHU_TENANT_ID": "tenant:feishu-prod",
+                "COPILOT_FEISHU_ORGANIZATION_ID": "org:feishu-ai",
+                "COPILOT_FEISHU_VISIBILITY": "organization",
+            },
+            clear=False,
+        ):
+            invocation = invocation_from_event(event, scope=SCOPE)
+
+        context = invocation.payload["current_context"]
+        permission = context["permission"]
+        self.assertEqual("tenant:feishu-prod", context["tenant_id"])
+        self.assertEqual("org:feishu-ai", context["organization_id"])
+        self.assertEqual(CHAT_ID, context["chat_id"])
+        self.assertEqual("tenant:feishu-prod", permission["actor"]["tenant_id"])
+        self.assertEqual("org:feishu-ai", permission["actor"]["organization_id"])
+        self.assertEqual(CHAT_ID, permission["source_context"]["chat_id"])
+        self.assertEqual("organization", permission["requested_visibility"])
+
     def test_chat_allowlist_ignores_non_sandbox_chat_without_reply(self) -> None:
         event = message_event_from_payload(payload("om_live_wrong_chat", "/health"))
         self.assertIsNotNone(event)

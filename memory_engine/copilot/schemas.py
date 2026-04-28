@@ -20,6 +20,10 @@ WORKING_CONTEXT_FIELDS = {
     "task_id",
     "scope",
     "user_id",
+    "tenant_id",
+    "organization_id",
+    "visibility_policy",
+    "document_id",
     "intent",
     "thread_topic",
     "allowed_scopes",
@@ -98,6 +102,10 @@ class WorkingContext:
     task_id: str | None = None
     scope: str | None = None
     user_id: str | None = None
+    tenant_id: str | None = None
+    organization_id: str | None = None
+    visibility_policy: str | None = None
+    document_id: str | None = None
     intent: str | None = None
     thread_topic: str | None = None
     allowed_scopes: list[str] = field(default_factory=list)
@@ -127,6 +135,10 @@ class WorkingContext:
             task_id=_optional_string(data, "task_id"),
             scope=_optional_string(data, "scope"),
             user_id=_optional_string(data, "user_id"),
+            tenant_id=_optional_string(data, "tenant_id"),
+            organization_id=_optional_string(data, "organization_id"),
+            visibility_policy=_optional_string(data, "visibility_policy"),
+            document_id=_optional_string(data, "document_id"),
             intent=_optional_string(data, "intent"),
             thread_topic=_optional_string(data, "thread_topic"),
             allowed_scopes=list(allowed_scopes),
@@ -136,7 +148,19 @@ class WorkingContext:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
-        for key in ("session_id", "chat_id", "task_id", "scope", "user_id", "intent", "thread_topic"):
+        for key in (
+            "session_id",
+            "chat_id",
+            "task_id",
+            "scope",
+            "user_id",
+            "tenant_id",
+            "organization_id",
+            "visibility_policy",
+            "document_id",
+            "intent",
+            "thread_topic",
+        ):
             value = getattr(self, key)
             if value:
                 result[key] = value

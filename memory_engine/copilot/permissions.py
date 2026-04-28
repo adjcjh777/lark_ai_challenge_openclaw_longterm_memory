@@ -88,15 +88,42 @@ def check_scope_access(
             workspace_id=workspace_id,
         )
 
-    if permission.actor.tenant_id != DEFAULT_TENANT_ID:
+    expected_tenant_id = _context_string(context, "tenant_id") or DEFAULT_TENANT_ID
+    expected_organization_id = _context_string(context, "organization_id") or DEFAULT_ORGANIZATION_ID
+
+    if permission.actor.tenant_id != expected_tenant_id:
         return _permission_error("tenant_mismatch", "actor tenant cannot access requested memory scope", permission=permission, action=action)
 
-    if permission.actor.organization_id != DEFAULT_ORGANIZATION_ID:
+    if permission.actor.organization_id != expected_organization_id:
         return _permission_error(
             "organization_mismatch",
             "actor organization cannot access requested memory scope",
             permission=permission,
             action=action,
+        )
+
+    context_chat_id = _context_string(context, "chat_id")
+    source_chat_id = permission.source_context.chat_id
+    if context_chat_id and source_chat_id and source_chat_id != context_chat_id:
+        return _permission_error(
+            "source_context_mismatch",
+            "permission source_context.chat_id does not match current chat",
+            permission=permission,
+            action=action,
+            context_chat_id=context_chat_id,
+            source_chat_id=source_chat_id,
+        )
+
+    context_document_id = _context_string(context, "document_id")
+    source_document_id = permission.source_context.document_id
+    if context_document_id and source_document_id and source_document_id != context_document_id:
+        return _permission_error(
+            "source_context_mismatch",
+            "permission source_context.document_id does not match current document",
+            permission=permission,
+            action=action,
+            context_document_id=context_document_id,
+            source_document_id=source_document_id,
         )
 
     roles = {role.strip().lower() for role in permission.actor.roles}
@@ -138,6 +165,11 @@ def _permission_error(
             error_details["trace_id"] = trace_id
     error_details.update(details)
     return CopilotError("permission_denied", message, details=error_details)
+
+
+def _context_string(context: dict[str, Any], key: str) -> str | None:
+    value = context.get(key)
+    return value if isinstance(value, str) and value else None
 
 
 def demo_permission_context(

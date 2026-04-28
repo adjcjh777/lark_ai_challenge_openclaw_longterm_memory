@@ -1,7 +1,7 @@
 # Permission Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase 1 contract freeze 已完成；Phase 2 权限前置实现已完成（commit `b6b17b4`）
+状态：Phase 1 contract freeze 已完成；Phase 2 权限前置实现已完成（commit `b6b17b4`）；2026-04-28 后期打磨已补真实飞书权限映射本地闭环
 适用范围：`memory_engine/copilot/permissions.py`、`schemas.py`、`service.py`、OpenClaw tool payload、Feishu review surface。
 
 ## 1. 目标
@@ -13,7 +13,9 @@
 - 已修复：`current_context.permission` 缺失或畸形时 fail closed。
 - 已修复：`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 统一经过 `CopilotService` 权限门控。
 - 已修复：`confirm/reject` 不再只依赖 `actor_id` 字符串；可从 permission actor 派生 actor。
-- 仍未完成：数据库层 tenant / organization / visibility migration、audit table、Feishu review surface、OpenClaw live bridge。
+- 已修复：数据库层 tenant / organization / visibility migration、audit table、Feishu review surface、OpenClaw live bridge。
+- 已修复：真实飞书 live sandbox 能把 actor、tenant、organization、chat、visibility 映射进 `current_context.permission`，非 demo tenant/org 不再被硬编码拒绝。
+- 仍未完成：真实 Feishu DM 到本项目 first-class `memory.*` tool routing 和 productized live 长期运行。
 
 ## 2. Permission Context
 
