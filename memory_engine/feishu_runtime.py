@@ -12,6 +12,7 @@ from .document_ingestion import ingest_document_source
 from .feishu_cards import build_card_from_text
 from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
 from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
+from .feishu_listener_guard import assert_single_feishu_listener
 from .copilot.service import CopilotService
 from .copilot.tools import handle_tool_request
 from .copilot.permissions import demo_permission_context
@@ -69,6 +70,7 @@ def replay_event(path: str | Path, *, db_path: str | Path | None = None) -> dict
 
 
 def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
+    active_listeners = assert_single_feishu_listener("legacy-lark-cli")
     config = load_feishu_config()
     conn = connect(db_path)
     init_db(conn)
@@ -85,6 +87,7 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
         card_mode=config.card_mode,
         card_retry_count=config.card_retry_count,
         card_timeout_seconds=config.card_timeout_seconds,
+        listener_preflight=[process.__dict__ for process in active_listeners],
     )
     print(f"Feishu listener log: {run_logger.path}", file=sys.stderr, flush=True)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=sys.stderr, text=True)

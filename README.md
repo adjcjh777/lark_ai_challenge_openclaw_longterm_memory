@@ -12,6 +12,7 @@
 | Phase A Storage Migration + Audit Table 已完成 | [Phase A handoff](docs/productization/phase-a-storage-audit-handoff.md)；[db.py](memory_engine/db.py)；[service.py](memory_engine/copilot/service.py)；[healthcheck.py](memory_engine/copilot/healthcheck.py) | `tenant_id`、`organization_id`、`visibility_policy` 兼容迁移；`memory_audit_events` 审计表；confirm/reject/deny/limited ingestion/heartbeat 审计 smoke | `python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass` 且 `audit_smoke.status=pass`；仍不是生产部署或完整多租户后台 |
 | 2026-04-28 PRD 完成度核对与未完成任务拆分 | [PRD completion audit and gap tasks](docs/productization/prd-completion-audit-and-gap-tasks.md)；[Feishu Memory Copilot PRD](docs/feishu-memory-copilot-prd.md)；[2026-05-08 handoff](docs/plans/2026-05-08-demo-readiness-handoff.md) | 回答 MVP 是否完成、是否接入飞书、是否接入 OpenClaw 做产品形态测试，并把未完成任务拆成可执行清单 | 明确区分 demo/pre-production、受控测试群 live sandbox 和 productized live；未完成项有负责人、位置、截止建议和完成标准 |
 | Feishu 测试群 live sandbox：用旧测试群承载新的 Memory Copilot | [start_copilot_feishu_live.sh](scripts/start_copilot_feishu_live.sh)；[feishu_live.py](memory_engine/copilot/feishu_live.py)；[test_copilot_feishu_live.py](tests/test_copilot_feishu_live.py)；[2026-05-08 handoff](docs/plans/2026-05-08-demo-readiness-handoff.md) | 飞书真实群消息 -> `copilot-feishu listen` -> `handle_tool_request()` -> `CopilotService` -> bot 回复 | 旧测试群只作为真实环境容器；启动时解析该群为 allowlist；reviewer 不默认 `*`；`/remember` 进入 candidate；`/confirm` 后才 active；普通 @ 提问触发 `memory.search`；回复包含 request_id / trace_id；仍不是生产部署、全量 Feishu workspace ingestion 或 productized live |
+| Feishu 单监听 staging 流程：避免 legacy / lark-cli / OpenClaw websocket 同时消费同一个 bot | [feishu-staging-runbook.md](docs/productization/feishu-staging-runbook.md)；[single listener handoff](docs/productization/feishu-single-listener-handoff.md)；[check_feishu_listener_singleton.py](scripts/check_feishu_listener_singleton.py)；[feishu_listener_guard.py](memory_engine/feishu_listener_guard.py) | 启动前检查并阻止多个监听同时占用 `Feishu Memory Engine bot` | OpenClaw Feishu websocket、`copilot-feishu listen`、legacy `feishu listen` 三选一；正式验收前先跑 singleton preflight；冲突时先停多余监听，不用并行监听碰运气 |
 | 2026-05-08 Demo-ready + Pre-production Readiness：本地演示前一键检查 | [2026-05-08 Ralph plan](docs/plans/2026-05-08-ralph-plan-demo-readiness.md)；[2026-05-08 handoff](docs/plans/2026-05-08-demo-readiness-handoff.md)；[check_demo_readiness.py](scripts/check_demo_readiness.py)；[demo_seed.py](scripts/demo_seed.py)；[test_demo_readiness.py](tests/test_demo_readiness.py)；[test_demo_seed.py](tests/test_demo_seed.py) | 聚合 OpenClaw 版本、Phase 6 healthcheck、Demo replay step-level、provider configuration-only 检查 | `python3 scripts/check_demo_readiness.py` 和 `--json` 可运行；Demo replay 每个 step 都是 `ok=true`；任一 step 失败会让 readiness 整体失败；仍不是生产部署、真实飞书推送、完整 audit migration 或 productized live |
 | Phase 6 Deployability + Healthcheck 已完成本地闭环：只做可检查、可初始化、可诊断 | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[check_copilot_health.py](scripts/check_copilot_health.py)；[healthcheck.py](memory_engine/copilot/healthcheck.py)；[test_copilot_healthcheck.py](tests/test_copilot_healthcheck.py)；[memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json) | Phase 6 healthcheck 命令、可读输出、JSON 输出、OpenClaw/schema/service/storage/permission/Cognee/embedding 检查、search/permission deny/candidate review smoke test | `python3 scripts/check_copilot_health.py` 可运行；schema/tool version 可见；Phase A 后 storage schema 和 audit smoke 已通过；Cognee 使用 repository fallback；embedding 只做 configuration-only 检查；这不是生产部署、真实飞书推送或 productized live |
 | Phase 5 Heartbeat Controlled Reminder 已完成本地闭环：active memory 只生成受控 reminder candidate（提醒候选） | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[heartbeat.py](memory_engine/copilot/heartbeat.py)；[tools.py](memory_engine/copilot/tools.py)；[feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py)；[copilot_heartbeat_cases.json](benchmarks/copilot_heartbeat_cases.json) | `heartbeat.review_due` 工具入口、reason/evidence/target actor/cooldown/permission trace、敏感内容 redacted/withheld、card/Bitable dry-run 安全摘要 | active memory 能生成 candidate；不自动 active；不真实飞书群推送；不是生产调度服务；non-reviewer 看不到敏感 evidence/current_value；Sensitive Reminder Leakage Rate = 0 |
@@ -99,11 +100,18 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
 # 可选：不设置时脚本会用 lark-cli user auth 解析“Feishu Memory Engine 测试群”和当前登录用户
 export COPILOT_FEISHU_ALLOWED_CHAT_QUERY="Feishu Memory Engine 测试群"
 # export COPILOT_FEISHU_ALLOWED_CHAT_IDS="oc_xxx"
 # export COPILOT_FEISHU_REVIEWER_OPEN_IDS="ou_xxx"
 scripts/start_copilot_feishu_live.sh
+```
+
+如果 OpenClaw Feishu websocket 已经接管同一个 `Feishu Memory Engine bot`，不要再运行上面的 lark-cli sandbox；改为先检查单监听状态，再只走 OpenClaw：
+
+```bash
+python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
 ```
 
 测试群中使用：

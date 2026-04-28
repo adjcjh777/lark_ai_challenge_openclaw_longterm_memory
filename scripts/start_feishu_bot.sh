@@ -28,5 +28,6 @@ echo "  card retry/per-attempt-timeout: $FEISHU_CARD_RETRY_COUNT / ${FEISHU_CARD
 echo "  log dir: $FEISHU_LOG_DIR"
 echo
 
+python3 scripts/check_feishu_listener_singleton.py --planned-listener legacy-lark-cli
 python3 -m memory_engine init-db >/dev/null
 exec python3 -m memory_engine feishu listen "$@"

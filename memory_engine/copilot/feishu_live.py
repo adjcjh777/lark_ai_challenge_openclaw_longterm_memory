@@ -16,6 +16,7 @@ from memory_engine.feishu_config import FeishuConfig, load_feishu_config
 from memory_engine.feishu_events import FeishuMessageEvent, message_event_from_payload
 from memory_engine.feishu_publisher import DryRunPublisher, LarkCliPublisher
 from memory_engine.feishu_runtime import FeishuRunLogger
+from memory_engine.feishu_listener_guard import assert_single_feishu_listener
 from memory_engine.repository import MemoryRepository
 
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
@@ -55,6 +56,7 @@ class CopilotFeishuInvocation:
 
 
 def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
+    active_listeners = assert_single_feishu_listener("copilot-lark-cli")
     config = load_feishu_config()
     conn = connect(db_path)
     init_db(conn)
@@ -71,6 +73,7 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
         card_mode=config.card_mode,
         entrypoint=ENTRYPOINT,
         scope=_scope(config),
+        listener_preflight=[process.__dict__ for process in active_listeners],
     )
     print(f"Memory Copilot live listener log: {run_logger.path}", file=sys.stderr, flush=True)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=sys.stderr, text=True)

@@ -76,5 +76,6 @@ echo "  card mode: $FEISHU_CARD_MODE"
 echo "  log dir: $FEISHU_LOG_DIR"
 echo
 
+python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
 python3 -m memory_engine init-db >/dev/null
 exec python3 -m memory_engine copilot-feishu listen "$@"

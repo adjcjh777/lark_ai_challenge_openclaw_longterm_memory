@@ -63,13 +63,13 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 | 任务 | 优先级 | 负责人 | 完成时间 | 文件/页面位置 | 完成标准 |
 |---|---|---|---|---|---|
 | 补 storage migration 和 audit table | P0 | 程俊豪 | 2026-04-28 | `memory_engine/db.py`、`memory_engine/copilot/service.py`、`memory_engine/copilot/healthcheck.py`、[Phase A handoff](phase-a-storage-audit-handoff.md) | 数据库有 `tenant_id`、`organization_id`、`visibility_policy` 和 `memory_audit_events`；healthcheck 不再报 storage warning；确认/拒绝/权限拒绝、limited ingestion candidate、heartbeat candidate 都有审计记录。 |
+| 补 Feishu 单监听 staging 流程 | P0 | 程俊豪 | 2026-04-28 | `scripts/check_feishu_listener_singleton.py`、`memory_engine/feishu_listener_guard.py`、[Feishu staging runbook](feishu-staging-runbook.md)、[single listener handoff](feishu-single-listener-handoff.md) | OpenClaw Feishu websocket、Copilot lark-cli sandbox、legacy fallback 三选一；repo 内启动脚本和 direct CLI 启动前都会做 singleton preflight；冲突时记录 pid、kind、command。 |
 
 ## 仍未完成任务拆分
 
 | 任务 | 优先级 | 负责人 | 截止建议 | 文件/页面位置 | 完成标准 |
 |---|---|---|---|---|---|
 | 补真实 OpenClaw Agent runtime 验收记录 | P0 | 程俊豪 | 2026-05-09 | `agent_adapters/openclaw/`、`docs/demo-runbook.md`、新增 runtime evidence 文档 | 在真实 OpenClaw Agent runtime 中跑通至少 3 条：历史召回、candidate 确认、任务前 prefetch；记录输入、输出、request_id、trace_id 和失败回退。 |
-| 把 Feishu live sandbox 升级成 staging runbook | P0 | 程俊豪 | 2026-05-10 | `scripts/start_copilot_feishu_live.sh`、`memory_engine/copilot/feishu_live.py`、`docs/reference/local-lark-cli-setup.md` | 明确 allowlist、reviewer、日志、退出、权限失败处理；真实 ID 只进本机环境；README 继续声明不是全量 workspace ingestion。 |
 | 验证 live Cognee / Ollama embedding，不再只做 configuration-only | P1 | 程俊豪 | 2026-05-10 | `scripts/check_embedding_provider.py`、`scripts/spike_cognee_local.py`、`memory_engine/copilot/cognee_adapter.py` | 能跑真实 provider 检查；若失败，文档写清 fallback；每次运行后 `ollama ps` 无本项目模型驻留或记录保留原因。 |
 | 做 no-overclaim 交付物审查 | P1 | 程俊豪 | 2026-05-10 | `README.md`、`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md` | 所有材料统一口径：已完成 demo/pre-production 和测试群 sandbox；未完成生产部署、全量 ingestion、多租户后台和 productized live。 |
 
