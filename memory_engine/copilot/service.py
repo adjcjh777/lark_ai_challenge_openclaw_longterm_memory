@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
@@ -17,9 +18,11 @@ from .schemas import (
     CreateCandidateRequest,
     ExplainVersionsRequest,
     HeartbeatReviewDueRequest,
+    PermissionContext,
     PrefetchRequest,
     RejectRequest,
     SearchRequest,
+    ValidationError,
     WorkingContext,
     WORKING_CONTEXT_FIELDS,
 )
@@ -40,21 +43,33 @@ class CopilotService:
         self.cognee_adapter = cognee_adapter
 
     def search(self, request: SearchRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context.to_dict(), action="memory.search")
-        if permission_error is not None:
-            return permission_error.to_response()
+        permission_denied = self._permission_denied(
+            "memory.search",
+            request.scope,
+            request.current_context.to_dict(),
+            target_type="memory",
+        )
+        if permission_denied is not None:
+            return permission_denied
 
         retriever = LayerAwareRetriever(self._repository(), cognee_adapter=self.cognee_adapter)
         orchestrator = MemorySearchOrchestrator(
             retriever,
             cognee_available=self.cognee_adapter is not None and self.cognee_adapter.is_configured,
         )
-        return orchestrator.search(request).to_dict()
+        response = orchestrator.search(request).to_dict()
+        self._record_audit("memory.search", request.scope, request.current_context.to_dict(), response, target_type="memory")
+        return response
 
     def create_candidate(self, request: CreateCandidateRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context, action="memory.create_candidate")
-        if permission_error is not None:
-            return permission_error.to_response()
+        permission_denied = self._permission_denied(
+            "memory.create_candidate",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+        )
+        if permission_denied is not None:
+            return permission_denied
         auto_confirm_ignored = False
         if request.auto_confirm and _is_real_feishu_source(request.source.source_type):
             request = replace(request, auto_confirm=False)
@@ -66,35 +81,108 @@ class CopilotService:
                 action="memory.confirm",
             )
             if confirm_permission_error is not None:
-                return confirm_permission_error.to_response()
+                response = confirm_permission_error.to_response()
+                self._record_audit(
+                    "memory.confirm",
+                    request.scope,
+                    _context_for_action(request.current_context, "memory.confirm"),
+                    response,
+                    target_type="candidate",
+                    event_type="permission_denied",
+                )
+                return response
         response = CopilotGovernance(self._repository()).create_candidate(request)
         if auto_confirm_ignored:
             response["auto_confirm_ignored"] = True
             response["candidate_only_reason"] = "feishu_source_candidate_only"
+        self._record_audit(
+            "memory.create_candidate",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            event_type="limited_ingestion_candidate" if _is_real_feishu_source(request.source.source_type) else None,
+        )
         return response
 
     def confirm(self, request: ConfirmRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context, action="memory.confirm")
-        if permission_error is not None:
-            return permission_error.to_response()
-        return CopilotGovernance(self._repository()).confirm(request)
+        permission_denied = self._permission_denied(
+            "memory.confirm",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = CopilotGovernance(self._repository()).confirm(request)
+        self._record_audit(
+            "memory.confirm",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        return response
 
     def reject(self, request: RejectRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context, action="memory.reject")
-        if permission_error is not None:
-            return permission_error.to_response()
-        return CopilotGovernance(self._repository()).reject(request)
+        permission_denied = self._permission_denied(
+            "memory.reject",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = CopilotGovernance(self._repository()).reject(request)
+        self._record_audit(
+            "memory.reject",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        return response
 
     def explain_versions(self, request: ExplainVersionsRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context, action="memory.explain_versions")
-        if permission_error is not None:
-            return permission_error.to_response()
-        return CopilotGovernance(self._repository()).explain_versions(request)
+        permission_denied = self._permission_denied(
+            "memory.explain_versions",
+            request.scope,
+            request.current_context,
+            target_type="memory",
+            target_id=request.memory_id,
+            memory_id=request.memory_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = CopilotGovernance(self._repository()).explain_versions(request)
+        self._record_audit(
+            "memory.explain_versions",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="memory",
+            target_id=request.memory_id,
+            memory_id=request.memory_id,
+        )
+        return response
 
     def prefetch(self, request: PrefetchRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context, action="memory.prefetch")
-        if permission_error is not None:
-            return permission_error.to_response()
+        permission_denied = self._permission_denied(
+            "memory.prefetch",
+            request.scope,
+            request.current_context,
+            target_type="memory",
+        )
+        if permission_denied is not None:
+            return permission_denied
 
         search_request = SearchRequest(
             query=_prefetch_query(request.task, request.current_context),
@@ -112,7 +200,7 @@ class CopilotService:
         relevant = [_compact_memory(result) for result in results]
         risks = [item for item in relevant if item.get("type") == "risk" or _mentions_risk(item.get("current_value"))]
         deadlines = [item for item in relevant if item.get("type") == "deadline" or _mentions_deadline(item.get("current_value"))]
-        return {
+        response = {
             "ok": True,
             "tool": "memory.prefetch",
             "task": request.task,
@@ -143,16 +231,32 @@ class CopilotService:
             },
             "state_mutation": "none",
         }
+        self._record_audit("memory.prefetch", request.scope, request.current_context, response, target_type="memory")
+        return response
 
     def heartbeat_review_due(self, request: HeartbeatReviewDueRequest) -> dict[str, object]:
-        permission_error = check_scope_access(request.scope, request.current_context, action="heartbeat.review_due")
-        if permission_error is not None:
-            return permission_error.to_response()
-        return HeartbeatReminderEngine(self._repository()).generate(
+        permission_denied = self._permission_denied(
+            "heartbeat.review_due",
+            request.scope,
+            request.current_context,
+            target_type="reminder",
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = HeartbeatReminderEngine(self._repository()).generate(
             scope=request.scope,
             current_context=request.current_context,
             limit=request.limit,
         )
+        self._record_audit(
+            "heartbeat.review_due",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="reminder",
+            event_type="heartbeat_candidate_generated",
+        )
+        return response
 
     def _repository(self) -> MemoryRepository:
         if self.repository is not None:
@@ -161,6 +265,62 @@ class CopilotService:
         init_db(conn)
         self.repository = MemoryRepository(conn)
         return self.repository
+
+    def _permission_denied(
+        self,
+        action: str,
+        scope: str,
+        current_context: dict[str, Any],
+        *,
+        target_type: str,
+        target_id: str | None = None,
+        memory_id: str | None = None,
+        candidate_id: str | None = None,
+    ) -> dict[str, object] | None:
+        permission_error = check_scope_access(scope, current_context, action=action)
+        if permission_error is None:
+            return None
+        response = permission_error.to_response()
+        self._record_audit(
+            action,
+            scope,
+            current_context,
+            response,
+            target_type=target_type,
+            target_id=target_id,
+            memory_id=memory_id,
+            candidate_id=candidate_id,
+            event_type="permission_denied",
+        )
+        return response
+
+    def _record_audit(
+        self,
+        action: str,
+        scope: str,
+        current_context: dict[str, Any],
+        response: dict[str, object],
+        *,
+        target_type: str,
+        target_id: str | None = None,
+        memory_id: str | None = None,
+        candidate_id: str | None = None,
+        event_type: str | None = None,
+    ) -> None:
+        repo = self._repository()
+        audit = _audit_payload(
+            action,
+            scope,
+            current_context,
+            response,
+            target_type=target_type,
+            target_id=target_id,
+            memory_id=memory_id,
+            candidate_id=candidate_id,
+            event_type=event_type,
+        )
+        with repo.conn:
+            repo.record_audit_event(**audit)
 
 
 def _working_context_only(context: dict[str, object]) -> dict[str, object]:
@@ -186,6 +346,149 @@ def _context_for_action(context: dict[str, object], action: str) -> dict[str, ob
 def _is_real_feishu_source(source_type: str) -> bool:
     normalized = source_type.strip().lower()
     return normalized.startswith("feishu_") or normalized in {"document_feishu", "lark_doc", "lark_bitable"}
+
+
+def _audit_payload(
+    action: str,
+    scope: str,
+    current_context: dict[str, Any],
+    response: dict[str, object],
+    *,
+    target_type: str,
+    target_id: str | None,
+    memory_id: str | None,
+    candidate_id: str | None,
+    event_type: str | None,
+) -> dict[str, Any]:
+    permission_payload = current_context.get("permission") if isinstance(current_context, dict) else None
+    permission = _parse_permission(permission_payload)
+    error = response.get("error") if isinstance(response.get("error"), dict) else {}
+    error_details = error.get("details") if isinstance(error.get("details"), dict) else {}
+    denied = error.get("code") == "permission_denied"
+    decision = "deny" if denied else "allow"
+    reason_code = str(error_details.get("reason_code") or ("permission_denied" if denied else "scope_access_granted"))
+    response_memory_id = _string_response_field(response, "memory_id")
+    response_candidate_id = _string_response_field(response, "candidate_id")
+    resolved_memory_id = memory_id or response_memory_id
+    resolved_candidate_id = candidate_id or response_candidate_id
+    resolved_target_id = target_id or resolved_candidate_id or resolved_memory_id
+    actor = _audit_actor(permission_payload, permission)
+    request_id = error_details.get("request_id") if isinstance(error_details.get("request_id"), str) else None
+    trace_id = error_details.get("trace_id") if isinstance(error_details.get("trace_id"), str) else None
+    return {
+        "event_type": event_type or _event_type(action, denied),
+        "action": action,
+        "tool_name": action,
+        "target_type": target_type,
+        "target_id": resolved_target_id,
+        "memory_id": resolved_memory_id,
+        "candidate_id": resolved_candidate_id,
+        "actor_id": actor["actor_id"],
+        "actor_roles": actor["roles"],
+        "tenant_id": actor["tenant_id"],
+        "organization_id": actor["organization_id"],
+        "scope": scope,
+        "permission_decision": decision,
+        "reason_code": reason_code,
+        "request_id": request_id or _permission_field(permission_payload, permission, "request_id"),
+        "trace_id": trace_id or _permission_field(permission_payload, permission, "trace_id"),
+        "visible_fields": _visible_fields(action, denied),
+        "redacted_fields": _redacted_fields(error_details, denied),
+        "source_context": _source_context(permission_payload, permission),
+    }
+
+
+def _parse_permission(permission_payload: Any) -> PermissionContext | None:
+    if not isinstance(permission_payload, dict):
+        return None
+    try:
+        return PermissionContext.from_payload(permission_payload)
+    except ValidationError:
+        return None
+
+
+def _audit_actor(permission_payload: Any, permission: PermissionContext | None) -> dict[str, Any]:
+    if permission is not None:
+        return {
+            "actor_id": permission.actor.primary_id() or "unknown",
+            "roles": list(permission.actor.roles),
+            "tenant_id": permission.actor.tenant_id,
+            "organization_id": permission.actor.organization_id,
+        }
+    actor = permission_payload.get("actor") if isinstance(permission_payload, dict) else {}
+    actor = actor if isinstance(actor, dict) else {}
+    roles = actor.get("roles")
+    return {
+        "actor_id": _first_string(actor, "user_id", "open_id") or "unknown",
+        "roles": list(roles) if isinstance(roles, list) and all(isinstance(role, str) for role in roles) else [],
+        "tenant_id": str(actor.get("tenant_id") or "tenant:demo"),
+        "organization_id": str(actor.get("organization_id") or "org:demo"),
+    }
+
+
+def _source_context(permission_payload: Any, permission: PermissionContext | None) -> dict[str, Any]:
+    if permission is not None:
+        return permission.source_context.to_dict()
+    source_context = permission_payload.get("source_context") if isinstance(permission_payload, dict) else {}
+    return dict(source_context) if isinstance(source_context, dict) else {}
+
+
+def _permission_field(permission_payload: Any, permission: PermissionContext | None, field_name: str) -> str | None:
+    if permission is not None:
+        value = getattr(permission, field_name)
+        return value if isinstance(value, str) and value else None
+    if isinstance(permission_payload, dict):
+        value = permission_payload.get(field_name)
+        return value if isinstance(value, str) and value else None
+    return None
+
+
+def _string_response_field(response: dict[str, object], field_name: str) -> str | None:
+    value = response.get(field_name)
+    return value if isinstance(value, str) and value else None
+
+
+def _first_string(data: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _event_type(action: str, denied: bool) -> str:
+    if denied:
+        return "permission_denied"
+    if action == "memory.confirm":
+        return "candidate_confirmed"
+    if action == "memory.reject":
+        return "candidate_rejected"
+    if action == "memory.create_candidate":
+        return "candidate_created"
+    if action == "heartbeat.review_due":
+        return "heartbeat_candidate_generated"
+    return "permission_allowed"
+
+
+def _visible_fields(action: str, denied: bool) -> list[str]:
+    if denied:
+        return []
+    if action == "memory.search":
+        return ["memory_id", "subject", "current_value", "evidence", "trace"]
+    if action in {"memory.confirm", "memory.reject"}:
+        return ["candidate_id", "memory_id", "status"]
+    if action == "memory.create_candidate":
+        return ["candidate_id", "status", "evidence", "risk_flags"]
+    if action == "heartbeat.review_due":
+        return ["reminder_id", "subject", "reason", "target_actor", "cooldown"]
+    return ["ok", "trace"]
+
+
+def _redacted_fields(error_details: dict[str, Any], denied: bool) -> list[str]:
+    value = error_details.get("redacted_fields")
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return list(value)
+    return ["current_value", "summary", "evidence"] if denied else []
 
 
 def _prefetch_query(task: str, context: dict[str, object]) -> str:

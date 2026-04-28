@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口。本测试规格只验收“完整可用 Copilot 产品化”后续路线，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成。下一步验收从 Phase B 真实 OpenClaw Agent Runtime 证据开始，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
@@ -106,7 +106,7 @@ Checks:
 - [x] Negative cases 进入测试计划。
 - [x] Architect/Critic 无 blocker。
 
-2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。仍未完成 storage migration、audit table 和 OpenClaw live bridge。
+2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；仍未完成真实 OpenClaw Agent runtime 独立验收。
 
 Commands:
 

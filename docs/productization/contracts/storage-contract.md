@@ -1,18 +1,24 @@
 # Storage Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase 1 contract freeze（文档冻结，待代码实现）
+状态：Phase A 已实现本地 SQLite 兼容迁移和 audit table；仍不是生产级多租户后台。
 适用范围：后续实现 `memory_engine/db.py`、`memory_engine/copilot/schemas.py`、`memory_engine/copilot/service.py`、repository adapter 和 benchmark fixture 时必须遵循。
 
 ## 1. 目标
 
-本契约把当前 scope-first 存储模型升级为 tenant / organization / visibility-aware 的产品模型。Phase 1 只冻结字段、索引、迁移和兼容要求，不直接执行数据库迁移。
+本契约把当前 scope-first 存储模型升级为 tenant / organization / visibility-aware 的产品模型。Phase A 已把字段、索引、迁移兼容和 `memory_audit_events` 落到本地 SQLite；后续生产化仍需真实部署、长期监控和更完整的多租户后台。
 
-当前差距：
+当前历史差距：
 
 - `memory_engine/db.py` 里的 `raw_events` 和 `memories` 只有 `scope_type` / `scope_id`，没有 `tenant_id`、`organization_id`、`visibility_policy`。
 - `memory_versions` 和 `memory_evidence` 不能独立表达来源组织、可见性、actor 或撤权状态。
 - 当前没有 audit 表，无法追踪 permission allow/deny、confirm/reject 和 ingestion gate。
+
+2026-04-28 Phase A 补充：
+
+- `raw_events`、`memories`、`memory_versions`、`memory_evidence` 已有 `tenant_id`、`organization_id`、`visibility_policy` 兼容字段。
+- 已新增 `memory_audit_events`。
+- `python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass`、`audit_smoke.status=pass`。
 
 ## 2. Scope / Tenant 语义
 

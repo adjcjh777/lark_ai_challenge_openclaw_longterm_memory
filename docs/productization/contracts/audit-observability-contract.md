@@ -1,12 +1,12 @@
 # Audit & Observability Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase 1 contract freeze（文档冻结，待代码实现）
+状态：Phase A 已实现本地 SQLite audit table 和 healthcheck audit smoke；仍不是生产监控系统。
 适用范围：Copilot service、permission decisions、Feishu review surface、OpenClaw tool trace、healthcheck。
 
 ## 1. 目标
 
-让完整产品能解释每次记忆读写和提醒为什么发生、谁触发、谁能看、哪些字段被遮挡。Phase 1 冻结审计和可观测字段，不实现具体存储。
+让完整产品能解释每次记忆读写和提醒为什么发生、谁触发、谁能看、哪些字段被遮挡。Phase A 已把最小审计事件写入 `memory_audit_events`，覆盖 confirm/reject/deny/limited ingestion candidate/heartbeat candidate。
 
 ## 2. Audit Events
 

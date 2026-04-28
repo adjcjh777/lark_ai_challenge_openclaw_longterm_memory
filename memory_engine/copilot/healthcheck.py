@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from memory_engine.db import init_db
+from memory_engine.db import SCHEMA_VERSION, init_db
 from memory_engine.repository import MemoryRepository
 
 from .permissions import demo_permission_context
@@ -51,6 +51,7 @@ def run_copilot_healthcheck(
         "cognee_adapter": _check_cognee_adapter(),
         "embedding_provider": _check_embedding_provider(repo_root / EMBEDDING_LOCK_FILE.relative_to(ROOT)),
         "smoke_tests": _check_smoke_tests(),
+        "audit_smoke": _check_audit_smoke(),
     }
     status_counts = _status_counts(checks)
     return {
@@ -169,19 +170,50 @@ def _check_storage_schema() -> dict[str, Any]:
     try:
         init_db(conn)
         tables = _sqlite_tables(conn)
-        memory_columns = _sqlite_columns(conn, "memories")
+        tenant_visibility_tables = ("raw_events", "memories", "memory_versions", "memory_evidence")
+        tenant_visibility_columns = {
+            table: {"tenant_id", "organization_id", "visibility_policy"}.issubset(_sqlite_columns(conn, table))
+            for table in tenant_visibility_tables
+        }
         has_core_tables = {"raw_events", "memories", "memory_versions", "memory_evidence"}.issubset(tables)
-        tenant_visibility_columns = {"tenant_id", "organization_id", "visibility_policy"}.issubset(memory_columns)
         audit_table_available = "memory_audit_events" in tables
-        status = "pass" if has_core_tables and tenant_visibility_columns and audit_table_available else "warning"
+        audit_columns = _sqlite_columns(conn, "memory_audit_events") if audit_table_available else set()
+        required_audit_columns = {
+            "audit_id",
+            "event_type",
+            "tool_name",
+            "memory_id",
+            "candidate_id",
+            "actor_id",
+            "tenant_id",
+            "organization_id",
+            "scope",
+            "permission_decision",
+            "request_id",
+            "trace_id",
+            "created_at",
+        }
+        audit_required_columns = required_audit_columns.issubset(audit_columns)
+        user_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        status = (
+            "pass"
+            if has_core_tables
+            and user_version >= SCHEMA_VERSION
+            and all(tenant_visibility_columns.values())
+            and audit_table_available
+            and audit_required_columns
+            else "warning"
+        )
         return {
             "status": status,
             "schema_checkable": has_core_tables,
-            "schema_version": "legacy_scope_v1" if has_core_tables else "unknown",
+            "schema_version": user_version,
+            "expected_schema_version": SCHEMA_VERSION,
             "tables": sorted(tables),
             "tenant_visibility_columns": tenant_visibility_columns,
             "audit_table_available": audit_table_available,
-            "boundary": "storage schema is checkable; this is not a full audit migration or tenant visibility migration.",
+            "audit_required_columns": audit_required_columns,
+            "boundary": "storage schema includes tenant/org/visibility compatibility and memory_audit_events; this is still local SQLite, not production deployment.",
             "next_step": (
                 ""
                 if status == "pass"
@@ -290,6 +322,99 @@ def _check_smoke_tests() -> dict[str, Any]:
         "search": search,
         "permission_deny": permission_deny,
         "candidate_review": candidate_review,
+    }
+
+
+def _check_audit_smoke() -> dict[str, Any]:
+    with _temp_service() as service:
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：审计 smoke confirm 必须记录 actor 和 trace。",
+                "scope": SCOPE,
+                "source": {
+                    "source_type": "document_feishu",
+                    "source_id": "health_audit_confirm",
+                    "actor_id": "u_health",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：审计 smoke confirm 必须记录 actor 和 trace。",
+                    "source_doc_id": "doc_health_audit",
+                },
+                "current_context": demo_permission_context("memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+            },
+            service=service,
+        )
+        candidate_id = created.get("candidate_id")
+        if isinstance(candidate_id, str):
+            handle_tool_request(
+                "memory.confirm",
+                {
+                    "candidate_id": candidate_id,
+                    "scope": SCOPE,
+                    "reason": "healthcheck audit confirm",
+                    "current_context": demo_permission_context("memory.confirm", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                },
+                service=service,
+            )
+        second = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：审计 smoke reject 必须记录 candidate。",
+                "scope": SCOPE,
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": "health_audit_reject",
+                    "actor_id": "u_health",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：审计 smoke reject 必须记录 candidate。",
+                },
+                "current_context": demo_permission_context("memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+            },
+            service=service,
+        )
+        reject_id = second.get("candidate_id")
+        if isinstance(reject_id, str):
+            handle_tool_request(
+                "memory.reject",
+                {
+                    "candidate_id": reject_id,
+                    "scope": SCOPE,
+                    "reason": "healthcheck audit reject",
+                    "current_context": demo_permission_context("memory.reject", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                },
+                service=service,
+            )
+        handle_tool_request("memory.search", {"query": "审计", "scope": SCOPE}, service=service)
+        handle_tool_request(
+            "heartbeat.review_due",
+            {"scope": SCOPE, "current_context": demo_permission_context("heartbeat.review_due", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
+            service=service,
+        )
+        rows = service.repository.conn.execute(
+            """
+            SELECT event_type, action, permission_decision, reason_code
+            FROM memory_audit_events
+            ORDER BY created_at, audit_id
+            """
+        ).fetchall()
+    events = [dict(row) for row in rows]
+    event_types = {event["event_type"] for event in events}
+    passed = {
+        "candidate_confirmed",
+        "candidate_rejected",
+        "permission_denied",
+        "limited_ingestion_candidate",
+        "heartbeat_candidate_generated",
+    }.issubset(event_types)
+    return {
+        "status": "pass" if passed else "fail",
+        "event_count": len(events),
+        "event_types": sorted(event_types),
+        "confirm_recorded": "candidate_confirmed" in event_types,
+        "reject_recorded": "candidate_rejected" in event_types,
+        "deny_recorded": "permission_denied" in event_types,
+        "limited_ingestion_recorded": "limited_ingestion_candidate" in event_types,
+        "heartbeat_recorded": "heartbeat_candidate_generated" in event_types,
     }
 
 
@@ -513,5 +638,12 @@ def _summary_for_check(name: str, check: dict[str, Any]) -> str:
             f" search={check.get('search', {}).get('status')}"
             f" permission_deny={check.get('permission_deny', {}).get('status')}"
             f" candidate_review={check.get('candidate_review', {}).get('status')}"
+        )
+    if name == "audit_smoke":
+        return (
+            f" events={check.get('event_count')}"
+            f" confirm={check.get('confirm_recorded')}"
+            f" reject={check.get('reject_recorded')}"
+            f" deny={check.get('deny_recorded')}"
         )
     return ""

@@ -146,9 +146,13 @@ class CopilotPermissionTest(unittest.TestCase):
                 service=fixture.service,
             )
             status = fixture.memory_status()
+            audit_events = fixture.audit_events("memory.confirm")
 
         self.assert_permission_denied(denied, "review_role_required")
         self.assertEqual("candidate", status)
+        self.assertEqual("deny", audit_events[-1]["permission_decision"])
+        self.assertEqual("review_role_required", audit_events[-1]["reason_code"])
+        self.assertEqual("u_member", audit_events[-1]["actor_id"])
 
     def test_member_auto_confirm_cannot_bypass_review_role(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_perm_", suffix=".sqlite") as tmp:
@@ -201,9 +205,45 @@ class CopilotPermissionTest(unittest.TestCase):
                 service=fixture.service,
             )
             status = fixture.memory_status()
+            audit_events = fixture.audit_events("memory.reject")
 
         self.assert_permission_denied(denied, "review_role_required")
         self.assertEqual("candidate", status)
+        self.assertEqual("deny", audit_events[-1]["permission_decision"])
+        self.assertEqual("review_role_required", audit_events[-1]["reason_code"])
+
+    def test_confirm_and_reject_write_allow_audit_records(self) -> None:
+        with candidate_service() as fixture:
+            confirmed = handle_tool_request(
+                "memory.confirm",
+                {
+                    "candidate_id": fixture.candidate_id,
+                    "scope": SCOPE,
+                    "actor_id": "u_reviewer",
+                    "current_context": permission_context(action="memory.confirm"),
+                },
+                service=fixture.service,
+            )
+            second = fixture.create_candidate("msg_2", "决定：QA 冻结前必须跑 audit smoke。")
+            rejected = handle_tool_request(
+                "memory.reject",
+                {
+                    "candidate_id": second,
+                    "scope": SCOPE,
+                    "actor_id": "u_reviewer",
+                    "current_context": permission_context(action="memory.reject"),
+                },
+                service=fixture.service,
+            )
+            confirm_events = fixture.audit_events("memory.confirm")
+            reject_events = fixture.audit_events("memory.reject")
+
+        self.assertTrue(confirmed["ok"])
+        self.assertTrue(rejected["ok"])
+        self.assertEqual("allow", confirm_events[-1]["permission_decision"])
+        self.assertEqual("candidate_confirmed", confirm_events[-1]["event_type"])
+        self.assertEqual("allow", reject_events[-1]["permission_decision"])
+        self.assertEqual("candidate_rejected", reject_events[-1]["event_type"])
 
     def test_explain_versions_missing_permission_context_fails_closed(self) -> None:
         response = handle_tool_request(
@@ -313,6 +353,39 @@ class candidate_service:
     def memory_status(self) -> str:
         row = self.conn.execute("SELECT status FROM memories WHERE id = ?", (self.candidate_id,)).fetchone()
         return str(row["status"])
+
+    def create_candidate(self, source_id: str, text: str) -> str:
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": text,
+                "scope": SCOPE,
+                "source": {
+                    "source_type": "unit_test",
+                    "source_id": source_id,
+                    "actor_id": "u_author",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": text,
+                },
+                "current_context": permission_context(action="memory.create_candidate"),
+            },
+            service=self.service,
+        )
+        if not created.get("ok"):
+            raise AssertionError(created)
+        return str(created["candidate_id"])
+
+    def audit_events(self, action: str) -> list[dict[str, object]]:
+        rows = self.conn.execute(
+            """
+            SELECT event_type, action, actor_id, permission_decision, reason_code
+            FROM memory_audit_events
+            WHERE action = ?
+            ORDER BY created_at, audit_id
+            """,
+            (action,),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
 
 if __name__ == "__main__":

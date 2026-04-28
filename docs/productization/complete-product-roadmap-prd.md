@@ -17,8 +17,8 @@ Metadata:
 
 下一步优先级：
 
-1. Phase A：Storage Migration + Audit Table。
-2. Phase B：真实 OpenClaw Agent Runtime 验收。
+1. Phase A：Storage Migration + Audit Table（已完成，见 [Phase A handoff](phase-a-storage-audit-handoff.md)）。
+2. Phase B：真实 OpenClaw Agent Runtime 验收（下一步）。
 3. Phase C：Feishu Staging Runbook。
 4. Phase D：Live Cognee / Ollama Embedding Gate。
 5. Phase E：Product QA + No-overclaim 审查。
@@ -38,11 +38,11 @@ Metadata:
 
 RALPLAN intake 时的仓库事实（历史快照，已被 2026-05-07 Phase 1/Phase 2 前置实现部分推进）：
 - RALPLAN 启动前 README 顶部仍把下一步描述为 2026-05-06 提交材料、录屏、QA 和 scope freeze；当前仓库副本已将 README 顶部改为完整产品路线入口（`README.md:7-11`）。
-- SQLite 基础表仍以 `scope_type/scope_id` 为主，`raw_events` 和 `memories` 尚无 `tenant_id`、`organization_id`、`visibility_policy`（`memory_engine/db.py:14-47`）。
+- Phase A 已完成本地 SQLite 兼容迁移：`raw_events`、`memories`、`memory_versions`、`memory_evidence` 已有 `tenant_id`、`organization_id`、`visibility_policy`，并新增 `memory_audit_events`。
 - 2026-05-07 最新状态：`current_context.permission` 已进入 OpenClaw schema；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 已在 `CopilotService` 统一权限门控；missing/malformed permission 已 fail closed；真实 Feishu document ingestion 已在 fetch 前 fail closed。对应提交：`b6b17b4`。
 - Phase 2 OpenClaw live bridge 已完成，commit `cb21bc7`：`handle_tool_request()` 统一桥接六个 MVP `memory.*` 工具到 permission-aware `CopilotService`，并返回 bridge request/trace/permission decision。
 - Phase 3 Feishu UI / Review Surface 已完成本地闭环：card、Bitable dry-run 和 card action 消费 service/tool output，permission denied 不展示未授权 evidence/current_value。
-- 仍未完成：storage migration、audit table、healthcheck、limited Feishu ingestion 和 productized live。
+- 仍未完成：真实 OpenClaw Agent runtime 独立验收、Feishu staging runbook、live embedding gate 和 productized live。
 
 ---
 

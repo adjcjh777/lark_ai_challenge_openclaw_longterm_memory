@@ -237,9 +237,10 @@ class CopilotGovernance:
             INSERT INTO memories (
               id, scope_type, scope_id, type, subject, normalized_subject,
               current_value, reason, status, confidence, importance,
-              source_event_id, active_version_id, created_at, updated_at
+              created_by, updated_by, source_event_id, active_version_id,
+              created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory_id,
@@ -252,6 +253,8 @@ class CopilotGovernance:
                 extracted.reason,
                 extracted.confidence,
                 extracted.importance,
+                request.source.actor_id,
+                request.source.actor_id,
                 event_id,
                 version_id,
                 ts,
@@ -550,11 +553,11 @@ class CopilotGovernance:
             """
             INSERT INTO memory_evidence (
               id, memory_id, version_id, source_type, source_url,
-              source_event_id, quote, created_at
+              source_event_id, quote, actor_id, ingested_at, created_at
             )
-            VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
             """,
-            (new_id("evi"), memory_id, version_id, source_type, event_id, quote, ts),
+            (new_id("evi"), memory_id, version_id, source_type, event_id, quote, None, ts, ts),
         )
 
     def _find_existing(

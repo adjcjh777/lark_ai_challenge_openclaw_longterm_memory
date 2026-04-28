@@ -7,6 +7,7 @@ import uuid
 from dataclasses import asdict
 from typing import Any
 
+from .db import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID, DEFAULT_VISIBILITY_POLICY
 from .extractor import extract_memory, is_override_intent, subject_for_query
 from .models import parse_scope, normalize_subject
 
@@ -22,6 +23,69 @@ def new_id(prefix: str) -> str:
 class MemoryRepository:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+
+    def record_audit_event(
+        self,
+        *,
+        event_type: str,
+        action: str,
+        tool_name: str | None = None,
+        target_type: str = "memory",
+        target_id: str | None = None,
+        memory_id: str | None = None,
+        candidate_id: str | None = None,
+        actor_id: str | None = None,
+        actor_roles: list[str] | None = None,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
+        scope: str | None = None,
+        permission_decision: str = "allow",
+        reason_code: str = "scope_access_granted",
+        request_id: str | None = None,
+        trace_id: str | None = None,
+        visible_fields: list[str] | None = None,
+        redacted_fields: list[str] | None = None,
+        source_context: dict[str, Any] | None = None,
+        created_at: int | None = None,
+    ) -> str:
+        audit_id = new_id("aud")
+        ts = created_at or now_ms()
+        self.conn.execute(
+            """
+            INSERT INTO memory_audit_events (
+              audit_id, event_type, action, tool_name, target_type, target_id,
+              memory_id, candidate_id, actor_id, actor_roles, tenant_id,
+              organization_id, scope, permission_decision, reason_code,
+              request_id, trace_id, visible_fields, redacted_fields,
+              source_context, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                audit_id,
+                event_type,
+                action,
+                tool_name or action,
+                target_type,
+                target_id,
+                memory_id,
+                candidate_id,
+                actor_id or "unknown",
+                json.dumps(actor_roles or [], ensure_ascii=False),
+                tenant_id or DEFAULT_TENANT_ID,
+                organization_id or DEFAULT_ORGANIZATION_ID,
+                scope,
+                permission_decision,
+                reason_code,
+                request_id or f"req_{audit_id}",
+                trace_id or f"trace_{audit_id}",
+                json.dumps(visible_fields or [], ensure_ascii=False),
+                json.dumps(redacted_fields or [], ensure_ascii=False),
+                json.dumps(source_context or {}, ensure_ascii=False),
+                ts,
+            ),
+        )
+        return audit_id
 
     def remember(
         self,
@@ -454,9 +518,10 @@ class MemoryRepository:
             INSERT INTO memories (
               id, scope_type, scope_id, type, subject, normalized_subject,
               current_value, reason, status, confidence, importance,
-              source_event_id, active_version_id, created_at, updated_at
+              created_by, updated_by, source_event_id, active_version_id,
+              created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory_id,
@@ -470,6 +535,8 @@ class MemoryRepository:
                 status,
                 extracted.confidence,
                 extracted.importance,
+                created_by,
+                created_by,
                 event_id,
                 version_id,
                 ts,
@@ -575,11 +642,11 @@ class MemoryRepository:
             """
             INSERT INTO memory_evidence (
               id, memory_id, version_id, source_type, source_url,
-              source_event_id, quote, created_at
+              source_event_id, quote, ingested_at, created_at
             )
-            VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)
             """,
-            (new_id("evi"), memory_id, version_id, source_type, event_id, quote, ts),
+            (new_id("evi"), memory_id, version_id, source_type, event_id, quote, ts, ts),
         )
 
     def _active_version_no(self, memory_id: str) -> int:

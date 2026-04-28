@@ -13,7 +13,7 @@
 1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-4. 当前最大的产品化缺口是：storage migration、audit table、真实 OpenClaw Agent runtime 验收、Feishu staging runbook、live Cognee/Ollama embedding 验证、no-overclaim 交付物审查。
+4. Phase A 已补齐 storage migration + audit table；当前最大的产品化缺口是：真实 OpenClaw Agent runtime 验收、Feishu staging runbook、live Cognee/Ollama embedding 验证、no-overclaim 交付物审查。
 5. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
 6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
 
@@ -42,6 +42,7 @@ docs/plans/2026-05-08-demo-readiness-handoff.md
 
 已经完成：
 
+- Phase A Storage Migration + Audit Table：SQLite schema version `2`；`raw_events`、`memories`、`memory_versions`、`memory_evidence` 有 `tenant_id`、`organization_id`、`visibility_policy` 兼容字段；新增 `memory_audit_events`；confirm/reject/permission deny/limited ingestion candidate/heartbeat candidate 写审计记录；healthcheck `storage_schema.status=pass`、`audit_smoke.status=pass`。
 - `memory.search`：active-only、Top K、evidence、L0/L1/L2/L3 trace、hybrid retrieval。
 - `memory.create_candidate`：候选识别、低价值内容过滤、evidence gate、risk flags。
 - `memory.confirm` / `memory.reject`：通过 Copilot governance 状态机处理。
@@ -55,8 +56,6 @@ docs/plans/2026-05-08-demo-readiness-handoff.md
 
 仍未完成：
 
-- 生产级 storage migration：`tenant_id`、`organization_id`、`visibility_policy` 仍未真正迁入数据库事实源。
-- audit table：confirm/reject/permission deny/ingestion/heartbeat 还没有完整审计表。
 - 真实 OpenClaw Agent runtime 证据：已有 schema、examples、local bridge，但还缺独立 runtime 验收记录。
 - Feishu staging runbook：测试群 sandbox 已有，但还需整理成稳定 staging 操作手册。
 - live embedding gate：healthcheck 目前只做 configuration-only，真实 Cognee/Ollama embedding 还不是默认门禁。
@@ -85,6 +84,8 @@ docs/plans/2026-05-08-demo-readiness-handoff.md
 
 ## Phase A：Storage Migration + Audit Table
 
+状态：已完成本地闭环，详见 [Phase A handoff](phase-a-storage-audit-handoff.md)。下一轮从 Phase B 开始。
+
 目标：让 Copilot Core 具备产品级事实源，不再只有 legacy scope。
 
 主要文件：
@@ -104,8 +105,8 @@ docs/productization/contracts/audit-observability-contract.md
 
 必须完成：
 
-1. 新增或迁移字段：`tenant_id`、`organization_id`、`visibility_policy`。
-2. 新增 audit table，至少记录：
+1. 已完成：新增或迁移字段：`tenant_id`、`organization_id`、`visibility_policy`。
+2. 已完成：新增 audit table，至少记录：
    - `audit_id`
    - `event_type`
    - `tool_name`
@@ -119,9 +120,9 @@ docs/productization/contracts/audit-observability-contract.md
    - `request_id`
    - `trace_id`
    - `created_at`
-3. `memory.confirm`、`memory.reject`、permission denied、limited ingestion、heartbeat candidate 都写 audit record。
-4. `scripts/check_copilot_health.py --json` 不再把 storage schema 报为 warning。
-5. 旧数据能兼容读取；不要破坏现有 benchmark。
+3. 已完成：`memory.confirm`、`memory.reject`、permission denied、limited ingestion、heartbeat candidate 都写 audit record。
+4. 已完成：`scripts/check_copilot_health.py --json` 不再把 storage schema 报为 warning。
+5. 已完成：旧数据能兼容读取；不要破坏现有 benchmark。
 
 验收命令：
 
@@ -137,9 +138,9 @@ ollama ps
 
 完成标准：
 
-- healthcheck 中 `storage_schema.status=pass`。
-- audit smoke test 能证明 confirm/reject/deny 都有记录。
-- 所有旧 Copilot tests 仍通过。
+- 已完成：healthcheck 中 `storage_schema.status=pass`。
+- 已完成：audit smoke test 能证明 confirm/reject/deny、limited ingestion candidate、heartbeat candidate 都有记录。
+- 已完成：所有旧 Copilot tests 仍通过。
 
 ## Phase B：真实 OpenClaw Agent Runtime 验收
 
@@ -377,14 +378,15 @@ docs/productization/contracts/openclaw-payload-contract.md
 docs/productization/contracts/migration-rfc.md
 docs/productization/contracts/negative-permission-test-plan.md
 docs/plans/2026-05-08-demo-readiness-handoff.md
+docs/productization/phase-a-storage-audit-handoff.md
 
-优先执行 Phase A：Storage Migration + Audit Table。
+Phase A Storage Migration + Audit Table 已完成。优先执行 Phase B：真实 OpenClaw Agent Runtime 验收。
 
 目标：
-1. 补齐 tenant_id、organization_id、visibility_policy 的存储/迁移兼容。
-2. 新增 audit table。
-3. 让 memory.confirm、memory.reject、permission denied、limited ingestion、heartbeat candidate 都写 audit record。
-4. 让 python3 scripts/check_copilot_health.py --json 不再报 storage_schema warning。
+1. 新增 docs/productization/openclaw-runtime-evidence.md。
+2. 在真实 OpenClaw Agent runtime 中至少跑通 3 条：历史决策召回、candidate 创建后确认或拒绝、任务前 memory.prefetch。
+3. 每条记录 input、output、tool、request_id、trace_id、permission_decision 和失败回退。
+4. 如果真实 runtime 不稳定，写清失败原因和 fallback 到 examples/local bridge 的证据，不能冒称 runtime 已完成。
 
 必须遵守：
 - Copilot Core 是事实源，所有入口必须走 CopilotService / handle_tool_request。
@@ -394,23 +396,18 @@ docs/plans/2026-05-08-demo-readiness-handoff.md
 - 不要改 OpenClaw 版本，保持 2026.4.24。
 
 建议文件：
-memory_engine/db.py
-memory_engine/repository.py
-memory_engine/copilot/service.py
-memory_engine/copilot/governance.py
-memory_engine/copilot/permissions.py
-memory_engine/copilot/healthcheck.py
-tests/test_copilot_permissions.py
-tests/test_copilot_healthcheck.py
-tests/test_copilot_tools.py
+agent_adapters/openclaw/memory_tools.schema.json
+agent_adapters/openclaw/feishu_memory_copilot.skill.md
+agent_adapters/openclaw/examples/*.json
+memory_engine/copilot/tools.py
+docs/demo-runbook.md
+docs/productization/openclaw-runtime-evidence.md
 
 验收命令：
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_demo_readiness.py --json
+python3 -m unittest tests.test_copilot_tools tests.test_demo_seed tests.test_demo_readiness
 git diff --check
-python3 -m compileall memory_engine scripts
-python3 -m unittest tests.test_copilot_permissions tests.test_copilot_healthcheck
-python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
-python3 scripts/check_copilot_health.py --json
 ollama ps
 
 完成后：
