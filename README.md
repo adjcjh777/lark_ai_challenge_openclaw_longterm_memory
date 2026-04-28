@@ -1,349 +1,440 @@
 # Feishu Memory Copilot
 
-## 今天先做这个：我的任务
+飞书 AI 挑战赛 OpenClaw 赛道项目。
 
-从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
+本项目要做的是一个 **OpenClaw-native Feishu Memory Copilot**：让 OpenClaw Agent 在飞书工作流里拥有可治理、可追溯、可审计的企业长程记忆能力。
 
-当前主线已经升级为 **完整产品推进路线**。2026-05-05 及以前的 implementation plan 已经全部完成，保留为历史计划和验收证据，不再作为后续执行入口；后续只围绕完整可用 Copilot 产品化继续推进。这里的“完整产品”不是零散 demo，也不是一上来做完整企业后台，而是按 PRD 做一个可用、可复现、可治理、可审计的 OpenClaw-native Feishu Memory Copilot。
+它不是一个普通聊天 Bot，也不是简单的向量数据库 Demo。核心目标是：**把飞书消息、文档、任务上下文里的长期有效信息，转成带证据、带权限、可确认、可版本化的企业记忆，并通过 OpenClaw 工具给 Agent 使用。**
 
-| 当前任务 | 直接入口 | 交付物 | 完成标准 |
-|---|---|---|---|
-| 后期打磨 P1 已完成：生产存储、索引和迁移方案 | [storage migration handoff](docs/productization/storage-migration-productization-handoff.md)；[后期打磨待办](docs/productization/launch-polish-todo.md)；[migration script](scripts/migrate_copilot_storage.py)；[storage migration tests](tests/test_copilot_storage_migration.py)；[healthcheck](scripts/check_copilot_health.py) | `scripts/migrate_copilot_storage.py --dry-run --json` 可检查缺失表/列/索引且不改库；`--apply --json` 可重复执行本地 SQLite 兼容迁移；healthcheck 的 `storage_schema` 会报告 schema version、index status、audit status；文档写清 SQLite 与托管 PostgreSQL 试点边界 | 可说本机 migration dry-run/apply 入口、产品化索引检查和上线试点存储方案已完成；仍不可说生产数据库已部署、完整多租户后台或 productized live 已完成 |
-| 后期打磨 P0 已完成：`memory.*` first-class OpenClaw 原生工具注册 | [first-class tools handoff](docs/productization/first-class-openclaw-tools-handoff.md)；[OpenClaw runtime evidence](docs/productization/openclaw-runtime-evidence.md)；[插件目录](agent_adapters/openclaw/plugin)；[registry test](tests/test_openclaw_tool_registry.py) | `openclaw plugins inspect feishu-memory-copilot --json` 已读回 7 个 `toolNames`；插件调用 Python runner 进入 `handle_tool_request()` / `CopilotService`；healthcheck 新增 `openclaw_native_registry` | 可说本机 first-class tool registry 已完成；仍不可说生产部署、全量 ingestion、长期 embedding 服务或 productized live |
-| 后期打磨 P0 已完成：OpenClaw Feishu websocket running 本机 staging 证据 | [websocket handoff](docs/productization/openclaw-feishu-websocket-handoff.md)；[后期打磨待办](docs/productization/launch-polish-todo.md)；[Feishu staging runbook](docs/productization/feishu-staging-runbook.md)；[websocket evidence check](scripts/check_openclaw_feishu_websocket.py) | `openclaw channels status --probe --json` 显示 Feishu channel 和 default account `running=true`；gateway 日志证明真实 DM 已 `received message`、`dispatching to agent`、`dispatch complete`；单监听检查未发现 repo 内 lark-cli listener 冲突 | 可说本机 staging websocket running 证据已完成；`openclaw health --json` running 字段仍有不一致 warning；真实 Feishu DM 还未稳定路由到本项目 first-class `memory.search` runner；仍不是生产部署或 productized live |
-| 完整可用 Copilot 产品化执行主线：Phase E no-overclaim 审查已完成 | [完整可用 Copilot 后续执行文档](docs/productization/full-copilot-next-execution-doc.md)；[Phase E handoff](docs/productization/phase-e-no-overclaim-handoff.md)；[PRD gap tasks](docs/productization/prd-completion-audit-and-gap-tasks.md) | 已核对 README、Demo runbook、Benchmark Report、白皮书和产品化 handoff：demo replay、测试群 sandbox、live embedding gate、OpenClaw runtime evidence、websocket staging evidence、productized live 的边界保持一致 | 下一步按 [后期打磨待办](docs/productization/launch-polish-todo.md) 继续推进真实权限映射和 Feishu tool routing；不可说生产部署、全量 ingestion、长期 embedding 服务或多租户后台已完成 |
-| Phase E Product QA + No-overclaim 审查已完成 | [Phase E handoff](docs/productization/phase-e-no-overclaim-handoff.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md)；[whitepaper](docs/memory-definition-and-architecture-whitepaper.md) | 修正 heartbeat 样例数为 7；把白皮书 Phase B/Phase D 之前的旧边界更新为当前事实；新增 claim audit 结论和仍未完成风险 | 可说 demo/pre-production、受控测试群 live sandbox、OpenClaw Agent runtime 受控证据、Phase D live embedding gate、first-class registry 和 websocket staging 证据已完成；不可说生产部署、全量 ingestion、长期 embedding 服务或多租户后台已完成 |
-| Phase D Live Cognee / Ollama Embedding Gate 已完成 | [Phase D handoff](docs/productization/phase-d-live-embedding-handoff.md)；[check_live_embedding_gate.py](scripts/check_live_embedding_gate.py)；[check_embedding_provider.py](scripts/check_embedding_provider.py)；[test_live_embedding_gate.py](tests/test_live_embedding_gate.py) | 真实检查 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维；Cognee dry-run adapter 路径通过；脚本自动执行 `ollama ps` 并停止本项目模型 | `python3 scripts/check_live_embedding_gate.py --json` 返回 `ok=true`；`ollama_cleanup.running_after_cleanup=[]`；这不是生产部署、长期 embedding 服务或 productized live |
-| Phase B 真实 OpenClaw Agent runtime 验收已完成受控闭环 | [Phase B evidence](docs/productization/openclaw-runtime-evidence.md)；[Phase B handoff](docs/productization/phase-b-openclaw-runtime-handoff.md)；[openclaw_runtime_evidence.py](scripts/openclaw_runtime_evidence.py) | OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e`；Agent 通过 `exec` 调用证据脚本，三条 Copilot flow 全部通过 | `memory.search`、`memory.create_candidate + memory.confirm`、`memory.prefetch` 都有 `request_id`、`trace_id`、`permission_decision=allow`；first-class registry 和 websocket staging 证据已另补 |
-| Phase A Storage Migration + Audit Table 已完成 | [Phase A handoff](docs/productization/phase-a-storage-audit-handoff.md)；[db.py](memory_engine/db.py)；[service.py](memory_engine/copilot/service.py)；[healthcheck.py](memory_engine/copilot/healthcheck.py) | `tenant_id`、`organization_id`、`visibility_policy` 兼容迁移；`memory_audit_events` 审计表；confirm/reject/deny/limited ingestion/heartbeat 审计 smoke | `python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass` 且 `audit_smoke.status=pass`；仍不是生产部署或完整多租户后台 |
-| 2026-04-28 PRD 完成度核对与未完成任务拆分 | [PRD completion audit and gap tasks](docs/productization/prd-completion-audit-and-gap-tasks.md)；[Feishu Memory Copilot PRD](docs/feishu-memory-copilot-prd.md)；[2026-05-08 handoff](docs/plans/2026-05-08-demo-readiness-handoff.md) | 回答 MVP 是否完成、是否接入飞书、是否接入 OpenClaw 做产品形态测试，并把未完成任务拆成可执行清单 | 明确区分 demo/pre-production、受控测试群 live sandbox 和 productized live；未完成项有负责人、位置、截止建议和完成标准 |
-| Feishu 测试群 live sandbox：用旧测试群承载新的 Memory Copilot | [start_copilot_feishu_live.sh](scripts/start_copilot_feishu_live.sh)；[feishu_live.py](memory_engine/copilot/feishu_live.py)；[test_copilot_feishu_live.py](tests/test_copilot_feishu_live.py)；[2026-05-08 handoff](docs/plans/2026-05-08-demo-readiness-handoff.md) | 飞书真实群消息 -> `copilot-feishu listen` -> `handle_tool_request()` -> `CopilotService` -> bot 回复 | 旧测试群只作为真实环境容器；启动时解析该群为 allowlist；reviewer 不默认 `*`；`/remember` 进入 candidate；`/confirm` 后才 active；普通 @ 提问触发 `memory.search`；回复包含 request_id / trace_id；仍不是生产部署、全量 Feishu workspace ingestion 或 productized live |
-| Feishu 单监听 staging 流程：避免 legacy / lark-cli / OpenClaw websocket 同时消费同一个 bot | [feishu-staging-runbook.md](docs/productization/feishu-staging-runbook.md)；[single listener handoff](docs/productization/feishu-single-listener-handoff.md)；[check_feishu_listener_singleton.py](scripts/check_feishu_listener_singleton.py)；[feishu_listener_guard.py](memory_engine/feishu_listener_guard.py) | 启动前检查并阻止多个监听同时占用 `Feishu Memory Engine bot` | OpenClaw Feishu websocket、`copilot-feishu listen`、legacy `feishu listen` 三选一；正式验收前先跑 singleton preflight；冲突时先停多余监听，不用并行监听碰运气 |
-| 2026-05-08 Demo-ready + Pre-production Readiness：本地演示前一键检查 | [2026-05-08 Ralph plan](docs/plans/2026-05-08-ralph-plan-demo-readiness.md)；[2026-05-08 handoff](docs/plans/2026-05-08-demo-readiness-handoff.md)；[check_demo_readiness.py](scripts/check_demo_readiness.py)；[demo_seed.py](scripts/demo_seed.py)；[test_demo_readiness.py](tests/test_demo_readiness.py)；[test_demo_seed.py](tests/test_demo_seed.py) | 聚合 OpenClaw 版本、Phase 6 healthcheck、Demo replay step-level、provider configuration-only 检查 | `python3 scripts/check_demo_readiness.py` 和 `--json` 可运行；Demo replay 每个 step 都是 `ok=true`；任一 step 失败会让 readiness 整体失败；仍不是生产部署、真实飞书推送、完整 audit migration 或 productized live |
-| Phase 6 Deployability + Healthcheck 已完成本地闭环：只做可检查、可初始化、可诊断 | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[check_copilot_health.py](scripts/check_copilot_health.py)；[healthcheck.py](memory_engine/copilot/healthcheck.py)；[test_copilot_healthcheck.py](tests/test_copilot_healthcheck.py)；[memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json) | Phase 6 healthcheck 命令、可读输出、JSON 输出、OpenClaw/schema/service/storage/permission/Cognee/embedding 检查、search/permission deny/candidate review smoke test | `python3 scripts/check_copilot_health.py` 可运行；schema/tool version 可见；Phase A 后 storage schema 和 audit smoke 已通过；Cognee 使用 repository fallback；embedding 只做 configuration-only 检查；这不是生产部署、真实飞书推送或 productized live |
-| Phase 5 Heartbeat Controlled Reminder 已完成本地闭环：active memory 只生成受控 reminder candidate（提醒候选） | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[heartbeat.py](memory_engine/copilot/heartbeat.py)；[tools.py](memory_engine/copilot/tools.py)；[feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py)；[copilot_heartbeat_cases.json](benchmarks/copilot_heartbeat_cases.json) | `heartbeat.review_due` 工具入口、reason/evidence/target actor/cooldown/permission trace、敏感内容 redacted/withheld、card/Bitable dry-run 安全摘要 | active memory 能生成 candidate；不自动 active；不真实飞书群推送；不是生产调度服务；non-reviewer 看不到敏感 evidence/current_value；Sensitive Reminder Leakage Rate = 0 |
-| Phase 4 Limited Feishu ingestion 已完成本地闭环：指定飞书来源只进入 candidate（待确认记忆）队列 | [2026-05-07 handoff](docs/plans/2026-05-07-handoff.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[document_ingestion.py](memory_engine/document_ingestion.py)；[Phase 4 OpenClaw example](agent_adapters/openclaw/examples/limited_feishu_ingestion_candidate_only.json) | 指定来源 -> candidate pipeline、权限拒绝样例、candidate-only 证据、request_id/trace_id、source metadata、review surface 可审核 | 真实飞书来源不能自动 active；`document_feishu` 的 `auto_confirm=True` 会被忽略；无权限 actor 看不到未授权内容；这仍不是 productized live 或全量 Feishu workspace ingestion |
-| Phase 3 Feishu UI / Review Surface 已完成本地闭环：card、Bitable dry-run 和 card action 消费 permission-aware service/tool output | [feishu_cards.py](memory_engine/feishu_cards.py)；[bitable_sync.py](memory_engine/bitable_sync.py)；[feishu_runtime.py](memory_engine/feishu_runtime.py)；[test_feishu_interactive_cards.py](tests/test_feishu_interactive_cards.py)；[test_bitable_sync.py](tests/test_bitable_sync.py) | Candidate Review card、Version Chain card、Bitable Candidate Review dry-run、permission denied 安全摘要、request_id/trace_id/permission_decision | approve/reject 通过 `CopilotService` / `handle_tool_request`；non-reviewer 被拒绝且 candidate 不变；未授权 payload 不展示 evidence/current_value；这仍不是 Feishu live ingestion |
-| Phase 2 OpenClaw live bridge 已完成，用 OpenClaw/本地桥真实调用 permission-aware Copilot service | [memory_tools.schema.json](agent_adapters/openclaw/memory_tools.schema.json)；[tools.py](memory_engine/copilot/tools.py)；[test_copilot_tools.py](tests/test_copilot_tools.py)；[OpenClaw examples](agent_adapters/openclaw/examples/) | seed/local service bridge、permission-aware tool response、trace/request id、missing/malformed permission fail-closed demo | commit `cb21bc7` 已完成；OpenClaw 版本仍为 `2026.4.24`；`memory.*` 工具通过 service 调用；明确这不是 Feishu live ingestion |
-| Phase 1 契约冻结和 Phase 2 权限前置实现已完成，可以作为下一步代码事实源 | [2026-05-07 产品化计划](docs/plans/2026-05-07-implementation-plan.md)；[Storage Contract](docs/productization/contracts/storage-contract.md)；[Permission Contract](docs/productization/contracts/permission-contract.md)；[OpenClaw Payload Contract](docs/productization/contracts/openclaw-payload-contract.md)；[Audit Contract](docs/productization/contracts/audit-observability-contract.md)；[Migration RFC](docs/productization/contracts/migration-rfc.md)；[Negative Permission Test Plan](docs/productization/contracts/negative-permission-test-plan.md)；[test_copilot_permissions.py](tests/test_copilot_permissions.py) | 六份契约文档、统一权限门控、负例测试、真实 Feishu doc fetch 前 fail closed | commit `a81be0c` 完成 Phase 1 contract freeze；commit `b6b17b4` 完成 permission pre-implementation；51 个专项测试和 124 个全量测试通过；飞书看板已同步 |
-| Phase 0 / 0.5 已完成：保护初赛提交闭环，并把产品化基线路线落到仓库文档 | [2026-05-06 产品化计划](docs/plans/2026-05-06-implementation-plan.md)；[总控计划](docs/feishu-memory-copilot-implementation-plan.md)；[完整产品 PRD](docs/productization/complete-product-roadmap-prd.md)；[完整产品测试规格](docs/productization/complete-product-roadmap-test-spec.md) | README 顶部入口、总控计划、05-06/05-07 日期计划、产品化 PRD/Test Spec | 三大初赛交付物不被破坏；文档清楚区分 schema demo / dry-run / replay / OpenClaw live bridge / limited Feishu ingestion；Phase 1 Contract Freeze Gate 明确后才能进入代码实现或 `$team` 并行 |
-| 2026-05-05 白皮书初稿已完成，作为 Phase 0 提交冻结证据 | [2026-05-05 handoff](docs/plans/2026-05-05-handoff.md)；[whitepaper](docs/memory-definition-and-architecture-whitepaper.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md) | Memory 定义与架构白皮书可提交初稿 | 能回答 Define it / Build it / Prove it；没有把未完成 live 能力写成已完成 |
-| 2026-05-04 Demo 固定和 README 快速开始已完成，作为 Phase 0 可复现证据 | [2026-05-04 handoff](docs/plans/2026-05-04-handoff.md)；[demo-runbook.md](docs/demo-runbook.md)；[demo_seed.py](scripts/demo_seed.py)；[OpenClaw examples](agent_adapters/openclaw/examples/) | 5 分钟 Demo runbook、OpenClaw examples、demo dry-run replay | 新读者能复现历史决策召回、冲突更新、prefetch 和 heartbeat dry-run；OpenClaw runtime 不稳时有 schema examples + CLI/dry-run 兜底 |
-| 2026-05-03 Benchmark Report 和指标自证已完成，作为 Phase 0 评测证据 | [2026-05-03 handoff](docs/plans/2026-05-03-handoff.md)；[benchmark-report.md](docs/benchmark-report.md)；[benchmark.py](memory_engine/benchmark.py) | Copilot recall / candidate / conflict / layer / prefetch / heartbeat 指标报告 | Recall@3、Candidate Precision、Conflict Accuracy、Context Use、Sensitive Reminder Leakage Rate 等 PRD 指标有可复现命令和报告 |
+---
 
-飞书 AI 挑战赛 OpenClaw 赛道项目。当前主线已经从旧的 CLI-first / Bot-first memory demo 切换为 **OpenClaw-native Feishu Memory Copilot**。
+## 1. 当前项目状态
 
-## 当前状态
+当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-截至 2026-04-28 最新口径：2026-04-26 至 2026-05-05 已完成第一周 MVP 闭环、Benchmark Report、Demo 固定和 Memory 定义与架构白皮书初稿；2026-05-06/2026-05-07 已完成完整产品路线、Phase 1 契约冻结、Phase 2 权限前置实现、Phase 2 OpenClaw live bridge、Phase 3 Feishu UI / Review Surface、Phase 4 Limited Feishu ingestion、Phase 5 Heartbeat Controlled Reminder 和 Phase 6 Deployability + Healthcheck 本地闭环；2026-05-08 已追加 Demo-ready + Pre-production Readiness 聚合门禁，并把旧飞书测试群接成新的 Memory Copilot live sandbox；Phase A/B/C/D 产品化硬缺口已补齐，Phase E no-overclaim 审查已完成；后期打磨 P0 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 本机 staging 证据和 P1 生产存储/索引/迁移方案也已补齐。当前剩余风险不是“再证明 demo 能跑”，而是真实权限映射、真实 Feishu DM 到本项目 first-class `memory.*` 工具路由、扩大真实 Feishu ingestion 范围、生产数据库实际部署和 productized live：
+状态快照：2026-04-28，以当前代码、`docs/productization/full-copilot-next-execution-doc.md` 和 `docs/productization/prd-completion-audit-and-gap-tasks.md` 为准。
 
-- OpenClaw 版本固定为 `2026.4.24`，锁文件位于 `agent_adapters/openclaw/openclaw-version.lock`。
-- OpenClaw MVP 工具 schema 已建立：`agent_adapters/openclaw/memory_tools.schema.json`。
-- Copilot Core 第一批骨架已建立：`memory_engine/copilot/`。
-- `memory.search` 已从最小 fallback 升级为 L0 / L1 / L2 / L3 query cascade：工具层薄封装，service 调 orchestrator，trace 能解释每层检索和 fallback。
-- Cognee 已通过窄 adapter 隔离在 `memory_engine/copilot/cognee_adapter.py`。
-- Cognee 本地 spike 已验证：RightCode 文本模型 + Ollama 本地 embedding 可跑通 `add -> cognify -> search`。
-- 本地 embedding 基线锁定为 `qwen3-embedding:0.6b-fp16`，锁文件位于 `memory_engine/copilot/embedding-provider.lock`。
-- 新增 `benchmarks/copilot_recall_cases.json`，并把 `benchmarks/copilot_layer_cases.json` 扩到 15 条分层样例；runner 已校验 `layer_accuracy`，fixture 自检会防重复、缺字段和缺失败排查提示。
-- MemPalace 调研结论已转换为日期计划：只借鉴原文证据、短索引、分层召回、可解释评测，不把 MemPalace 作为新依赖接入。
-- `memory.search` 已升级为 hybrid retrieval：先做 structured filter，再走 keyword_index、curated memory vector、可选 Cognee 通道，最后 merge/rerank；结果带 `matched_via` 和 `why_ranked`。
-- `benchmarks/copilot_recall_cases.json` 已扩到 8 条，覆盖 keyword-only、vector-only、stale-conflict，runner 输出 Recall@3 和 Evidence Coverage。
-- `memory.create_candidate`、`memory.confirm`、`memory.reject` 已接入 Copilot governance；手动记忆、自动候选和文档抽取都先进入 candidate（待确认记忆）路径，缺 evidence 不能升级为 active。
-- 新增 `benchmarks/copilot_candidate_cases.json`，30 条样例覆盖 15 条应该记、15 条不应该记，runner 输出 Candidate Precision、candidate_not_detected、false_positive_candidate 和 evidence_missing。
-- `memory.explain_versions` 已接入 Copilot service / tools；冲突 candidate 确认后新版本 active，旧版本 superseded，默认 `memory.search` 不返回旧值作为当前答案。
-- 新增 `benchmarks/copilot_conflict_cases.json`，10 条样例覆盖真实冲突表达，runner 输出 Conflict Update Accuracy、stale leakage、superseded leakage 和 evidence coverage。
-- Candidate Review card、Version Chain card 和 Bitable dry-run 五类表字段已成型，当前只消费 Copilot service 输出，不直接改状态。
-- `memory.prefetch` 已接入 Copilot service / tools，返回 compact context pack，包含 relevant memory、evidence、risk/deadline、version status 和 trace summary，不带 raw events。
-- `memory_engine/copilot/heartbeat.py` 已生成 heartbeat reminder candidate 和 agent run summary candidate；只做 dry-run，不真实发群，不绕过 governance 自动 active。
-- `benchmarks/copilot_prefetch_cases.json` 已有 6 条样例，`benchmarks/copilot_heartbeat_cases.json` 已有 7 条样例；prefetch runner 输出 Agent Task Context Use Rate，heartbeat runner 输出 Sensitive Reminder Leakage Rate，并覆盖非 reviewer 敏感提醒 withheld。
-- `docs/benchmark-report.md` 已串联 recall、candidate、conflict、layer、prefetch、heartbeat 六类指标，报告包含失败分类、反例说明、PRD 指标映射和 Bitable Benchmark Results dry-run 字段说明。
-- `docs/benchmark-report.md` 已加入 10 条证明力难例；当前 runner 样例为 recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 7 条，Phase 5 新增非 reviewer 敏感提醒 withheld 证明。
-- `docs/demo-runbook.md` 已改成 OpenClaw-native 5 分钟演示脚本，覆盖 `memory.search`、`memory.explain_versions`、`memory.prefetch`、heartbeat reminder candidate 和 benchmark 收口。
-- `scripts/demo_seed.py` 已固定 demo dry-run replay：默认使用临时 SQLite，不写飞书生产空间；可用 `--json-output reports/demo_replay.json` 生成本地演示证据。
-- `agent_adapters/openclaw/examples/*.json` 已标注 copyable / schema demo 边界，并和 `memory_tools.schema.json` 的实际 search 输出字段对齐。
-- `docs/memory-definition-and-architecture-whitepaper.md` 已完成初赛可提交初稿，覆盖 Define it / Build it / Prove it、架构边界、状态机、证据链、Demo/Benchmark 证明、局限和复赛路线。
-- Phase 1 contract freeze 已完成：storage、permission、OpenClaw payload、audit、migration、negative permission test plan 均已落到 `docs/productization/contracts/`。
-- Phase 2 权限前置实现已完成：`current_context.permission` 缺失或畸形会 fail closed；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 都经过 `CopilotService` 统一权限门控；真实 Feishu document ingestion 在 fetch 前必须通过权限校验。
-- Phase 2 OpenClaw live bridge 已完成：`handle_tool_request` 统一桥接 MVP `memory.*` 和 `heartbeat.review_due` 工具到 permission-aware `CopilotService`，返回 `bridge.request_id`、`bridge.trace_id` 和 `permission_decision`。
-- Phase 3 Feishu UI / Review Surface 已完成本地闭环：Candidate Review card、Version Chain card、Bitable dry-run 和 Feishu card action 都消费 service/tool 输出；权限拒绝时只展示安全摘要，不泄露未授权 evidence/current_value。
-- Phase 4 Limited Feishu ingestion 已完成本地闭环：指定 Feishu document source 在授权上下文下进入 candidate；source context document_id 不匹配会在 fetch 前 fail closed；candidate 带 evidence quote、source metadata 和 ingestion trace；真实飞书来源仍不会自动 active。
-- Phase 5 Heartbeat Controlled Reminder 已完成本地闭环：active memory 只生成受控 reminder candidate，输出 reason、evidence、target actor、cooldown 和 permission trace；敏感内容对非 reviewer 只给 withheld/redacted payload；card/Bitable dry-run 不展示未授权 evidence/current_value。本阶段仍不真实推送飞书群消息，不做生产调度服务，也不写成 productized live。
-- Phase 6 Deployability + Healthcheck 已完成本地闭环：`python3 scripts/check_copilot_health.py` 能输出可读摘要，`--json` 能输出 handoff 可复制 JSON；检查 OpenClaw 版本、Copilot service 初始化、OpenClaw schema/tool version、storage schema、permission fail-closed、Cognee adapter、embedding provider，以及 search / permission deny / candidate review smoke test。本阶段只做可检查性，不做生产部署、真实飞书推送或 productized live。
-- Demo readiness 已追加本地聚合入口：`python3 scripts/check_demo_readiness.py` 同时检查 OpenClaw version、Phase 6 healthcheck、Demo replay 每个 step 和 provider configuration-only 状态；`--json` 可输出机器可读报告。只要 Demo replay 任一 step `ok=false`，readiness 整体就会失败。
-- Feishu 测试群 live sandbox 已追加：`python3 -m memory_engine copilot-feishu listen` 和 `scripts/start_copilot_feishu_live.sh` 监听真实测试群消息，但消息处理层只走 `memory_engine/copilot/feishu_live.py` -> `handle_tool_request()` -> `CopilotService`；旧 `memory_engine feishu listen` 只保留为 fallback。启动脚本默认把“Feishu Memory Engine 测试群”解析成群聊 allowlist，并把当前登录用户解析为 reviewer；真实 ID 不写入仓库。
-- 已在旧测试群完成一次真实消息闭环：`/health` 返回 CopilotService live 状态，`/remember` 创建 candidate，`/confirm` 后 active，普通 @ 提问触发 `memory.search` 并返回 request_id、trace_id、hybrid retrieval trace。本能力是受控测试群联调，不是生产部署或全量 workspace ingestion。
-- Phase A Storage Migration + Audit Table 已完成本地闭环：SQLite schema version 已升到 `2`，`raw_events`、`memories`、`memory_versions`、`memory_evidence` 都有 `tenant_id`、`organization_id`、`visibility_policy` 兼容字段；新增 `memory_audit_events`，`memory.confirm`、`memory.reject`、permission deny、limited ingestion candidate 和 heartbeat candidate 均写审计记录；healthcheck 的 `storage_schema.status=pass`、`audit_smoke.status=pass`。这仍是本地 SQLite 产品化迁移，不是生产部署或完整多租户后台。
-- Phase B 真实 OpenClaw Agent runtime 验收已完成受控闭环：`openclaw agent --agent main` run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用 `scripts/openclaw_runtime_evidence.py`，三条 Copilot flow 全部 `ok=true`，并保留 request_id、trace_id、permission_decision。
-- First-class OpenClaw 原生工具注册已完成本机插件证据：新增 `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/tool_registry.py` 和 `memory_engine/copilot/openclaw_tool_runner.py`；`openclaw plugins inspect feishu-memory-copilot --json` 可读回 7 个 `toolNames`：`memory.search`、`memory.create_candidate`、`memory.confirm`、`memory.reject`、`memory.explain_versions`、`memory.prefetch`、`heartbeat.review_due`。安装插件因需要调用 Python runner，使用了 OpenClaw 的 unsafe install override；这不是生产 live。
-- OpenClaw Feishu websocket running 已补本机 staging 证据：`python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45` 返回 `ok=true`、`pass=4`、`warning=1`、`fail=0`；`channels_status.channel_running=true`、`account_running=true`、`probe_ok=true`；gateway 日志证明真实 DM 已进入 OpenClaw Agent dispatch。`openclaw health --json` 总览 running 字段仍与 `channels.status` 不一致，本阶段记为 warning；真实 Feishu DM 当前触发的是 OpenClaw 内置 `memory_search`，不是本项目 first-class `memory.search` runner。
-- 生产存储、索引和迁移方案已补本地入口：`scripts/migrate_copilot_storage.py --dry-run --json` 可报告待迁移表/列/索引且不改库；`--apply --json` 可重复执行本地 SQLite 兼容迁移；healthcheck 的 `storage_schema` 会报告 schema version、index status 和 audit status；上线试点建议托管 PostgreSQL，但本阶段没有部署生产 DB。
-- Phase D Live Cognee / Ollama Embedding Gate 已完成：`python3 scripts/check_live_embedding_gate.py --json` 真实调用 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维；`scripts/spike_cognee_local.py --dry-run` 通过；脚本停止本项目模型后 `running_after_cleanup=[]`。这只是可复现 live gate，不是长期 embedding 服务或 productized live。
-- Phase E Product QA + No-overclaim 审查已完成：README、Demo runbook、Benchmark Report、白皮书和产品化 handoff 的口径已对齐；heartbeat benchmark 样例数统一为 7；白皮书已更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实；后续又补齐 first-class registry 和 websocket staging 证据；仍未完成的 productized live、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台和 Feishu tool routing 保持显式边界。
+### 已完成
 
-## 10 分钟快速开始
+| 能力 | 当前状态 | 主要证据 |
+|---|---|---|
+| OpenClaw memory 工具 | 已完成本机 first-class tool registry | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`tests/test_openclaw_tool_registry.py` |
+| Copilot Core | 已完成核心服务层 | `memory_engine/copilot/service.py`、`tools.py`、`governance.py`、`retrieval.py` |
+| 权限门控 | 已完成 fail-closed 本地闭环 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` |
+| 候选记忆治理 | 已完成 candidate / confirm / reject / conflict / version chain | `memory_engine/copilot/governance.py` |
+| 检索链路 | 已完成 L0/L1/L2/L3 分层混合检索 | `memory_engine/copilot/orchestrator.py`、`retrieval.py` |
+| 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
+| 存储迁移方案 | 已完成本地 migration dry-run / apply 和索引检查 | `scripts/migrate_copilot_storage.py`、`tests/test_copilot_storage_migration.py` |
+| Feishu live sandbox | 已完成受控测试群联调 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh` |
+| OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` |
+| Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
+| Benchmark | 已完成多类评测样例 | `benchmarks/copilot_*.json`、`docs/benchmark-report.md` |
+| 白皮书 / 答辩材料 | 已完成初稿，放在后半部分查看 | `docs/memory-definition-and-architecture-whitepaper.md`、`docs/demo-runbook.md` |
 
-先确认 OpenClaw 版本锁：
+### 不能 overclaim
+
+不能说已经完成：
+
+- 生产部署。
+- 全量接入飞书 workspace。
+- 多租户企业后台。
+- 长期 embedding 服务。
+- 真实 Feishu DM 稳定路由到本项目 first-class `memory.*` 工具。
+- productized live 长期运行。
+
+### 当前最重要的未完成项
+
+| 优先级 | 任务 | 完成标准 |
+|---|---|---|
+| P1 | 打通真实 Feishu DM 到本项目 first-class `memory.*` tool routing | 真实飞书 DM 进入 OpenClaw Agent 后，自然选择本项目 `memory.search` / `memory.prefetch` / `memory.create_candidate` 等工具，并进入 `handle_tool_request()` / `CopilotService` |
+| P1 | 扩大真实飞书 ingestion 范围 | 在明确权限和审计边界下，把更多真实飞书来源接入 candidate-only 流程 |
+| P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
+| P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
+
+---
+
+## 2. 快速开始
+
+最小验收：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_copilot_health.py --json
+python3 scripts/check_demo_readiness.py --json
 ```
 
-再运行 Phase 6 healthcheck。这个命令只做本地可检查性和 smoke test，不做真实飞书推送，也不触发真实 embedding 调用：
+### 2.1 初始化环境
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### 2.2 初始化本地数据库
+
+```bash
+python3 -m memory_engine init-db
+```
+
+默认数据库路径：
+
+```text
+data/memory.sqlite
+```
+
+也可以通过环境变量指定：
+
+```bash
+export MEMORY_DB_PATH=/tmp/memory.sqlite
+```
+
+### 2.3 运行本地健康检查
 
 ```bash
 python3 scripts/check_copilot_health.py
 python3 scripts/check_copilot_health.py --json
 ```
 
-再运行 Demo readiness 聚合门禁。这个命令会顺手生成 `reports/demo_replay.json`，并检查每个 Demo step 是否为 `ok=true`：
+健康检查会覆盖：
+
+- OpenClaw 版本。
+- CopilotService 初始化。
+- OpenClaw tool schema。
+- SQLite storage schema。
+- permission fail-closed。
+- search smoke test。
+- candidate review smoke test。
+- audit smoke test。
+- Cognee adapter / embedding provider 状态。
+- first-class OpenClaw tool registry 状态。
+
+### 2.4 运行 Demo readiness
 
 ```bash
 python3 scripts/check_demo_readiness.py
 python3 scripts/check_demo_readiness.py --json
 ```
 
-如果只想生成本地 Demo replay，可以单独运行。这个命令默认用临时 SQLite，只写 `reports/demo_replay.json`，不会写真实飞书生产空间：
+Demo readiness 用来确认本地演示是否可复现。
+
+---
+
+## 3. 核心演示流程
+
+### 3.1 运行固定 Demo replay
 
 ```bash
+python3 scripts/demo_seed.py
 python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 ```
 
-受控接入旧飞书测试群时运行新的 Copilot live sandbox。这个入口不是旧 Memory Engine handler；它把飞书消息路由到 `CopilotService` 和 OpenClaw memory tools：
+这个脚本会演示：
 
-```bash
-python3 scripts/check_openclaw_version.py
-python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
-# 可选：不设置时脚本会用 lark-cli user auth 解析“Feishu Memory Engine 测试群”和当前登录用户
-export COPILOT_FEISHU_ALLOWED_CHAT_QUERY="Feishu Memory Engine 测试群"
-# export COPILOT_FEISHU_ALLOWED_CHAT_IDS="oc_xxx"
-# export COPILOT_FEISHU_REVIEWER_OPEN_IDS="ou_xxx"
-scripts/start_copilot_feishu_live.sh
-```
+1. 创建带证据的长期记忆。
+2. 搜索当前 active memory。
+3. 处理冲突更新。
+4. 解释版本链。
+5. 生成 Agent 任务前上下文包。
+6. 生成 heartbeat reminder candidate。
 
-如果 OpenClaw Feishu websocket 已经接管同一个 `Feishu Memory Engine bot`，不要再运行上面的 lark-cli sandbox；改为先检查单监听状态，再只走 OpenClaw：
-
-```bash
-python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
-python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
-```
-
-测试群中使用：
-
-```text
-@Feishu Memory Engine bot /health
-@Feishu Memory Engine bot /remember 决定：Copilot live sandbox 验收口径是 candidate 先确认再 active
-@Feishu Memory Engine bot /confirm <candidate_id>
-@Feishu Memory Engine bot Copilot live sandbox 验收口径是什么？
-```
-
-查看 OpenClaw tools 契约和三条演示样例：
-
-```bash
-sed -n '1,220p' agent_adapters/openclaw/memory_tools.schema.json
-sed -n '1,140p' agent_adapters/openclaw/examples/historical_decision_search.json
-sed -n '1,180p' agent_adapters/openclaw/examples/conflict_update_flow.json
-sed -n '1,160p' agent_adapters/openclaw/examples/task_prefetch_flow.json
-sed -n '1,180p' agent_adapters/openclaw/examples/limited_feishu_ingestion_candidate_only.json
-```
-
-按 5 分钟脚本演示：
-
-```bash
-sed -n '1,260p' docs/demo-runbook.md
-```
-
-跑可复现指标证明：
+### 3.2 运行 Benchmark
 
 ```bash
 python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 ```
 
-Cognee 本地 SDK path 用于真实 knowledge / memory engine spike，不是 Demo 的必需前置。需要验证 Cognee + 本地 embedding 时再运行：
+Benchmark 覆盖：
 
-```bash
-python3 scripts/check_live_embedding_gate.py --json
-python3 scripts/check_embedding_provider.py
-python3 scripts/spike_cognee_local.py --dry-run
-ollama ps
-ollama stop qwen3-embedding:0.6b-fp16
+| 评测方向 | 说明 |
+|---|---|
+| recall | 能不能在 Top 3 找到正确长期记忆 |
+| candidate | 能不能识别该记的内容，不乱记闲聊 |
+| conflict | 新旧结论冲突时能不能生成候选版本 |
+| layer | L1/L2/L3 分层检索是否符合预期 |
+| prefetch | Agent 任务前是否能带入正确上下文 |
+| heartbeat | 主动提醒候选是否泄露敏感内容 |
+
+---
+
+## 4. 项目架构
+
+```text
+Feishu / OpenClaw
+      |
+      v
+OpenClaw memory.* tools
+      |
+      v
+agent_adapters/openclaw/
+      |
+      v
+memory_engine/copilot/tools.py
+      |
+      v
+CopilotService
+      |
+      +--> permissions.py       权限门控，默认 fail closed
+      +--> governance.py        candidate / confirm / reject / version chain
+      +--> orchestrator.py      L0/L1/L2/L3 检索编排
+      +--> retrieval.py         keyword + vector + Cognee optional merge/rerank
+      +--> heartbeat.py         reminder candidate
+      |
+      v
+MemoryRepository / SQLite
+      |
+      +--> raw_events
+      +--> memories
+      +--> memory_versions
+      +--> memory_evidence
+      +--> memory_audit_events
 ```
 
-飞书配置说明：
+核心原则：
 
-- OpenClaw 是主入口，工具契约在 `agent_adapters/openclaw/memory_tools.schema.json`。
-- lark-cli 是飞书文档、Bitable 和看板同步工具，配置参考 [local-lark-cli-setup.md](docs/reference/local-lark-cli-setup.md)。
-- 旧 Feishu Bot handler 是 fallback / reference；新的测试群联调入口是 `scripts/start_copilot_feishu_live.sh`，默认只在旧测试群做受控 live sandbox，不写成生产空间上线。
+1. **OpenClaw 是主入口。**
+   `memory.*` 工具是 Agent 使用记忆的正式接口。
 
-## 快速验证
+2. **CopilotService 是唯一业务服务层。**
+   CLI、Feishu live sandbox、OpenClaw runner 都应该进入同一套 `CopilotService`。
 
-基础验证：
+3. **真实飞书来源只能进入 candidate。**
+   不能自动变成 active memory，必须经过 reviewer 确认。
+
+4. **默认只召回 active memory。**
+   candidate、superseded、rejected、raw events 不会默认出现在搜索结果里。
+
+5. **每条长期记忆必须有证据。**
+   search / prefetch 返回结果必须带 evidence 和 trace。
+
+6. **权限缺失时拒绝。**
+   `current_context.permission` 缺失、畸形、scope 不匹配、tenant/org 不匹配时，全部 fail closed。
+
+---
+
+## 5. 关键目录
+
+```text
+agent_adapters/openclaw/
+  memory_tools.schema.json       OpenClaw memory 工具契约
+  plugin/                        first-class OpenClaw plugin
+  examples/                      OpenClaw 工具调用样例
+
+memory_engine/copilot/
+  service.py                     Copilot 应用服务层
+  tools.py                       OpenClaw 工具桥接入口
+  schemas.py                     请求/响应模型
+  permissions.py                 权限门控和敏感内容识别
+  governance.py                  candidate、confirm、reject、version chain
+  orchestrator.py                L0/L1/L2/L3 检索编排
+  retrieval.py                   keyword/vector/Cognee 混合检索
+  heartbeat.py                   reminder candidate
+  feishu_live.py                 飞书测试群 live sandbox
+  healthcheck.py                 Copilot 健康检查
+
+memory_engine/
+  db.py                          SQLite schema 和 migration
+  repository.py                  本地存储访问层
+  cli.py                         memory CLI 入口
+  document_ingestion.py          文档摄取
+  feishu_runtime.py              legacy Feishu runtime fallback
+  bitable_sync.py                Bitable dry-run / sync
+
+scripts/
+  check_copilot_health.py        Copilot healthcheck
+  check_demo_readiness.py        Demo readiness
+  demo_seed.py                   固定 Demo replay
+  check_openclaw_version.py      OpenClaw 版本检查
+  check_live_embedding_gate.py   live embedding gate
+  migrate_copilot_storage.py     存储迁移 dry-run / apply
+  start_copilot_feishu_live.sh   飞书测试群 sandbox 启动脚本
+
+benchmarks/
+  copilot_*.json                 Copilot benchmark cases
+
+docs/
+  demo-runbook.md
+  benchmark-report.md
+  memory-definition-and-architecture-whitepaper.md
+  productization/
+  plans/
+```
+
+---
+
+## 6. OpenClaw 版本
+
+当前锁定版本：
+
+```text
+OpenClaw 2026.4.24
+```
+
+锁文件：
+
+```text
+agent_adapters/openclaw/openclaw-version.lock
+```
+
+检查命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
-python3 scripts/check_copilot_health.py
+```
+
+除非明确要升级并重新锁定版本，不要运行：
+
+```bash
+openclaw update
+npm update -g openclaw
+npm install -g openclaw@latest
+```
+
+---
+
+## 7. Feishu live sandbox
+
+新的飞书测试群入口是：
+
+```bash
+python3 -m memory_engine copilot-feishu listen
+```
+
+或：
+
+```bash
+scripts/start_copilot_feishu_live.sh
+```
+
+支持的飞书消息示例：
+
+```text
+/help
+/health
+/search 生产部署 region 是什么？
+/remember 规则：生产部署必须加 --canary
+/confirm <candidate_id>
+/reject <candidate_id>
+/versions <memory_id>
+/prefetch 今天上线前检查清单
+/heartbeat
+```
+
+边界说明：
+
+- 这是受控测试群 sandbox。
+- 不是生产部署。
+- 不是全量飞书 workspace ingestion。
+- 真实飞书消息默认进入 candidate，不会自动 active。
+- reviewer 配置不能默认使用 `*`，真实 ID 不写入仓库。
+
+---
+
+## 8. 答辩和提交材料
+
+答辩材料放在这里：
+
+| 材料 | 路径 | 用途 |
+|---|---|---|
+| Demo runbook | `docs/demo-runbook.md` | 5 分钟演示脚本 |
+| Benchmark report | `docs/benchmark-report.md` | 指标和评测证据 |
+| Memory 白皮书 | `docs/memory-definition-and-architecture-whitepaper.md` | Define it / Build it / Prove it |
+| PRD 完成度审计 | `docs/productization/prd-completion-audit-and-gap-tasks.md` | 当前完成度和未完成边界 |
+| 产品化执行文档 | `docs/productization/full-copilot-next-execution-doc.md` | 后续执行主线 |
+| OpenClaw runtime evidence | `docs/productization/openclaw-runtime-evidence.md` | OpenClaw Agent 受控验收证据 |
+| Feishu websocket handoff | `docs/productization/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
+| Storage migration handoff | `docs/productization/storage-migration-productization-handoff.md` | 存储迁移和生产存储试点方案 |
+
+答辩时可以用这句话概括：
+
+> 我们做的不是一个会记笔记的 Bot，而是一个 OpenClaw-native 的企业记忆治理层。它把飞书里的长期有效信息转成候选记忆，通过权限门控、证据链、版本链和审计表治理后，再以 `memory.*` 工具的形式提供给 OpenClaw Agent 使用。
+
+---
+
+## 9. 当前主线任务
+
+当前优先级最高的后续任务：
+
+| 任务 | 位置 | 完成标准 |
+|---|---|---|
+| 打通真实 Feishu DM 到 first-class `memory.*` tool routing | `agent_adapters/openclaw/plugin/`、`memory_engine/copilot/openclaw_tool_runner.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` | 真实 Feishu DM 进入 OpenClaw Agent 后自然选择本项目 memory 工具 |
+| 扩大真实 Feishu ingestion 范围 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/feishu_live.py`、`docs/productization/full-copilot-next-execution-doc.md` | 真实飞书来源继续 candidate-only，权限和审计可检查 |
+| 设计 productized live 长期运行方案 | `docs/productization/full-copilot-next-execution-doc.md` | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
+| 保持 no-overclaim 文档口径 | README、白皮书、Demo runbook、Benchmark report | 不把 demo、dry-run、sandbox、staging 写成 production live |
+
+---
+
+## 10. 开发验证命令
+
+文档改动：
+
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
+```
+
+Python / Copilot 代码改动：
+
+```bash
+python3 scripts/check_openclaw_version.py
+git diff --check
 python3 -m compileall memory_engine scripts
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m unittest discover tests
 ```
 
-Copilot contract 验证：
+Copilot 核心专项：
 
 ```bash
-python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_retrieval tests.test_copilot_cognee_adapter tests.test_copilot_healthcheck
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
+python3 -m unittest tests.test_copilot_permissions tests.test_copilot_governance
+python3 -m unittest tests.test_copilot_retrieval tests.test_copilot_benchmark
 ```
 
-Embedding provider 验证：
+Demo / healthcheck：
 
 ```bash
-python3 scripts/check_live_embedding_gate.py --json
-python3 scripts/check_embedding_provider.py
-ollama ps
-ollama stop qwen3-embedding:0.6b-fp16
+python3 scripts/check_copilot_health.py --json
+python3 scripts/check_demo_readiness.py --json
 ```
 
-`check_embedding_provider.py` 会拉起本地 Ollama embedding 模型；验证结束后需要检查 `ollama ps`，并停止本项目拉起的 `qwen3-embedding:0.6b-fp16`，避免持续占用 Mac mini GPU/内存。
-
-## 执行入口
-
-从现在起，2026-05-05 及以前的 implementation plan 不再需要执行。它们只用于查历史背景、验收证据和风险记录；不要按旧日期计划继续补任务，也不要把旧 handoff 里的“下一步”当成当前待办。
-
-后续开工前先读：
-
-1. `AGENTS.md`
-2. `README.md`
-3. `docs/README.md`
-4. `docs/human-product-guide.md`
-5. `docs/productization/full-copilot-next-execution-doc.md`
-6. `docs/productization/launch-polish-todo.md`
-7. `docs/productization/workflow-and-test-process.md`
-8. 和当前产品化阶段直接相关的 contract / runbook / handoff
-
-当前唯一推荐执行主线：
-
-- Phase A：Storage Migration + Audit Table（已完成，见 `docs/productization/phase-a-storage-audit-handoff.md`）
-- Phase B：真实 OpenClaw Agent Runtime 验收（已完成受控证据，见 `docs/productization/openclaw-runtime-evidence.md`）
-- Phase C：Feishu Staging Runbook（已完成单监听守卫和 runbook，见 `docs/productization/feishu-staging-runbook.md`）
-- Phase D：Live Cognee / Ollama Embedding Gate（已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`）
-- Phase E：Product QA + No-overclaim 审查（已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`）
-
-Phase E 之后已完成第一项后期打磨：
-
-- `memory.*` first-class OpenClaw 原生工具注册：已通过 [first-class tools handoff](docs/productization/first-class-openclaw-tools-handoff.md) 留下本机插件安装和 `toolNames` 读回证据。
-
-接下来若继续推进，优先处理：
-
-- 真实 Feishu DM 到本项目 first-class `memory.*` 工具路由：当前 websocket 已 running，真实 DM 已进入 OpenClaw Agent dispatch，但工具调用仍落到 OpenClaw 内置 `memory_search`，还没稳定进入本项目 `handle_tool_request()`。
-- productized live 的长期运行、监控、权限后台和运维交接；本阶段不用做，也不要写成已完成。
-
-已完成的历史计划和证据：
-
-- `docs/plans/2026-04-26-implementation-plan.md`
-- `docs/plans/2026-04-27-implementation-plan.md`
-- `docs/plans/2026-04-27-handoff.md`
-- `docs/plans/2026-04-28-implementation-plan.md`
-- `docs/plans/2026-04-28-handoff.md`
-- `docs/plans/2026-04-29-implementation-plan.md`
-- `docs/plans/2026-04-29-handoff.md`
-- `docs/plans/2026-04-30-implementation-plan.md`
-- `docs/plans/2026-04-30-handoff.md`
-- `docs/plans/2026-05-01-implementation-plan.md`
-- `docs/plans/2026-05-01-handoff.md`
-- `docs/plans/2026-05-02-implementation-plan.md`
-- `docs/plans/2026-05-02-handoff.md`
-- `docs/plans/2026-05-03-implementation-plan.md`
-- `docs/plans/2026-05-03-handoff.md`
-- `docs/plans/2026-05-04-implementation-plan.md`
-- `docs/plans/2026-05-04-handoff.md`
-- `docs/plans/2026-05-05-implementation-plan.md`
-- `docs/plans/2026-05-05-handoff.md`
-
-仍可作为产品化参考，但不是 2026-05-05 及以前的待执行项：
-
-- `docs/plans/2026-05-06-implementation-plan.md`
-- `docs/plans/2026-05-07-implementation-plan.md`
-- `docs/plans/2026-05-07-handoff.md`
-
-## 主架构边界
-
-新功能优先进入：
-
-```text
-memory_engine/copilot/
-agent_adapters/openclaw/
-```
-
-不要从大改这些旧路径开始：
-
-```text
-memory_engine/repository.py
-memory_engine/feishu_runtime.py
-memory_engine/cli.py
-```
-
-旧实现保留为 reference / fallback，包括本地 SQLite 记忆、Feishu Bot、Bitable 同步、文档 ingestion 和旧 benchmark 样例。
-
-## 本地数据和敏感文件
-
-以下内容不得提交：
-
-- `.env`
-- `.env.local`
-- `.data/`
-- `.omx/`
-- `data/*.sqlite`
-- `logs/`
-- `reports/`
-- 真实飞书日志、群聊 ID、用户 ID、token
-
-Cognee 本地数据目录固定在 `.data/cognee/`。
-
-## 旧 CLI / Bot 兜底
-
-旧本地 memory loop 仍可作为 fallback 使用：
+Benchmark：
 
 ```bash
-python3 -m memory_engine init-db
-python3 -m memory_engine remember --scope project:feishu_ai_challenge "生产部署必须加 --canary --region cn-shanghai"
-python3 -m memory_engine recall --scope project:feishu_ai_challenge "生产部署参数"
-python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 ```
 
-旧 Feishu Bot replay 仍可用于回归：
+---
 
-```bash
-python3 -m memory_engine feishu replay tests/fixtures/feishu_text_remember_event.json
-python3 -m memory_engine feishu replay tests/fixtures/feishu_text_recall_event.json
-```
+## 11. 项目边界
 
-真实监听仍使用：
+本项目当前是比赛项目和产品化原型，不是完整生产系统。
 
-```bash
-scripts/start_feishu_bot.sh --dry-run
-```
+当前已经证明：
 
-注意：旧 Bot 是 fallback 和可复现测试面，不是新 Copilot 主入口。
+- 本地可复现。
+- Demo 可演示。
+- Benchmark 可运行。
+- OpenClaw tool contract 可检查。
+- 飞书测试群 sandbox 可联调。
+- 权限、证据、版本、审计有本地闭环。
+- 存储迁移和索引检查有本地 dry-run / apply 入口。
 
-## 关键文档
+当前尚未完成：
 
-- 文档导航：`docs/README.md`
-- 给人类快速理解产品：`docs/human-product-guide.md`
-- 后期打磨待办：`docs/productization/launch-polish-todo.md`
-- 工作和测试流程：`docs/productization/workflow-and-test-process.md`
-- 当前执行入口：`docs/productization/full-copilot-next-execution-doc.md`
-- 历史主控计划/产品化参考：`docs/feishu-memory-copilot-implementation-plan.md`
-- PRD：`docs/feishu-memory-copilot-prd.md`
-- 日期计划索引：`docs/plans/README.md`
-- 2026-04-27 handoff：`docs/plans/2026-04-27-handoff.md`
-- 2026-04-28 handoff：`docs/plans/2026-04-28-handoff.md`
-- 2026-04-29 handoff：`docs/plans/2026-04-29-handoff.md`
-- 2026-05-04 Demo runbook：`docs/demo-runbook.md`
-- 2026-05-04 handoff：`docs/plans/2026-05-04-handoff.md`
-- 2026-05-05 白皮书：`docs/memory-definition-and-architecture-whitepaper.md`
-- 2026-05-05 handoff：`docs/plans/2026-05-05-handoff.md`
-- 产品化 PRD：`docs/productization/complete-product-roadmap-prd.md`
-- PRD 完成度核对：`docs/productization/prd-completion-audit-and-gap-tasks.md`
-- Windows embedding 配置：`docs/reference/local-windows-cognee-embedding-setup.md`
-- 旧资料归档：`docs/archive/`
-- 长期参考资料：`docs/reference/`
+- 生产部署。
+- 全量飞书 workspace ingestion。
+- 多租户企业后台。
+- 真实权限后台。
+- 长期在线 embedding 服务。
+- 长期监控、告警、回滚。
+- 真实 Feishu DM 稳定路由到本项目 first-class `memory.*` 工具。
