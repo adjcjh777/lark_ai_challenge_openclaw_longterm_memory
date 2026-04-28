@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`。下一步验收从 Phase D live embedding gate 和 Phase E no-overclaim 审查开始，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`。下一步验收从 Phase E no-overclaim 审查开始，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
@@ -243,6 +243,7 @@ Commands:
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_live_embedding_gate.py --json
 python3 scripts/check_embedding_provider.py
 ollama ps
 ```

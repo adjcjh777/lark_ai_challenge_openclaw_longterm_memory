@@ -53,15 +53,20 @@ def main() -> None:
         sys.exit(1)
 
     actual_dimensions = len(result)
+    ollama_model = model.removeprefix("ollama/")
     _print(
         {
             "ok": actual_dimensions == expected_dimensions,
             "status": "ready" if actual_dimensions == expected_dimensions else "dimension_mismatch",
+            "check_mode": "live_embedding",
             "model": model,
+            "ollama_model": ollama_model,
             "endpoint": endpoint,
             "expected_dimensions": expected_dimensions,
             "actual_dimensions": actual_dimensions,
             "sample": args.text,
+            "cleanup_required": model.startswith("ollama/"),
+            "cleanup_command": f"ollama stop {ollama_model}" if model.startswith("ollama/") else None,
         }
     )
     if actual_dimensions != expected_dimensions:

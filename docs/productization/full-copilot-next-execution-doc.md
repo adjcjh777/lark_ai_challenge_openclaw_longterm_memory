@@ -13,7 +13,7 @@
 1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；当前最大的产品化缺口是：live Cognee/Ollama embedding 验证、no-overclaim 交付物审查，以及后续是否把 `memory.*` 注册成 OpenClaw first-class 原生工具。
+4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate。当前最大的产品化缺口是：no-overclaim 交付物审查，以及后续是否把 `memory.*` 注册成 OpenClaw first-class 原生工具。
 5. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
 6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
 
@@ -54,6 +54,7 @@ docs/productization/feishu-single-listener-handoff.md
 - Feishu live sandbox：真实测试群消息进入 `memory_engine/copilot/feishu_live.py -> handle_tool_request() -> CopilotService`。
 - Feishu 单监听 preflight：`scripts/check_feishu_listener_singleton.py` 会在 repo 内 lark-cli listener 启动前拦截 legacy / copilot / direct lark-cli / 可识别 OpenClaw websocket 冲突；OpenClaw websocket、Copilot lark-cli sandbox、legacy fallback 三选一。
 - Phase B OpenClaw Agent runtime evidence：`openclaw agent --agent main` run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用 `scripts/openclaw_runtime_evidence.py`，三条 Copilot flow 全部 `ok=true`，并保留 request_id、trace_id、permission_decision。
+- Phase D live embedding gate：`python3 scripts/check_live_embedding_gate.py --json` 已真实调用 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维，并确认清理后无本项目 Ollama 模型驻留；healthcheck 仍保留 configuration-only，不把它写成长期 embedding 服务。
 - Demo readiness：`python3 scripts/check_demo_readiness.py --json` 已可通过。
 - Benchmark：recall、candidate、conflict、layer、prefetch、heartbeat 六类 runner 已有。
 
@@ -61,7 +62,6 @@ docs/productization/feishu-single-listener-handoff.md
 
 - `memory.*` first-class OpenClaw 原生工具注册：本阶段已证明 Agent runtime -> `exec` -> evidence script -> `handle_tool_request()`，但不宣称 `memory.*` 已出现在 OpenClaw Agent `systemPromptReport.tools.entries` 中。
 - OpenClaw Feishu websocket running 证据：`openclaw health --json` 当前显示 Feishu channel configured/enabled 且 credential probe OK，但 `running=false`。
-- live embedding gate：healthcheck 目前只做 configuration-only，真实 Cognee/Ollama embedding 还不是默认门禁。
 - productized live：没有生产部署、长期运行监控、完整多租户后台。
 
 ## 产品完成定义
@@ -87,7 +87,7 @@ docs/productization/feishu-single-listener-handoff.md
 
 ## Phase A：Storage Migration + Audit Table
 
-状态：已完成本地闭环，详见 [Phase A handoff](phase-a-storage-audit-handoff.md)。Phase B 也已补受控 runtime 证据，下一轮优先从 Phase D / Phase E 开始。
+状态：已完成本地闭环，详见 [Phase A handoff](phase-a-storage-audit-handoff.md)。Phase B 已补受控 runtime 证据，Phase D 已补 live embedding gate，下一轮优先从 Phase E 开始。
 
 目标：让 Copilot Core 具备产品级事实源，不再只有 legacy scope。
 
@@ -245,29 +245,34 @@ ollama ps
 
 ## Phase D：Live Cognee / Ollama Embedding Gate
 
+状态：已完成可复现 live gate，详见 [Phase D handoff](phase-d-live-embedding-handoff.md)。下一步进入 Phase E no-overclaim 审查。
+
 目标：把 embedding 从 configuration-only warning 推进到可选 live check，并保持可清理。
 
 主要文件：
 
 ```text
 scripts/check_embedding_provider.py
+scripts/check_live_embedding_gate.py
 scripts/spike_cognee_local.py
 memory_engine/copilot/cognee_adapter.py
 memory_engine/copilot/embedding-provider.lock
 docs/reference/local-windows-cognee-embedding-setup.md
+tests/test_live_embedding_gate.py
 ```
 
 必须完成：
 
-1. 明确 live embedding check 与 fallback check 的区别。
-2. 真实运行 provider 检查时必须执行 `ollama ps`。
-3. 如果拉起 `qwen3-embedding:0.6b-fp16` 或其他本项目模型，验证结束后必须停止，除非文档写明保留原因。
-4. healthcheck 继续允许 configuration-only，但 productized readiness 要有 live embedding gate 的结果。
+1. 已完成：明确 live embedding check 与 fallback check 的区别。
+2. 已完成：真实运行 provider 检查时执行 `ollama ps`。
+3. 已完成：如果拉起 `qwen3-embedding:0.6b-fp16` 或其他本项目模型，验证结束后自动停止，除非文档写明保留原因。
+4. 已完成：healthcheck 继续允许 configuration-only，但 productized readiness 有 live embedding gate 的结果。
 
 验收命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_live_embedding_gate.py --json
 python3 scripts/check_embedding_provider.py
 python3 scripts/spike_cognee_local.py --dry-run
 ollama ps
@@ -276,9 +281,9 @@ git diff --check
 
 完成标准：
 
-- 成功时记录 live provider 维度、模型名、endpoint。
-- 失败时记录 fallback 和原因。
-- 最终 `ollama ps` 无本项目模型驻留，或文档写明为什么保留。
+- 已完成：成功时记录 live provider 维度、模型名、endpoint。
+- 已完成：失败时记录 fallback 和原因。
+- 已完成：最终 `ollama ps` 无本项目模型驻留，或文档写明为什么保留。
 
 ## Phase E：Product QA + No-overclaim 审查
 
@@ -394,15 +399,15 @@ docs/productization/contracts/migration-rfc.md
 docs/productization/contracts/negative-permission-test-plan.md
 docs/plans/2026-05-08-demo-readiness-handoff.md
 docs/productization/phase-a-storage-audit-handoff.md
+docs/productization/phase-d-live-embedding-handoff.md
 
-Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agent Runtime 受控证据也已完成，详见 docs/productization/openclaw-runtime-evidence.md 和 docs/productization/phase-b-openclaw-runtime-handoff.md。优先执行 Phase D：Live Cognee / Ollama Embedding Gate；随后执行 Phase E：Product QA + No-overclaim 审查。
+Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agent Runtime 受控证据也已完成，详见 docs/productization/openclaw-runtime-evidence.md 和 docs/productization/phase-b-openclaw-runtime-handoff.md。Phase D Live Cognee / Ollama Embedding Gate 已完成，详见 docs/productization/phase-d-live-embedding-handoff.md。优先执行 Phase E：Product QA + No-overclaim 审查。
 
 目标：
-1. 跑真实 provider 检查：`python3 scripts/check_embedding_provider.py` 和 `python3 scripts/spike_cognee_local.py --dry-run`。
-2. 运行后必须执行 `ollama ps`，如果本项目模型仍在运行，停止 `qwen3-embedding:0.6b-fp16` 或写清保留原因。
-3. 更新 README、full execution doc 或 handoff，区分 live embedding check 与 configuration-only fallback。
-4. 做 no-overclaim 审查：README、demo runbook、benchmark report、whitepaper 不能把 replay/dry-run/test group sandbox 写成 productized live。
-5. 同步飞书共享任务看板，记录验证结果、commit hash 和仍未完成风险。
+1. 做 no-overclaim 审查：README、demo runbook、benchmark report、whitepaper 不能把 replay/dry-run/test group sandbox 写成 productized live。
+2. 核对 Phase D 之后的 wording：可以说 live embedding gate 已通过，不能说长期 embedding 服务、生产部署或 productized live 已完成。
+3. 更新 README、full execution doc 或 handoff，把 Phase E 的剩余风险和完成标准写清。
+4. 同步飞书共享任务看板，记录验证结果、commit hash 和仍未完成风险。
 
 必须遵守：
 - Copilot Core 是事实源，所有入口必须走 CopilotService / handle_tool_request。
@@ -414,16 +419,18 @@ Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agen
 
 建议文件：
 scripts/check_embedding_provider.py
+scripts/check_live_embedding_gate.py
 scripts/spike_cognee_local.py
 memory_engine/copilot/cognee_adapter.py
 memory_engine/copilot/embedding-provider.lock
 docs/productization/full-copilot-next-execution-doc.md
-docs/productization/phase-b-openclaw-runtime-handoff.md
+docs/productization/phase-d-live-embedding-handoff.md
 docs/productization/prd-completion-audit-and-gap-tasks.md
 README.md
 
 验收命令：
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_live_embedding_gate.py --json
 python3 scripts/check_embedding_provider.py
 python3 scripts/spike_cognee_local.py --dry-run
 git diff --check

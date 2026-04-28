@@ -59,5 +59,5 @@ Phase B 要交付：
 
 - 还没有真实 OpenClaw Agent runtime 独立验收记录。
 - Feishu staging runbook 还没整理成可交接流程。
-- live Cognee / Ollama embedding 仍不是默认门禁；healthcheck 仍是 configuration-only。
+- live Cognee / Ollama embedding gate 已由后续 Phase D 补齐；healthcheck 仍保留 configuration-only，不把它写成长期 embedding 服务。
 - 当前 storage migration 是本地 SQLite 兼容迁移，不是生产级多租户后台或长期运行监控。

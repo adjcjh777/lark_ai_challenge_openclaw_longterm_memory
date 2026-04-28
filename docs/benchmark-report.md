@@ -132,7 +132,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 - 样例规模仍是 MVP 级：recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 6 条。适合证明链路，不代表最终复赛级压力测试。
 - `reports/` 的 JSON / CSV 是本地运行证据，没有提交；评委材料优先读本报告和可复现命令。
-- Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable，没有跑真实 embedding；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。
+- Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。真实 Cognee / Ollama embedding 已由 Phase D live gate 单独验证，不把本 benchmark 报告写成长期 embedding 服务证明。
 - heartbeat 仍是 reminder candidate / dry-run，不真实发群，不绕过治理层自动写 active memory。
 - Bitable 仍是展示和审核面，不是 source of truth。
 

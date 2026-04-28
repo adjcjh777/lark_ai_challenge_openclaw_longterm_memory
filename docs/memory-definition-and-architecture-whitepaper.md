@@ -296,7 +296,7 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 
 - Benchmark 样例规模仍小，适合证明链路和指标定义。
 - `reports/` JSON / CSV 是本地证据目录，没有提交。
-- Cognee optional recall channel 在本地 benchmark 中可以 unavailable；真实 Cognee + Ollama spike 已在前期验证，但本报告主证据是 Copilot Core、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。
+- Cognee optional recall channel 在本地 benchmark 中可以 unavailable；真实 Cognee + Ollama embedding 已由 Phase D live gate 单独验证，但本报告主证据仍是 Copilot Core、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run，不把它写成长期 embedding 服务或 productized live。
 - Heartbeat 不真实发群。
 - Bitable 是展示和审核面，不是 source of truth。
 
