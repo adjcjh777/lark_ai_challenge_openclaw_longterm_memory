@@ -220,6 +220,12 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return _prefetch_invocation(event, scope, argument or text, reason="explicit_prefetch")
     if command_name in {"heartbeat", "review_due"}:
         return _heartbeat_invocation(event, scope, reason="explicit_heartbeat")
+    if command_name == "task":
+        return _task_invocation(event, scope, argument, reason="explicit_task")
+    if command_name == "meeting":
+        return _meeting_invocation(event, scope, argument, reason="explicit_meeting")
+    if command_name == "bitable":
+        return _bitable_invocation(event, scope, argument, reason="explicit_bitable")
 
     if text.startswith("确认 "):
         return _review_invocation(event, scope, "memory.confirm", text.removeprefix("确认 ").strip(), reason="natural_confirm")
@@ -249,6 +255,12 @@ def format_tool_result(invocation: CopilotFeishuInvocation, result: dict[str, An
         return _format_prefetch(result)
     if invocation.tool_name == "heartbeat.review_due":
         return _format_heartbeat(result)
+    if invocation.tool_name == "feishu.fetch_task":
+        return _format_feishu_source(result, "飞书任务")
+    if invocation.tool_name == "feishu.fetch_meeting":
+        return _format_feishu_source(result, "飞书会议")
+    if invocation.tool_name == "feishu.fetch_bitable":
+        return _format_feishu_source(result, "Bitable 记录")
     return _reply(
         "Memory Copilot 已执行工具。",
         [
@@ -368,6 +380,96 @@ def _heartbeat_invocation(event: FeishuMessageEvent, scope: str, *, reason: str)
             "limit": 5,
         },
         event.text,
+        reason,
+    )
+
+
+def _task_invocation(event: FeishuMessageEvent, scope: str, task_id: str, *, reason: str) -> CopilotFeishuInvocation:
+    """处理 /task <task_id> 命令，拉取飞书任务进入 candidate pipeline。"""
+    tool = "feishu.fetch_task"
+    context = _current_context(event, scope, tool, intent="fetch_task", thread_topic=task_id)
+    context["source_context"] = {
+        "entrypoint": ENTRYPOINT,
+        "workspace_id": scope,
+        "chat_id": event.chat_id,
+        "task_id": task_id,
+    }
+    return CopilotFeishuInvocation(
+        tool,
+        {
+            "task_id": task_id,
+            "scope": scope,
+            "current_context": context,
+        },
+        task_id,
+        reason,
+    )
+
+
+def _meeting_invocation(
+    event: FeishuMessageEvent, scope: str, minute_token: str, *, reason: str
+) -> CopilotFeishuInvocation:
+    """处理 /meeting <minute_token> 命令，拉取飞书妙记进入 candidate pipeline。"""
+    tool = "feishu.fetch_meeting"
+    context = _current_context(event, scope, tool, intent="fetch_meeting", thread_topic=minute_token)
+    context["source_context"] = {
+        "entrypoint": ENTRYPOINT,
+        "workspace_id": scope,
+        "chat_id": event.chat_id,
+        "meeting_id": minute_token,
+    }
+    return CopilotFeishuInvocation(
+        tool,
+        {
+            "minute_token": minute_token,
+            "scope": scope,
+            "current_context": context,
+        },
+        minute_token,
+        reason,
+    )
+
+
+def _bitable_invocation(
+    event: FeishuMessageEvent, scope: str, argument: str, *, reason: str
+) -> CopilotFeishuInvocation:
+    """处理 /bitable <app_token> <table_id> <record_id> 命令，拉取 Bitable 记录进入 candidate pipeline。"""
+    tool = "feishu.fetch_bitable"
+    parts = argument.split()
+    if len(parts) < 3:
+        # 参数不足，返回一个错误提示
+        context = _current_context(event, scope, tool, intent="fetch_bitable", thread_topic="error")
+        return CopilotFeishuInvocation(
+            tool,
+            {
+                "error": "参数不足，需要: /bitable <app_token> <table_id> <record_id>",
+                "scope": scope,
+                "current_context": context,
+            },
+            argument,
+            reason,
+        )
+
+    app_token, table_id, record_id = parts[0], parts[1], parts[2]
+    context = _current_context(event, scope, tool, intent="fetch_bitable", thread_topic=record_id)
+    context["source_context"] = {
+        "entrypoint": ENTRYPOINT,
+        "workspace_id": scope,
+        "chat_id": event.chat_id,
+        "bitable_app_token": app_token,
+        "bitable_table_id": table_id,
+        "bitable_record_id": record_id,
+    }
+    return CopilotFeishuInvocation(
+        tool,
+        {
+            "app_token": app_token,
+            "table_id": table_id,
+            "record_id": record_id,
+            "scope": scope,
+            "current_context": context,
+        },
+        argument,
         reason,
     )
 
@@ -594,6 +696,62 @@ def _format_heartbeat(result: dict[str, Any]) -> str:
     return _reply("Memory Copilot 已生成提醒候选。", lines)
 
 
+def _format_feishu_source(result: dict[str, Any], source_label: str) -> str:
+    """格式化飞书来源（任务、会议、Bitable）的拉取结果。"""
+    if result.get("error"):
+        error = result.get("error")
+        if isinstance(error, str):
+            error_message = error
+        elif isinstance(error, dict):
+            error_message = error.get("message", str(error))
+        else:
+            error_message = str(error)
+        return _reply(
+            f"Memory Copilot 拉取{source_label}失败。",
+            [
+                f"状态：error",
+                f"原因：{error_message}",
+            ],
+        )
+
+    source = result.get("source", {})
+    source_type = source.get("source_type", "")
+    source_id = source.get("source_id", "")
+    title = source.get("title", "")
+    candidate_count = result.get("candidate_count", 0)
+    duplicate_count = result.get("duplicate_count", 0)
+
+    lines = [
+        f"工具：feishu.fetch_{source_type}",
+        f"状态：ok",
+        f"处理结果：已从{source_label}提取文本进入 candidate pipeline。",
+        f"来源标题：{title}",
+        f"来源 ID：{source_id}",
+        f"候选数量：{candidate_count}",
+        f"重复数量：{duplicate_count}",
+        "注意：所有候选仍需人工确认，不会自动成为 active memory。",
+    ]
+
+    # 显示前 3 个候选
+    candidates = result.get("candidates", [])
+    if candidates:
+        lines.append("\n候选列表：")
+        for i, candidate in enumerate(candidates[:3], 1):
+            if isinstance(candidate, dict):
+                candidate_id = candidate.get("candidate_id", "")
+                subject = candidate.get("subject", "")
+                action = candidate.get("action", "")
+                lines.append(f"{i}. {subject} ({action}) ID: {candidate_id}")
+
+    lines.extend(
+        [
+            f"request_id：{_bridge_field(result, 'request_id')}",
+            f"trace_id：{_bridge_field(result, 'trace_id')}",
+        ]
+    )
+    return _reply(f"Memory Copilot 已拉取{source_label}。", lines)
+
+
 def _format_error(invocation: CopilotFeishuInvocation, result: dict[str, Any]) -> str:
     error = result.get("error") if isinstance(result.get("error"), dict) else {}
     details = error.get("details") if isinstance(error.get("details"), dict) else {}
@@ -622,6 +780,9 @@ def _format_help() -> str:
             "版本解释：@Bot /versions <memory_id>",
             "任务预取：@Bot /prefetch 生成今天上线 checklist",
             "健康检查：@Bot /health",
+            "飞书任务：@Bot /task <task_id>",
+            "飞书会议：@Bot /meeting <minute_token>",
+            "多维表格：@Bot /bitable <app_token> <table_id> <record_id>",
             "边界：真实飞书消息进入 candidate/review 流程；不会自动 active，也不是生产全量 workspace ingestion。",
         ],
     )

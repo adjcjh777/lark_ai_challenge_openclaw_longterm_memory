@@ -74,6 +74,10 @@ def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
 
 
 def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService | None = None) -> dict[str, Any]:
+    # 处理飞书来源工具（不需要通过 CopilotService）
+    if tool_name in {"feishu.fetch_task", "feishu.fetch_meeting", "feishu.fetch_bitable"}:
+        return _handle_feishu_source_tool(tool_name, payload)
+
     parser = REQUEST_TYPES.get(tool_name)
     if parser is None:
         return error_response(
@@ -110,6 +114,132 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
         f"{tool_name} is declared but not implemented in the 2026-04-27 MVP slice",
         details={"tool": tool_name},
     )
+
+
+def _handle_feishu_source_tool(tool_name: str, payload: Any) -> dict[str, Any]:
+    """处理飞书来源工具（task、meeting、bitable）。"""
+    if not isinstance(payload, dict):
+        return error_response("validation_error", "payload must be an object", details={"tool": tool_name})
+
+    scope = payload.get("scope")
+    if not scope:
+        return error_response("scope_required", "scope is required", details={"tool": tool_name})
+
+    current_context = payload.get("current_context", {})
+    if not isinstance(current_context, dict):
+        current_context = {}
+
+    try:
+        if tool_name == "feishu.fetch_task":
+            return _handle_fetch_task(payload, scope, current_context)
+        elif tool_name == "feishu.fetch_meeting":
+            return _handle_fetch_meeting(payload, scope, current_context)
+        elif tool_name == "feishu.fetch_bitable":
+            return _handle_fetch_bitable(payload, scope, current_context)
+        else:
+            return error_response("validation_error", f"Unknown tool: {tool_name}", details={"tool": tool_name})
+    except Exception as e:
+        return error_response("internal_error", str(e), details={"tool": tool_name})
+
+
+def _handle_fetch_task(payload: dict[str, Any], scope: str, current_context: dict[str, Any]) -> dict[str, Any]:
+    """处理飞书任务拉取。"""
+    task_id = payload.get("task_id")
+    if not task_id:
+        return error_response("validation_error", "task_id is required", details={"tool": "feishu.fetch_task"})
+
+    try:
+        from memory_engine.db import connect, init_db
+        from memory_engine.document_ingestion import ingest_feishu_source
+        from memory_engine.feishu_task_fetcher import fetch_feishu_task_text
+        from memory_engine.repository import MemoryRepository
+
+        # 拉取任务
+        source = fetch_feishu_task_text(task_id)
+
+        # 进入 candidate pipeline
+        from memory_engine.db import db_path_from_env
+        conn = connect(db_path_from_env())
+        init_db(conn)
+        repo = MemoryRepository(conn)
+
+        result = ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
+        conn.close()
+
+        return result
+    except ValueError as e:
+        return error_response("validation_error", str(e), details={"tool": "feishu.fetch_task"})
+    except Exception as e:
+        return error_response("internal_error", str(e), details={"tool": "feishu.fetch_task"})
+
+
+def _handle_fetch_meeting(payload: dict[str, Any], scope: str, current_context: dict[str, Any]) -> dict[str, Any]:
+    """处理飞书会议拉取。"""
+    minute_token = payload.get("minute_token")
+    if not minute_token:
+        return error_response("validation_error", "minute_token is required", details={"tool": "feishu.fetch_meeting"})
+
+    try:
+        from memory_engine.db import connect, init_db
+        from memory_engine.document_ingestion import ingest_feishu_source
+        from memory_engine.feishu_meeting_fetcher import fetch_feishu_meeting_text
+        from memory_engine.repository import MemoryRepository
+
+        # 拉取会议
+        source = fetch_feishu_meeting_text(minute_token)
+
+        # 进入 candidate pipeline
+        from memory_engine.db import db_path_from_env
+        conn = connect(db_path_from_env())
+        init_db(conn)
+        repo = MemoryRepository(conn)
+
+        result = ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
+        conn.close()
+
+        return result
+    except ValueError as e:
+        return error_response("validation_error", str(e), details={"tool": "feishu.fetch_meeting"})
+    except Exception as e:
+        return error_response("internal_error", str(e), details={"tool": "feishu.fetch_meeting"})
+
+
+def _handle_fetch_bitable(payload: dict[str, Any], scope: str, current_context: dict[str, Any]) -> dict[str, Any]:
+    """处理 Bitable 记录拉取。"""
+    app_token = payload.get("app_token")
+    table_id = payload.get("table_id")
+    record_id = payload.get("record_id")
+
+    if not app_token or not table_id or not record_id:
+        return error_response(
+            "validation_error",
+            "app_token, table_id, and record_id are required",
+            details={"tool": "feishu.fetch_bitable"},
+        )
+
+    try:
+        from memory_engine.db import connect, init_db
+        from memory_engine.document_ingestion import ingest_feishu_source
+        from memory_engine.feishu_bitable_fetcher import fetch_bitable_record_text
+        from memory_engine.repository import MemoryRepository
+
+        # 拉取记录
+        source = fetch_bitable_record_text(app_token, table_id, record_id)
+
+        # 进入 candidate pipeline
+        from memory_engine.db import db_path_from_env
+        conn = connect(db_path_from_env())
+        init_db(conn)
+        repo = MemoryRepository(conn)
+
+        result = ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
+        conn.close()
+
+        return result
+    except ValueError as e:
+        return error_response("validation_error", str(e), details={"tool": "feishu.fetch_bitable"})
+    except Exception as e:
+        return error_response("internal_error", str(e), details={"tool": "feishu.fetch_bitable"})
 
 
 def _to_plain_dict(value: Any) -> dict[str, Any]:

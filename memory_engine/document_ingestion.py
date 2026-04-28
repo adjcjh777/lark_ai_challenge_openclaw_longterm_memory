@@ -362,6 +362,21 @@ def _check_feishu_source_context(token: str, current_context: dict[str, Any] | N
     if document_id == token:
         return None
 
+    # 检查是否缺少 permission context
+    if permission is None:
+        details: dict[str, Any] = {
+            "reason_code": "missing_permission_context",
+            "action": "memory.create_candidate",
+            "requested_document_id": token,
+            "visible_fields": [],
+            "redacted_fields": ["current_value", "summary", "evidence"],
+        }
+        return CopilotError(
+            "permission_denied",
+            "permission context is missing",
+            details=details,
+        )
+
     details: dict[str, Any] = {
         "reason_code": "source_context_mismatch",
         "action": "memory.create_candidate",
