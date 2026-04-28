@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from memory_engine.copilot.heartbeat import HeartbeatReminderEngine, agent_run_summary_candidate
+from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request, supported_tool_names, validate_tool_request
 from memory_engine.db import connect, init_db
@@ -83,30 +84,14 @@ SEARCH_PAYLOAD = {
     "scope": DEFAULT_SCOPE,
     "top_k": 3,
     "filters": {"status": "active", "type": "decision"},
-    "current_context": {
-        "session_id": "openclaw-demo-session",
-        "scope": DEFAULT_SCOPE,
-        "intent": "回答历史决策问题",
-        "thread_topic": "生产部署",
-        "allowed_scopes": [DEFAULT_SCOPE],
-    },
+    "current_context": {},
 }
 
 
 PREFETCH_PAYLOAD = {
     "task": "生成今天的生产部署 checklist",
     "scope": DEFAULT_SCOPE,
-    "current_context": {
-        "session_id": "openclaw-demo-session",
-        "task_id": "demo-prefetch-001",
-        "scope": DEFAULT_SCOPE,
-        "intent": "准备生产部署 checklist",
-        "thread_topic": "生产部署",
-        "allowed_scopes": [DEFAULT_SCOPE],
-        "metadata": {
-            "current_message": "请帮我生成今天上线前的部署检查清单。",
-        },
-    },
+    "current_context": {},
     "top_k": 5,
 }
 
@@ -153,23 +138,51 @@ def seed_demo_memories(conn: sqlite3.Connection, scope: str) -> None:
 def build_replay(repo: MemoryRepository, scope: str, db_path: str, *, persistent: bool) -> dict[str, Any]:
     service = CopilotService(repository=repo)
     search_payload = _with_scope(SEARCH_PAYLOAD, scope)
+    search_payload["current_context"] = _demo_context(
+        "memory.search",
+        scope,
+        intent="回答历史决策问题",
+        thread_topic="生产部署",
+        session_id="openclaw-demo-session",
+    )
     prefetch_payload = _with_scope(PREFETCH_PAYLOAD, scope)
+    prefetch_payload["current_context"] = _demo_context(
+        "memory.prefetch",
+        scope,
+        intent="准备生产部署 checklist",
+        thread_topic="生产部署",
+        session_id="openclaw-demo-session",
+        task_id="demo-prefetch-001",
+        metadata={"current_message": "请帮我生成今天上线前的部署检查清单。"},
+    )
 
     search = handle_tool_request("memory.search", search_payload, service=service)
+    versions_payload = {
+        "memory_id": "mem_demo_deploy_region",
+        "scope": scope,
+        "current_context": _demo_context(
+            "memory.explain_versions",
+            scope,
+            intent="解释生产部署 region 的版本链",
+            thread_topic="生产部署",
+            session_id="openclaw-demo-session",
+        ),
+    }
     versions = handle_tool_request(
         "memory.explain_versions",
-        {"memory_id": "mem_demo_deploy_region", "scope": scope},
+        versions_payload,
         service=service,
     )
     prefetch = handle_tool_request("memory.prefetch", prefetch_payload, service=service)
     reminder = HeartbeatReminderEngine(repo, now_ms=BASE_TS + 3600000).generate(
         scope=scope,
-        current_context={
-            "scope": scope,
-            "intent": "准备初赛提交材料和上线 checklist",
-            "thread_topic": "生产部署 Demo",
-            "allowed_scopes": [scope],
-        },
+        current_context=_demo_context(
+            "heartbeat.review_due",
+            scope,
+            intent="准备初赛提交材料和上线 checklist",
+            thread_topic="生产部署 Demo",
+            session_id="openclaw-demo-session",
+        ),
     )
     summary_candidate = agent_run_summary_candidate(
         task="2026-05-04 Demo dry-run",
@@ -199,7 +212,7 @@ def build_replay(repo: MemoryRepository, scope: str, db_path: str, *, persistent
             {
                 "name": "conflict_update_version_chain",
                 "tool": "memory.explain_versions",
-                "input": {"memory_id": "mem_demo_deploy_region", "scope": scope},
+                "input": versions_payload,
                 "output": versions,
                 "proves": "旧 cn-shanghai 保留为 superseded 证据，但默认当前答案只用 ap-shanghai。",
             },
@@ -253,6 +266,13 @@ def validate_examples() -> dict[str, Any]:
             )
         examples.append({"file": str(path.relative_to(ROOT)), "steps": step_results})
     return {"ok": all(step["declared"] and step["valid_request"] for item in examples for step in item["steps"]), "examples": examples}
+
+
+def _demo_context(action: str, scope: str, **values: Any) -> dict[str, Any]:
+    context = demo_permission_context(action, scope, actor_id="openclaw_demo", entrypoint="demo_replay")
+    context["allowed_scopes"] = [scope]
+    context.update({key: value for key, value in values.items() if value is not None})
+    return context
 
 
 def _insert_memory(conn: sqlite3.Connection, parsed_scope: Any, memory: DemoMemory, ts: int) -> None:
@@ -394,7 +414,7 @@ def _compact_summary(replay: dict[str, Any], output_path: Path) -> dict[str, Any
             {
                 "name": step["name"],
                 "tool": step["tool"],
-                "ok": bool(output.get("ok")) if isinstance(output, dict) else True,
+                "ok": isinstance(output, dict) and output.get("ok") is True,
                 "proves": step["proves"],
             }
         )
