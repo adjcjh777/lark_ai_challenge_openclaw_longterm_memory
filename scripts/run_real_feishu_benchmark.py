@@ -18,17 +18,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tempfile
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from memory_engine.db import connect, init_db
 from memory_engine.document_ingestion import extract_candidate_quotes
-from memory_engine.repository import MemoryRepository
-
 
 CASES_PATH = Path("benchmarks/copilot_real_feishu_cases.json")
 
@@ -116,10 +112,7 @@ def _run_recall_case(case: dict) -> dict:
     candidates = extract_candidate_quotes(source_text, limit=12)
 
     # 验证 2: 候选文本包含期望的 evidence keyword
-    evidence_found = any(
-        evidence_keyword in candidate
-        for candidate in candidates
-    ) if evidence_keyword else True
+    evidence_found = any(evidence_keyword in candidate for candidate in candidates) if evidence_keyword else True
 
     # 验证 3: expected_active_value 能在 source_text 中找到
     value_in_source = expected_active_value in source_text if expected_active_value else True
@@ -189,7 +182,7 @@ def _run_candidate_case(case: dict) -> dict:
     if false_positive:
         failures.append(f"误记: 预期不是候选但提取到了 {len(candidates)} 个候选")
     if false_negative:
-        failures.append(f"漏记: 预期是候选但未提取到任何候选")
+        failures.append("漏记: 预期是候选但未提取到任何候选")
 
     return {
         "case_id": case_id,
@@ -273,14 +266,14 @@ def _print_report(summary: dict, results: list[dict]) -> None:
 
     # Recall 指标
     recall = summary["recall"]
-    print(f"\n--- Recall ---")
+    print("\n--- Recall ---")
     print(f"  总数: {recall['total']}")
     print(f"  通过: {recall['pass']}")
     print(f"  准确率: {recall['accuracy']:.1%}")
 
     # Candidate Precision 指标
     cand = summary["candidate_precision"]
-    print(f"\n--- Candidate Precision ---")
+    print("\n--- Candidate Precision ---")
     print(f"  总数: {cand['total']}")
     print(f"  通过: {cand['pass']}")
     print(f"  精度: {cand['precision']:.1%}")
@@ -288,7 +281,7 @@ def _print_report(summary: dict, results: list[dict]) -> None:
     print(f"  漏记 (false_negative): {cand['false_negatives']}")
 
     # 按来源类型统计
-    print(f"\n--- 来源类型统计 ---")
+    print("\n--- 来源类型统计 ---")
     for st, stats in summary["source_type_stats"].items():
         rate = stats["pass"] / stats["total"] if stats["total"] > 0 else 0.0
         print(f"  {st}: {stats['pass']}/{stats['total']} ({rate:.1%})")
@@ -296,7 +289,7 @@ def _print_report(summary: dict, results: list[dict]) -> None:
     # 失败详情
     failed_cases = [r for r in results if r["status"] == "fail"]
     if failed_cases:
-        print(f"\n--- 失败详情 ---")
+        print("\n--- 失败详情 ---")
         for r in failed_cases:
             print(f"\n  [{r['case_id']}] {r.get('source_type', '?')}")
             for failure in r.get("failures", []):

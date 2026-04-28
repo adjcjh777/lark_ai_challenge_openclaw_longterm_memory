@@ -59,12 +59,24 @@ class OpenClawFeishuWebsocketEvidenceTest(unittest.TestCase):
                     "openclaw channels logs --channel feishu --json --lines 120": {
                         "file": "/tmp/openclaw/openclaw-2026-04-28.log",
                         "lines": [
-                            {"time": "2026-04-28T14:56:36.274+08:00", "message": "starting feishu[default] (mode: websocket)"},
-                            {"time": "2026-04-28T14:56:36.318+08:00", "message": "feishu[default]: WebSocket client started"},
+                            {
+                                "time": "2026-04-28T14:56:36.274+08:00",
+                                "message": "starting feishu[default] (mode: websocket)",
+                            },
+                            {
+                                "time": "2026-04-28T14:56:36.318+08:00",
+                                "message": "feishu[default]: WebSocket client started",
+                            },
                             {"time": "2026-04-28T14:56:36.666+08:00", "message": "ws client ready"},
-                            {"time": "2026-04-28T15:35:02.000+08:00", "message": "received message from ou_xxx in oc_xxx"},
+                            {
+                                "time": "2026-04-28T15:35:02.000+08:00",
+                                "message": "received message from ou_xxx in oc_xxx",
+                            },
                             {"time": "2026-04-28T15:35:02.010+08:00", "message": "dispatching to agent"},
-                            {"time": "2026-04-28T15:35:33.000+08:00", "message": "dispatch complete (queuedFinal=true, replies=1)"},
+                            {
+                                "time": "2026-04-28T15:35:33.000+08:00",
+                                "message": "dispatch complete (queuedFinal=true, replies=1)",
+                            },
                         ],
                     },
                 }

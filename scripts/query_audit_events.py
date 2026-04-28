@@ -29,6 +29,7 @@ Usage examples:
     # Export JSON
     python3 scripts/query_audit_events.py --format json --limit 50 > audit_export.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,10 +38,7 @@ import io
 import json
 import os
 import sqlite3
-import sys
-from pathlib import Path
 from typing import Any
-
 
 DEFAULT_DB_PATH = "data/memory.sqlite"
 
@@ -158,7 +156,16 @@ def summary_by_field(
     until: str | None = None,
 ) -> list[dict[str, Any]]:
     """Aggregate audit event counts by a field."""
-    allowed_fields = {"event_type", "permission_decision", "tenant_id", "organization_id", "action", "tool_name", "actor_id", "reason_code"}
+    allowed_fields = {
+        "event_type",
+        "permission_decision",
+        "tenant_id",
+        "organization_id",
+        "action",
+        "tool_name",
+        "actor_id",
+        "reason_code",
+    }
     if group_by not in allowed_fields:
         raise ValueError(f"group_by must be one of {sorted(allowed_fields)}")
 
@@ -236,6 +243,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     # Convert timestamp to ISO string for readability
     if "created_at" in d and isinstance(d["created_at"], int):
         from datetime import datetime, timezone
+
         dt = datetime.fromtimestamp(d["created_at"] / 1000, tz=timezone.utc)
         d["created_at_iso"] = dt.isoformat()
     return d
@@ -244,6 +252,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
 def _iso_to_ms(iso_str: str) -> int:
     """Convert ISO 8601 string to milliseconds timestamp."""
     from datetime import datetime, timezone
+
     try:
         dt = datetime.fromisoformat(iso_str)
     except ValueError:

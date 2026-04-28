@@ -11,10 +11,10 @@ from typing import Any, Callable
 
 from dotenv import load_dotenv
 
-from memory_engine.db import SCHEMA_VERSION, init_db
-from memory_engine.storage_migration import inspect_copilot_storage
-from memory_engine.repository import MemoryRepository
 from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest
+from memory_engine.db import SCHEMA_VERSION, init_db
+from memory_engine.repository import MemoryRepository
+from memory_engine.storage_migration import inspect_copilot_storage
 
 from .permissions import demo_permission_context
 from .service import CopilotService
@@ -114,7 +114,9 @@ def _check_openclaw_version(openclaw_version_reader: OpenClawVersionReader | Non
         "locked_version": locked,
         "local_version": local,
         "command": "python3 scripts/check_openclaw_version.py",
-        "next_step": "" if local == locked else f"Reinstall exact locked version: npm i -g openclaw@{locked} --no-fund --no-audit",
+        "next_step": ""
+        if local == locked
+        else f"Reinstall exact locked version: npm i -g openclaw@{locked} --no-fund --no-audit",
     }
 
 
@@ -184,8 +186,7 @@ def _check_openclaw_native_registry() -> dict[str, Any]:
         tools = [tool["name"] for tool in manifest["tools"]]
         plugin_dir = ROOT / manifest["plugin_dir"]
         files_exist = all(
-            (plugin_dir / filename).exists()
-            for filename in ("package.json", "openclaw.plugin.json", "index.js")
+            (plugin_dir / filename).exists() for filename in ("package.json", "openclaw.plugin.json", "index.js")
         )
         status = "pass" if files_exist and tools else "warning"
         return {
@@ -308,7 +309,9 @@ def _check_permission_contract() -> dict[str, Any]:
         "malformed_reason_code": deny["malformed_reason_code"],
         "request_id": deny["request_id"],
         "trace_id": deny["trace_id"],
-        "next_step": "" if deny["passed"] else "修复 missing/malformed current_context.permission 的 fail-closed 行为。",
+        "next_step": ""
+        if deny["passed"]
+        else "修复 missing/malformed current_context.permission 的 fail-closed 行为。",
     }
 
 
@@ -339,7 +342,9 @@ def _check_cognee_adapter() -> dict[str, Any]:
                 config_error = str(exc)
 
         return {
-            "status": "pass" if sdk_available and configured else ("warning" if sdk_available and config_valid else "fallback_used"),
+            "status": "pass"
+            if sdk_available and configured
+            else ("warning" if sdk_available and config_valid else "fallback_used"),
             "adapter_import": "ok",
             "configured": configured,
             "sdk_available": sdk_available,
@@ -350,7 +355,8 @@ def _check_cognee_adapter() -> dict[str, Any]:
             "next_step": (
                 ""
                 if configured
-                else f"配置 .env 文件中的 LLM_API_KEY 和 EMBEDDING_MODEL，然后重新运行 healthcheck。配置错误: {config_error}" if config_valid and config_error
+                else f"配置 .env 文件中的 LLM_API_KEY 和 EMBEDDING_MODEL，然后重新运行 healthcheck。配置错误: {config_error}"
+                if config_valid and config_error
                 else "配置 .env 文件中的 LLM_API_KEY 和 EMBEDDING_MODEL，然后重新运行 healthcheck。"
                 if sdk_available
                 else "安装 cognee SDK（pip install cognee）并配置 .env 文件。"
@@ -391,6 +397,7 @@ def _check_embedding_provider(path: Path, live_check: bool = False) -> dict[str,
     if litellm_available:
         try:
             from .embeddings import OllamaEmbeddingProvider
+
             ollama_provider = OllamaEmbeddingProvider()
             ollama_available = ollama_provider.is_available()
 
@@ -470,7 +477,9 @@ def _check_audit_smoke() -> dict[str, Any]:
                     "quote": "决定：审计 smoke confirm 必须记录 actor 和 trace。",
                     "source_doc_id": "doc_health_audit",
                 },
-                "current_context": demo_permission_context("memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                "current_context": demo_permission_context(
+                    "memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
             },
             service=service,
         )
@@ -483,7 +492,9 @@ def _check_audit_smoke() -> dict[str, Any]:
                     "candidate_id": candidate_id,
                     "scope": SCOPE,
                     "reason": "healthcheck audit confirm",
-                    "current_context": demo_permission_context("memory.confirm", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                    "current_context": demo_permission_context(
+                        "memory.confirm", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                    ),
                 },
                 service=service,
             )
@@ -500,7 +511,9 @@ def _check_audit_smoke() -> dict[str, Any]:
                     "created_at": "2026-05-07T10:00:00+08:00",
                     "quote": "决定：审计 smoke reject 必须记录 candidate。",
                 },
-                "current_context": demo_permission_context("memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                "current_context": demo_permission_context(
+                    "memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
             },
             service=service,
         )
@@ -513,7 +526,9 @@ def _check_audit_smoke() -> dict[str, Any]:
                     "candidate_id": reject_id,
                     "scope": SCOPE,
                     "reason": "healthcheck audit reject",
-                    "current_context": demo_permission_context("memory.reject", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                    "current_context": demo_permission_context(
+                        "memory.reject", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                    ),
                 },
                 service=service,
             )
@@ -548,19 +563,36 @@ def _check_audit_smoke() -> dict[str, Any]:
         # 7. memory.explain_versions -> permission_allowed
         handle_tool_request(
             "memory.explain_versions",
-            {"memory_id": "mem_nonexistent", "scope": SCOPE, "current_context": demo_permission_context("memory.explain_versions", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
+            {
+                "memory_id": "mem_nonexistent",
+                "scope": SCOPE,
+                "current_context": demo_permission_context(
+                    "memory.explain_versions", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
+            },
             service=service,
         )
         # 8. memory.prefetch -> permission_allowed
         handle_tool_request(
             "memory.prefetch",
-            {"task": "部署前检查", "scope": SCOPE, "current_context": demo_permission_context("memory.prefetch", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
+            {
+                "task": "部署前检查",
+                "scope": SCOPE,
+                "current_context": demo_permission_context(
+                    "memory.prefetch", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
+            },
             service=service,
         )
         # 9. heartbeat.review_due -> heartbeat_candidate_generated
         handle_tool_request(
             "heartbeat.review_due",
-            {"scope": SCOPE, "current_context": demo_permission_context("heartbeat.review_due", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
+            {
+                "scope": SCOPE,
+                "current_context": demo_permission_context(
+                    "heartbeat.review_due", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
+            },
             service=service,
         )
         rows = service.repository.conn.execute(
@@ -628,7 +660,9 @@ def _smoke_search() -> dict[str, Any]:
         "tool": "memory.search",
         "returned_count": returned_count,
         "trace_backend": (result.get("trace") or {}).get("backend") if isinstance(result.get("trace"), dict) else None,
-        "fallback_used": (result.get("trace") or {}).get("fallback_used") if isinstance(result.get("trace"), dict) else None,
+        "fallback_used": (result.get("trace") or {}).get("fallback_used")
+        if isinstance(result.get("trace"), dict)
+        else None,
     }
 
 
@@ -709,7 +743,9 @@ def _smoke_candidate_review() -> dict[str, Any]:
                     "created_at": "2026-05-07T10:00:00+08:00",
                     "quote": "决定：生产部署必须加 --canary --region cn-shanghai。",
                 },
-                "current_context": demo_permission_context("memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                "current_context": demo_permission_context(
+                    "memory.create_candidate", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
             },
             service=service,
         )
@@ -723,12 +759,19 @@ def _smoke_candidate_review() -> dict[str, Any]:
                     "candidate_id": candidate_id,
                     "scope": SCOPE,
                     "reason": "healthcheck smoke confirm",
-                    "current_context": demo_permission_context("memory.confirm", SCOPE, actor_id="u_health", entrypoint="healthcheck"),
+                    "current_context": demo_permission_context(
+                        "memory.confirm", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                    ),
                 },
                 service=service,
             )
     memory = confirmed.get("memory") if isinstance(confirmed.get("memory"), dict) else {}
-    passed = created.get("ok") and candidate.get("status") == "candidate" and confirmed.get("ok") and memory.get("status") == "active"
+    passed = (
+        created.get("ok")
+        and candidate.get("status") == "candidate"
+        and confirmed.get("ok")
+        and memory.get("status") == "active"
+    )
     return {
         "status": "pass" if passed else "fail",
         "entrypoint": "handle_tool_request",
@@ -833,7 +876,9 @@ def _summary_for_check(name: str, check: dict[str, Any]) -> str:
         live_available = check.get("live_available")
         actual_dims = check.get("actual_dimensions")
         if mode == "live_embedding" and live_available is not None:
-            return f" provider={check.get('provider')} model={check.get('model')} live={live_available} dims={actual_dims}"
+            return (
+                f" provider={check.get('provider')} model={check.get('model')} live={live_available} dims={actual_dims}"
+            )
         return f" provider={check.get('provider')} model={check.get('model')} ollama={ollama_available} mode={mode}"
     if name == "cognee_adapter":
         return f" configured={check.get('configured')} fallback={check.get('fallback')}"

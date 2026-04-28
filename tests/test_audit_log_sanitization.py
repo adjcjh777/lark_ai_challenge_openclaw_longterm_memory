@@ -5,6 +5,7 @@ Verifies:
 - 6.4.2: deny logs do not contain raw private memory content
 - 6.4.3: redacted_fields only records field names, not redacted plaintext
 """
+
 from __future__ import annotations
 
 import json
@@ -12,11 +13,11 @@ import sqlite3
 import tempfile
 import unittest
 
-from memory_engine.db import connect, init_db
-from memory_engine.repository import MemoryRepository
+from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
-from memory_engine.copilot.permissions import demo_permission_context
+from memory_engine.db import init_db
+from memory_engine.repository import MemoryRepository
 
 SCOPE = "project:feishu_ai_challenge"
 
@@ -55,9 +56,7 @@ class AuditLogSanitizationTest(unittest.TestCase):
         self.tmp.close()
 
     def _get_all_audit_events(self) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM memory_audit_events ORDER BY created_at"
-        ).fetchall()
+        rows = self.conn.execute("SELECT * FROM memory_audit_events ORDER BY created_at").fetchall()
         return [dict(row) for row in rows]
 
     def _serialize_event(self, event: dict) -> str:
@@ -142,7 +141,7 @@ class AuditLogSanitizationTest(unittest.TestCase):
         self.assertGreater(len(deny_events), 0, "Should have at least one deny event")
 
         for event in deny_events:
-            serialized = self._serialize_event(event)
+            self._serialize_event(event)
             # Deny events should have redacted_fields
             redacted = event.get("redacted_fields")
             if isinstance(redacted, str):
@@ -302,9 +301,7 @@ class AuditCoverageTest(unittest.TestCase):
         self.tmp.close()
 
     def _get_all_audit_events(self) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM memory_audit_events ORDER BY created_at"
-        ).fetchall()
+        rows = self.conn.execute("SELECT * FROM memory_audit_events ORDER BY created_at").fetchall()
         return [dict(row) for row in rows]
 
     def test_all_five_tools_produce_audit_events(self) -> None:
@@ -395,9 +392,7 @@ class AuditCoverageTest(unittest.TestCase):
         from memory_engine.document_ingestion import mark_feishu_source_revoked
 
         # Use document_feishu source type which requires document_id in source_context
-        context = demo_permission_context(
-            "memory.create_candidate", SCOPE, actor_id="u_revoke", entrypoint="test"
-        )
+        context = demo_permission_context("memory.create_candidate", SCOPE, actor_id="u_revoke", entrypoint="test")
         context["permission"]["source_context"]["document_id"] = "test_revoke_doc"
 
         mark_feishu_source_revoked(

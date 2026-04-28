@@ -9,14 +9,13 @@ from .schemas import (
     CreateCandidateRequest,
     ExplainVersionsRequest,
     HeartbeatReviewDueRequest,
-    PrefetchRequest,
     PermissionContext,
+    PrefetchRequest,
     RejectRequest,
     SearchRequest,
     ValidationError,
 )
 from .service import CopilotService
-
 
 BRIDGE_VISIBILITIES = {"private", "team", "organization", "tenant", "public_demo"}
 
@@ -159,6 +158,7 @@ def _handle_fetch_task(payload: dict[str, Any], scope: str, current_context: dic
 
         # 进入 candidate pipeline
         from memory_engine.db import db_path_from_env
+
         conn = connect(db_path_from_env())
         init_db(conn)
         repo = MemoryRepository(conn)
@@ -190,6 +190,7 @@ def _handle_fetch_meeting(payload: dict[str, Any], scope: str, current_context: 
 
         # 进入 candidate pipeline
         from memory_engine.db import db_path_from_env
+
         conn = connect(db_path_from_env())
         init_db(conn)
         repo = MemoryRepository(conn)
@@ -228,6 +229,7 @@ def _handle_fetch_bitable(payload: dict[str, Any], scope: str, current_context: 
 
         # 进入 candidate pipeline
         from memory_engine.db import db_path_from_env
+
         conn = connect(db_path_from_env())
         init_db(conn)
         repo = MemoryRepository(conn)
@@ -308,7 +310,9 @@ def _permission_decision(
     summary: dict[str, Any] = {
         "decision": "deny" if denied else "allow",
         "reason_code": str(reason_code),
-        "requested_action": _schema_safe_action(_permission_field(permission_payload, permission, "requested_action"), tool_name),
+        "requested_action": _schema_safe_action(
+            _permission_field(permission_payload, permission, "requested_action"), tool_name
+        ),
     }
     requested_visibility = _permission_field(permission_payload, permission, "requested_visibility")
     if requested_visibility in BRIDGE_VISIBILITIES:

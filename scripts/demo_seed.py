@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -21,7 +20,6 @@ from memory_engine.copilot.tools import handle_tool_request, supported_tool_name
 from memory_engine.db import connect, init_db
 from memory_engine.models import normalize_subject, parse_scope
 from memory_engine.repository import MemoryRepository
-
 
 DEFAULT_SCOPE = "project:feishu_ai_challenge"
 BASE_TS = 1777852800000  # 2026-05-04 00:00:00 +08:00
@@ -265,7 +263,10 @@ def validate_examples() -> dict[str, Any]:
                 }
             )
         examples.append({"file": str(path.relative_to(ROOT)), "steps": step_results})
-    return {"ok": all(step["declared"] and step["valid_request"] for item in examples for step in item["steps"]), "examples": examples}
+    return {
+        "ok": all(step["declared"] and step["valid_request"] for item in examples for step in item["steps"]),
+        "examples": examples,
+    }
 
 
 def _demo_context(action: str, scope: str, **values: Any) -> dict[str, Any]:

@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_OLLAMA_MODELS = ("qwen3-embedding:0.6b-fp16", "bge-m3:567m")
 
@@ -20,8 +19,12 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="Print the full gate report as JSON.")
     parser.add_argument("--provider-timeout", type=float, default=60.0)
-    parser.add_argument("--skip-spike-dry-run", action="store_true", help="Skip scripts/spike_cognee_local.py --dry-run.")
-    parser.add_argument("--no-cleanup", action="store_true", help="Report running project models without stopping them.")
+    parser.add_argument(
+        "--skip-spike-dry-run", action="store_true", help="Skip scripts/spike_cognee_local.py --dry-run."
+    )
+    parser.add_argument(
+        "--no-cleanup", action="store_true", help="Report running project models without stopping them."
+    )
     args = parser.parse_args()
 
     report = run_live_embedding_gate(
@@ -229,7 +232,9 @@ def _command_error(result: dict[str, Any]) -> str | None:
 
 def _display_command(command: list[str]) -> str:
     if command and command[0] == sys.executable:
-        return "python3 " + " ".join(str(Path(part).relative_to(ROOT)) if str(part).startswith(str(ROOT)) else part for part in command[1:])
+        return "python3 " + " ".join(
+            str(Path(part).relative_to(ROOT)) if str(part).startswith(str(ROOT)) else part for part in command[1:]
+        )
     return " ".join(command)
 
 

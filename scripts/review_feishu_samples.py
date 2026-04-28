@@ -10,8 +10,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent
@@ -115,14 +115,10 @@ def main():
         "last_updated": datetime.now().isoformat(),
         "total_samples": sum(len(v) for k, v in data.items() if k != "_metadata"),
         "confirmed_samples": sum(
-            len([s for s in v if s.get("review_status") == "confirmed"])
-            for k, v in data.items()
-            if k != "_metadata"
+            len([s for s in v if s.get("review_status") == "confirmed"]) for k, v in data.items() if k != "_metadata"
         ),
         "rejected_samples": sum(
-            len([s for s in v if s.get("review_status") == "rejected"])
-            for k, v in data.items()
-            if k != "_metadata"
+            len([s for s in v if s.get("review_status") == "rejected"]) for k, v in data.items() if k != "_metadata"
         ),
     }
 

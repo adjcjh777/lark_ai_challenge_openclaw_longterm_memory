@@ -13,6 +13,7 @@ Usage:
     python3 scripts/check_audit_alerts.py --json
     python3 scripts/check_audit_alerts.py --window-minutes 60
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,9 +22,7 @@ import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
-
 
 DEFAULT_DB_PATH = "data/memory.sqlite"
 
@@ -92,18 +91,22 @@ def check_deny_rate(
 ) -> dict[str, Any] | None:
     """Check if deny rate exceeds threshold in time window."""
     since_ms = _minutes_ago_ms(window_minutes)
-    total = int(conn.execute(
-        "SELECT COUNT(*) FROM memory_audit_events WHERE created_at >= ?",
-        (since_ms,),
-    ).fetchone()[0])
+    total = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM memory_audit_events WHERE created_at >= ?",
+            (since_ms,),
+        ).fetchone()[0]
+    )
 
     if total == 0:
         return None
 
-    denies = int(conn.execute(
-        "SELECT COUNT(*) FROM memory_audit_events WHERE created_at >= ? AND permission_decision = 'deny'",
-        (since_ms,),
-    ).fetchone()[0])
+    denies = int(
+        conn.execute(
+            "SELECT COUNT(*) FROM memory_audit_events WHERE created_at >= ? AND permission_decision = 'deny'",
+            (since_ms,),
+        ).fetchone()[0]
+    )
 
     rate = denies / total
     if rate > threshold:
@@ -127,26 +130,30 @@ def check_ingestion_failure_rate(
 ) -> dict[str, Any] | None:
     """Check if ingestion failure rate exceeds threshold."""
     since_ms = _minutes_ago_ms(window_minutes)
-    ingestion_total = int(conn.execute(
-        """
+    ingestion_total = int(
+        conn.execute(
+            """
         SELECT COUNT(*) FROM memory_audit_events
         WHERE created_at >= ? AND action IN ('memory.create_candidate', 'source.revoked')
         """,
-        (since_ms,),
-    ).fetchone()[0])
+            (since_ms,),
+        ).fetchone()[0]
+    )
 
     if ingestion_total == 0:
         return None
 
-    ingestion_failures = int(conn.execute(
-        """
+    ingestion_failures = int(
+        conn.execute(
+            """
         SELECT COUNT(*) FROM memory_audit_events
         WHERE created_at >= ?
           AND action IN ('memory.create_candidate', 'source.revoked')
           AND (reason_code LIKE '%failed%' OR reason_code LIKE '%error%' OR permission_decision = 'deny')
         """,
-        (since_ms,),
-    ).fetchone()[0])
+            (since_ms,),
+        ).fetchone()[0]
+    )
 
     rate = ingestion_failures / ingestion_total
     if rate > threshold:
@@ -168,9 +175,7 @@ def check_audit_gap(
     gap_minutes: int = DEFAULT_MIN_AUDIT_GAP_MINUTES,
 ) -> dict[str, Any] | None:
     """Check if there's an unusually long gap without audit events."""
-    row = conn.execute(
-        "SELECT MAX(created_at) as last_event_at FROM memory_audit_events"
-    ).fetchone()
+    row = conn.execute("SELECT MAX(created_at) as last_event_at FROM memory_audit_events").fetchone()
 
     if row is None or row["last_event_at"] is None:
         return {
@@ -218,7 +223,9 @@ def check_all_alerts(
         if alert:
             alerts.append(alert)
 
-        alert = check_ingestion_failure_rate(conn, threshold=ingestion_failure_rate_threshold, window_minutes=window_minutes)
+        alert = check_ingestion_failure_rate(
+            conn, threshold=ingestion_failure_rate_threshold, window_minutes=window_minutes
+        )
         if alert:
             alerts.append(alert)
 
@@ -252,6 +259,7 @@ def _minutes_ago_ms(minutes: int) -> int:
     """Get milliseconds timestamp for N minutes ago."""
     now = datetime.now(tz=timezone.utc)
     from datetime import timedelta
+
     ago = now - timedelta(minutes=minutes)
     return int(ago.timestamp() * 1000)
 
@@ -261,7 +269,9 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Output as JSON (default)")
     parser.add_argument("--consecutive-deny-threshold", type=int, default=DEFAULT_CONSECUTIVE_DENY_THRESHOLD)
     parser.add_argument("--deny-rate-threshold", type=float, default=DEFAULT_DENY_RATE_THRESHOLD)
-    parser.add_argument("--ingestion-failure-rate-threshold", type=float, default=DEFAULT_INGESTION_FAILURE_RATE_THRESHOLD)
+    parser.add_argument(
+        "--ingestion-failure-rate-threshold", type=float, default=DEFAULT_INGESTION_FAILURE_RATE_THRESHOLD
+    )
     parser.add_argument("--window-minutes", type=int, default=DEFAULT_WINDOW_MINUTES)
     parser.add_argument("--gap-minutes", type=int, default=DEFAULT_MIN_AUDIT_GAP_MINUTES)
     parser.add_argument("--db-path", help="SQLite database path")

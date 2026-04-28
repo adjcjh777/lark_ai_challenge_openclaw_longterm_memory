@@ -6,8 +6,8 @@ governance behavior into the old Day 1 repository implementation.
 """
 
 from .schemas import (
-    CandidateSource,
     CandidateMemory,
+    CandidateSource,
     ConfirmRequest,
     CopilotError,
     CreateCandidateRequest,

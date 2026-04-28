@@ -6,7 +6,6 @@ from typing import Any
 
 from memory_engine.models import parse_scope
 
-
 MAX_TOP_K = 10
 DEFAULT_SEARCH_TOP_K = 3
 DEFAULT_PREFETCH_TOP_K = 5
@@ -203,7 +202,11 @@ class PermissionActor:
         if not user_id and not open_id:
             raise ValidationError("current_context.permission.actor.user_id or open_id is required")
         roles = data.get("roles")
-        if not isinstance(roles, list) or not roles or not all(isinstance(item, str) and item.strip() for item in roles):
+        if (
+            not isinstance(roles, list)
+            or not roles
+            or not all(isinstance(item, str) and item.strip() for item in roles)
+        ):
             raise ValidationError("current_context.permission.actor.roles must be a non-empty list of strings")
         return cls(
             user_id=user_id,

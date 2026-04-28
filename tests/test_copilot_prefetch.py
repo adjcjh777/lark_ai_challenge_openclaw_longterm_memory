@@ -11,7 +11,6 @@ from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
-
 SCOPE = "project:feishu_ai_challenge"
 
 
@@ -95,7 +94,9 @@ class CopilotPrefetchTest(unittest.TestCase):
 
     def test_prefetch_does_not_leak_superseded_value(self) -> None:
         self.repo.remember("project:feishu_ai_challenge", "生产部署 region 固定 cn-shanghai。", source_type="unit_test")
-        self.repo.remember("project:feishu_ai_challenge", "不对，生产部署 region 改成 ap-shanghai。", source_type="unit_test")
+        self.repo.remember(
+            "project:feishu_ai_challenge", "不对，生产部署 region 改成 ap-shanghai。", source_type="unit_test"
+        )
 
         result = handle_tool_request(
             "memory.prefetch",

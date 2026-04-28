@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-from datetime import datetime
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .copilot.permissions import demo_permission_context
+from .copilot.service import CopilotService
+from .copilot.tools import handle_tool_request
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
 from .feishu_cards import build_card_from_text
 from .feishu_config import FeishuConfig, load_feishu_config, scope_for_chat
 from .feishu_events import FeishuMessageEvent, FeishuTextEvent, message_event_from_payload
 from .feishu_listener_guard import assert_single_feishu_listener
-from .copilot.service import CopilotService
-from .copilot.tools import handle_tool_request
-from .copilot.permissions import demo_permission_context
 from .feishu_messages import (
     format_duplicate_reply,
-    format_help,
     format_health,
+    format_help,
     format_ignored_reply,
     format_ingest_doc_reply,
     format_recall_reply,
@@ -30,7 +30,6 @@ from .feishu_messages import (
 )
 from .feishu_publisher import DryRunPublisher, LarkCliPublisher
 from .repository import MemoryRepository
-
 
 SOURCE_TYPE = "feishu_message"
 
@@ -421,7 +420,9 @@ def _format_review_tool_reply(tool_result: dict[str, Any], *, action: str, candi
     ]
     if label_line:
         lines.insert(5, label_line)
-    return "\n".join([f"候选记忆{action}卡片：{candidate_label + ' ' if candidate_label else ''}候选状态已更新。", *lines])
+    return "\n".join(
+        [f"候选记忆{action}卡片：{candidate_label + ' ' if candidate_label else ''}候选状态已更新。", *lines]
+    )
 
 
 def _card_action_value(event: FeishuMessageEvent) -> dict[str, Any]:

@@ -15,7 +15,6 @@ if str(ROOT) not in sys.path:
 
 from memory_engine.copilot.cognee_adapter import CogneeMemoryAdapter, load_cognee_client
 
-
 DATA_ROOT = Path(".data/cognee/data")
 SYSTEM_ROOT = Path(".data/cognee/system")
 DATABASE_ROOT = SYSTEM_ROOT / "databases"
@@ -24,8 +23,14 @@ EMBEDDING_LOCK_FILE = ROOT / "memory_engine/copilot/embedding-provider.lock"
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the 2026-04-27 local Cognee SDK spike.")
-    parser.add_argument("--dry-run", action="store_true", help="Validate local paths and adapter wiring without importing Cognee.")
-    parser.add_argument("--reset-local-data", action="store_true", help="Delete .data/cognee before running; use after changing embedding dimensions.")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Validate local paths and adapter wiring without importing Cognee."
+    )
+    parser.add_argument(
+        "--reset-local-data",
+        action="store_true",
+        help="Delete .data/cognee before running; use after changing embedding dimensions.",
+    )
     parser.add_argument("--scope", default="project:feishu_ai_challenge")
     parser.add_argument("--query", default="生产部署参数")
     args = parser.parse_args()

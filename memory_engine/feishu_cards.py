@@ -4,7 +4,6 @@ import json
 import re
 from typing import Any
 
-
 CARD_ACTION_KEY = "memory_engine_action"
 
 
@@ -336,8 +335,14 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
             {
                 "tag": "div",
                 "fields": [
-                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**主题**\n{payload.get('subject') or ''}"}},
-                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**状态**\n{payload.get('status') or ''}"}},
+                    {
+                        "is_short": True,
+                        "text": {"tag": "lark_md", "content": f"**主题**\n{payload.get('subject') or ''}"},
+                    },
+                    {
+                        "is_short": True,
+                        "text": {"tag": "lark_md", "content": f"**状态**\n{payload.get('status') or ''}"},
+                    },
                 ],
             },
             {
@@ -532,7 +537,9 @@ def _is_permission_denied(response: dict[str, Any], bridge: dict[str, Any]) -> b
     return error.get("code") == "permission_denied" or decision.get("decision") == "deny"
 
 
-def _denied_surface_payload(surface: str, title: str, response: dict[str, Any], bridge: dict[str, Any]) -> dict[str, Any]:
+def _denied_surface_payload(
+    surface: str, title: str, response: dict[str, Any], bridge: dict[str, Any]
+) -> dict[str, Any]:
     error = response.get("error") if isinstance(response.get("error"), dict) else {}
     details = error.get("details") if isinstance(error.get("details"), dict) else {}
     reason_code = bridge.get("permission_reason") or details.get("reason_code") or "permission_denied"
@@ -550,7 +557,13 @@ def _denied_surface_payload(surface: str, title: str, response: dict[str, Any], 
         "evidence": {},
         "risk_flags": [],
         "recommended_action": "permission_denied",
-        "conflict": {"has_conflict": False, "old_memory_id": None, "old_value": None, "old_status": None, "reason": None},
+        "conflict": {
+            "has_conflict": False,
+            "old_memory_id": None,
+            "old_value": None,
+            "old_status": None,
+            "reason": None,
+        },
         "buttons": [],
         "state_mutation": "none",
         "error": {

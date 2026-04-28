@@ -10,7 +10,6 @@ from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import DryRunPublisher
 from memory_engine.feishu_runtime import handle_message_event
 
-
 CHAT_ID = "oc_day5"
 FIXTURE = "tests/fixtures/day5_doc_ingestion_fixture.md"
 

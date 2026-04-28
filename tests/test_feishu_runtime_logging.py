@@ -20,10 +20,7 @@ class FeishuRuntimeLoggingTest(unittest.TestCase):
             self.assertTrue(logger.path.name.startswith("feishu-listen-"))
             self.assertTrue(logger.path.name.endswith(".ndjson"))
 
-            records = [
-                json.loads(line)
-                for line in logger.path.read_text(encoding="utf-8").splitlines()
-            ]
+            records = [json.loads(line) for line in logger.path.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(["listen_start", "event_result"], [record["event"] for record in records])
             self.assertIn("T", records[0]["ts"])
             self.assertEqual("reject", records[1]["command"])

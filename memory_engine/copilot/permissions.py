@@ -5,7 +5,6 @@ from typing import Any
 
 from .schemas import CopilotError, PermissionContext, ValidationError
 
-
 _SENSITIVE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("api_key", re.compile(r"(?i)\b(api[_-]?key|apikey)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{8,}")),
     ("app_secret", re.compile(r"(?i)\b(app[_-]?secret|secret)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{8,}")),
@@ -104,7 +103,9 @@ def check_scope_access(
     expected_organization_id = _context_string(context, "organization_id") or DEFAULT_ORGANIZATION_ID
 
     if permission.actor.tenant_id != expected_tenant_id:
-        return _permission_error("tenant_mismatch", "actor tenant cannot access requested memory scope", permission=permission, action=action)
+        return _permission_error(
+            "tenant_mismatch", "actor tenant cannot access requested memory scope", permission=permission, action=action
+        )
 
     if permission.actor.organization_id != expected_organization_id:
         return _permission_error(
@@ -140,10 +141,17 @@ def check_scope_access(
 
     roles = {role.strip().lower() for role in permission.actor.roles}
     if action in {"memory.confirm", "memory.reject"} and not roles.intersection(REVIEW_ROLES):
-        return _permission_error("review_role_required", "reviewer, owner, or admin role is required", permission=permission, action=action)
+        return _permission_error(
+            "review_role_required", "reviewer, owner, or admin role is required", permission=permission, action=action
+        )
 
     if permission.requested_visibility == "private" and not roles.intersection(REVIEW_ROLES):
-        return _permission_error("visibility_private_non_owner", "private memory requires owner or reviewer access", permission=permission, action=action)
+        return _permission_error(
+            "visibility_private_non_owner",
+            "private memory requires owner or reviewer access",
+            permission=permission,
+            action=action,
+        )
 
     return None
 

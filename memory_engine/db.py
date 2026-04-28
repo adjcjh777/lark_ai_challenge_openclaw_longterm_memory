@@ -4,7 +4,6 @@ import os
 import sqlite3
 from pathlib import Path
 
-
 DEFAULT_DB_PATH = Path("data/memory.sqlite")
 DEFAULT_TENANT_ID = "tenant:demo"
 DEFAULT_ORGANIZATION_ID = "org:demo"
@@ -267,9 +266,7 @@ def _backfill_table_defaults(conn: sqlite3.Connection, table: str) -> None:
             f"UPDATE {table} SET ingestion_status = 'raw' WHERE ingestion_status IS NULL OR ingestion_status = ''"
         )
     if "ingested_at" in existing and "created_at" in existing:
-        conn.execute(
-            f"UPDATE {table} SET ingested_at = created_at WHERE ingested_at IS NULL OR ingested_at = 0"
-        )
+        conn.execute(f"UPDATE {table} SET ingested_at = created_at WHERE ingested_at IS NULL OR ingested_at = 0")
     if "redaction_state" in existing:
         conn.execute(
             f"UPDATE {table} SET redaction_state = 'none' WHERE redaction_state IS NULL OR redaction_state = ''"

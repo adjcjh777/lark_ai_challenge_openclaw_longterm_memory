@@ -6,11 +6,10 @@ import unittest
 
 from memory_engine.copilot.embeddings import DeterministicEmbeddingProvider
 from memory_engine.copilot.retrieval import RecallIndexEntry
-from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.schemas import Evidence, SearchRequest
+from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-
 
 SCOPE = "project:feishu_ai_challenge"
 
@@ -183,7 +182,9 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual([], response["results"])
         self.assertEqual("no_active_memory_with_evidence", response["trace"]["final_reason"])
         self.assertIn("L3", response["trace"]["layers"])
-        self.assertEqual("l3_raw_events_blocked_for_default_search", _trace_step(response, layer="L3", stage="structured")["note"])
+        self.assertEqual(
+            "l3_raw_events_blocked_for_default_search", _trace_step(response, layer="L3", stage="structured")["note"]
+        )
 
     def test_missing_evidence_candidate_does_not_enter_top_results(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -226,9 +227,7 @@ class CopilotRetrievalTest(unittest.TestCase):
                 "生产部署必须加 --canary --region cn-shanghai。",
                 source_type="unit_test",
             )
-            conn.execute(
-                "UPDATE memories SET tenant_id = 'tenant:other', organization_id = 'org:other'"
-            )
+            conn.execute("UPDATE memories SET tenant_id = 'tenant:other', organization_id = 'org:other'")
             conn.commit()
 
             response = CopilotService(repository=repo).search(
@@ -438,7 +437,9 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertNotIn("raw_event", entry.index_text)
 
         embedder = DeterministicEmbeddingProvider(dimension=16)
-        self.assertEqual(embedder.embed_curated_memory(entry.embedding_text()), embedder.embed_curated_memory(entry.embedding_text()))
+        self.assertEqual(
+            embedder.embed_curated_memory(entry.embedding_text()), embedder.embed_curated_memory(entry.embedding_text())
+        )
 
 
 def _trace_step(response: dict[str, object], *, layer: str, stage: str) -> dict[str, object]:

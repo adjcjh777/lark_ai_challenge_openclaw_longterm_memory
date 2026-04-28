@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .document_ingestion import FeishuIngestionSource
-from .feishu_api_client import FeishuApiResult, extract_text_from_result, run_lark_cli
+from .feishu_api_client import FeishuApiResult, run_lark_cli
 
 
 def fetch_feishu_meeting_text(
@@ -199,14 +199,16 @@ def list_feishu_meetings(
         duration = item.get("duration", 0)
         meeting_date = item.get("meeting_date", "")
 
-        meetings.append({
-            "minute_token": minute_token,
-            "title": title,
-            "status": status,
-            "creator_id": creator_id,
-            "duration": duration,
-            "meeting_date": meeting_date,
-        })
+        meetings.append(
+            {
+                "minute_token": minute_token,
+                "title": title,
+                "status": status,
+                "creator_id": creator_id,
+                "duration": duration,
+                "meeting_date": meeting_date,
+            }
+        )
 
     return meetings
 

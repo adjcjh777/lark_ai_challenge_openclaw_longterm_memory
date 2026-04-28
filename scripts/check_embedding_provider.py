@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_FILE = ROOT / "memory_engine/copilot/embedding-provider.lock"
 DEFAULT_TEXT = "生产部署参数"

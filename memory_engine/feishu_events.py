@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -113,10 +113,7 @@ def _card_action_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEve
     context = event.get("context") if isinstance(event.get("context"), dict) else {}
     operator = event.get("operator") if isinstance(event.get("operator"), dict) else {}
     chat_id = _string(
-        context.get("open_chat_id")
-        or context.get("chat_id")
-        or event.get("open_chat_id")
-        or event.get("chat_id")
+        context.get("open_chat_id") or context.get("chat_id") or event.get("open_chat_id") or event.get("chat_id")
     )
     if not chat_id:
         return None

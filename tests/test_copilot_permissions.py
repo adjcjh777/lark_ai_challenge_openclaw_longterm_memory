@@ -8,7 +8,6 @@ from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
-
 SCOPE = "project:feishu_ai_challenge"
 
 
@@ -255,8 +254,12 @@ class CopilotPermissionTest(unittest.TestCase):
                 },
                 service=service,
             )
-            active_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
-            candidate_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"]
+            active_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()[
+                "count"
+            ]
+            candidate_count = conn.execute(
+                "SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'"
+            ).fetchone()["count"]
             conn.close()
 
         self.assert_permission_denied(denied, "review_role_required")

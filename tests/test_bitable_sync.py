@@ -3,10 +3,14 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-
 from unittest.mock import patch
 
-from memory_engine.bitable_sync import build_commands, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
+from memory_engine.bitable_sync import (
+    build_commands,
+    collect_sync_payload,
+    sync_payload,
+    table_schema_spec,
+)
 from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request

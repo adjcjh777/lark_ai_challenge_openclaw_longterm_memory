@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .models import DECISION_WORDS, DEFAULT_SCOPE, OVERRIDE_WORDS, PREFERENCE_WORDS, WORKFLOW_WORDS, contains_any
-from .repository import MemoryRepository, now_ms
 from .copilot.permissions import check_scope_access, demo_permission_context
 from .copilot.schemas import CopilotError, CreateCandidateRequest
 from .copilot.service import CopilotService
+from .models import DECISION_WORDS, DEFAULT_SCOPE, OVERRIDE_WORDS, PREFERENCE_WORDS, WORKFLOW_WORDS, contains_any
+from .repository import MemoryRepository, now_ms
 
 
 @dataclass(frozen=True)
@@ -161,7 +161,9 @@ def mark_feishu_source_revoked(
     permission_error = check_scope_access(scope, current_context, action=_permission_action(current_context))
     if permission_error is not None:
         return permission_error.to_response()
-    synthetic_source = FeishuIngestionSource(source_type=source_type, source_id=source_id, title=source_id, text="", actor_id="source_revocation")
+    synthetic_source = FeishuIngestionSource(
+        source_type=source_type, source_id=source_id, title=source_id, text="", actor_id="source_revocation"
+    )
     source_error = _check_limited_source_context(synthetic_source, current_context)
     if source_error is not None:
         return source_error.to_response()

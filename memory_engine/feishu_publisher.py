@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import subprocess
 import time
 from typing import Any
@@ -42,7 +42,9 @@ class LarkCliPublisher:
         fallback["reply_error"] = result
         return fallback
 
-    def _publish_interactive_with_text_fallback(self, event: FeishuTextEvent, text: str, card: dict[str, Any]) -> dict[str, Any]:
+    def _publish_interactive_with_text_fallback(
+        self, event: FeishuTextEvent, text: str, card: dict[str, Any]
+    ) -> dict[str, Any]:
         idempotency_key = self._idempotency_key(event)
         attempts: list[dict[str, Any]] = []
         for attempt_no in range(1, self.config.card_retry_count + 1):

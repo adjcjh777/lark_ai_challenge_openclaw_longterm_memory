@@ -7,9 +7,9 @@ import uuid
 from dataclasses import asdict
 from typing import Any
 
-from .db import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID, DEFAULT_VISIBILITY_POLICY
+from .db import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
 from .extractor import extract_memory, is_override_intent, subject_for_query
-from .models import parse_scope, normalize_subject
+from .models import normalize_subject, parse_scope
 
 
 def now_ms() -> int:
@@ -137,7 +137,9 @@ class MemoryRepository:
                 return self._insert_new_memory(extracted, parsed_scope, event_id, source_type, created_by, ts)
 
             if existing["current_value"] == extracted.current_value:
-                self._insert_evidence(existing["id"], existing["active_version_id"], source_type, event_id, extracted.current_value, ts)
+                self._insert_evidence(
+                    existing["id"], existing["active_version_id"], source_type, event_id, extracted.current_value, ts
+                )
                 return self._result(
                     "duplicate",
                     existing["id"],
@@ -469,7 +471,9 @@ class MemoryRepository:
                 ),
             )
 
-    def _find_memory(self, scope_type: str, scope_id: str, memory_type: str, normalized_subject: str) -> sqlite3.Row | None:
+    def _find_memory(
+        self, scope_type: str, scope_id: str, memory_type: str, normalized_subject: str
+    ) -> sqlite3.Row | None:
         return self.conn.execute(
             """
             SELECT *
@@ -547,7 +551,9 @@ class MemoryRepository:
         self._insert_evidence(memory_id, version_id, source_type, event_id, quote or extracted.current_value, ts)
         return self._result("created", memory_id, version_id, extracted, 1, status=status, **(extra or {}))
 
-    def _supersede_memory(self, existing, extracted, event_id: str, source_type: str, created_by: str | None, ts: int) -> dict[str, Any]:
+    def _supersede_memory(
+        self, existing, extracted, event_id: str, source_type: str, created_by: str | None, ts: int
+    ) -> dict[str, Any]:
         old_version_id = existing["active_version_id"]
         new_version_no = self._active_version_no(existing["id"]) + 1
         new_version_id = new_id("ver")
@@ -637,7 +643,9 @@ class MemoryRepository:
             ),
         )
 
-    def _insert_evidence(self, memory_id: str, version_id: str | None, source_type: str, event_id: str, quote: str, ts: int) -> None:
+    def _insert_evidence(
+        self, memory_id: str, version_id: str | None, source_type: str, event_id: str, quote: str, ts: int
+    ) -> None:
         self.conn.execute(
             """
             INSERT INTO memory_evidence (

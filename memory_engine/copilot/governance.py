@@ -18,7 +18,6 @@ from memory_engine.repository import MemoryRepository, new_id, now_ms
 from .permissions import sensitive_risk_flags
 from .schemas import ConfirmRequest, CopilotError, CreateCandidateRequest, ExplainVersionsRequest, RejectRequest
 
-
 _PREFIX_SIGNALS = ("记忆", "规则", "结论", "约束", "风险", "负责人", "决定")
 
 
@@ -73,7 +72,14 @@ class CopilotGovernance:
             if existing is None:
                 candidate = self._insert_new_candidate(request, extracted, parsed_scope, event_id, ts, risk_flags)
             elif existing["current_value"] == extracted.current_value:
-                self._insert_evidence(existing["id"], existing["active_version_id"], request.source.source_type, event_id, request.source.quote, ts)
+                self._insert_evidence(
+                    existing["id"],
+                    existing["active_version_id"],
+                    request.source.source_type,
+                    event_id,
+                    request.source.quote,
+                    ts,
+                )
                 candidate = self._duplicate_response(request, extracted, existing, risk_flags)
             else:
                 candidate = self._insert_conflict_candidate(request, extracted, existing, event_id, ts, risk_flags)
@@ -276,7 +282,9 @@ class CopilotGovernance:
                 ts,
             ),
         )
-        self._insert_version(version_id, memory_id, 1, extracted, "candidate", event_id, request.source.actor_id, ts, None)
+        self._insert_version(
+            version_id, memory_id, 1, extracted, "candidate", event_id, request.source.actor_id, ts, None
+        )
         self._insert_evidence(memory_id, version_id, request.source.source_type, event_id, request.source.quote, ts)
         candidate = self._candidate_payload(
             candidate_id=memory_id,
@@ -333,7 +341,9 @@ class CopilotGovernance:
             ts,
             existing["active_version_id"],
         )
-        self._insert_evidence(str(existing["id"]), version_id, request.source.source_type, event_id, request.source.quote, ts)
+        self._insert_evidence(
+            str(existing["id"]), version_id, request.source.source_type, event_id, request.source.quote, ts
+        )
         conflict = {
             "has_conflict": True,
             "old_memory_id": str(existing["id"]),
@@ -415,7 +425,9 @@ class CopilotGovernance:
                 """,
                 (version["value"], version["reason"], version["source_event_id"], version["id"], ts, memory["id"]),
             )
-        response = self._status_response("confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]))
+        response = self._status_response(
+            "confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"])
+        )
         response["superseded"] = {
             "version_id": old_version_id,
             "value": str(memory["current_value"]),
@@ -458,7 +470,9 @@ class CopilotGovernance:
                 "UPDATE memories SET updated_at = ? WHERE id = ?",
                 (ts, memory["id"]),
             )
-        response = self._status_response("rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]))
+        response = self._status_response(
+            "rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"])
+        )
         response["memory"]["status"] = "rejected"
         return response
 
@@ -592,7 +606,9 @@ class CopilotGovernance:
             ),
         )
 
-    def _insert_evidence(self, memory_id: str, version_id: str | None, source_type: str, event_id: str, quote: str, ts: int) -> None:
+    def _insert_evidence(
+        self, memory_id: str, version_id: str | None, source_type: str, event_id: str, quote: str, ts: int
+    ) -> None:
         self.repository.conn.execute(
             """
             INSERT INTO memory_evidence (

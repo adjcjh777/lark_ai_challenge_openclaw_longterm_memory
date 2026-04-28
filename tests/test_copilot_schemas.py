@@ -4,15 +4,15 @@ import unittest
 
 from memory_engine.copilot.schemas import (
     CandidateSource,
-    Evidence,
-    MemoryResult,
-    MemoryLayer,
+    ConfirmRequest,
     CopilotError,
     CreateCandidateRequest,
-    PrefetchRequest,
-    PermissionContext,
+    Evidence,
     ExplainVersionsRequest,
-    ConfirmRequest,
+    MemoryLayer,
+    MemoryResult,
+    PermissionContext,
+    PrefetchRequest,
     SearchRequest,
     ValidationError,
     WorkingContext,
@@ -267,7 +267,10 @@ class CopilotSchemaTest(unittest.TestCase):
         self.assertEqual("L2", payload["layer"])
         self.assertEqual(2, payload["version"])
         self.assertEqual(121.0, payload["score"])
-        self.assertEqual([Evidence("benchmark", "evt_1", "生产部署必须加 --canary --region cn-shanghai").to_dict()], payload["evidence"])
+        self.assertEqual(
+            [Evidence("benchmark", "evt_1", "生产部署必须加 --canary --region cn-shanghai").to_dict()],
+            payload["evidence"],
+        )
 
 
 if __name__ == "__main__":

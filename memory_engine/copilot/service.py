@@ -16,6 +16,7 @@ from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
 from .retrieval import LayerAwareRetriever
 from .schemas import (
+    WORKING_CONTEXT_FIELDS,
     ConfirmRequest,
     CreateCandidateRequest,
     ExplainVersionsRequest,
@@ -26,7 +27,6 @@ from .schemas import (
     SearchRequest,
     ValidationError,
     WorkingContext,
-    WORKING_CONTEXT_FIELDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,9 @@ class CopilotService:
             cognee_available=self.cognee_adapter is not None and self.cognee_adapter.is_configured,
         )
         response = orchestrator.search(request).to_dict()
-        self._record_audit("memory.search", request.scope, request.current_context.to_dict(), response, target_type="memory")
+        self._record_audit(
+            "memory.search", request.scope, request.current_context.to_dict(), response, target_type="memory"
+        )
         return response
 
     def create_candidate(self, request: CreateCandidateRequest) -> dict[str, object]:
@@ -225,7 +227,9 @@ class CopilotService:
         trace = dict(search_response.get("trace") or {})
         relevant = [_compact_memory(result) for result in results]
         risks = [item for item in relevant if item.get("type") == "risk" or _mentions_risk(item.get("current_value"))]
-        deadlines = [item for item in relevant if item.get("type") == "deadline" or _mentions_deadline(item.get("current_value"))]
+        deadlines = [
+            item for item in relevant if item.get("type") == "deadline" or _mentions_deadline(item.get("current_value"))
+        ]
         response = {
             "ok": True,
             "tool": "memory.prefetch",
@@ -341,16 +345,14 @@ class CopilotService:
             logger.info("Cognee adapter auto-initialized successfully")
         except CogneeAdapterNotConfigured as exc:
             logger.debug(
-                "Cognee adapter auto-initialization skipped: %s. "
-                "Falling back to repository-based retrieval.",
-                exc
+                "Cognee adapter auto-initialization skipped: %s. Falling back to repository-based retrieval.", exc
             )
             self.cognee_adapter = None
         except Exception as exc:
             logger.debug(
                 "Unexpected error during Cognee adapter auto-initialization: %s. "
                 "Falling back to repository-based retrieval.",
-                exc
+                exc,
             )
             self.cognee_adapter = None
 

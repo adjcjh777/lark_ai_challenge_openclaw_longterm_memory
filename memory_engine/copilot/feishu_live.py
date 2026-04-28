@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import json
 import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,15 +14,14 @@ from memory_engine.db import connect, db_path_from_env, init_db
 from memory_engine.feishu_cards import build_card_from_text
 from memory_engine.feishu_config import FeishuConfig, load_feishu_config
 from memory_engine.feishu_events import FeishuMessageEvent, message_event_from_payload
+from memory_engine.feishu_listener_guard import assert_single_feishu_listener
 from memory_engine.feishu_publisher import DryRunPublisher, LarkCliPublisher
 from memory_engine.feishu_runtime import FeishuRunLogger
-from memory_engine.feishu_listener_guard import assert_single_feishu_listener
 from memory_engine.repository import MemoryRepository
 
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
 from .service import CopilotService
 from .tools import handle_tool_request
-
 
 DEFAULT_SCOPE = "project:feishu_ai_challenge"
 SOURCE_TYPE = "feishu_message"
@@ -150,7 +149,7 @@ def handle_copilot_message_event(
             [
                 "类型：消息处理",
                 "入口：Feishu live sandbox",
-                f"状态：ignored",
+                "状态：ignored",
                 f"原因：{event.ignore_reason}",
                 "处理结果：未调用 CopilotService。",
             ],
@@ -228,9 +227,13 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return _bitable_invocation(event, scope, argument, reason="explicit_bitable")
 
     if text.startswith("确认 "):
-        return _review_invocation(event, scope, "memory.confirm", text.removeprefix("确认 ").strip(), reason="natural_confirm")
+        return _review_invocation(
+            event, scope, "memory.confirm", text.removeprefix("确认 ").strip(), reason="natural_confirm"
+        )
     if text.startswith("拒绝 "):
-        return _review_invocation(event, scope, "memory.reject", text.removeprefix("拒绝 ").strip(), reason="natural_reject")
+        return _review_invocation(
+            event, scope, "memory.reject", text.removeprefix("拒绝 ").strip(), reason="natural_reject"
+        )
     if _looks_like_candidate(text):
         return _candidate_invocation(event, scope, text, reason="natural_candidate")
     if _looks_like_prefetch(text):
@@ -336,7 +339,9 @@ def _review_invocation(
     )
 
 
-def _versions_invocation(event: FeishuMessageEvent, scope: str, memory_id: str, *, reason: str) -> CopilotFeishuInvocation:
+def _versions_invocation(
+    event: FeishuMessageEvent, scope: str, memory_id: str, *, reason: str
+) -> CopilotFeishuInvocation:
     tool = "memory.explain_versions"
     context = _current_context(event, scope, tool, intent="explain_versions", thread_topic=memory_id)
     return CopilotFeishuInvocation(
@@ -709,7 +714,7 @@ def _format_feishu_source(result: dict[str, Any], source_label: str) -> str:
         return _reply(
             f"Memory Copilot 拉取{source_label}失败。",
             [
-                f"状态：error",
+                "状态：error",
                 f"原因：{error_message}",
             ],
         )
@@ -723,7 +728,7 @@ def _format_feishu_source(result: dict[str, Any], source_label: str) -> str:
 
     lines = [
         f"工具：feishu.fetch_{source_type}",
-        f"状态：ok",
+        "状态：ok",
         f"处理结果：已从{source_label}提取文本进入 candidate pipeline。",
         f"来源标题：{title}",
         f"来源 ID：{source_id}",

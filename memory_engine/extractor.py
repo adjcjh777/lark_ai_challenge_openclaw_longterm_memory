@@ -4,11 +4,11 @@ import re
 
 from .models import (
     DECISION_WORDS,
-    ExtractedMemory,
     OVERRIDE_WORDS,
     PREFERENCE_WORDS,
     SUBJECT_RULES,
     WORKFLOW_WORDS,
+    ExtractedMemory,
     contains_any,
     normalize_subject,
 )
@@ -84,4 +84,3 @@ def _extract_reason(content: str) -> str | None:
         if marker in content:
             return content.split(marker, 1)[1].strip(" 。.，,")
     return None
-

@@ -73,7 +73,7 @@ def run_lark_cli(
             last_error = result
             if attempt < retries:
                 # 指数退避
-                time.sleep(min(2 ** attempt, 4))
+                time.sleep(min(2**attempt, 4))
                 continue
 
             return result
@@ -86,7 +86,7 @@ def run_lark_cli(
                 returncode=-1,
             )
             if attempt < retries:
-                time.sleep(min(2 ** attempt, 4))
+                time.sleep(min(2**attempt, 4))
                 continue
 
         except FileNotFoundError:
@@ -105,7 +105,7 @@ def run_lark_cli(
                 returncode=-1,
             )
             if attempt < retries:
-                time.sleep(min(2 ** attempt, 4))
+                time.sleep(min(2**attempt, 4))
                 continue
 
     # 所有重试都失败
@@ -182,36 +182,45 @@ def _classify_error(returncode: int, stdout: str, stderr: str) -> tuple[str, str
     combined_output = f"{stdout} {stderr}".lower()
 
     # 权限错误
-    if any(keyword in combined_output for keyword in [
-        "permission denied",
-        "access denied",
-        "forbidden",
-        "403",
-        "no permission",
-        "权限",
-    ]):
+    if any(
+        keyword in combined_output
+        for keyword in [
+            "permission denied",
+            "access denied",
+            "forbidden",
+            "403",
+            "no permission",
+            "权限",
+        ]
+    ):
         return "permission_denied", f"权限不足: {stderr or stdout}"
 
     # 资源不存在
-    if any(keyword in combined_output for keyword in [
-        "not found",
-        "404",
-        "resource not found",
-        "不存在",
-        "找不到",
-    ]):
+    if any(
+        keyword in combined_output
+        for keyword in [
+            "not found",
+            "404",
+            "resource not found",
+            "不存在",
+            "找不到",
+        ]
+    ):
         return "resource_not_found", f"资源不存在: {stderr or stdout}"
 
     # 网络/限流错误
-    if any(keyword in combined_output for keyword in [
-        "rate limit",
-        "too many requests",
-        "429",
-        "timeout",
-        "network",
-        "限流",
-        "超时",
-    ]):
+    if any(
+        keyword in combined_output
+        for keyword in [
+            "rate limit",
+            "too many requests",
+            "429",
+            "timeout",
+            "network",
+            "限流",
+            "超时",
+        ]
+    ):
         return "api_error", f"API 调用失败（网络/限流）: {stderr or stdout}"
 
     # 其他错误

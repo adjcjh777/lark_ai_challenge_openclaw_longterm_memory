@@ -19,7 +19,9 @@ def main() -> None:
         description="Inspect or apply the local SQLite Copilot storage migration. This does not deploy production storage."
     )
     parser.add_argument("--db", help="SQLite database path. Defaults to MEMORY_DB_PATH or data/memory.sqlite.")
-    parser.add_argument("--dry-run", action="store_true", help="Inspect pending migration work without changing the database.")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Inspect pending migration work without changing the database."
+    )
     parser.add_argument("--apply", action="store_true", help="Apply idempotent local SQLite migration.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     args = parser.parse_args()
@@ -47,7 +49,9 @@ def main() -> None:
     print(f"ready: {str(report['ready']).lower()}")
     print(f"schema_version: {report['current_schema_version']}/{report['target_schema_version']}")
     print(f"missing_tables: {', '.join(report['missing_tables']) or 'none'}")
-    print(f"pending_column_additions: {json.dumps(report['pending_column_additions'], ensure_ascii=False, sort_keys=True)}")
+    print(
+        f"pending_column_additions: {json.dumps(report['pending_column_additions'], ensure_ascii=False, sort_keys=True)}"
+    )
     print(f"missing_indexes: {', '.join(report['missing_indexes']) or 'none'}")
     print(f"rollback: {report['rollback']['reason']}")
 

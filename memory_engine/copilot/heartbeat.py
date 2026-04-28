@@ -11,7 +11,6 @@ from memory_engine.repository import MemoryRepository
 from .permissions import REVIEW_ROLES, check_scope_access, redact_sensitive_text, sensitive_risk_flags
 from .schemas import PermissionContext, ValidationError
 
-
 DEFAULT_COOLDOWN_MS = 24 * 60 * 60 * 1000
 DEFAULT_REVIEW_DUE_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -167,7 +166,8 @@ class HeartbeatReminderEngine:
         }
         due_at = _extract_due_at(raw_value)
         gates = {
-            "importance": float(row["importance"] or 0) >= 0.65 or trigger in {"deadline", "review_due", "thread_similarity"},
+            "importance": float(row["importance"] or 0) >= 0.65
+            or trigger in {"deadline", "review_due", "thread_similarity"},
             "relevance": trigger != "thread_similarity" or self._thread_relevance(row, context) > 0,
             "cooldown": self._cooldown_passed(row),
             "scope_permission": True,
@@ -266,8 +266,7 @@ class HeartbeatReminderEngine:
 
     def _thread_relevance(self, row: Any, context: dict[str, Any]) -> int:
         thread_text = " ".join(
-            str(context.get(key) or "")
-            for key in ("intent", "thread_topic", "current_message", "task")
+            str(context.get(key) or "") for key in ("intent", "thread_topic", "current_message", "task")
         )
         if not thread_text:
             metadata = context.get("metadata")
@@ -326,11 +325,7 @@ def _target_actor(permission: PermissionContext | None) -> dict[str, Any]:
     if permission is None:
         return {}
     actor = permission.actor.to_dict()
-    return {
-        key: value
-        for key, value in actor.items()
-        if key in {"user_id", "open_id", "roles"} and value
-    }
+    return {key: value for key, value in actor.items() if key in {"user_id", "open_id", "roles"} and value}
 
 
 def _permission_trace(
@@ -345,7 +340,9 @@ def _permission_trace(
         "decision": decision,
         "reason_code": reason_code,
         "requested_action": "heartbeat.review_due",
-        "visible_fields": list(visible_fields or ["subject", "current_value", "reason", "evidence", "target_actor", "cooldown"]),
+        "visible_fields": list(
+            visible_fields or ["subject", "current_value", "reason", "evidence", "target_actor", "cooldown"]
+        ),
         "redacted_fields": list(redacted_fields or []),
     }
     if permission is not None:

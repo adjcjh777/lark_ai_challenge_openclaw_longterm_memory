@@ -6,13 +6,12 @@ import unittest
 from pathlib import Path
 
 from memory_engine.benchmark import run_benchmark
-from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.heartbeat import HeartbeatReminderEngine, agent_run_summary_candidate
+from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-
 
 SCOPE = "project:feishu_ai_challenge"
 
@@ -71,8 +70,12 @@ class CopilotHeartbeatTest(unittest.TestCase):
         self.assertTrue(result["candidates"][0]["cooldown"]["passed"])
         self.assertEqual("req_heartbeat_review_due", result["candidates"][0]["permission_trace"]["request_id"])
         self.assertEqual("trace_heartbeat_review_due", result["candidates"][0]["permission_trace"]["trace_id"])
-        active_count = self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
-        candidate_count = self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"]
+        active_count = self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()[
+            "count"
+        ]
+        candidate_count = self.conn.execute(
+            "SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'"
+        ).fetchone()["count"]
         self.assertEqual(1, active_count)
         self.assertEqual(0, candidate_count)
 

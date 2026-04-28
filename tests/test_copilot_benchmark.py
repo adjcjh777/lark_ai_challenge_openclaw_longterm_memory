@@ -7,7 +7,6 @@ from pathlib import Path
 
 from memory_engine.benchmark import run_benchmark
 
-
 LAYER_CASES = Path("benchmarks/copilot_layer_cases.json")
 RECALL_CASES = Path("benchmarks/copilot_recall_cases.json")
 CANDIDATE_CASES = Path("benchmarks/copilot_candidate_cases.json")

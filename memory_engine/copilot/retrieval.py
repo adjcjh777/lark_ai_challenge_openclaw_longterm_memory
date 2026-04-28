@@ -20,7 +20,6 @@ from .embeddings import (
 )
 from .schemas import Evidence, MemoryLayer, MemoryResult, RetrievalTraceStep, SearchRequest
 
-
 MATCH_ORDER = ("keyword_index", "vector", "cognee", "repository_fallback")
 
 
@@ -380,7 +379,10 @@ class LayerAwareRetriever:
                         score=float(item.get("score") or 0) * 100,
                         rank=rank,
                         matched_via=["cognee"],
-                        why_ranked={"cognee_score": float(item.get("score") or 0) * 100, "provenance": "copilot_ledger"},
+                        why_ranked={
+                            "cognee_score": float(item.get("score") or 0) * 100,
+                            "provenance": "copilot_ledger",
+                        },
                     )
                 )
                 continue
@@ -577,10 +579,10 @@ def _load_ollama_embedding_provider() -> OllamaEmbeddingProvider | Deterministic
     except Exception as exc:
         # Log at debug level to avoid noise in test environments
         import logging
+
         logger = logging.getLogger(__name__)
         logger.debug(
-            "Failed to create OllamaEmbeddingProvider: %s. "
-            "Falling back to DeterministicEmbeddingProvider.",
+            "Failed to create OllamaEmbeddingProvider: %s. Falling back to DeterministicEmbeddingProvider.",
             exc,
         )
 

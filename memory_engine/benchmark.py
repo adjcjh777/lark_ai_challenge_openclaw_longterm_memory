@@ -9,13 +9,18 @@ from typing import Any
 
 from .copilot.heartbeat import HeartbeatReminderEngine
 from .copilot.permissions import demo_permission_context
-from .copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, PrefetchRequest, SearchRequest
+from .copilot.schemas import (
+    ConfirmRequest,
+    CreateCandidateRequest,
+    ExplainVersionsRequest,
+    PrefetchRequest,
+    SearchRequest,
+)
 from .copilot.service import CopilotService
 from .db import connect, init_db
 from .document_ingestion import ingest_document_source
 from .models import DEFAULT_SCOPE
 from .repository import MemoryRepository
-
 
 FAILURE_RECOMMENDED_FIXES = {
     "candidate_not_detected": "检查 candidate 规则是否覆盖决策、负责人、截止时间、流程规则和风险结论。",
@@ -336,16 +341,22 @@ def run_copilot_candidate_benchmark(
                     "created_at": case.get("created_at", "2026-04-30T00:00:00+08:00"),
                     "quote": case.get("quote", case["text"]),
                 },
-                "current_context": demo_permission_context("memory.create_candidate", scope, actor_id=case.get("actor_id", "benchmark")),
+                "current_context": demo_permission_context(
+                    "memory.create_candidate", scope, actor_id=case.get("actor_id", "benchmark")
+                ),
             }
             if case.get("auto_confirm") is not None:
                 request_payload["auto_confirm"] = case["auto_confirm"]
-            response = CopilotService(repository=repo).create_candidate(CreateCandidateRequest.from_payload(request_payload))
+            response = CopilotService(repository=repo).create_candidate(
+                CreateCandidateRequest.from_payload(request_payload)
+            )
             latency_ms = round((time.perf_counter() - started) * 1000, 3)
             conn.close()
 
         candidate = response.get("candidate") if response.get("ok") else None
-        candidate_created = bool(candidate and response.get("action") in {"created", "candidate_conflict", "auto_confirmed"})
+        candidate_created = bool(
+            candidate and response.get("action") in {"created", "candidate_conflict", "auto_confirmed"}
+        )
         expected_candidate = bool(case.get("expected_candidate"))
         evidence_present = bool(candidate and (candidate.get("evidence") or {}).get("quote"))
         failure_category = _candidate_failure_category(
@@ -431,7 +442,9 @@ def run_copilot_conflict_benchmark(
                     "created_at": case.get("created_at", "2026-05-01T00:00:00+08:00"),
                     "quote": case.get("quote", case["text"]),
                 },
-                "current_context": demo_permission_context("memory.create_candidate", scope, actor_id=case.get("actor_id", "benchmark")),
+                "current_context": demo_permission_context(
+                    "memory.create_candidate", scope, actor_id=case.get("actor_id", "benchmark")
+                ),
             }
             candidate_response = service.create_candidate(CreateCandidateRequest.from_payload(request_payload))
             candidate_id = candidate_response.get("candidate_id")
@@ -456,7 +469,9 @@ def run_copilot_conflict_benchmark(
                         "query": case["query"],
                         "scope": scope,
                         "top_k": 3,
-                        "current_context": demo_permission_context("memory.search", scope, actor_id=case.get("actor_id", "benchmark")),
+                        "current_context": demo_permission_context(
+                            "memory.search", scope, actor_id=case.get("actor_id", "benchmark")
+                        ),
                     }
                 )
             )
@@ -485,13 +500,15 @@ def run_copilot_conflict_benchmark(
         expected_rank = _copilot_expected_rank(top_results, expected)
         forbidden_leak = bool(forbidden and any(forbidden in item.get("current_value", "") for item in top_results))
         version_statuses = {
-            item.get("status")
-            for item in explain_response.get("versions", [])
-            if isinstance(item, dict)
+            item.get("status") for item in explain_response.get("versions", []) if isinstance(item, dict)
         }
         superseded_seen = "superseded" in version_statuses
         active_seen = "active" in version_statuses
-        conflict_detected = bool((candidate_response.get("conflict") or {}).get("has_conflict")) if candidate_response.get("ok") else False
+        conflict_detected = (
+            bool((candidate_response.get("conflict") or {}).get("has_conflict"))
+            if candidate_response.get("ok")
+            else False
+        )
         explain_has_evidence = _explain_versions_has_evidence(explain_response)
         passed = bool(
             conflict_detected
@@ -579,7 +596,9 @@ def run_copilot_prefetch_benchmark(
             repo = MemoryRepository(conn)
 
             for event in case.get("events", []):
-                repo.remember(scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_prefetch")
+                repo.remember(
+                    scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_prefetch"
+                )
 
             for update in case.get("conflict_updates", []):
                 repo.remember(scope, update, source_type="benchmark_prefetch_conflict")
@@ -606,7 +625,9 @@ def run_copilot_prefetch_benchmark(
         evidence_present = any(item.get("evidence") for item in relevant if isinstance(item, dict))
         used_context = bool(relevant)
         forbidden_leak = bool(forbidden and forbidden in text)
-        passed = bool(response.get("ok") and used_context and expected_keyword in text and evidence_present and not forbidden_leak)
+        passed = bool(
+            response.get("ok") and used_context and expected_keyword in text and evidence_present and not forbidden_leak
+        )
         failure_type = _prefetch_failure_type(
             expected_keyword=expected_keyword,
             output_text=text,
@@ -667,7 +688,9 @@ def run_copilot_heartbeat_benchmark(
             init_db(conn)
             repo = MemoryRepository(conn)
             for event in case.get("events", []):
-                repo.remember(scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_heartbeat")
+                repo.remember(
+                    scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_heartbeat"
+                )
             if case.get("mark_recalled_query"):
                 repo.recall(scope, case["mark_recalled_query"])
 
@@ -1212,14 +1235,10 @@ def run_document_ingestion_benchmark(cases_path: str | Path, *, scope: str = DEF
             expected_quotes = case.get("expected_quotes", [])
             forbidden_quotes = case.get("forbidden_quotes", [])
             quote_hits = [
-                expected
-                for expected in expected_quotes
-                if any(expected in quote for quote in candidate_quotes)
+                expected for expected in expected_quotes if any(expected in quote for quote in candidate_quotes)
             ]
             forbidden_hits = [
-                forbidden
-                for forbidden in forbidden_quotes
-                if any(forbidden in quote for quote in candidate_quotes)
+                forbidden for forbidden in forbidden_quotes if any(forbidden in quote for quote in candidate_quotes)
             ]
             candidate_count = int(ingestion.get("candidate_count", 0))
             candidate_min_ok = candidate_count >= int(case.get("expected_candidate_min", 1))
@@ -1240,7 +1259,9 @@ def run_document_ingestion_benchmark(cases_path: str | Path, *, scope: str = DEF
                         "actual": actual,
                         "confirmed_memory_id": memory_id,
                         "confirm_action": confirmed,
-                        "document_source_present": bool(source and source.get("document_title") and source.get("quote")),
+                        "document_source_present": bool(
+                            source and source.get("document_title") and source.get("quote")
+                        ),
                         "passed": bool(
                             confirmed
                             and recalled
@@ -1288,11 +1309,7 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     passed = sum(1 for result in results if result["passed"])
     conflict_cases = [result for result in results if result["case_type"] == "conflict_update"]
     forbidden_cases = [result for result in results if result.get("forbidden")]
-    leaked = [
-        result
-        for result in forbidden_cases
-        if result["forbidden"] and result["forbidden"] in result["actual"]
-    ]
+    leaked = [result for result in forbidden_cases if result["forbidden"] and result["forbidden"] in result["actual"]]
     evidence_cases = [result for result in results if result["evidence_present"]]
     layer_cases = [result for result in results if result.get("expected_layer")]
     layer_passed = [result for result in layer_cases if result.get("layer_passed")]
@@ -1320,7 +1337,11 @@ def _copilot_layer_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     evidence_present = sum(1 for result in results if result["evidence_present"])
     layer_passed = sum(1 for result in results if result["layer_passed"])
     forbidden_cases = [result for result in results if result.get("forbidden")]
-    forbidden_leaks = [result for result in forbidden_cases if result.get("forbidden") and result.get("forbidden") in result.get("actual", "")]
+    forbidden_leaks = [
+        result
+        for result in forbidden_cases
+        if result.get("forbidden") and result.get("forbidden") in result.get("actual", "")
+    ]
     latencies = sorted(result["latency_ms"] for result in results)
     l1_latencies = sorted(result["latency_ms"] for result in results if result.get("expected_layer") == "L1")
     l2_cases = [result for result in results if result.get("expected_layer") == "L2"]
@@ -1330,7 +1351,10 @@ def _copilot_layer_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "case_pass_rate": _ratio(passed, total),
         "layer_case_count": total,
         "layer_accuracy": _ratio(layer_passed, total),
-        "l1_hit_rate": _ratio(sum(1 for result in results if result.get("expected_layer") == "L1" and result["layer_passed"]), len(l1_latencies)),
+        "l1_hit_rate": _ratio(
+            sum(1 for result in results if result.get("expected_layer") == "L1" and result["layer_passed"]),
+            len(l1_latencies),
+        ),
         "l2_fallback_success_rate": _ratio(sum(1 for result in l2_cases if result["layer_passed"]), len(l2_cases)),
         "l3_deep_search_success_rate": _ratio(sum(1 for result in l3_cases if result["layer_passed"]), len(l3_cases)),
         "l1_hot_recall_p95_ms": _percentile(l1_latencies, 0.95),
@@ -1608,9 +1632,16 @@ def _write_csv(path: str | Path, results: list[dict[str, Any]]) -> None:
                         "failure_type": result.get("failure_type"),
                         "recommended_fix": result.get("recommended_fix"),
                         "latency_ms": result.get("latency_ms"),
-                        "input_summary": result.get("query") or result.get("text") or result.get("task") or result.get("expected_subject"),
-                        "expected_output": json.dumps(result.get("expected_output", {}), ensure_ascii=False, sort_keys=True),
-                        "actual_output_summary": json.dumps(result.get("actual_output_summary", {}), ensure_ascii=False, sort_keys=True),
+                        "input_summary": result.get("query")
+                        or result.get("text")
+                        or result.get("task")
+                        or result.get("expected_subject"),
+                        "expected_output": json.dumps(
+                            result.get("expected_output", {}), ensure_ascii=False, sort_keys=True
+                        ),
+                        "actual_output_summary": json.dumps(
+                            result.get("actual_output_summary", {}), ensure_ascii=False, sort_keys=True
+                        ),
                     }
                 )
         return
@@ -1648,12 +1679,16 @@ def _document_ingestion_metrics(results: list[dict[str, Any]]) -> dict[str, Any]
         "case_pass_rate": _ratio(passed, total),
         "avg_candidate_count": round(sum(result["candidate_count"] for result in results) / total, 3) if total else 0.0,
         "avg_quote_coverage": round(sum(result["quote_coverage"] for result in results) / total, 4) if total else 0.0,
-        "avg_noise_rejection_rate": round(sum(result["noise_rejection_rate"] for result in results) / total, 4) if total else 0.0,
+        "avg_noise_rejection_rate": round(sum(result["noise_rejection_rate"] for result in results) / total, 4)
+        if total
+        else 0.0,
         "document_evidence_coverage": _ratio(
             sum(1 for result in results for recall in result["recalls"] if recall["document_source_present"]),
             sum(len(result["recalls"]) for result in results),
         ),
-        "avg_ingestion_latency_ms": round(sum(result["ingestion_latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_ingestion_latency_ms": round(sum(result["ingestion_latency_ms"] for result in results) / total, 3)
+        if total
+        else 0.0,
     }
 
 

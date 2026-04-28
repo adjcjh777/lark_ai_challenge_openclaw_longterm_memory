@@ -8,7 +8,6 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 from scripts.demo_seed import build_replay, seed_demo_memories
 
-
 SCOPE = "project:feishu_ai_challenge"
 
 

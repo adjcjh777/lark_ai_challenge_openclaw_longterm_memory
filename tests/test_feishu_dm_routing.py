@@ -9,7 +9,6 @@ Validates that:
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +23,6 @@ from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.tools import supported_tool_names
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / "agent_adapters" / "openclaw" / "plugin"

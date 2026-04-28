@@ -5,7 +5,6 @@ from typing import Any
 
 from .db import MIGRATIONS, SCHEMA_VERSION, init_db
 
-
 TARGET_SCHEMA_VERSION = SCHEMA_VERSION
 CORE_TABLES = ("raw_events", "memories", "memory_versions", "memory_evidence")
 REQUIRED_TABLES = (*CORE_TABLES, "memory_audit_events")
@@ -104,7 +103,9 @@ def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
 
 
 def _count_rows_needing_defaults(conn: sqlite3.Connection, table: str, columns: set[str]) -> int:
-    required_defaults = [column for column in ("tenant_id", "organization_id", "visibility_policy") if column in columns]
+    required_defaults = [
+        column for column in ("tenant_id", "organization_id", "visibility_policy") if column in columns
+    ]
     if not required_defaults:
         try:
             return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])

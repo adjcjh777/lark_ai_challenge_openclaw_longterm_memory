@@ -5,13 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest, native_tool_registrations, OPENCLAW_TO_PYTHON
+from agent_adapters.openclaw.tool_registry import (
+    OPENCLAW_TO_PYTHON,
+    native_tool_registrations,
+    openclaw_plugin_manifest,
+)
 from memory_engine.copilot.openclaw_tool_runner import run_envelope
 from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.tools import supported_tool_names
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / "agent_adapters" / "openclaw" / "plugin"
@@ -51,7 +54,9 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             conn = connect(tmp.name)
             init_db(conn)
             repo = MemoryRepository(conn)
-            repo.remember(SCOPE, "决定：first-class OpenClaw 工具必须保留 request_id 和 trace_id。", source_type="unit_test")
+            repo.remember(
+                SCOPE, "决定：first-class OpenClaw 工具必须保留 request_id 和 trace_id。", source_type="unit_test"
+            )
             conn.close()
 
             response = run_envelope(

@@ -17,7 +17,6 @@ from memory_engine.document_ingestion import (
 )
 from memory_engine.repository import MemoryRepository
 
-
 FIXTURE = Path("tests/fixtures/day5_doc_ingestion_fixture.md")
 SCOPE = "project:feishu_ai_challenge"
 
@@ -169,8 +168,13 @@ class DocumentIngestionTest(unittest.TestCase):
         fetch.assert_called_once()
         self.assertTrue(result["ok"])
         self.assertEqual(1, result["candidate_count"])
-        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"])
-        self.assertEqual(1, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"])
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
+        )
+        self.assertEqual(
+            1,
+            self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()["count"],
+        )
 
         candidate = result["candidates"][0]
         self.assertEqual("created", candidate["action"])
@@ -268,8 +272,15 @@ class DocumentIngestionTest(unittest.TestCase):
 
         self.assertTrue(all(result["ok"] for result in results))
         self.assertEqual([1, 1, 1], [result["candidate_count"] for result in results])
-        self.assertEqual(3, self.conn.execute("SELECT COUNT(*) AS count FROM memory_versions WHERE status = 'candidate'").fetchone()["count"])
-        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"])
+        self.assertEqual(
+            3,
+            self.conn.execute("SELECT COUNT(*) AS count FROM memory_versions WHERE status = 'candidate'").fetchone()[
+                "count"
+            ],
+        )
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
+        )
         self.assertEqual(
             ["feishu_task", "feishu_meeting", "lark_bitable"],
             [result["candidates"][0]["evidence"]["source_type"] for result in results],

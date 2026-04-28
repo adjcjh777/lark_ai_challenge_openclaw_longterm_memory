@@ -32,9 +32,7 @@ def load_cognee_client() -> CogneeClient:
     try:
         cognee_module = importlib.import_module("cognee")
     except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "cognee SDK is not installed. Install it with: pip install cognee"
-        ) from exc
+        raise ModuleNotFoundError("cognee SDK is not installed. Install it with: pip install cognee") from exc
 
     # Validate configuration
     _validate_cognee_configuration()
@@ -72,20 +70,14 @@ def _validate_cognee_configuration() -> None:
 
     # Ollama doesn't require an API key
     if provider != "ollama" and not llm_api_key:
-        raise CogneeConfigurationError(
-            "Missing LLM API key. Set OPENAI_API_KEY or LLM_API_KEY in .env file."
-        )
+        raise CogneeConfigurationError("Missing LLM API key. Set OPENAI_API_KEY or LLM_API_KEY in .env file.")
 
     if provider == "custom" and not os.environ.get("LLM_ENDPOINT"):
-        raise CogneeConfigurationError(
-            "LLM_ENDPOINT is required for Cognee custom provider. Set it in .env file."
-        )
+        raise CogneeConfigurationError("LLM_ENDPOINT is required for Cognee custom provider. Set it in .env file.")
 
     embedding_model = os.environ.get("EMBEDDING_MODEL")
     if not embedding_model:
-        raise CogneeConfigurationError(
-            "EMBEDDING_MODEL is required for Cognee embeddings. Set it in .env file."
-        )
+        raise CogneeConfigurationError("EMBEDDING_MODEL is required for Cognee embeddings. Set it in .env file.")
 
     if embedding_model.startswith("ollama/") and not os.environ.get("EMBEDDING_ENDPOINT"):
         raise CogneeConfigurationError(
@@ -94,26 +86,19 @@ def _validate_cognee_configuration() -> None:
 
 
 class CogneeClient(Protocol):
-    def remember(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def remember(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def recall(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def recall(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def improve(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def improve(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def forget(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def forget(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def add(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def add(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def cognify(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def cognify(self, *args: Any, **kwargs: Any) -> Any: ...
 
-    def search(self, *args: Any, **kwargs: Any) -> Any:
-        ...
+    def search(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 @dataclass

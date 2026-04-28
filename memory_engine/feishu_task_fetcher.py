@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .document_ingestion import FeishuIngestionSource
-from .feishu_api_client import FeishuApiResult, extract_text_from_result, run_lark_cli
+from .feishu_api_client import FeishuApiResult, run_lark_cli
 
 
 def fetch_feishu_task_text(
@@ -141,13 +141,15 @@ def list_feishu_tasks(
         due = item.get("due", {})
         due_timestamp = due.get("timestamp")
 
-        tasks.append({
-            "task_id": task_id,
-            "title": title,
-            "status": status,
-            "creator_id": creator_id,
-            "due_timestamp": due_timestamp,
-        })
+        tasks.append(
+            {
+                "task_id": task_id,
+                "title": title,
+                "status": status,
+                "creator_id": creator_id,
+                "due_timestamp": due_timestamp,
+            }
+        )
 
     return tasks
 

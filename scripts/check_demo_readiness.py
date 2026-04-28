@@ -8,7 +8,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -18,9 +17,10 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 from scripts.demo_seed import build_replay, seed_demo_memories
 
-
 STATUS_ORDER = ("pass", "fail", "warning", "skipped", "not_configured", "fallback_used")
-BOUNDARY = "demo/pre-production readiness only; no production deployment, no real Feishu push, no productized live claim."
+BOUNDARY = (
+    "demo/pre-production readiness only; no production deployment, no real Feishu push, no productized live claim."
+)
 
 
 def main() -> int:
@@ -72,9 +72,7 @@ def run_demo_readiness(*, demo_json_output: Path | None = None) -> dict[str, Any
 def evaluate_demo_replay(replay: dict[str, Any], *, demo_json_output: Path | None = None) -> dict[str, Any]:
     steps = replay.get("steps") if isinstance(replay.get("steps"), list) else []
     failed_steps = [
-        str(step.get("name") or f"step_{index}")
-        for index, step in enumerate(steps, start=1)
-        if not _step_ok(step)
+        str(step.get("name") or f"step_{index}") for index, step in enumerate(steps, start=1) if not _step_ok(step)
     ]
     contract_ok = bool((replay.get("openclaw_example_contract") or {}).get("ok"))
     status = "pass" if not failed_steps and contract_ok and bool(replay.get("ok")) else "fail"
@@ -84,7 +82,9 @@ def evaluate_demo_replay(replay: dict[str, Any], *, demo_json_output: Path | Non
         "failed_steps": failed_steps,
         "openclaw_example_contract_ok": contract_ok,
         "json_output": str(demo_json_output) if demo_json_output else None,
-        "next_step": "" if status == "pass" else "修复 failed_steps；demo readiness 只要任一 step ok=false 就必须失败。",
+        "next_step": ""
+        if status == "pass"
+        else "修复 failed_steps；demo readiness 只要任一 step ok=false 就必须失败。",
     }
 
 
@@ -177,7 +177,9 @@ def _summary(name: str, check: dict[str, Any]) -> str:
     if name == "phase6_healthcheck":
         return f" healthcheck_ok={check.get('healthcheck_ok')} counts={check.get('status_counts')}"
     if name == "demo_replay":
-        return f" steps={check.get('step_count')} failed_steps={check.get('failed_steps')} json={check.get('json_output')}"
+        return (
+            f" steps={check.get('step_count')} failed_steps={check.get('failed_steps')} json={check.get('json_output')}"
+        )
     if name == "provider_config":
         return f" mode={check.get('check_mode')} provider={check.get('provider')} model={check.get('model')}"
     return ""

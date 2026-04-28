@@ -13,7 +13,6 @@ from .benchmark import run_benchmark
 from .feishu_cards import candidate_review_payload, reminder_candidate_payload
 from .models import parse_scope
 
-
 LEDGER_FIELDS = [
     "memory_id",
     "scope",
@@ -297,7 +296,9 @@ def candidate_review_output_rows(outputs: list[dict[str, Any]], *, scope: str | 
         output_scope = payload.get("scope") or output.get("scope")
         if scope is not None and output_scope != scope:
             continue
-        permission_decision = payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
+        permission_decision = (
+            payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
+        )
         evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
         conflict = payload.get("conflict") if isinstance(payload.get("conflict"), dict) else {}
         rows.append(
@@ -329,7 +330,9 @@ def reminder_candidate_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
     for reminder in reminders:
         payload = reminder_candidate_payload(reminder)
         evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
-        permission_decision = payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
+        permission_decision = (
+            payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
+        )
         rows.append(
             [
                 _reminder_candidate_sync_key(payload),
@@ -495,7 +498,9 @@ def build_commands(payload: dict[str, Any], target: BitableTarget) -> list[dict[
                     argv.extend(["--profile", target.profile])
                 if target.as_identity:
                     argv.extend(["--as", target.as_identity])
-                commands.append({"table": key, "argv": argv, "body": body, "sync_key": body.get(UPSERT_TABLE_KEYS[key])})
+                commands.append(
+                    {"table": key, "argv": argv, "body": body, "sync_key": body.get(UPSERT_TABLE_KEYS[key])}
+                )
             continue
         for chunk in _chunks(rows, 200):
             body = {"fields": table["fields"], "rows": chunk}
@@ -558,10 +563,7 @@ def table_schema_spec() -> dict[str, Any]:
 def setup_commands(target: BitableTarget) -> list[list[str]]:
     commands = []
     for table in table_schema_spec()["tables"]:
-        fields = [
-            {"name": field["name"], "type": field["type"]}
-            for field in table["fields"]
-        ]
+        fields = [{"name": field["name"], "type": field["type"]} for field in table["fields"]]
         argv = [
             target.lark_cli,
             "base",
@@ -612,7 +614,9 @@ def _schema_fields(fields: list[str]) -> list[dict[str, str]]:
 
 def _run_with_retry(argv: list[str], body: dict[str, Any], *, retries: int) -> dict[str, Any]:
     display_argv = list(argv)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", prefix=".bitable_sync_", suffix=".json", dir=".", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", prefix=".bitable_sync_", suffix=".json", dir=".", delete=False
+    ) as tmp:
         json.dump(body, tmp, ensure_ascii=False)
         tmp_path = Path(tmp.name)
         tmp_arg = f"@./{tmp_path.name}"
@@ -737,7 +741,15 @@ def _verify_upsert_readback(payload: dict[str, Any], target: BitableTarget, *, r
                 {
                     "ok": False,
                     "attempts": 1,
-                    "argv": [target.lark_cli, "base", "+record-list", "--base-token", target.base_token, "--table-id", table_ids[key]],
+                    "argv": [
+                        target.lark_cli,
+                        "base",
+                        "+record-list",
+                        "--base-token",
+                        target.base_token,
+                        "--table-id",
+                        table_ids[key],
+                    ],
                     "returncode": 0,
                     "stdout": result.get("stdout", ""),
                     "stderr": f"readback missing {field_name}: {', '.join(missing)}",
@@ -774,7 +786,14 @@ def _run_plain_with_retry(argv: list[str], *, retries: int) -> dict[str, Any]:
         try:
             completed = subprocess.run(argv, check=False, text=True, capture_output=True)
         except OSError as exc:
-            return {"ok": False, "attempts": attempt, "argv": argv, "returncode": None, "stdout": "", "stderr": str(exc)}
+            return {
+                "ok": False,
+                "attempts": attempt,
+                "argv": argv,
+                "returncode": None,
+                "stdout": "",
+                "stderr": str(exc),
+            }
         if completed.returncode == 0:
             return {"ok": True, "attempts": attempt, "argv": argv, "stdout": completed.stdout.strip()}
         if attempt <= retries:
@@ -817,10 +836,7 @@ def _expected_sync_keys(table: dict[str, Any] | None, field_name: str) -> list[s
 
 
 def _table_summary(payload: dict[str, Any]) -> dict[str, int]:
-    return {
-        key: len(table["rows"])
-        for key, table in payload["tables"].items()
-    }
+    return {key: len(table["rows"]) for key, table in payload["tables"].items()}
 
 
 def _target_table_ids(target: BitableTarget) -> dict[str, str]:

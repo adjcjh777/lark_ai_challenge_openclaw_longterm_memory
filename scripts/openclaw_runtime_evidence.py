@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -18,7 +16,6 @@ from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-
 
 DEFAULT_SCOPE = "project:feishu_ai_challenge"
 
@@ -44,7 +41,9 @@ def main() -> None:
         print(json.dumps(evidence, ensure_ascii=False, indent=2))
 
 
-def build_evidence(scope: str = DEFAULT_SCOPE, db_path: str | None = None, *, persistent: bool = False) -> dict[str, Any]:
+def build_evidence(
+    scope: str = DEFAULT_SCOPE, db_path: str | None = None, *, persistent: bool = False
+) -> dict[str, Any]:
     path = db_path
     if path is None:
         with tempfile.TemporaryDirectory(prefix="openclaw_runtime_evidence_") as tmp:
@@ -135,7 +134,9 @@ def _run_candidate_confirm(service: CopilotService, scope: str) -> dict[str, Any
             "trace_phase_b_candidate_confirm",
         ),
     }
-    confirmed = handle_tool_request("memory.confirm", confirm_payload, service=service) if isinstance(candidate_id, str) else {}
+    confirmed = (
+        handle_tool_request("memory.confirm", confirm_payload, service=service) if isinstance(candidate_id, str) else {}
+    )
     output = {
         "ok": bool(created.get("ok")) and bool(confirmed.get("ok")),
         "create_candidate": created,
@@ -161,7 +162,9 @@ def _run_prefetch(service: CopilotService, scope: str) -> dict[str, Any]:
 
 
 def _context(action: str, scope: str, request_id: str, trace_id: str) -> dict[str, Any]:
-    context = demo_permission_context(action, scope, actor_id="openclaw_agent_main", entrypoint="openclaw_agent_runtime")
+    context = demo_permission_context(
+        action, scope, actor_id="openclaw_agent_main", entrypoint="openclaw_agent_runtime"
+    )
     context["allowed_scopes"] = [scope]
     permission = context["permission"]
     permission["request_id"] = request_id

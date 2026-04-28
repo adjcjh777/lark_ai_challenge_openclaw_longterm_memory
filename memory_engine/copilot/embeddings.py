@@ -8,10 +8,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
-from typing import Any
-
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +103,7 @@ class OllamaEmbeddingProvider:
 
         # LRU cache for embeddings (using OrderedDict for true LRU behavior)
         from collections import OrderedDict
+
         self._cache_size = cache_size
         self._embed_text_cache: OrderedDict[str, list[float]] = OrderedDict()
         self._embed_curated_cache: OrderedDict[str, list[float]] = OrderedDict()
@@ -116,7 +114,10 @@ class OllamaEmbeddingProvider:
     def _init_litellm(self) -> None:
         """Initialize litellm and verify availability."""
         try:
-            import litellm
+            import importlib.util
+
+            if importlib.util.find_spec("litellm") is None:
+                raise ImportError("litellm not found")
             self._litellm_available = True
             self._initialized = True
             logger.info(
@@ -129,8 +130,7 @@ class OllamaEmbeddingProvider:
             self._litellm_available = False
             self._initialized = False
             logger.warning(
-                "litellm not available, OllamaEmbeddingProvider cannot be used. "
-                "Install litellm: pip install litellm"
+                "litellm not available, OllamaEmbeddingProvider cannot be used. Install litellm: pip install litellm"
             )
 
     def is_available(self) -> bool:
@@ -192,9 +192,10 @@ class OllamaEmbeddingProvider:
             try:
                 # Check if we're in an asyncio event loop
                 try:
-                    loop = asyncio.get_running_loop()
+                    asyncio.get_running_loop()
                     # If we're in an event loop, use thread pool to avoid blocking
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(
                             litellm.embedding,
@@ -216,10 +217,7 @@ class OllamaEmbeddingProvider:
 
                 # Validate dimension
                 if len(vector) != self.dimension:
-                    raise ValueError(
-                        f"Expected embedding dimension {self.dimension}, "
-                        f"got {len(vector)}"
-                    )
+                    raise ValueError(f"Expected embedding dimension {self.dimension}, got {len(vector)}")
 
                 return vector
 
@@ -233,12 +231,9 @@ class OllamaEmbeddingProvider:
                 )
                 if attempt < self.max_retries - 1:
                     # Exponential backoff
-                    time.sleep(0.5 * (2 ** attempt))
+                    time.sleep(0.5 * (2**attempt))
 
-        raise RuntimeError(
-            f"Failed to generate embedding after {self.max_retries} attempts: "
-            f"{last_error}"
-        )
+        raise RuntimeError(f"Failed to generate embedding after {self.max_retries} attempts: {last_error}")
 
     def batch_embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts in a single API call."""
@@ -258,10 +253,7 @@ class OllamaEmbeddingProvider:
             # Validate dimensions
             for i, vector in enumerate(embeddings):
                 if len(vector) != self.dimension:
-                    raise ValueError(
-                        f"Expected embedding dimension {self.dimension} at index {i}, "
-                        f"got {len(vector)}"
-                    )
+                    raise ValueError(f"Expected embedding dimension {self.dimension} at index {i}, got {len(vector)}")
 
             return embeddings
 

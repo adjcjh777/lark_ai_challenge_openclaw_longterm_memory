@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
-
+from dataclasses import dataclass
 
 DEFAULT_SCOPE = "project:feishu_ai_challenge"
 
@@ -59,4 +58,3 @@ def normalize_subject(subject: str) -> str:
 def contains_any(text: str, words: tuple[str, ...]) -> bool:
     lowered = text.lower()
     return any(word.lower() in lowered for word in words)
-

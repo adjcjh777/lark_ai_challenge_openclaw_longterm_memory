@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from memory_engine.copilot.service import CopilotService
+from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
 from memory_engine.feishu_cards import (
     build_candidate_review_card,
@@ -19,8 +21,6 @@ from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import LarkCliPublisher
 from memory_engine.feishu_runtime import handle_message_event
-from memory_engine.copilot.service import CopilotService
-from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.repository import MemoryRepository
 
 
@@ -79,7 +79,9 @@ def text_payload(message_id: str, text: str) -> dict:
     }
 
 
-def copilot_context(action: str, *, roles: list[str] | None = None, request_id: str | None = None, trace_id: str | None = None) -> dict:
+def copilot_context(
+    action: str, *, roles: list[str] | None = None, request_id: str | None = None, trace_id: str | None = None
+) -> dict:
     return {
         "scope": "project:feishu_ai_challenge",
         "permission": {
@@ -246,7 +248,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("候选 1", action_blocks[0]["actions"][0]["value"]["candidate_label"])
 
     def test_card_action_event_routes_to_existing_command_and_fails_closed_without_permission(self) -> None:
-        ingest = message_event_from_payload(text_payload("om_ingest_for_card", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))
+        ingest = message_event_from_payload(
+            text_payload("om_ingest_for_card", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md")
+        )
         self.assertIsNotNone(ingest)
         handle_message_event(self.conn, ingest, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
         row = self.conn.execute("SELECT id FROM memories WHERE status = 'candidate' LIMIT 1").fetchone()
@@ -266,7 +270,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("candidate", status)
 
     def test_card_action_result_preserves_candidate_label(self) -> None:
-        ingest = message_event_from_payload(text_payload("om_ingest_for_card_label", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md"))
+        ingest = message_event_from_payload(
+            text_payload("om_ingest_for_card_label", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md")
+        )
         self.assertIsNotNone(ingest)
         handle_message_event(self.conn, ingest, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
         row = self.conn.execute("SELECT id FROM memories WHERE status = 'candidate' LIMIT 1").fetchone()
@@ -274,7 +280,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         event = message_event_from_payload(card_action_payload("reject", row["id"], candidate_index=2))
         self.assertIsNotNone(event)
-        result = handle_message_event(self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
+        result = handle_message_event(
+            self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path
+        )
 
         self.assertEqual("reject", result["command"])
         field_texts = [field["text"]["content"] for field in result["publish"]["card"]["elements"][0]["fields"]]
@@ -288,7 +296,11 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
             "status": "candidate",
             "recommended_action": "review_conflict",
             "risk_flags": ["conflict_candidate"],
-            "evidence": {"source_type": "unit_test", "source_id": "msg_1", "quote": "不对，生产部署 region 改成 ap-shanghai。"},
+            "evidence": {
+                "source_type": "unit_test",
+                "source_id": "msg_1",
+                "quote": "不对，生产部署 region 改成 ap-shanghai。",
+            },
             "conflict": {
                 "has_conflict": True,
                 "old_memory_id": "mem_1",
@@ -355,7 +367,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         payload = candidate_review_payload(denied)
         card = build_candidate_review_card(denied)
         rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
-        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()["status"]
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()[
+            "status"
+        ]
 
         self.assertFalse(denied["ok"])
         self.assertEqual("candidate", status)
@@ -408,8 +422,12 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         )
         self.assertIsNotNone(event)
 
-        result = handle_message_event(self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
-        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()["status"]
+        result = handle_message_event(
+            self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path
+        )
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()[
+            "status"
+        ]
         rendered = json.dumps(result["publish"]["card"], ensure_ascii=False)
 
         self.assertEqual("confirm", result["command"])
@@ -455,14 +473,20 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         )
         self.assertIsNotNone(event)
 
-        result = handle_message_event(self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
-        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()["status"]
+        result = handle_message_event(
+            self.conn, event, FakePublisher(self.config, [True]), self.config, db_path=self.db_path
+        )
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()[
+            "status"
+        ]
         rendered = json.dumps(result["publish"]["card"], ensure_ascii=False)
 
         self.assertEqual("confirm", result["command"])
         self.assertFalse(result["tool_result"]["ok"])
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
-        self.assertEqual("missing_permission_context", result["tool_result"]["bridge"]["permission_decision"]["reason_code"])
+        self.assertEqual(
+            "missing_permission_context", result["tool_result"]["bridge"]["permission_decision"]["reason_code"]
+        )
         self.assertEqual("candidate", status)
         self.assertNotIn("权限上下文的卡片点击不能确认候选", rendered)
 

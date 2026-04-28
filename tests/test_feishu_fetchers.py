@@ -6,14 +6,13 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 from memory_engine.db import connect, init_db
-from memory_engine.document_ingestion import FeishuIngestionSource, ingest_feishu_source
+from memory_engine.document_ingestion import ingest_feishu_source
 from memory_engine.feishu_api_client import FeishuApiResult
 from memory_engine.feishu_bitable_fetcher import (
     fetch_bitable_record_text,
@@ -29,7 +28,6 @@ from memory_engine.feishu_task_fetcher import (
     list_feishu_tasks,
 )
 from memory_engine.repository import MemoryRepository
-
 
 SCOPE = "project:feishu_ai_challenge"
 
@@ -87,21 +85,23 @@ class TaskFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_task_fetcher.run_lark_cli")
     def test_fetch_feishu_task_text_success(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "task": {
-                    "title": "生产部署任务",
-                    "summary": "生产部署必须加 --canary --region cn-shanghai",
-                    "creator": {"id": "ou_creator_1"},
-                    "due": {"timestamp": "1714500000"},
-                    "status": "open",
-                    "subtasks": [
-                        {"title": "配置灰度", "status": "completed"},
-                        {"title": "监控告警", "status": "pending"},
-                    ],
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "task": {
+                        "title": "生产部署任务",
+                        "summary": "生产部署必须加 --canary --region cn-shanghai",
+                        "creator": {"id": "ou_creator_1"},
+                        "due": {"timestamp": "1714500000"},
+                        "status": "open",
+                        "subtasks": [
+                            {"title": "配置灰度", "status": "completed"},
+                            {"title": "监控告警", "status": "pending"},
+                        ],
+                    },
                 },
-            },
-        })
+            }
+        )
 
         source = fetch_feishu_task_text("task_123")
 
@@ -133,14 +133,22 @@ class TaskFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_task_fetcher.run_lark_cli")
     def test_list_feishu_tasks_success(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "items": [
-                    {"task_id": "t1", "title": "任务一", "status": "open", "creator": {"id": "ou1"}, "due": {}},
-                    {"task_id": "t2", "title": "任务二", "status": "done", "creator": {"id": "ou2"}, "due": {"timestamp": "1714600000"}},
-                ],
-            },
-        })
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "items": [
+                        {"task_id": "t1", "title": "任务一", "status": "open", "creator": {"id": "ou1"}, "due": {}},
+                        {
+                            "task_id": "t2",
+                            "title": "任务二",
+                            "status": "done",
+                            "creator": {"id": "ou2"},
+                            "due": {"timestamp": "1714600000"},
+                        },
+                    ],
+                },
+            }
+        )
 
         tasks = list_feishu_tasks(page_size=10)
 
@@ -159,16 +167,18 @@ class TaskFetcherTest(unittest.TestCase):
     @patch("memory_engine.feishu_task_fetcher.run_lark_cli")
     def test_fetch_feishu_task_text_ingests_candidate(self, mock_run: Mock) -> None:
         """验证 fetch_feishu_task_text 返回的 source 可正确进入 candidate pipeline。"""
-        mock_run.return_value = _ok_result({
-            "data": {
-                "task": {
-                    "title": "上线任务",
-                    "summary": "决定：上线负责人是程俊豪，截止 2026-04-30。",
-                    "creator": {"id": "ou_owner"},
-                    "status": "open",
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "task": {
+                        "title": "上线任务",
+                        "summary": "决定：上线负责人是程俊豪，截止 2026-04-30。",
+                        "creator": {"id": "ou_owner"},
+                        "status": "open",
+                    },
                 },
-            },
-        })
+            }
+        )
 
         source = fetch_feishu_task_text("task_ingest")
         result = ingest_feishu_source(
@@ -180,7 +190,9 @@ class TaskFetcherTest(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertGreaterEqual(result["candidate_count"], 1)
-        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"])
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"]
+        )
         candidate = result["candidates"][0]
         self.assertEqual("feishu_task", candidate["evidence"]["source_type"])
         self.assertEqual("task_ingest", candidate["evidence"]["source_task_id"])
@@ -188,15 +200,17 @@ class TaskFetcherTest(unittest.TestCase):
     @patch("memory_engine.feishu_task_fetcher.run_lark_cli")
     def test_task_with_no_subtasks(self, mock_run: Mock) -> None:
         """无子任务时不应生成子任务文本段。"""
-        mock_run.return_value = _ok_result({
-            "data": {
-                "task": {
-                    "title": "简单任务",
-                    "summary": "只做一件事。",
-                    "creator": {"id": "ou1"},
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "task": {
+                        "title": "简单任务",
+                        "summary": "只做一件事。",
+                        "creator": {"id": "ou1"},
+                    },
                 },
-            },
-        })
+            }
+        )
 
         source = fetch_feishu_task_text("task_no_sub")
         self.assertNotIn("子任务", source.text)
@@ -225,36 +239,40 @@ class MeetingFetcherTest(unittest.TestCase):
         def side_effect(argv, **kwargs):
             # 注意：必须先检查更具体的模式，因为 "+get" 是 "+get-ai-content" 的子串
             if any("get-ai-content" in arg for arg in argv):
-                return _ok_result({
-                    "data": {
-                        "ai_content": {
-                            "summary": "会议决定：生产部署 region 统一用 ap-shanghai。",
-                            "todos": [
-                                {"text": "更新部署文档"},
-                                {"text": "通知运维团队"},
-                            ],
-                            "chapters": [
-                                {"title": "部署方案讨论"},
-                                {"title": "遗留问题"},
-                            ],
+                return _ok_result(
+                    {
+                        "data": {
+                            "ai_content": {
+                                "summary": "会议决定：生产部署 region 统一用 ap-shanghai。",
+                                "todos": [
+                                    {"text": "更新部署文档"},
+                                    {"text": "通知运维团队"},
+                                ],
+                                "chapters": [
+                                    {"title": "部署方案讨论"},
+                                    {"title": "遗留问题"},
+                                ],
+                            },
                         },
-                    },
-                })
+                    }
+                )
             if any("get-transcript" in arg for arg in argv):
                 return _ok_result({"data": {"transcript": []}})
             # minute detail
-            return _ok_result({
-                "data": {
-                    "minute": {
-                        "title": "发布复盘会",
-                        "creator": {"id": "ou_host"},
-                        "duration": 3600,
-                        "participant_count": 8,
-                        "meeting_date": "2026-04-28",
-                        "status": "ended",
+            return _ok_result(
+                {
+                    "data": {
+                        "minute": {
+                            "title": "发布复盘会",
+                            "creator": {"id": "ou_host"},
+                            "duration": 3600,
+                            "participant_count": 8,
+                            "meeting_date": "2026-04-28",
+                            "status": "ended",
+                        },
                     },
-                },
-            })
+                }
+            )
 
         mock_run.side_effect = side_effect
 
@@ -271,30 +289,35 @@ class MeetingFetcherTest(unittest.TestCase):
     @patch("memory_engine.feishu_meeting_fetcher.run_lark_cli")
     def test_fetch_meeting_fallback_to_transcript(self, mock_run: Mock) -> None:
         """AI 产物为空时降级使用逐字稿。"""
+
         def side_effect(argv, **kwargs):
             if any("get-ai-content" in arg for arg in argv):
                 return _ok_result({"data": {"ai_content": {}}})
             if any("get-transcript" in arg for arg in argv):
-                return _ok_result({
+                return _ok_result(
+                    {
+                        "data": {
+                            "transcript": [
+                                {"speaker": "Alice", "text": "今天讨论部署 region 问题。"},
+                                {"speaker": "Bob", "text": "决定用 ap-shanghai。"},
+                            ],
+                        },
+                    }
+                )
+            return _ok_result(
+                {
                     "data": {
-                        "transcript": [
-                            {"speaker": "Alice", "text": "今天讨论部署 region 问题。"},
-                            {"speaker": "Bob", "text": "决定用 ap-shanghai。"},
-                        ],
+                        "minute": {
+                            "title": "技术讨论",
+                            "creator": {"id": "ou_host"},
+                            "duration": 1800,
+                            "participant_count": 3,
+                            "meeting_date": "2026-04-28",
+                            "status": "ended",
+                        },
                     },
-                })
-            return _ok_result({
-                "data": {
-                    "minute": {
-                        "title": "技术讨论",
-                        "creator": {"id": "ou_host"},
-                        "duration": 1800,
-                        "participant_count": 3,
-                        "meeting_date": "2026-04-28",
-                        "status": "ended",
-                    },
-                },
-            })
+                }
+            )
 
         mock_run.side_effect = side_effect
 
@@ -306,15 +329,17 @@ class MeetingFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_meeting_fetcher.run_lark_cli")
     def test_fetch_meeting_in_progress_raises(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "minute": {
-                    "title": "进行中会议",
-                    "creator": {"id": "ou_host"},
-                    "status": "in_progress",
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "minute": {
+                        "title": "进行中会议",
+                        "creator": {"id": "ou_host"},
+                        "status": "in_progress",
+                    },
                 },
-            },
-        })
+            }
+        )
 
         with self.assertRaises(ValueError) as ctx:
             fetch_feishu_meeting_text("minute_live")
@@ -330,20 +355,22 @@ class MeetingFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_meeting_fetcher.run_lark_cli")
     def test_list_feishu_meetings_success(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "items": [
-                    {
-                        "minute_token": "m1",
-                        "title": "会议一",
-                        "status": "ended",
-                        "creator": {"id": "ou1"},
-                        "duration": 3600,
-                        "meeting_date": "2026-04-28",
-                    },
-                ],
-            },
-        })
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "items": [
+                        {
+                            "minute_token": "m1",
+                            "title": "会议一",
+                            "status": "ended",
+                            "creator": {"id": "ou1"},
+                            "duration": 3600,
+                            "meeting_date": "2026-04-28",
+                        },
+                    ],
+                },
+            }
+        )
 
         meetings = list_feishu_meetings(page_size=10)
 
@@ -353,27 +380,32 @@ class MeetingFetcherTest(unittest.TestCase):
     @patch("memory_engine.feishu_meeting_fetcher.run_lark_cli")
     def test_meeting_ingests_candidate(self, mock_run: Mock) -> None:
         """验证会议 fetcher 返回的 source 可进入 candidate pipeline。"""
+
         def side_effect(argv, **kwargs):
             if any("get-ai-content" in arg for arg in argv):
-                return _ok_result({
-                    "data": {
-                        "ai_content": {
-                            "summary": "风险：灰度期间不能关闭审计日志。",
-                            "todos": [{"text": "确认审计配置"}],
+                return _ok_result(
+                    {
+                        "data": {
+                            "ai_content": {
+                                "summary": "风险：灰度期间不能关闭审计日志。",
+                                "todos": [{"text": "确认审计配置"}],
+                            },
                         },
-                    },
-                })
+                    }
+                )
             if any("get-transcript" in arg for arg in argv):
                 return _ok_result({"data": {"transcript": []}})
-            return _ok_result({
-                "data": {
-                    "minute": {
-                        "title": "安全复盘会",
-                        "creator": {"id": "ou_host"},
-                        "status": "ended",
+            return _ok_result(
+                {
+                    "data": {
+                        "minute": {
+                            "title": "安全复盘会",
+                            "creator": {"id": "ou_host"},
+                            "status": "ended",
+                        },
                     },
-                },
-            })
+                }
+            )
 
         mock_run.side_effect = side_effect
 
@@ -410,20 +442,22 @@ class BitableFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_fetch_bitable_record_text_success(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "record": {
-                    "record_id": "rec_001",
-                    "fields": {
-                        "项目名称": "生产部署",
-                        "负责人": "程俊豪",
-                        "截止日期": "2026-04-30",
-                        "优先级": "P1",
-                        "created_at": "2026-04-28",
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "record": {
+                        "record_id": "rec_001",
+                        "fields": {
+                            "项目名称": "生产部署",
+                            "负责人": "程俊豪",
+                            "截止日期": "2026-04-30",
+                            "优先级": "P1",
+                            "created_at": "2026-04-28",
+                        },
                     },
                 },
-            },
-        })
+            }
+        )
 
         source = fetch_bitable_record_text("app_token", "tbl_1", "rec_001")
 
@@ -446,14 +480,16 @@ class BitableFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_fetch_bitable_record_empty_fields(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "record": {
-                    "record_id": "rec_empty",
-                    "fields": {},
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "record": {
+                        "record_id": "rec_empty",
+                        "fields": {},
+                    },
                 },
-            },
-        })
+            }
+        )
 
         with self.assertRaises(ValueError) as ctx:
             fetch_bitable_record_text("app", "tbl", "rec_empty")
@@ -461,20 +497,22 @@ class BitableFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_list_bitable_records_success(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "items": [
-                    {
-                        "record_id": "rec_1",
-                        "fields": {"名称": "记录一", "状态": "进行中"},
-                    },
-                    {
-                        "record_id": "rec_2",
-                        "fields": {"名称": "记录二", "状态": "已完成"},
-                    },
-                ],
-            },
-        })
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "items": [
+                        {
+                            "record_id": "rec_1",
+                            "fields": {"名称": "记录一", "状态": "进行中"},
+                        },
+                        {
+                            "record_id": "rec_2",
+                            "fields": {"名称": "记录二", "状态": "已完成"},
+                        },
+                    ],
+                },
+            }
+        )
 
         records = list_bitable_records("app", "tbl", limit=10)
 
@@ -484,14 +522,16 @@ class BitableFetcherTest(unittest.TestCase):
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_list_bitable_tables_success(self, mock_run: Mock) -> None:
-        mock_run.return_value = _ok_result({
-            "data": {
-                "items": [
-                    {"table_id": "tbl_a", "name": "任务表", "revision": 3},
-                    {"table_id": "tbl_b", "name": "人员表", "revision": 1},
-                ],
-            },
-        })
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "items": [
+                        {"table_id": "tbl_a", "name": "任务表", "revision": 3},
+                        {"table_id": "tbl_b", "name": "人员表", "revision": 1},
+                    ],
+                },
+            }
+        )
 
         tables = list_bitable_tables("app_token")
 
@@ -502,17 +542,19 @@ class BitableFetcherTest(unittest.TestCase):
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_bitable_ingests_candidate(self, mock_run: Mock) -> None:
         """验证 bitable fetcher 返回的 source 可进入 candidate pipeline。"""
-        mock_run.return_value = _ok_result({
-            "data": {
-                "record": {
-                    "record_id": "rec_ingest",
-                    "fields": {
-                        "规则": "生产部署 region 使用 ap-shanghai。",
-                        "负责人": "程俊豪",
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "record": {
+                        "record_id": "rec_ingest",
+                        "fields": {
+                            "规则": "生产部署 region 使用 ap-shanghai。",
+                            "负责人": "程俊豪",
+                        },
                     },
                 },
-            },
-        })
+            }
+        )
 
         source = fetch_bitable_record_text("app", "tbl", "rec_ingest")
         result = ingest_feishu_source(
@@ -530,22 +572,24 @@ class BitableFetcherTest(unittest.TestCase):
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_bitable_field_value_extraction(self, mock_run: Mock) -> None:
         """验证各种字段值类型都能正确提取。"""
-        mock_run.return_value = _ok_result({
-            "data": {
-                "record": {
-                    "record_id": "rec_types",
-                    "fields": {
-                        "文本字段": "hello",
-                        "数字字段": 42,
-                        "布尔字段": True,
-                        "数组字段": ["选项A", "选项B"],
-                        "人员字段": [{"name": "张三"}, {"en_name": "Alice"}],
-                        "URL字段": {"text": "https://example.com", "link": "https://example.com"},
-                        "空值字段": None,
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "record": {
+                        "record_id": "rec_types",
+                        "fields": {
+                            "文本字段": "hello",
+                            "数字字段": 42,
+                            "布尔字段": True,
+                            "数组字段": ["选项A", "选项B"],
+                            "人员字段": [{"name": "张三"}, {"en_name": "Alice"}],
+                            "URL字段": {"text": "https://example.com", "link": "https://example.com"},
+                            "空值字段": None,
+                        },
                     },
                 },
-            },
-        })
+            }
+        )
 
         source = fetch_bitable_record_text("app", "tbl", "rec_types")
 

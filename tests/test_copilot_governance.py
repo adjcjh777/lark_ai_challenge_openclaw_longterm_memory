@@ -4,11 +4,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from memory_engine.copilot.schemas import ConfirmRequest, CreateCandidateRequest, ExplainVersionsRequest, RejectRequest, SearchRequest
+from memory_engine.copilot.schemas import (
+    ConfirmRequest,
+    CreateCandidateRequest,
+    ExplainVersionsRequest,
+    RejectRequest,
+    SearchRequest,
+)
 from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-
 
 SCOPE = "project:feishu_ai_challenge"
 
@@ -64,7 +69,9 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_create_candidate_stays_out_of_default_search_until_confirmed(self) -> None:
-        created = self.service.create_candidate(candidate_request("决定：生产部署必须加 --canary --region cn-shanghai。"))
+        created = self.service.create_candidate(
+            candidate_request("决定：生产部署必须加 --canary --region cn-shanghai。")
+        )
 
         self.assertTrue(created["ok"])
         self.assertEqual("created", created["action"])
@@ -207,7 +214,16 @@ class CopilotGovernanceTest(unittest.TestCase):
 
         self.assertTrue(rejected["ok"])
         self.assertEqual("pass", rejected["cognee_sync"]["status"])
-        self.assertEqual([(SCOPE, created["memory_id"], {"candidate_id": created["candidate_id"], "action": "rejected", "provenance": "copilot_ledger"})], adapter.withdrawn)
+        self.assertEqual(
+            [
+                (
+                    SCOPE,
+                    created["memory_id"],
+                    {"candidate_id": created["candidate_id"], "action": "rejected", "provenance": "copilot_ledger"},
+                )
+            ],
+            adapter.withdrawn,
+        )
 
     def test_low_signal_text_is_ignored(self) -> None:
         result = self.service.create_candidate(candidate_request("大家下午三点喝咖啡。"))

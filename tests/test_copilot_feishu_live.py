@@ -13,7 +13,6 @@ from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import DryRunPublisher
 from memory_engine.repository import MemoryRepository
 
-
 CHAT_ID = "oc_copilot_live_test"
 SCOPE = "project:feishu_ai_challenge"
 

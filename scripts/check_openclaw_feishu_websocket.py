@@ -19,7 +19,6 @@ from memory_engine.feishu_listener_guard import (  # noqa: E402
     assert_single_feishu_listener,
 )
 
-
 BOUNDARY = (
     "OpenClaw Feishu websocket staging evidence only; no production deployment, "
     "no full Feishu workspace ingestion, no productized live claim."
@@ -133,9 +132,7 @@ def _listener_singleton_check(
     *, process_rows: list[str] | None = None, current_pid: int | None = None
 ) -> dict[str, Any]:
     try:
-        active = assert_single_feishu_listener(
-            "openclaw-websocket", process_rows=process_rows, current_pid=current_pid
-        )
+        active = assert_single_feishu_listener("openclaw-websocket", process_rows=process_rows, current_pid=current_pid)
     except FeishuListenerConflict as exc:
         return {
             "status": "fail",
@@ -233,7 +230,9 @@ def _health_consistency_check(channels: dict[str, Any], health: dict[str, Any]) 
 def _feishu_logs_check(
     runner: CommandRunner, timeout: int, log_lines: int, *, require_dispatch: bool
 ) -> dict[str, Any]:
-    result = runner(["openclaw", "channels", "logs", "--channel", "feishu", "--json", "--lines", str(log_lines)], timeout)
+    result = runner(
+        ["openclaw", "channels", "logs", "--channel", "feishu", "--json", "--lines", str(log_lines)], timeout
+    )
     if result.returncode != 0:
         return _command_fail(f"openclaw channels logs --channel feishu --json --lines {log_lines}", result)
     data = _parse_json(result.stdout)
@@ -256,9 +255,7 @@ def _feishu_logs_check(
         "missing_required_events": missing,
         "evidence_times": evidence,
         "network_disconnect_seen": bool(evidence.get("network_disconnect_seen")),
-        "next_step": ""
-        if status == "pass"
-        else "发送一条真实飞书消息给 bot，等待 dispatch complete 后重跑本脚本。",
+        "next_step": "" if status == "pass" else "发送一条真实飞书消息给 bot，等待 dispatch complete 后重跑本脚本。",
     }
 
 

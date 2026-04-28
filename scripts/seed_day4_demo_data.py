@@ -6,14 +6,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from memory_engine.db import connect, init_db
 from memory_engine.models import normalize_subject, parse_scope
-
 
 DEFAULT_SCOPE = "project:day4_demo"
 
@@ -90,9 +88,7 @@ DEMO_MEMORIES = (
         "mem_day4_preference_docs",
         "preference",
         "文档入口偏好",
-        (
-            "团队偏好把每日计划和 handoff 分开放，计划写意图和范围，handoff 写结果和证据。",
-        ),
+        ("团队偏好把每日计划和 handoff 分开放，计划写意图和范围，handoff 写结果和证据。",),
         importance=0.6,
     ),
     DemoMemory(
@@ -183,7 +179,9 @@ def main() -> None:
     conn = connect(args.db_path)
     init_db(conn)
     seed_demo_data(conn, args.scope)
-    print(json.dumps({"ok": True, "scope": args.scope, "memory_count": len(DEMO_MEMORIES)}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps({"ok": True, "scope": args.scope, "memory_count": len(DEMO_MEMORIES)}, ensure_ascii=False, indent=2)
+    )
 
 
 def seed_demo_data(conn, scope: str) -> None:

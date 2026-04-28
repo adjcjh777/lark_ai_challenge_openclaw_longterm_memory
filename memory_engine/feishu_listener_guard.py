@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
 import subprocess
+from dataclasses import dataclass
 from typing import Iterable, Literal
-
 
 ListenerKind = Literal[
     "copilot-lark-cli",
@@ -102,9 +101,7 @@ def listener_report(active: Iterable[FeishuListenerProcess]) -> str:
     processes = list(active)
     if not processes:
         return "No Feishu listener process detected."
-    return "\n".join(
-        f"- pid={process.pid} kind={process.kind} command={process.command}" for process in processes
-    )
+    return "\n".join(f"- pid={process.pid} kind={process.kind} command={process.command}" for process in processes)
 
 
 def _ps_rows() -> list[str]:

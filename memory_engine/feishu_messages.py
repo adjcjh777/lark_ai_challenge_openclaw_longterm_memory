@@ -4,10 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-
-SUPPORTED_COMMANDS = frozenset(
-    {"remember", "recall", "versions", "help", "health", "ingest_doc", "confirm", "reject"}
-)
+SUPPORTED_COMMANDS = frozenset({"remember", "recall", "versions", "help", "health", "ingest_doc", "confirm", "reject"})
 
 
 @dataclass(frozen=True)
@@ -181,10 +178,7 @@ def format_versions_reply(memory_id: str, versions: list[dict[str, Any]]) -> str
     for version in versions:
         status = version.get("status")
         value = _redact_sensitive_text(version.get("value") or "-")
-        lines.append(
-            f"v{version.get('version_no')} [{status}] "
-            f"是否被覆盖：{_overwritten_label(status)}｜{value}"
-        )
+        lines.append(f"v{version.get('version_no')} [{status}] 是否被覆盖：{_overwritten_label(status)}｜{value}")
     return _reply("版本链卡片：active 版本是当前有效企业记忆。", lines)
 
 
@@ -224,7 +218,9 @@ def format_ingest_doc_reply(result: dict[str, Any]) -> str:
             f"{candidate_text}（confidence={confidence:.2f}{review_hint}{action_hint}）"
         )
     lines.append("下一步：用 /confirm <candidate_id> 激活，或 /reject <candidate_id> 拒绝。")
-    low_confidence_count = sum(1 for candidate in candidates if float((candidate.get("memory") or {}).get("confidence") or 0) < 0.7)
+    low_confidence_count = sum(
+        1 for candidate in candidates if float((candidate.get("memory") or {}).get("confidence") or 0) < 0.7
+    )
     if low_confidence_count:
         lines.append(f"人工确认提示：{low_confidence_count} 条候选置信度低于 0.70，Demo 时建议先确认再召回。")
     return _reply("已从文档抽取候选记忆，等待人工确认。", lines)

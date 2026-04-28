@@ -12,8 +12,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # 添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent
@@ -60,7 +60,7 @@ def main():
 
 def collect_task_samples(args):
     """收集飞书任务样本。"""
-    from memory_engine.feishu_task_fetcher import list_feishu_tasks, fetch_feishu_task_text
+    from memory_engine.feishu_task_fetcher import fetch_feishu_task_text, list_feishu_tasks
 
     print(f"正在获取任务列表（最多 {args.limit} 条）...")
     try:
@@ -76,7 +76,7 @@ def collect_task_samples(args):
     print(f"找到 {len(tasks)} 个任务")
 
     samples = []
-    for i, task in enumerate(tasks[:args.limit], 1):
+    for i, task in enumerate(tasks[: args.limit], 1):
         task_id = task.get("task_id")
         title = task.get("title", "无标题")
 
@@ -89,18 +89,20 @@ def collect_task_samples(args):
                 as_identity=args.as_identity,
             )
 
-            samples.append({
-                "source_type": "feishu_task",
-                "source_id": task_id,
-                "title": source.title,
-                "text": source.text,
-                "actor_id": source.actor_id,
-                "source_url": source.source_url,
-                "metadata": source.metadata,
-                "review_status": "pending",  # pending, confirmed, rejected
-                "review_reason": "",
-                "reviewed_at": "",
-            })
+            samples.append(
+                {
+                    "source_type": "feishu_task",
+                    "source_id": task_id,
+                    "title": source.title,
+                    "text": source.text,
+                    "actor_id": source.actor_id,
+                    "source_url": source.source_url,
+                    "metadata": source.metadata,
+                    "review_status": "pending",  # pending, confirmed, rejected
+                    "review_reason": "",
+                    "reviewed_at": "",
+                }
+            )
 
             print(f"  成功: {len(source.text)} 字符")
 
@@ -114,7 +116,7 @@ def collect_task_samples(args):
 
 def collect_meeting_samples(args):
     """收集飞书会议样本。"""
-    from memory_engine.feishu_meeting_fetcher import list_feishu_meetings, fetch_feishu_meeting_text
+    from memory_engine.feishu_meeting_fetcher import fetch_feishu_meeting_text, list_feishu_meetings
 
     print(f"正在获取妙记列表（最多 {args.limit} 条）...")
     try:
@@ -132,7 +134,7 @@ def collect_meeting_samples(args):
     print(f"找到 {len(meetings)} 个妙记")
 
     samples = []
-    for i, meeting in enumerate(meetings[:args.limit], 1):
+    for i, meeting in enumerate(meetings[: args.limit], 1):
         minute_token = meeting.get("minute_token")
         title = meeting.get("title", "无标题")
 
@@ -145,18 +147,20 @@ def collect_meeting_samples(args):
                 as_identity=args.as_identity,
             )
 
-            samples.append({
-                "source_type": "feishu_meeting",
-                "source_id": minute_token,
-                "title": source.title,
-                "text": source.text,
-                "actor_id": source.actor_id,
-                "source_url": source.source_url,
-                "metadata": source.metadata,
-                "review_status": "pending",  # pending, confirmed, rejected
-                "review_reason": "",
-                "reviewed_at": "",
-            })
+            samples.append(
+                {
+                    "source_type": "feishu_meeting",
+                    "source_id": minute_token,
+                    "title": source.title,
+                    "text": source.text,
+                    "actor_id": source.actor_id,
+                    "source_url": source.source_url,
+                    "metadata": source.metadata,
+                    "review_status": "pending",  # pending, confirmed, rejected
+                    "review_reason": "",
+                    "reviewed_at": "",
+                }
+            )
 
             print(f"  成功: {len(source.text)} 字符")
 
@@ -174,7 +178,7 @@ def collect_bitable_samples(args):
         print("错误: --app-token 和 --table-id 参数必须提供", file=sys.stderr)
         sys.exit(1)
 
-    from memory_engine.feishu_bitable_fetcher import list_bitable_records, fetch_bitable_record_text
+    from memory_engine.feishu_bitable_fetcher import fetch_bitable_record_text, list_bitable_records
 
     print(f"正在获取 Bitable 记录列表（最多 {args.limit} 条）...")
     try:
@@ -192,7 +196,7 @@ def collect_bitable_samples(args):
     print(f"找到 {len(records)} 条记录")
 
     samples = []
-    for i, record in enumerate(records[:args.limit], 1):
+    for i, record in enumerate(records[: args.limit], 1):
         record_id = record.get("record_id")
         summary = record.get("summary", "无摘要")
 
@@ -207,18 +211,20 @@ def collect_bitable_samples(args):
                 as_identity=args.as_identity,
             )
 
-            samples.append({
-                "source_type": "lark_bitable",
-                "source_id": record_id,
-                "title": source.title,
-                "text": source.text,
-                "actor_id": source.actor_id,
-                "source_url": source.source_url,
-                "metadata": source.metadata,
-                "review_status": "pending",  # pending, confirmed, rejected
-                "review_reason": "",
-                "reviewed_at": "",
-            })
+            samples.append(
+                {
+                    "source_type": "lark_bitable",
+                    "source_id": record_id,
+                    "title": source.title,
+                    "text": source.text,
+                    "actor_id": source.actor_id,
+                    "source_url": source.source_url,
+                    "metadata": source.metadata,
+                    "review_status": "pending",  # pending, confirmed, rejected
+                    "review_reason": "",
+                    "reviewed_at": "",
+                }
+            )
 
             print(f"  成功: {len(source.text)} 字符")
 

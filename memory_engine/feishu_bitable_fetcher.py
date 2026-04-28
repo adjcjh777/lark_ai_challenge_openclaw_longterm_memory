@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .document_ingestion import FeishuIngestionSource
-from .feishu_api_client import FeishuApiResult, extract_text_from_result, run_lark_cli
+from .feishu_api_client import FeishuApiResult, run_lark_cli
 
 
 def fetch_bitable_record_text(
@@ -148,11 +148,13 @@ def list_bitable_records(
         if len(summary_parts) > 5:
             summary += f" ... (共 {len(summary_parts)} 个字段)"
 
-        records.append({
-            "record_id": record_id,
-            "field_count": len(fields),
-            "summary": summary,
-        })
+        records.append(
+            {
+                "record_id": record_id,
+                "field_count": len(fields),
+                "summary": summary,
+            }
+        )
 
     return records
 
@@ -195,11 +197,13 @@ def list_bitable_tables(
         name = item.get("name", "")
         revision = item.get("revision", 0)
 
-        tables.append({
-            "table_id": table_id,
-            "name": name,
-            "revision": revision,
-        })
+        tables.append(
+            {
+                "table_id": table_id,
+                "name": name,
+                "revision": revision,
+            }
+        )
 
     return tables
 

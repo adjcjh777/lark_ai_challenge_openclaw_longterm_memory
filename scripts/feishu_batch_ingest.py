@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -53,7 +52,7 @@ def main():
 
 def batch_ingest_tasks(args):
     """批量拉取飞书任务。"""
-    from memory_engine.feishu_task_fetcher import list_feishu_tasks, fetch_feishu_task_text
+    from memory_engine.feishu_task_fetcher import fetch_feishu_task_text, list_feishu_tasks
 
     print(f"正在获取任务列表（最多 {args.limit} 条）...")
     try:
@@ -70,7 +69,7 @@ def batch_ingest_tasks(args):
 
     if args.dry_run:
         print("\n[Dry Run] 将要拉取的任务:")
-        for i, task in enumerate(tasks[:args.limit], 1):
+        for i, task in enumerate(tasks[: args.limit], 1):
             print(f"{i}. {task.get('title', '无标题')} (ID: {task.get('task_id', '-')})")
         return
 
@@ -82,7 +81,7 @@ def batch_ingest_tasks(args):
     success_count = 0
     error_count = 0
 
-    for i, task in enumerate(tasks[:args.limit], 1):
+    for i, task in enumerate(tasks[: args.limit], 1):
         task_id = task.get("task_id")
         title = task.get("title", "无标题")
 
@@ -119,7 +118,7 @@ def batch_ingest_tasks(args):
 
 def batch_ingest_meetings(args):
     """批量拉取飞书会议。"""
-    from memory_engine.feishu_meeting_fetcher import list_feishu_meetings, fetch_feishu_meeting_text
+    from memory_engine.feishu_meeting_fetcher import fetch_feishu_meeting_text, list_feishu_meetings
 
     print(f"正在获取妙记列表（最多 {args.limit} 条）...")
     try:
@@ -138,7 +137,7 @@ def batch_ingest_meetings(args):
 
     if args.dry_run:
         print("\n[Dry Run] 将要拉取的妙记:")
-        for i, meeting in enumerate(meetings[:args.limit], 1):
+        for i, meeting in enumerate(meetings[: args.limit], 1):
             print(f"{i}. {meeting.get('title', '无标题')} (Token: {meeting.get('minute_token', '-')})")
         return
 
@@ -150,7 +149,7 @@ def batch_ingest_meetings(args):
     success_count = 0
     error_count = 0
 
-    for i, meeting in enumerate(meetings[:args.limit], 1):
+    for i, meeting in enumerate(meetings[: args.limit], 1):
         minute_token = meeting.get("minute_token")
         title = meeting.get("title", "无标题")
 
@@ -191,7 +190,7 @@ def batch_ingest_bitable(args):
         print("错误: --app-token 和 --table-id 参数必须提供", file=sys.stderr)
         sys.exit(1)
 
-    from memory_engine.feishu_bitable_fetcher import list_bitable_records, fetch_bitable_record_text
+    from memory_engine.feishu_bitable_fetcher import fetch_bitable_record_text, list_bitable_records
 
     print(f"正在获取 Bitable 记录列表（最多 {args.limit} 条）...")
     try:
@@ -210,7 +209,7 @@ def batch_ingest_bitable(args):
 
     if args.dry_run:
         print("\n[Dry Run] 将要拉取的记录:")
-        for i, record in enumerate(records[:args.limit], 1):
+        for i, record in enumerate(records[: args.limit], 1):
             print(f"{i}. {record.get('summary', '无摘要')} (ID: {record.get('record_id', '-')})")
         return
 
@@ -222,7 +221,7 @@ def batch_ingest_bitable(args):
     success_count = 0
     error_count = 0
 
-    for i, record in enumerate(records[:args.limit], 1):
+    for i, record in enumerate(records[: args.limit], 1):
         record_id = record.get("record_id")
         summary = record.get("summary", "无摘要")
 

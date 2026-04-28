@@ -5,12 +5,12 @@ import json
 import os
 import sys
 
-from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
 from .benchmark import run_benchmark, run_document_ingestion_benchmark, write_benchmark_outputs
+from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
+from .copilot.feishu_live import listen as copilot_feishu_listen
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
 from .feishu_runtime import listen, replay_event
-from .copilot.feishu_live import listen as copilot_feishu_listen
 from .models import DEFAULT_SCOPE
 from .repository import MemoryRepository
 
@@ -150,7 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    init_parser = subparsers.add_parser("init-db", help="Initialize the SQLite schema")
+    subparsers.add_parser("init-db", help="Initialize the SQLite schema")
 
     remember_parser = subparsers.add_parser("remember", help="Store a memory")
     remember_parser.add_argument("--scope", default=DEFAULT_SCOPE)
@@ -163,12 +163,22 @@ def build_parser() -> argparse.ArgumentParser:
     versions_parser = subparsers.add_parser("versions", help="List versions for a memory")
     versions_parser.add_argument("memory_id")
 
-    ingest_parser = subparsers.add_parser("ingest-doc", help="Import candidate memories from a Feishu doc token/url or Markdown file")
+    ingest_parser = subparsers.add_parser(
+        "ingest-doc", help="Import candidate memories from a Feishu doc token/url or Markdown file"
+    )
     ingest_parser.add_argument("--scope", default=DEFAULT_SCOPE)
     ingest_parser.add_argument("--limit", type=int, default=12, help="Maximum candidate memories to extract")
-    ingest_parser.add_argument("--lark-cli", default=os.environ.get("LARK_CLI", "lark-cli"), help="lark-cli executable path")
-    ingest_parser.add_argument("--profile", default=os.environ.get("LARK_CLI_PROFILE"), help="Optional lark-cli profile")
-    ingest_parser.add_argument("--as-identity", default=os.environ.get("LARK_CLI_AS"), help="Optional lark-cli identity, for example user or bot")
+    ingest_parser.add_argument(
+        "--lark-cli", default=os.environ.get("LARK_CLI", "lark-cli"), help="lark-cli executable path"
+    )
+    ingest_parser.add_argument(
+        "--profile", default=os.environ.get("LARK_CLI_PROFILE"), help="Optional lark-cli profile"
+    )
+    ingest_parser.add_argument(
+        "--as-identity",
+        default=os.environ.get("LARK_CLI_AS"),
+        help="Optional lark-cli identity, for example user or bot",
+    )
     ingest_parser.add_argument("url_or_token")
 
     confirm_parser = subparsers.add_parser("confirm", help="Promote a candidate memory to active")
@@ -185,14 +195,18 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--json-output", help="Optional path for machine-readable JSON output")
     run_parser.add_argument("--csv-output", help="Optional path for query-level CSV output")
     run_parser.add_argument("--markdown-output", help="Optional path for a judge-readable Markdown report")
-    ingest_doc_benchmark_parser = benchmark_subparsers.add_parser("ingest-doc", help="Run document ingestion benchmark cases")
+    ingest_doc_benchmark_parser = benchmark_subparsers.add_parser(
+        "ingest-doc", help="Run document ingestion benchmark cases"
+    )
     ingest_doc_benchmark_parser.add_argument("cases_path")
 
     bitable_parser = subparsers.add_parser("bitable", help="Bitable ledger sync commands")
     bitable_subparsers = bitable_parser.add_subparsers(dest="bitable_command")
     bitable_subparsers.add_parser("schema", help="Print the Day 4 Bitable table schema")
 
-    setup_parser = bitable_subparsers.add_parser("setup-commands", help="Print lark-cli commands to create Day 4 tables")
+    setup_parser = bitable_subparsers.add_parser(
+        "setup-commands", help="Print lark-cli commands to create Day 4 tables"
+    )
     add_bitable_target_args(setup_parser)
 
     sync_parser = bitable_subparsers.add_parser("sync", help="Sync local SQLite rows to Bitable")
@@ -220,21 +234,51 @@ def build_parser() -> argparse.ArgumentParser:
         "listen",
         help="Listen for Feishu events and route them through Memory Copilot tools",
     )
-    copilot_listen_parser.add_argument("--dry-run", action="store_true", help="Print replies without sending them to Feishu")
+    copilot_listen_parser.add_argument(
+        "--dry-run", action="store_true", help="Print replies without sending them to Feishu"
+    )
 
     return parser
 
 
 def add_bitable_target_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--base-token", default=os.environ.get("BITABLE_BASE_TOKEN", "app_xxx"), help="Bitable/Base token. Required for non-dry-run sync")
-    parser.add_argument("--ledger-table", default=os.environ.get("BITABLE_LEDGER_TABLE", "Memory Ledger"), help="Table ID or table name for current memory rows")
-    parser.add_argument("--versions-table", default=os.environ.get("BITABLE_VERSIONS_TABLE", "Memory Versions"), help="Table ID or table name for version rows")
-    parser.add_argument("--candidate-review-table", default=os.environ.get("BITABLE_CANDIDATE_REVIEW_TABLE", "Candidate Review"), help="Table ID or table name for candidate review rows")
-    parser.add_argument("--benchmark-table", default=os.environ.get("BITABLE_BENCHMARK_TABLE", "Benchmark Results"), help="Table ID or table name for benchmark rows")
-    parser.add_argument("--reminder-candidates-table", default=os.environ.get("BITABLE_REMINDER_CANDIDATES_TABLE", "Reminder Candidates"), help="Table ID or table name for reminder candidate rows")
+    parser.add_argument(
+        "--base-token",
+        default=os.environ.get("BITABLE_BASE_TOKEN", "app_xxx"),
+        help="Bitable/Base token. Required for non-dry-run sync",
+    )
+    parser.add_argument(
+        "--ledger-table",
+        default=os.environ.get("BITABLE_LEDGER_TABLE", "Memory Ledger"),
+        help="Table ID or table name for current memory rows",
+    )
+    parser.add_argument(
+        "--versions-table",
+        default=os.environ.get("BITABLE_VERSIONS_TABLE", "Memory Versions"),
+        help="Table ID or table name for version rows",
+    )
+    parser.add_argument(
+        "--candidate-review-table",
+        default=os.environ.get("BITABLE_CANDIDATE_REVIEW_TABLE", "Candidate Review"),
+        help="Table ID or table name for candidate review rows",
+    )
+    parser.add_argument(
+        "--benchmark-table",
+        default=os.environ.get("BITABLE_BENCHMARK_TABLE", "Benchmark Results"),
+        help="Table ID or table name for benchmark rows",
+    )
+    parser.add_argument(
+        "--reminder-candidates-table",
+        default=os.environ.get("BITABLE_REMINDER_CANDIDATES_TABLE", "Reminder Candidates"),
+        help="Table ID or table name for reminder candidate rows",
+    )
     parser.add_argument("--lark-cli", default=os.environ.get("LARK_CLI", "lark-cli"), help="lark-cli executable path")
     parser.add_argument("--profile", default=os.environ.get("LARK_CLI_PROFILE"), help="Optional lark-cli profile")
-    parser.add_argument("--as-identity", default=os.environ.get("LARK_CLI_AS"), help="Optional lark-cli identity, for example user or bot")
+    parser.add_argument(
+        "--as-identity",
+        default=os.environ.get("LARK_CLI_AS"),
+        help="Optional lark-cli identity, for example user or bot",
+    )
 
 
 def _bitable_target(args) -> BitableTarget:

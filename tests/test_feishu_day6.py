@@ -11,7 +11,6 @@ from memory_engine.feishu_events import message_event_from_payload
 from memory_engine.feishu_publisher import DryRunPublisher
 from memory_engine.feishu_runtime import handle_message_event
 
-
 CHAT_ID = "oc_day6"
 FIXTURE = "tests/fixtures/day5_doc_ingestion_fixture.md"
 
@@ -96,7 +95,9 @@ class FeishuDay6Test(unittest.TestCase):
         self.assertIn("旧版本状态：superseded", reply)
 
     def test_versions_reply_is_cardized_and_redacted(self) -> None:
-        self.handle("/remember 生产部署必须加 --canary，API_TOKEN=feishu_abcdefghijklmnopqrstuvwxyz", "om_d6_versions_secret")
+        self.handle(
+            "/remember 生产部署必须加 --canary，API_TOKEN=feishu_abcdefghijklmnopqrstuvwxyz", "om_d6_versions_secret"
+        )
         memory_id = self.conn.execute("SELECT id FROM memories WHERE subject = ?", ("生产部署",)).fetchone()["id"]
 
         result = self.handle(f"/versions {memory_id}", "om_d6_versions")

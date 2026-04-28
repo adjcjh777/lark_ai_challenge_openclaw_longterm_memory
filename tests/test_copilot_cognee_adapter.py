@@ -3,7 +3,11 @@ from __future__ import annotations
 import asyncio
 import unittest
 
-from memory_engine.copilot.cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter, curated_memory_document
+from memory_engine.copilot.cognee_adapter import (
+    CogneeAdapterNotConfigured,
+    CogneeMemoryAdapter,
+    curated_memory_document,
+)
 
 
 class FakeCogneeClient:
@@ -58,7 +62,9 @@ class CogneeAdapterContractTest(unittest.TestCase):
     def test_dataset_name_is_stable_for_scope(self) -> None:
         adapter = CogneeMemoryAdapter(dataset_prefix="test_prefix")
 
-        self.assertEqual("test_prefix_project_feishu_ai_challenge", adapter.dataset_for_scope("project:feishu_ai_challenge"))
+        self.assertEqual(
+            "test_prefix_project_feishu_ai_challenge", adapter.dataset_for_scope("project:feishu_ai_challenge")
+        )
         self.assertEqual("test_prefix_chat_oc_123", adapter.dataset_for_scope("chat:oc-123"))
 
     def test_unconfigured_adapter_fails_without_changing_state(self) -> None:

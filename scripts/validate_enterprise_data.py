@@ -45,7 +45,7 @@ def validate_thread_count(threads):
     if len(threads) != 60:
         err(f"Expected 60 threads, got {len(threads)}")
     else:
-        ok(f"60 threads")
+        ok("60 threads")
 
 
 def validate_message_count(threads):
@@ -83,7 +83,18 @@ def validate_noise_threads(threads):
 
 def validate_memory_types(threads):
     print("\n=== 6. Memory type 覆盖 10 类 ===")
-    required = {"decision", "workflow", "preference", "deadline", "risk", "permission", "security", "demo", "benchmark", "document"}
+    required = {
+        "decision",
+        "workflow",
+        "preference",
+        "deadline",
+        "risk",
+        "permission",
+        "security",
+        "demo",
+        "benchmark",
+        "document",
+    }
     found = set()
     for t in threads:
         for ml in t["memory_labels"]:
@@ -117,7 +128,18 @@ def validate_evidence_ids(threads):
 
 def validate_active_evidence_quality(threads):
     print("\n=== 9. Active label 证据不能只是确认句 ===")
-    trivial = {"好", "收到", "可以", "行", "嗯", "同意", "确认", "好，确认。先这么定。", "可以，这个作为长期规则记下来。", "收到，记下来了。"}
+    trivial = {
+        "好",
+        "收到",
+        "可以",
+        "行",
+        "嗯",
+        "同意",
+        "确认",
+        "好，确认。先这么定。",
+        "可以，这个作为长期规则记下来。",
+        "收到，记下来了。",
+    }
     for t in threads:
         for ml in t["memory_labels"]:
             if ml["status"] != "active":
@@ -162,7 +184,11 @@ def validate_noise_messages():
     try:
         with path.open(encoding="utf-8") as f:
             noise = [line.strip() for line in f if line.strip()]
-        proj_noise = [n for n in noise if any(kw in n for kw in ["临时", "只限今天", "不算", "别记", "demo", "测试", "截图", "配置", "部署"])]
+        proj_noise = [
+            n
+            for n in noise
+            if any(kw in n for kw in ["临时", "只限今天", "不算", "别记", "demo", "测试", "截图", "配置", "部署"])
+        ]
         ok(f"{len(noise)} total noise, {len(proj_noise)} project-related (need >= 150)")
         if len(noise) < 150:
             err(f"Only {len(noise)} noise messages (need >= 150)")
@@ -183,7 +209,16 @@ def validate_benchmarks():
 
         # Validate structure
         for c in cases:
-            for field in ["case_id", "source_thread_id", "type", "query", "expected_active_value", "forbidden_value", "evidence_message_ids", "difficulty"]:
+            for field in [
+                "case_id",
+                "source_thread_id",
+                "type",
+                "query",
+                "expected_active_value",
+                "forbidden_value",
+                "evidence_message_ids",
+                "difficulty",
+            ]:
                 if field not in c:
                     err(f"Case {c.get('case_id', '?')}: missing field {field}")
 

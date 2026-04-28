@@ -18,11 +18,15 @@ class CopilotHealthcheckTest(unittest.TestCase):
         self.assertEqual("2026.4.24", report["checks"]["openclaw_schema"]["openclaw_version"])
         # Tools may have fmc_ prefix depending on schema
         tools = report["checks"]["openclaw_schema"]["tools"]
-        has_search_tool = "memory.search" in tools or any("memory_search" in t or "fmc_memory_search" in t for t in tools)
+        has_search_tool = "memory.search" in tools or any(
+            "memory_search" in t or "fmc_memory_search" in t for t in tools
+        )
         self.assertTrue(has_search_tool, f"Expected memory.search tool in {tools}")
         self.assertIn(report["checks"]["cognee_adapter"]["status"], {"pass", "fallback_used", "not_configured"})
         self.assertTrue(report["checks"]["cognee_adapter"]["fallback_available"])
-        self.assertIn(report["checks"]["embedding_provider"]["status"], {"pass", "warning", "not_configured", "fallback_used"})
+        self.assertIn(
+            report["checks"]["embedding_provider"]["status"], {"pass", "warning", "not_configured", "fallback_used"}
+        )
         self.assertEqual("configuration_only", report["checks"]["embedding_provider"]["check_mode"])
         self.assertIn("status_counts", report)
 
