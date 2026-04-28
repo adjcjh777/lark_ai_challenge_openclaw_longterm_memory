@@ -10,6 +10,7 @@ from .benchmark import run_benchmark, run_document_ingestion_benchmark, write_be
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
 from .feishu_runtime import listen, replay_event
+from .copilot.feishu_live import listen as copilot_feishu_listen
 from .models import DEFAULT_SCOPE
 from .repository import MemoryRepository
 
@@ -136,6 +137,10 @@ def main(argv: list[str] | None = None) -> None:
         listen(db_path=args.db_path, dry_run=args.dry_run)
         return
 
+    if args.command == "copilot-feishu" and args.copilot_feishu_command == "listen":
+        copilot_feishu_listen(db_path=args.db_path, dry_run=args.dry_run)
+        return
+
     parser.print_help()
 
 
@@ -205,6 +210,17 @@ def build_parser() -> argparse.ArgumentParser:
     replay_parser.add_argument("event_path")
     listen_parser = feishu_subparsers.add_parser("listen", help="Listen for Feishu events with lark-cli")
     listen_parser.add_argument("--dry-run", action="store_true", help="Print replies without sending them to Feishu")
+
+    copilot_feishu_parser = subparsers.add_parser(
+        "copilot-feishu",
+        help="Feishu live sandbox backed by CopilotService and OpenClaw memory tools",
+    )
+    copilot_feishu_subparsers = copilot_feishu_parser.add_subparsers(dest="copilot_feishu_command")
+    copilot_listen_parser = copilot_feishu_subparsers.add_parser(
+        "listen",
+        help="Listen for Feishu events and route them through Memory Copilot tools",
+    )
+    copilot_listen_parser.add_argument("--dry-run", action="store_true", help="Print replies without sending them to Feishu")
 
     return parser
 

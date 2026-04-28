@@ -3,7 +3,7 @@
 ## 先看这个
 
 1. 这份计划的目标是把当前 Phase 6 的“可检查、可初始化、可诊断”推进到“可演示、可本地试运行、具备上线前门禁”。
-2. 本阶段仍然不做生产部署、不真实发飞书群消息、不宣称 productized live，也不改 OpenClaw `2026.4.24` 锁定版本。
+2. 本阶段仍然不做生产部署、不做全量飞书空间接入、不宣称 productized live，也不改 OpenClaw `2026.4.24` 锁定版本；允许把旧测试群作为受控 live sandbox 接入新的 Memory Copilot。
 3. 最短路径是先让 demo replay 的 step-level 结果全绿，再把 provider / Cognee 不可用时的诊断信息、OpenClaw 示例契约和 README 入口收口。
 4. Ralph 主控可以派生多个 Codex native subagents 并行推进；每个子代理只写自己的文件范围，避免多人同时改共享核心。
 5. 最终完成必须有 fresh verification evidence 和 architect verification `APPROVED`。
@@ -27,6 +27,7 @@ Demo replay step-level 全绿。
 provider / Cognee 不可用时不会崩，会给明确 fallback 或修复建议。
 README 顶部有队友可直接执行的命令。
 当前仍不是生产部署，也没有真实飞书推送。
+允许旧飞书测试群作为 live sandbox 验证新 Copilot 路径。
 Architect verification APPROVED。
 代码已提交并 push。
 ```
@@ -210,7 +211,7 @@ python3 -m unittest tests.test_demo_readiness
 
 1. README 顶部任务区加入“本地拉起 / 演示前检查”的明确入口。
 2. 写清推荐命令顺序。
-3. 文案不得说成生产部署、真实 live、完整 audit migration 或 productized live。
+3. 文案不得把测试群 live sandbox 说成生产部署、全量真实 live、完整 audit migration 或 productized live。
 4. handoff 写清已完成、怎么运行、仍未实现、剩余风险。
 5. 看板只在 Ralph leader 最终验收后统一同步并读回确认。
 
@@ -234,6 +235,7 @@ git diff --check
 python3 -m compileall memory_engine scripts
 python3 -m unittest tests.test_demo_seed tests.test_demo_readiness
 python3 -m unittest tests.test_copilot_permissions tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_healthcheck
+python3 -m unittest tests.test_copilot_feishu_live
 python3 -m unittest tests.test_copilot_cognee_adapter tests.test_copilot_prefetch tests.test_copilot_heartbeat
 python3 -m unittest discover tests
 ollama ps
@@ -256,7 +258,7 @@ ollama ps
 ## 今日不做
 
 - 不做生产部署。
-- 不真实发飞书群消息。
+- 不做生产群推送；只允许旧测试群作为受控 live sandbox。
 - 不做完整生产调度服务。
 - 不做完整 audit table migration。
 - 不做完整多租户后台。
