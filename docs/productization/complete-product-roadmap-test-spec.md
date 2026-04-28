@@ -106,7 +106,7 @@ Checks:
 - [x] Negative cases 进入测试计划。
 - [x] Architect/Critic 无 blocker。
 
-2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；仍未完成真实 OpenClaw Agent runtime 独立验收。
+2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；Phase B 真实 OpenClaw Agent runtime 受控证据也已完成，但仍不宣称 `memory.*` 是 OpenClaw first-class 原生工具，也不宣称 Feishu websocket 已 running。
 
 Commands:
 

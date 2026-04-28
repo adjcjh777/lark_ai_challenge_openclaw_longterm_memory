@@ -8,7 +8,8 @@
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
-| 完整可用 Copilot 产品化执行主线：Phase E no-overclaim 审查已完成 | [完整可用 Copilot 后续执行文档](docs/productization/full-copilot-next-execution-doc.md)；[Phase E handoff](docs/productization/phase-e-no-overclaim-handoff.md)；[PRD gap tasks](docs/productization/prd-completion-audit-and-gap-tasks.md) | 已核对 README、Demo runbook、Benchmark Report、白皮书和产品化 handoff：demo replay、测试群 sandbox、live embedding gate、OpenClaw runtime evidence、productized live 的边界保持一致 | 下一步只有在明确继续产品化时，才评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live；本轮不把这些写成已完成 |
+| 后期打磨和上线前优化入口：先按新文档导航执行 | [文档导航](docs/README.md)；[人类产品指南](docs/human-product-guide.md)；[后期打磨待办](docs/productization/launch-polish-todo.md)；[工作和测试流程](docs/productization/workflow-and-test-process.md) | 初期构建、OMX / RALPLAN 构建、后期打磨优化已经分区；后续待办按上线优先级排序；新接手的人能先理解立项目的、目标和使用方式 | 先做 `memory.*` first-class OpenClaw 原生工具注册，再补 OpenClaw Feishu websocket running 证据、真实权限映射、生产存储/审计和 Feishu ingestion 扩面；本轮不把这些写成已完成 |
+| 完整可用 Copilot 产品化执行主线：Phase E no-overclaim 审查已完成 | [完整可用 Copilot 后续执行文档](docs/productization/full-copilot-next-execution-doc.md)；[Phase E handoff](docs/productization/phase-e-no-overclaim-handoff.md)；[PRD gap tasks](docs/productization/prd-completion-audit-and-gap-tasks.md) | 已核对 README、Demo runbook、Benchmark Report、白皮书和产品化 handoff：demo replay、测试群 sandbox、live embedding gate、OpenClaw runtime evidence、productized live 的边界保持一致 | 下一步按 [后期打磨待办](docs/productization/launch-polish-todo.md) 执行；不可说生产部署、全量 ingestion、长期 embedding 服务、多租户后台、OpenClaw first-class 工具注册已完成 |
 | Phase E Product QA + No-overclaim 审查已完成 | [Phase E handoff](docs/productization/phase-e-no-overclaim-handoff.md)；[demo-runbook.md](docs/demo-runbook.md)；[benchmark-report.md](docs/benchmark-report.md)；[whitepaper](docs/memory-definition-and-architecture-whitepaper.md) | 修正 heartbeat 样例数为 7；把白皮书 Phase B/Phase D 之前的旧边界更新为当前事实；新增 claim audit 结论和仍未完成风险 | 可说 demo/pre-production、受控测试群 live sandbox、OpenClaw Agent runtime 受控证据、Phase D live embedding gate 已完成；不可说生产部署、全量 ingestion、长期 embedding 服务、多租户后台、OpenClaw first-class 工具注册已完成 |
 | Phase D Live Cognee / Ollama Embedding Gate 已完成 | [Phase D handoff](docs/productization/phase-d-live-embedding-handoff.md)；[check_live_embedding_gate.py](scripts/check_live_embedding_gate.py)；[check_embedding_provider.py](scripts/check_embedding_provider.py)；[test_live_embedding_gate.py](tests/test_live_embedding_gate.py) | 真实检查 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维；Cognee dry-run adapter 路径通过；脚本自动执行 `ollama ps` 并停止本项目模型 | `python3 scripts/check_live_embedding_gate.py --json` 返回 `ok=true`；`ollama_cleanup.running_after_cleanup=[]`；这不是生产部署、长期 embedding 服务或 productized live |
 | Phase B 真实 OpenClaw Agent runtime 验收已完成受控闭环 | [Phase B evidence](docs/productization/openclaw-runtime-evidence.md)；[Phase B handoff](docs/productization/phase-b-openclaw-runtime-handoff.md)；[openclaw_runtime_evidence.py](scripts/openclaw_runtime_evidence.py) | OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e`；Agent 通过 `exec` 调用证据脚本，三条 Copilot flow 全部通过 | `memory.search`、`memory.create_candidate + memory.confirm`、`memory.prefetch` 都有 `request_id`、`trace_id`、`permission_decision=allow`；不宣称 `memory.*` 已注册成 OpenClaw first-class 原生工具，也不宣称 Feishu websocket 已 running |
@@ -206,9 +207,12 @@ ollama stop qwen3-embedding:0.6b-fp16
 
 1. `AGENTS.md`
 2. `README.md`
-3. `docs/productization/full-copilot-next-execution-doc.md`
-4. `docs/productization/prd-completion-audit-and-gap-tasks.md`
-5. 和当前产品化阶段直接相关的 contract / runbook / handoff
+3. `docs/README.md`
+4. `docs/human-product-guide.md`
+5. `docs/productization/full-copilot-next-execution-doc.md`
+6. `docs/productization/launch-polish-todo.md`
+7. `docs/productization/workflow-and-test-process.md`
+8. 和当前产品化阶段直接相关的 contract / runbook / handoff
 
 当前唯一推荐执行主线：
 
@@ -314,6 +318,10 @@ scripts/start_feishu_bot.sh --dry-run
 
 ## 关键文档
 
+- 文档导航：`docs/README.md`
+- 给人类快速理解产品：`docs/human-product-guide.md`
+- 后期打磨待办：`docs/productization/launch-polish-todo.md`
+- 工作和测试流程：`docs/productization/workflow-and-test-process.md`
 - 当前执行入口：`docs/productization/full-copilot-next-execution-doc.md`
 - 历史主控计划/产品化参考：`docs/feishu-memory-copilot-implementation-plan.md`
 - PRD：`docs/feishu-memory-copilot-prd.md`

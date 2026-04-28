@@ -24,7 +24,11 @@
 ```text
 AGENTS.md
 README.md
+docs/README.md
+docs/human-product-guide.md
 docs/productization/prd-completion-audit-and-gap-tasks.md
+docs/productization/launch-polish-todo.md
+docs/productization/workflow-and-test-process.md
 docs/productization/complete-product-roadmap-prd.md
 docs/productization/complete-product-roadmap-test-spec.md
 docs/productization/contracts/storage-contract.md
@@ -390,7 +394,11 @@ python3 scripts/check_openclaw_version.py
 然后按顺序读取：
 AGENTS.md
 README.md
+docs/README.md
+docs/human-product-guide.md
 docs/productization/full-copilot-next-execution-doc.md
+docs/productization/launch-polish-todo.md
+docs/productization/workflow-and-test-process.md
 docs/productization/prd-completion-audit-and-gap-tasks.md
 docs/productization/complete-product-roadmap-prd.md
 docs/productization/complete-product-roadmap-test-spec.md
