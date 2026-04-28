@@ -265,7 +265,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("send_card", publisher.modes)
         self.assertFalse(result["tool_result"]["ok"])
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
-        self.assertEqual("missing_permission_context", result["tool_result"]["error"]["details"]["reason_code"])
+        self.assertEqual("review_role_required", result["tool_result"]["error"]["details"]["reason_code"])
         status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (row["id"],)).fetchone()["status"]
         self.assertEqual("candidate", status)
 
@@ -485,7 +485,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertFalse(result["tool_result"]["ok"])
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
         self.assertEqual(
-            "missing_permission_context", result["tool_result"]["bridge"]["permission_decision"]["reason_code"]
+            "review_role_required", result["tool_result"]["bridge"]["permission_decision"]["reason_code"]
         )
         self.assertEqual("candidate", status)
         self.assertNotIn("权限上下文的卡片点击不能确认候选", rendered)
@@ -546,13 +546,13 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
             },
             "bridge": {
                 "entrypoint": "openclaw_tool",
-                "tool": "memory.explain_versions",
+                "tool": "fmc_memory_explain_versions",
                 "request_id": "req_versions_deny",
                 "trace_id": "trace_versions_deny",
                 "permission_decision": {
                     "decision": "deny",
                     "reason_code": "tenant_mismatch",
-                    "requested_action": "memory.explain_versions",
+                    "requested_action": "fmc_memory_explain_versions",
                 },
             },
         }

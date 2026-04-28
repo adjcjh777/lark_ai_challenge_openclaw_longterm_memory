@@ -86,7 +86,7 @@ class FeishuDMRoutingTest(unittest.TestCase):
             )
 
         self.assertTrue(response["ok"])
-        self.assertEqual("memory.search", response["bridge"]["tool"])
+        self.assertEqual("fmc_memory_search", response["bridge"]["tool"])
 
     def test_runner_returns_bridge_metadata_for_search(self) -> None:
         """Verify memory.search returns complete bridge metadata."""
@@ -110,7 +110,7 @@ class FeishuDMRoutingTest(unittest.TestCase):
         self.assertTrue(response["ok"])
         bridge = response["bridge"]
         self.assertEqual("openclaw_tool", bridge["entrypoint"])
-        self.assertEqual("memory.search", bridge["tool"])
+        self.assertEqual("fmc_memory_search", bridge["tool"])
         self.assertIn("permission_decision", bridge)
         self.assertIn("request_id", bridge)
         self.assertIn("trace_id", bridge)
@@ -143,7 +143,7 @@ class FeishuDMRoutingTest(unittest.TestCase):
 
         self.assertTrue(response["ok"])
         bridge = response["bridge"]
-        self.assertEqual("memory.create_candidate", bridge["tool"])
+        self.assertEqual("fmc_memory_create_candidate", bridge["tool"])
         self.assertIn("permission_decision", bridge)
 
     def test_runner_returns_bridge_metadata_for_prefetch(self) -> None:
@@ -167,7 +167,7 @@ class FeishuDMRoutingTest(unittest.TestCase):
 
         self.assertTrue(response["ok"])
         bridge = response["bridge"]
-        self.assertEqual("memory.prefetch", bridge["tool"])
+        self.assertEqual("fmc_memory_prefetch", bridge["tool"])
 
     def test_runner_auto_generates_permission_context(self) -> None:
         """Verify runner auto-generates permission when not provided."""

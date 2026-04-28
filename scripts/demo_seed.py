@@ -246,6 +246,16 @@ def build_replay(repo: MemoryRepository, scope: str, db_path: str, *, persistent
 def validate_examples() -> dict[str, Any]:
     examples_dir = ROOT / "agent_adapters" / "openclaw" / "examples"
     supported = set(supported_tool_names())
+    # OpenClaw-facing names use fmc_ prefix; map back to Python-side names for validation
+    openclaw_to_python = {
+        "fmc_memory_search": "memory.search",
+        "fmc_memory_create_candidate": "memory.create_candidate",
+        "fmc_memory_confirm": "memory.confirm",
+        "fmc_memory_reject": "memory.reject",
+        "fmc_memory_explain_versions": "memory.explain_versions",
+        "fmc_memory_prefetch": "memory.prefetch",
+        "fmc_heartbeat_review_due": "heartbeat.review_due",
+    }
     examples = []
     for path in sorted(examples_dir.glob("*.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -253,11 +263,12 @@ def validate_examples() -> dict[str, Any]:
         for step in payload.get("steps", []):
             tool_name = step.get("tool")
             arguments = step.get("arguments")
-            parsed = validate_tool_request(tool_name, arguments)
+            python_name = openclaw_to_python.get(tool_name, tool_name)
+            parsed = validate_tool_request(python_name, arguments)
             step_results.append(
                 {
                     "tool": tool_name,
-                    "declared": tool_name in supported,
+                    "declared": python_name in supported,
                     "valid_request": bool(parsed.get("ok")),
                     "error": parsed.get("error"),
                 }

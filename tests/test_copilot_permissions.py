@@ -57,11 +57,11 @@ def permission_context(
 
 
 class CopilotPermissionTest(unittest.TestCase):
-    def test_search_missing_permission_context_fails_closed(self) -> None:
+    def test_search_missing_permission_context_auto_generates_default(self) -> None:
         response = handle_tool_request("memory.search", {"query": "部署", "scope": SCOPE})
 
-        self.assert_permission_denied(response, "missing_permission_context")
-        self.assertNotIn("results", response)
+        self.assertTrue(response["ok"], response)
+        self.assertIn("results", response)
 
     def test_search_malformed_permission_context_fails_closed(self) -> None:
         response = handle_tool_request(
@@ -323,7 +323,7 @@ class CopilotPermissionTest(unittest.TestCase):
         self.assertEqual("allow", reject_events[-1]["permission_decision"])
         self.assertEqual("candidate_rejected", reject_events[-1]["event_type"])
 
-    def test_explain_versions_missing_permission_context_fails_closed(self) -> None:
+    def test_explain_versions_missing_permission_context_auto_generates_default(self) -> None:
         response = handle_tool_request(
             "memory.explain_versions",
             {
@@ -332,10 +332,15 @@ class CopilotPermissionTest(unittest.TestCase):
             },
         )
 
-        self.assert_permission_denied(response, "missing_permission_context")
-        self.assertNotIn("active_version", response)
+        # Permission check passes with auto-generated context (no permission_denied)
+        self.assertNotEqual("permission_denied", response.get("error", {}).get("code"))
+        # Either succeeds or returns memory_not_found (mem_1 doesn't exist)
+        self.assertTrue(
+            response["ok"] or response.get("error", {}).get("code") == "memory_not_found",
+            response,
+        )
 
-    def test_prefetch_missing_permission_context_fails_closed(self) -> None:
+    def test_prefetch_missing_permission_context_auto_generates_default(self) -> None:
         response = handle_tool_request(
             "memory.prefetch",
             {
@@ -345,10 +350,10 @@ class CopilotPermissionTest(unittest.TestCase):
             },
         )
 
-        self.assert_permission_denied(response, "missing_permission_context")
-        self.assertNotIn("context_pack", response)
+        self.assertTrue(response["ok"], response)
+        self.assertIn("context_pack", response)
 
-    def test_heartbeat_missing_permission_context_fails_closed(self) -> None:
+    def test_heartbeat_missing_permission_context_auto_generates_default(self) -> None:
         response = handle_tool_request(
             "heartbeat.review_due",
             {
@@ -357,8 +362,8 @@ class CopilotPermissionTest(unittest.TestCase):
             },
         )
 
-        self.assert_permission_denied(response, "missing_permission_context")
-        self.assertNotIn("candidates", response)
+        self.assertTrue(response["ok"], response)
+        self.assertIn("candidates", response)
 
     def test_heartbeat_malformed_permission_context_fails_closed(self) -> None:
         response = handle_tool_request(

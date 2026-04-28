@@ -78,7 +78,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             )
 
         self.assertTrue(response["ok"])
-        self.assertEqual("memory.search", response["bridge"]["tool"])
+        self.assertEqual("fmc_memory_search", response["bridge"]["tool"])
         self.assertEqual("openclaw_tool", response["bridge"]["entrypoint"])
         self.assertEqual("allow", response["bridge"]["permission_decision"]["decision"])
         self.assertEqual("req_memory_search", response["bridge"]["request_id"])

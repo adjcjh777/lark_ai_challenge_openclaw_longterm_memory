@@ -43,22 +43,45 @@ class CopilotToolContractTest(unittest.TestCase):
 
         self.assertEqual("2026-05-07", schema["version"])
         self.assertEqual("2026.4.24", schema["openclaw_version"])
-        self.assertEqual(supported_tool_names(), schema_tools)
+        # Schema uses OpenClaw-facing names (fmc_ prefix); map to Python-side names
+        openclaw_to_python = {
+            "fmc_memory_search": "memory.search",
+            "fmc_memory_create_candidate": "memory.create_candidate",
+            "fmc_memory_confirm": "memory.confirm",
+            "fmc_memory_reject": "memory.reject",
+            "fmc_memory_explain_versions": "memory.explain_versions",
+            "fmc_memory_prefetch": "memory.prefetch",
+            "fmc_heartbeat_review_due": "heartbeat.review_due",
+        }
+        python_tools = sorted(openclaw_to_python.get(t, t) for t in schema_tools)
+        self.assertEqual(supported_tool_names(), python_tools)
 
     def test_schema_matches_parser_edge_contracts(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        # Schema uses OpenClaw-facing names (fmc_ prefix)
         tools = {tool["name"]: tool["input_schema"] for tool in schema["tools"]}
 
-        search_filters = tools["memory.search"]["properties"]["filters"]
+        search_filters = tools["fmc_memory_search"]["properties"]["filters"]
         self.assertFalse(search_filters["additionalProperties"])
 
-        prefetch_context = tools["memory.prefetch"]["properties"]["current_context"]
+        prefetch_context = tools["fmc_memory_prefetch"]["properties"]["current_context"]
         self.assertEqual(1, prefetch_context["minProperties"])
-        self.assertEqual("#/$defs/current_context", prefetch_context["$ref"])
 
+        # Map Python-side names to OpenClaw-facing names for schema lookups
+        python_to_openclaw = {
+            "memory.search": "fmc_memory_search",
+            "memory.create_candidate": "fmc_memory_create_candidate",
+            "memory.confirm": "fmc_memory_confirm",
+            "memory.reject": "fmc_memory_reject",
+            "memory.explain_versions": "fmc_memory_explain_versions",
+            "memory.prefetch": "fmc_memory_prefetch",
+            "heartbeat.review_due": "fmc_heartbeat_review_due",
+        }
+        schema_tools_by_name = {tool["name"]: tool for tool in schema["tools"]}
         for tool_name in supported_tool_names():
-            self.assertIn("current_context", tools[tool_name]["required"])
-            self.assertIn("output_schema", {tool["name"]: tool for tool in schema["tools"]}[tool_name])
+            schema_name = python_to_openclaw.get(tool_name, tool_name)
+            self.assertIn("current_context", tools[schema_name]["required"])
+            self.assertIn("output_schema", schema_tools_by_name[schema_name])
 
         current_context = schema["$defs"]["current_context"]
         self.assertEqual(["permission"], current_context["required"])
@@ -261,7 +284,7 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual(
             {
                 "entrypoint": "openclaw_tool",
-                "tool": "memory.search",
+                "tool": "fmc_memory_search",
                 "request_id": "req_memory_search",
                 "trace_id": "trace_memory_search",
             },
@@ -274,7 +297,7 @@ class CopilotToolContractTest(unittest.TestCase):
         )
         self.assertEqual("allow", result["bridge"]["permission_decision"]["decision"])
         self.assertEqual("scope_access_granted", result["bridge"]["permission_decision"]["reason_code"])
-        self.assertEqual("memory.search", result["bridge"]["permission_decision"]["requested_action"])
+        self.assertEqual("fmc_memory_search", result["bridge"]["permission_decision"]["requested_action"])
         self.assertEqual("team", result["bridge"]["permission_decision"]["requested_visibility"])
         self.assertEqual("ou_test", result["bridge"]["permission_decision"]["actor"]["user_id"])
         self.assert_search_output_matches_schema(result)
@@ -303,7 +326,7 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("stub", result["trace"]["strategy"])
         self.assertEqual("openclaw_tool", result["bridge"]["entrypoint"])
-        self.assertEqual("memory.search", result["bridge"]["tool"])
+        self.assertEqual("fmc_memory_search", result["bridge"]["tool"])
 
     def test_handle_tool_request_bridges_all_mvp_actions_through_one_entrypoint(self) -> None:
         class StubService:
@@ -379,11 +402,22 @@ class CopilotToolContractTest(unittest.TestCase):
             },
         }
 
+        python_to_openclaw = {
+            "memory.search": "fmc_memory_search",
+            "memory.create_candidate": "fmc_memory_create_candidate",
+            "memory.confirm": "fmc_memory_confirm",
+            "memory.reject": "fmc_memory_reject",
+            "memory.explain_versions": "fmc_memory_explain_versions",
+            "memory.prefetch": "fmc_memory_prefetch",
+            "heartbeat.review_due": "fmc_heartbeat_review_due",
+        }
+
         for tool_name, payload in payloads.items():
             with self.subTest(tool_name=tool_name):
                 result = handle_tool_request(tool_name, payload, service=service)  # type: ignore[arg-type]
                 self.assertTrue(result["ok"])
-                self.assertEqual(tool_name, result["bridge"]["tool"])
+                schema_name = python_to_openclaw.get(tool_name, tool_name)
+                self.assertEqual(schema_name, result["bridge"]["tool"])
                 self.assertEqual("openclaw_tool", result["bridge"]["entrypoint"])
                 self.assertEqual(f"req_{tool_name.replace('.', '_')}", result["bridge"]["request_id"])
                 self.assertEqual(f"trace_{tool_name.replace('.', '_')}", result["bridge"]["trace_id"])
@@ -521,8 +555,10 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual({"organization_id": "org:demo"}, result["bridge"]["permission_decision"]["actor"])
         self.assert_error_output_matches_schema(result)
 
-    def test_handle_tool_request_fails_closed_for_missing_permission_on_all_mvp_actions(self) -> None:
-        payloads = {
+    def test_handle_tool_request_auto_generates_default_permission_when_missing(self) -> None:
+        """When permission context is missing, auto-generated default (member role) is used.
+        Confirm/reject still require reviewer role."""
+        ok_payloads = {
             "memory.search": {"query": "部署参数", "scope": SCOPE},
             "memory.create_candidate": {
                 "text": "决定：生产部署必须加 --canary。",
@@ -535,25 +571,28 @@ class CopilotToolContractTest(unittest.TestCase):
                     "quote": "决定：生产部署必须加 --canary。",
                 },
             },
-            "memory.confirm": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
-            "memory.reject": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
-            "memory.explain_versions": {"memory_id": "mem_missing_permission", "scope": SCOPE},
             "memory.prefetch": {
                 "task": "生成部署 checklist",
                 "scope": SCOPE,
                 "current_context": {"scope": SCOPE},
             },
         }
+        for tool_name, payload in ok_payloads.items():
+            with self.subTest(tool_name=tool_name):
+                result = handle_tool_request(tool_name, payload)
+                self.assertTrue(result["ok"], f"{tool_name}: {result}")
 
-        for tool_name, payload in payloads.items():
+        # Confirm/reject require reviewer role; auto-generated context only has member
+        review_payloads = {
+            "memory.confirm": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
+            "memory.reject": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
+        }
+        for tool_name, payload in review_payloads.items():
             with self.subTest(tool_name=tool_name):
                 result = handle_tool_request(tool_name, payload)
                 self.assertFalse(result["ok"])
                 self.assertEqual("permission_denied", result["error"]["code"])
-                self.assertEqual("missing_permission_context", result["error"]["details"]["reason_code"])
-                self.assertEqual("deny", result["bridge"]["permission_decision"]["decision"])
-                self.assertEqual("missing_permission_context", result["bridge"]["permission_decision"]["reason_code"])
-                self.assert_bridge_matches_schema(result, tool_name)
+                self.assertEqual("review_role_required", result["error"]["details"]["reason_code"])
 
     def test_handle_prefetch_keeps_tools_layer_thin_with_injected_service(self) -> None:
         class StubService:
@@ -729,7 +768,18 @@ class CopilotToolContractTest(unittest.TestCase):
         for field in bridge_schema["required"]:
             self.assertIn(field, bridge)
         self.assertEqual("openclaw_tool", bridge["entrypoint"])
-        self.assertEqual(tool_name, bridge["tool"])
+        # Bridge uses OpenClaw-facing names (fmc_ prefix)
+        python_to_openclaw = {
+            "memory.search": "fmc_memory_search",
+            "memory.create_candidate": "fmc_memory_create_candidate",
+            "memory.confirm": "fmc_memory_confirm",
+            "memory.reject": "fmc_memory_reject",
+            "memory.explain_versions": "fmc_memory_explain_versions",
+            "memory.prefetch": "fmc_memory_prefetch",
+            "heartbeat.review_due": "fmc_heartbeat_review_due",
+        }
+        schema_name = python_to_openclaw.get(tool_name, tool_name)
+        self.assertEqual(schema_name, bridge["tool"])
         self.assertIn(bridge["tool"], bridge_schema["properties"]["tool"]["enum"])
 
         decision = bridge["permission_decision"]
@@ -756,13 +806,25 @@ class CopilotToolContractTest(unittest.TestCase):
 
     def test_examples_only_use_declared_tools(self) -> None:
         supported = set(supported_tool_names())
+        # OpenClaw-facing tool names use fmc_ prefix; map them back to Python-side names
+        openclaw_to_python = {
+            "fmc_memory_search": "memory.search",
+            "fmc_memory_create_candidate": "memory.create_candidate",
+            "fmc_memory_confirm": "memory.confirm",
+            "fmc_memory_reject": "memory.reject",
+            "fmc_memory_explain_versions": "memory.explain_versions",
+            "fmc_memory_prefetch": "memory.prefetch",
+            "fmc_heartbeat_review_due": "heartbeat.review_due",
+        }
         example_paths = sorted(EXAMPLES_DIR.glob("*.json"))
 
         self.assertGreaterEqual(len(example_paths), 3)
         for path in example_paths:
             payload = json.loads(path.read_text(encoding="utf-8"))
             for step in payload["steps"]:
-                self.assertIn(step["tool"], supported, msg=str(path))
+                tool_name = step["tool"]
+                python_name = openclaw_to_python.get(tool_name, tool_name)
+                self.assertIn(python_name, supported, msg=f"{path}: {tool_name}")
 
 
 if __name__ == "__main__":

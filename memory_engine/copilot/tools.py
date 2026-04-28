@@ -262,14 +262,26 @@ def _with_bridge_metadata(response: dict[str, Any], tool_name: str, request: Any
     return bridged
 
 
+PYTHON_TO_OPENCLAW_TOOL_NAMES = {
+    "memory.search": "fmc_memory_search",
+    "memory.create_candidate": "fmc_memory_create_candidate",
+    "memory.confirm": "fmc_memory_confirm",
+    "memory.reject": "fmc_memory_reject",
+    "memory.explain_versions": "fmc_memory_explain_versions",
+    "memory.prefetch": "fmc_memory_prefetch",
+    "heartbeat.review_due": "fmc_heartbeat_review_due",
+}
+
+
 def _bridge_metadata(tool_name: str, request: Any, response: dict[str, Any]) -> dict[str, Any]:
     context = _request_context(request)
     permission_payload = context.get("permission")
     permission = _parse_permission(permission_payload)
 
+    schema_tool_name = PYTHON_TO_OPENCLAW_TOOL_NAMES.get(tool_name, tool_name)
     metadata: dict[str, Any] = {
         "entrypoint": "openclaw_tool",
-        "tool": tool_name,
+        "tool": schema_tool_name,
         "permission_decision": _permission_decision(response, tool_name, permission_payload, permission),
     }
     request_id = _permission_field(permission_payload, permission, "request_id")
@@ -314,6 +326,8 @@ def _permission_decision(
             _permission_field(permission_payload, permission, "requested_action"), tool_name
         ),
     }
+    # Map to OpenClaw-facing name for schema compliance
+    summary["requested_action"] = PYTHON_TO_OPENCLAW_TOOL_NAMES.get(summary["requested_action"], summary["requested_action"])
     requested_visibility = _permission_field(permission_payload, permission, "requested_visibility")
     if requested_visibility in BRIDGE_VISIBILITIES:
         summary["requested_visibility"] = requested_visibility

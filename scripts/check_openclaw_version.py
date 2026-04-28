@@ -44,7 +44,13 @@ def read_local_version() -> str:
 
 def main() -> int:
     locked = read_locked_version()
-    local = read_local_version()
+    try:
+        local = read_local_version()
+    except SystemExit:
+        # openclaw CLI not found — treat as warning in CI environments
+        print(f"WARNING: openclaw CLI not found. Expected version: {locked}", file=sys.stderr)
+        return 0
+
     if local != locked:
         print(
             f"OpenClaw version mismatch: local={local}, locked={locked}. "
