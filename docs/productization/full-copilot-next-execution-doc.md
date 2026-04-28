@@ -28,6 +28,7 @@ docs/README.md
 docs/human-product-guide.md
 docs/productization/prd-completion-audit-and-gap-tasks.md
 docs/productization/launch-polish-todo.md
+docs/productization/user-experience-todo.md
 docs/productization/workflow-and-test-process.md
 docs/productization/complete-product-roadmap-prd.md
 docs/productization/complete-product-roadmap-test-spec.md
@@ -74,6 +75,7 @@ docs/productization/feishu-single-listener-handoff.md
 
 - Feishu Agent live DM routing：本地 Agent 到 `fmc_*` 插件工具、再到 Python 侧 `memory.*` / `CopilotService` 的调用验证已补；但真实 Feishu DM 进入 OpenClaw Agent 后稳定选择本项目 `fmc_*` 工具的 live E2E 证据仍未完成。旧 websocket handoff 曾记录真实 DM 落到 OpenClaw 内置 `memory_search`，后续要用真实 DM 重新验收并读回 tool call、request_id、trace_id、permission_decision。
 - 真实 Feishu API 拉取和扩样：limited ingestion 本地底座已支持群聊、文档、任务、会议、Bitable 来源文本进入 candidate-only pipeline；后续还要接真实任务/会议/Bitable API 拉取、失败 fallback 和人工复核样本集。
+- 用户体验产品化：7 个 UX 缺口已单独进入 [用户体验产品化 TODO 清单](user-experience-todo.md)，包括飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包；当前都不能写成已完成。
 - OpenClaw health running 字段一致性：OpenClaw 2026.4.24 的 `openclaw health --json` 总览仍把 Feishu running 报为 `false`，但 `openclaw channels status --probe --json` 和 gateway 日志显示 running；当前作为 warning 记录。
 - productized live：没有生产 DB 部署、长期运行监控、完整多租户后台。
 

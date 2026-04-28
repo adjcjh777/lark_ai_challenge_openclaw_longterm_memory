@@ -86,6 +86,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 |---|---|---|---|---|---|
 | 补真实 Feishu DM 到本项目 first-class 工具的 live E2E 证据 | P1 | 程俊豪 | 待定 | `agent_adapters/openclaw/plugin/`、`memory_engine/copilot/openclaw_tool_runner.py`、`scripts/check_feishu_dm_routing.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` | 在已完成本地 Agent `fmc_*` 工具调用验证的基础上，真实 Feishu DM 进入 OpenClaw Agent 后自然选择本项目 `fmc_memory_search` / `fmc_memory_prefetch` 等工具，并进入 `handle_tool_request()`；回复保留 request_id、trace_id、permission_decision；仍保持 candidate-only 和 permission fail-closed。 |
 | 接真实 Feishu API 拉取和扩充人工复核样本 | P1 | 程俊豪 | 待定 | `memory_engine/copilot/feishu_live.py`、`memory_engine/document_ingestion.py`、`memory_engine/bitable_sync.py`、`docs/productization/feishu-staging-runbook.md` | 在 limited ingestion 底座之上，接任务、会议、Bitable 等真实 API 拉取；lark-cli / OpenAPI 失败时有明确 fallback，不冒称 live 成功；增加真实测试群消息样本的人工复核集。 |
+| 跟踪 7 个用户体验产品化缺口 | P0 | 程俊豪 | 待定 | [user-experience-todo.md](user-experience-todo.md) | 逐项跟踪飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包；只有普通用户不理解内部 ID 也能完成动作时才标记完成。 |
 | 设计 productized live 长期运行方案 | P2 | 程俊豪 | 待定 | `docs/productization/full-copilot-next-execution-doc.md` 或后续 handoff | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界；本阶段不把它写成已完成。 |
 
 ## Phase E 已完成审查

@@ -51,6 +51,7 @@
 |---|---|---|
 | P1 | 补真实 Feishu DM 到本项目 first-class 工具的 live E2E 证据 | 真实飞书 DM 进入 OpenClaw Agent 后，自然选择本项目 `fmc_memory_search` / `fmc_memory_prefetch` / `fmc_memory_create_candidate`，再翻译进入 `memory.search` / `memory.prefetch` / `memory.create_candidate` 和 `handle_tool_request()` / `CopilotService` |
 | P1 | 接真实 Feishu API 拉取与扩充人工复核样本 | 在 limited ingestion 底座之上，接任务、会议、Bitable 等真实 API 拉取，并保留失败 fallback 和 candidate-only 边界 |
+| P0 | 跟踪 7 个用户体验产品化缺口 | [用户体验产品化 TODO](docs/productization/user-experience-todo.md) 逐项记录飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包是否完成 |
 | P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 

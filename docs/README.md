@@ -20,13 +20,14 @@
 | [productization/full-copilot-next-execution-doc.md](productization/full-copilot-next-execution-doc.md) | **当前主控执行文档** | 所有产品化任务 |
 | [productization/prd-completion-audit-and-gap-tasks.md](productization/prd-completion-audit-and-gap-tasks.md) | PRD 完成度审计和未完成边界 | 复盘 / 对账 |
 
-### 产品规划（3 个）
+### 产品规划（4 个）
 
 | 文档 | 用途 |
 |---|---|
 | [productization/complete-product-roadmap-prd.md](productization/complete-product-roadmap-prd.md) | 完整产品路线 PRD |
 | [productization/complete-product-roadmap-test-spec.md](productization/complete-product-roadmap-test-spec.md) | 验收规格 |
 | [productization/launch-polish-todo.md](productization/launch-polish-todo.md) | 待办清单 |
+| [productization/user-experience-todo.md](productization/user-experience-todo.md) | 用户体验产品化 TODO，记录 7 个 UX 缺口是否完成 |
 
 ### 工作流和人类入口（2 个）
 
@@ -80,9 +81,10 @@
 
 1. [human-product-guide.md](human-product-guide.md)
 2. [productization/launch-polish-todo.md](productization/launch-polish-todo.md)
-3. [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md)
-4. [demo-runbook.md](demo-runbook.md)
-5. [benchmark-report.md](benchmark-report.md)
+3. [productization/user-experience-todo.md](productization/user-experience-todo.md)
+4. [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md)
+5. [demo-runbook.md](demo-runbook.md)
+6. [benchmark-report.md](benchmark-report.md)
 
 ### Codex / Agent 后续执行
 
