@@ -104,10 +104,11 @@ class OllamaEmbeddingProvider:
         self._initialized = False
         self._litellm_available = False
 
-        # LRU cache for embeddings
+        # LRU cache for embeddings (using OrderedDict for true LRU behavior)
+        from collections import OrderedDict
         self._cache_size = cache_size
-        self._embed_text_cache: dict[str, list[float]] = {}
-        self._embed_curated_cache: dict[str, list[float]] = {}
+        self._embed_text_cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._embed_curated_cache: OrderedDict[str, list[float]] = OrderedDict()
 
         # Initialize litellm
         self._init_litellm()
@@ -144,16 +145,17 @@ class OllamaEmbeddingProvider:
         # Check cache
         cache_key = f"text:{text}"
         if cache_key in self._embed_text_cache:
+            # Move to end (most recently used)
+            self._embed_text_cache.move_to_end(cache_key)
             return self._embed_text_cache[cache_key]
 
         # Generate embedding with retry
         vector = self._embed_with_retry(text)
 
-        # Cache the result (simple LRU - remove oldest if full)
+        # Cache the result (true LRU - remove least recently used if full)
         if len(self._embed_text_cache) >= self._cache_size:
-            # Remove first item (FIFO approximation of LRU)
-            oldest_key = next(iter(self._embed_text_cache))
-            del self._embed_text_cache[oldest_key]
+            # Remove first item (least recently used)
+            self._embed_text_cache.popitem(last=False)
         self._embed_text_cache[cache_key] = vector
 
         return vector
@@ -166,15 +168,17 @@ class OllamaEmbeddingProvider:
         # Check cache
         cache_key = f"curated:{text.to_text()}"
         if cache_key in self._embed_curated_cache:
+            # Move to end (most recently used)
+            self._embed_curated_cache.move_to_end(cache_key)
             return self._embed_curated_cache[cache_key]
 
         # Generate embedding with retry
         vector = self._embed_with_retry(text.to_text())
 
-        # Cache the result
+        # Cache the result (true LRU - remove least recently used if full)
         if len(self._embed_curated_cache) >= self._cache_size:
-            oldest_key = next(iter(self._embed_curated_cache))
-            del self._embed_curated_cache[oldest_key]
+            # Remove first item (least recently used)
+            self._embed_curated_cache.popitem(last=False)
         self._embed_curated_cache[cache_key] = vector
 
         return vector

@@ -9,6 +9,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
+from dotenv import load_dotenv
+
 from memory_engine.db import SCHEMA_VERSION, init_db
 from memory_engine.storage_migration import inspect_copilot_storage
 from memory_engine.repository import MemoryRepository
@@ -17,6 +19,9 @@ from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest
 from .permissions import demo_permission_context
 from .service import CopilotService
 from .tools import handle_tool_request
+
+# Load .env file
+load_dotenv()
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -761,6 +766,10 @@ def _sqlite_tables(conn: sqlite3.Connection) -> set[str]:
 
 
 def _sqlite_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    # Whitelist validation to prevent SQL injection
+    allowed_tables = {"raw_events", "memories", "memory_versions", "memory_evidence", "memory_audit_events"}
+    if table not in allowed_tables:
+        raise ValueError(f"Table '{table}' is not in the allowed whitelist")
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return {str(row["name"]) for row in rows}
 
