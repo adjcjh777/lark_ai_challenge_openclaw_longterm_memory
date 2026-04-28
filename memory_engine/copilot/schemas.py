@@ -41,7 +41,21 @@ ERROR_CODES = {
     "internal_error",
 }
 
-SOURCE_FIELDS = {"source_type", "source_id", "actor_id", "created_at", "quote", "source_chat_id", "source_doc_id"}
+SOURCE_FIELDS = {
+    "source_type",
+    "source_id",
+    "actor_id",
+    "created_at",
+    "quote",
+    "source_url",
+    "source_chat_id",
+    "source_doc_id",
+    "source_task_id",
+    "source_meeting_id",
+    "source_bitable_app_token",
+    "source_bitable_table_id",
+    "source_bitable_record_id",
+}
 SEARCH_FIELDS = {"query", "scope", "top_k", "filters", "current_context"}
 SEARCH_FILTER_FIELDS = {"type", "layer", "status"}
 CREATE_CANDIDATE_FIELDS = {"text", "scope", "source", "current_context", "auto_confirm"}
@@ -284,6 +298,11 @@ class Evidence:
     source_url: str | None = None
     source_chat_id: str | None = None
     source_doc_id: str | None = None
+    source_task_id: str | None = None
+    source_meeting_id: str | None = None
+    source_bitable_app_token: str | None = None
+    source_bitable_table_id: str | None = None
+    source_bitable_record_id: str | None = None
     document_token: str | None = None
     document_title: str | None = None
 
@@ -308,6 +327,11 @@ class Evidence:
             "source_url": self.source_url,
             "source_chat_id": self.source_chat_id,
             "source_doc_id": self.source_doc_id,
+            "source_task_id": self.source_task_id,
+            "source_meeting_id": self.source_meeting_id,
+            "source_bitable_app_token": self.source_bitable_app_token,
+            "source_bitable_table_id": self.source_bitable_table_id,
+            "source_bitable_record_id": self.source_bitable_record_id,
             "document_token": self.document_token,
             "document_title": self.document_title,
         }
@@ -498,8 +522,14 @@ class CandidateSource:
     actor_id: str
     created_at: str
     quote: str
+    source_url: str | None = None
     source_chat_id: str | None = None
     source_doc_id: str | None = None
+    source_task_id: str | None = None
+    source_meeting_id: str | None = None
+    source_bitable_app_token: str | None = None
+    source_bitable_table_id: str | None = None
+    source_bitable_record_id: str | None = None
 
     @classmethod
     def from_payload(cls, payload: Any) -> "CandidateSource":
@@ -511,8 +541,14 @@ class CandidateSource:
             actor_id=_require_string(data, "actor_id"),
             created_at=_require_string(data, "created_at"),
             quote=_require_string(data, "quote"),
+            source_url=_optional_string(data, "source_url"),
             source_chat_id=_optional_string(data, "source_chat_id"),
             source_doc_id=_optional_string(data, "source_doc_id"),
+            source_task_id=_optional_string(data, "source_task_id"),
+            source_meeting_id=_optional_string(data, "source_meeting_id"),
+            source_bitable_app_token=_optional_string(data, "source_bitable_app_token"),
+            source_bitable_table_id=_optional_string(data, "source_bitable_table_id"),
+            source_bitable_record_id=_optional_string(data, "source_bitable_record_id"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -527,6 +563,18 @@ class CandidateSource:
             result["source_chat_id"] = self.source_chat_id
         if self.source_doc_id:
             result["source_doc_id"] = self.source_doc_id
+        if self.source_url:
+            result["source_url"] = self.source_url
+        if self.source_task_id:
+            result["source_task_id"] = self.source_task_id
+        if self.source_meeting_id:
+            result["source_meeting_id"] = self.source_meeting_id
+        if self.source_bitable_app_token:
+            result["source_bitable_app_token"] = self.source_bitable_app_token
+        if self.source_bitable_table_id:
+            result["source_bitable_table_id"] = self.source_bitable_table_id
+        if self.source_bitable_record_id:
+            result["source_bitable_record_id"] = self.source_bitable_record_id
         return result
 
 

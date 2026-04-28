@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`；后续 first-class OpenClaw 原生工具注册已补本机证据，见 `docs/productization/first-class-openclaw-tools-handoff.md`；OpenClaw Feishu websocket running 本机 staging 证据已补，见 `docs/productization/openclaw-feishu-websocket-handoff.md`。后续若继续推进，优先补真实权限映射、Feishu Agent tool routing 和 productized live；当前不宣称这些已经完成。
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`；后续 first-class OpenClaw 原生工具注册已补本机证据，见 `docs/productization/first-class-openclaw-tools-handoff.md`；OpenClaw Feishu websocket running 本机 staging 证据已补，见 `docs/productization/openclaw-feishu-websocket-handoff.md`；真实权限映射和 limited Feishu ingestion 本地底座已补，见 `docs/productization/real-feishu-permission-mapping-handoff.md` 和 `docs/productization/limited-feishu-ingestion-handoff.md`。后续若继续推进，优先补 Feishu Agent tool routing、真实 API 拉取扩样和 productized live；当前不宣称这些已经完成。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
@@ -106,7 +106,7 @@ Checks:
 - [x] Negative cases 进入测试计划。
 - [x] Architect/Critic 无 blocker。
 
-2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；Phase B 真实 OpenClaw Agent runtime 受控证据也已完成；后续 first-class OpenClaw 原生工具注册和 Feishu websocket staging running 证据已补；仍不宣称 production live 或真实 Feishu DM 已稳定进入本项目 first-class `memory.*` tool routing。
+2026-05-07 补充：Phase 2 权限前置实现已把第一批 negative cases 转成 [tests/test_copilot_permissions.py](../../tests/test_copilot_permissions.py)，并更新 schema/service/permission 代码。2026-04-28 Phase A 已补齐 storage migration 和 audit table；Phase B 真实 OpenClaw Agent runtime 受控证据也已完成；后续 first-class OpenClaw 原生工具注册、Feishu websocket staging running 证据、真实权限映射和 limited Feishu ingestion 本地底座已补；仍不宣称 production live 或真实 Feishu DM 已稳定进入本项目 first-class `memory.*` tool routing。
 
 Commands:
 
@@ -189,10 +189,11 @@ Required artifacts:
 - audit trail
 
 Checks:
-- [ ] 真实 Feishu source 进入 candidate，不自动 active。
-- [ ] candidate 有 evidence quote/source metadata。
-- [ ] 无权限 actor 无法查看或 approve。
-- [ ] source 权限撤销时 recall 降级/隐藏/标记 stale。
+- [x] 本地底座支持真实 Feishu source 文本进入 candidate，不自动 active。
+- [x] candidate 有 evidence quote/source metadata。
+- [x] source context mismatch 在创建 candidate 前 fail closed。
+- [x] source 权限撤销时 recall 降级/隐藏/标记 stale。
+- [ ] 真实任务、会议、Bitable API 拉取和失败 fallback 仍需后续接入。
 
 Commands:
 

@@ -7,7 +7,14 @@ from unittest.mock import Mock, patch
 
 from memory_engine.benchmark import run_document_ingestion_benchmark
 from memory_engine.db import connect, init_db
-from memory_engine.document_ingestion import extract_candidate_quotes, fetch_feishu_document_text, ingest_document_source
+from memory_engine.document_ingestion import (
+    FeishuIngestionSource,
+    extract_candidate_quotes,
+    fetch_feishu_document_text,
+    ingest_document_source,
+    ingest_feishu_source,
+    mark_feishu_source_revoked,
+)
 from memory_engine.repository import MemoryRepository
 
 
@@ -15,13 +22,14 @@ FIXTURE = Path("tests/fixtures/day5_doc_ingestion_fixture.md")
 SCOPE = "project:feishu_ai_challenge"
 
 
-def permission_context(*, document_id: str = "doc_token") -> dict[str, object]:
+def permission_context(*, document_id: str = "doc_token", **source_context_extra: str) -> dict[str, object]:
     source_context = {
         "entrypoint": "limited_feishu_ingestion",
         "workspace_id": SCOPE,
     }
     if document_id:
         source_context["document_id"] = document_id
+    source_context.update(source_context_extra)
     return {
         "scope": SCOPE,
         "permission": {
@@ -216,6 +224,108 @@ class DocumentIngestionTest(unittest.TestCase):
         self.assertEqual("trace_limited_feishu_ingestion", result["error"]["details"]["trace_id"])
         self.assertNotIn("candidates", result)
         self.assertNotIn("document", result)
+
+    def test_limited_feishu_ingestion_supports_task_meeting_and_bitable_candidate_only(self) -> None:
+        sources = [
+            FeishuIngestionSource(
+                source_type="feishu_task",
+                source_id="task_1",
+                title="上线任务",
+                text="决定：上线任务负责人是程俊豪，截止 2026-04-30。",
+                actor_id="ou_task_owner",
+            ),
+            FeishuIngestionSource(
+                source_type="feishu_meeting",
+                source_id="meeting_1",
+                title="发布复盘会",
+                text="风险：发布复盘会确认灰度期间不能关闭审计日志。",
+                actor_id="ou_meeting_owner",
+            ),
+            FeishuIngestionSource(
+                source_type="lark_bitable",
+                source_id="record_1",
+                title="上线参数表",
+                text="规则：Bitable 记录要求生产部署 region 使用 ap-shanghai。",
+                actor_id="ou_bitable_owner",
+                metadata={"app_token": "app_token", "table_id": "tbl_1", "record_id": "record_1"},
+            ),
+        ]
+
+        results = [
+            ingest_feishu_source(
+                self.repo,
+                source,
+                current_context=permission_context(
+                    document_id="",
+                    task_id="task_1" if source.source_type == "feishu_task" else "",
+                    meeting_id="meeting_1" if source.source_type == "feishu_meeting" else "",
+                    bitable_record_id="record_1" if source.source_type == "lark_bitable" else "",
+                ),
+                limit=1,
+            )
+            for source in sources
+        ]
+
+        self.assertTrue(all(result["ok"] for result in results))
+        self.assertEqual([1, 1, 1], [result["candidate_count"] for result in results])
+        self.assertEqual(3, self.conn.execute("SELECT COUNT(*) AS count FROM memory_versions WHERE status = 'candidate'").fetchone()["count"])
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'active'").fetchone()["count"])
+        self.assertEqual(
+            ["feishu_task", "feishu_meeting", "lark_bitable"],
+            [result["candidates"][0]["evidence"]["source_type"] for result in results],
+        )
+        self.assertEqual("record_1", results[2]["source_metadata"]["bitable_record_id"])
+        self.assertIsNone(self.repo.recall(SCOPE, "生产部署 region"))
+
+    def test_limited_feishu_ingestion_source_id_mismatch_fails_closed_before_candidate(self) -> None:
+        result = ingest_feishu_source(
+            self.repo,
+            FeishuIngestionSource(
+                source_type="feishu_task",
+                source_id="task_1",
+                title="上线任务",
+                text="决定：上线任务负责人是程俊豪。",
+                actor_id="ou_task_owner",
+            ),
+            current_context=permission_context(document_id="", task_id="other_task"),
+            limit=1,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("source_context_mismatch", result["error"]["details"]["reason_code"])
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"])
+
+    def test_source_revocation_marks_confirmed_memory_stale_and_hides_recall(self) -> None:
+        created = ingest_feishu_source(
+            self.repo,
+            FeishuIngestionSource(
+                source_type="feishu_task",
+                source_id="task_1",
+                title="上线任务",
+                text="决定：上线任务负责人是程俊豪。",
+                actor_id="ou_task_owner",
+            ),
+            current_context=permission_context(document_id="", task_id="task_1"),
+            limit=1,
+        )
+        candidate_id = created["candidates"][0]["candidate_id"]
+        confirm = self.repo.confirm_candidate(candidate_id)
+        self.assertEqual("confirmed", confirm["action"])
+        self.assertIsNotNone(self.repo.recall(SCOPE, "上线任务负责人"))
+
+        revoked = mark_feishu_source_revoked(
+            self.repo,
+            source_type="feishu_task",
+            source_id="task_1",
+            current_context=permission_context(document_id="", task_id="task_1"),
+        )
+
+        self.assertTrue(revoked["ok"])
+        self.assertEqual(1, revoked["stale_memory_count"])
+        self.assertIsNone(self.repo.recall(SCOPE, "上线任务负责人"))
+        status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (candidate_id,)).fetchone()["status"]
+        self.assertEqual("stale", status)
 
     def test_day5_ingestion_benchmark(self) -> None:
         result = run_document_ingestion_benchmark("benchmarks/day5_ingestion_cases.json")

@@ -27,6 +27,7 @@
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
 | 存储迁移方案 | 已完成本地 migration dry-run / apply 和索引检查 | `scripts/migrate_copilot_storage.py`、`tests/test_copilot_storage_migration.py` |
 | Feishu live sandbox | 已完成受控测试群联调 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh` |
+| Limited Feishu ingestion | 已完成本地 candidate-only 底座，支持群聊、文档、任务、会议、Bitable 来源文本 | `memory_engine/document_ingestion.py`、`tests/test_document_ingestion.py`、`docs/productization/limited-feishu-ingestion-handoff.md` |
 | OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
 | Benchmark | 已完成多类评测样例 | `benchmarks/copilot_*.json`、`docs/benchmark-report.md` |
@@ -48,7 +49,7 @@
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
 | P1 | 打通真实 Feishu DM 到本项目 first-class `memory.*` tool routing | 真实飞书 DM 进入 OpenClaw Agent 后，自然选择本项目 `memory.search` / `memory.prefetch` / `memory.create_candidate` 等工具，并进入 `handle_tool_request()` / `CopilotService` |
-| P1 | 扩大真实飞书 ingestion 范围 | 在明确权限和审计边界下，把更多真实飞书来源接入 candidate-only 流程 |
+| P1 | 接真实 Feishu API 拉取与扩充人工复核样本 | 在 limited ingestion 底座之上，接任务、会议、Bitable 等真实 API 拉取，并保留失败 fallback 和 candidate-only 边界 |
 | P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 

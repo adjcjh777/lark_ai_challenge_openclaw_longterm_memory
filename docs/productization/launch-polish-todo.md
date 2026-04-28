@@ -189,7 +189,7 @@ git diff --check
 ollama ps
 ```
 
-### 5. P1：扩大真实 Feishu ingestion 范围
+### 5. P1：扩大真实 Feishu ingestion 范围（已完成本地 limited ingestion 底座）
 
 要做什么：把受控测试群和指定文档的 candidate-only 能力，扩展到更多真实飞书来源：群聊、文档、任务、会议、Bitable。
 
@@ -206,11 +206,18 @@ ollama ps
 
 完成标准：
 
-- 每类来源都有 source metadata、evidence quote、去重策略和权限 gate。
-- 所有真实来源只进入 candidate，不自动 active。
-- source 删除或权限撤销后，recall 降级、隐藏或标记 stale。
-- lark-cli / OpenAPI 失败时有明确 fallback，不冒称 live 成功。
-- 增加真实测试群消息样本的人工复核集。
+- 已完成：群聊、文档、任务、会议、Bitable 来源文本都有统一 `FeishuIngestionSource` 入口、source metadata、evidence quote 和权限 gate。
+- 已完成：所有来源通过 `memory.create_candidate` 进入 candidate，不自动 active。
+- 已完成：source 删除或权限撤销后，active memory 会标记为 `stale`，默认 recall 不再返回。
+- 已完成：文档和测试明确本轮不是直接调用任务、会议、Bitable OpenAPI；真实 API 拉取失败时不能冒称 live 成功。
+- 后续继续：接真实飞书任务、会议、Bitable API 拉取，并扩充真实样本人工复核集。
+
+已完成证据：
+
+- 新增 `FeishuIngestionSource`、`ingest_feishu_source()`、`mark_feishu_source_revoked()`。
+- 扩展 candidate source / evidence metadata：task、meeting、Bitable 字段可进入 Copilot schema。
+- `tests.test_document_ingestion` 覆盖 task / meeting / Bitable candidate-only、source context mismatch fail-closed、source revoked -> stale。
+- 新增 [limited Feishu ingestion handoff](limited-feishu-ingestion-handoff.md)。
 
 建议验证：
 
