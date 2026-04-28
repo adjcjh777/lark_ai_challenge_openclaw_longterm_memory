@@ -10,6 +10,17 @@ const REPO_ROOT = resolve(PLUGIN_DIR, "../../..");
 const SCHEMA_PATH = resolve(REPO_ROOT, "agent_adapters/openclaw/memory_tools.schema.json");
 const PYTHON = process.env.FEISHU_MEMORY_COPILOT_PYTHON || "python3";
 
+// Translation map: OpenClaw-facing tool names (fmc_xxx) → Python-side tool names (memory.xxx)
+const OPENCLAW_TO_PYTHON = {
+  fmc_memory_search: "memory.search",
+  fmc_memory_create_candidate: "memory.create_candidate",
+  fmc_memory_confirm: "memory.confirm",
+  fmc_memory_reject: "memory.reject",
+  fmc_memory_explain_versions: "memory.explain_versions",
+  fmc_memory_prefetch: "memory.prefetch",
+  fmc_heartbeat_review_due: "heartbeat.review_due",
+};
+
 function loadToolSpecs() {
   const raw = readFileSync(SCHEMA_PATH, "utf8");
   const schema = JSON.parse(raw);
@@ -26,7 +37,8 @@ function createTool(toolSpec) {
     description: toolSpec.description,
     parameters: toolSpec.input_schema,
     execute: async (_toolCallId, rawParams) => {
-      const output = await runPythonTool(toolSpec.name, rawParams || {});
+      const pythonToolName = OPENCLAW_TO_PYTHON[toolSpec.name] || toolSpec.name;
+      const output = await runPythonTool(pythonToolName, rawParams || {});
       return jsonResult(output);
     },
   };
@@ -81,13 +93,13 @@ export default definePluginEntry({
       return specs.map(createTool);
     }, {
       names: [
-        "memory.search",
-        "memory.create_candidate",
-        "memory.confirm",
-        "memory.reject",
-        "memory.explain_versions",
-        "memory.prefetch",
-        "heartbeat.review_due",
+        "fmc_memory_search",
+        "fmc_memory_create_candidate",
+        "fmc_memory_confirm",
+        "fmc_memory_reject",
+        "fmc_memory_explain_versions",
+        "fmc_memory_prefetch",
+        "fmc_heartbeat_review_due",
       ],
     });
   },

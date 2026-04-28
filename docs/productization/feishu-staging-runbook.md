@@ -1,158 +1,254 @@
-# Feishu Staging Runbook
+# Feishu Memory Copilot Staging Runbook
 
-日期：2026-04-28  
-状态：已补单监听测试流程和 OpenClaw Feishu websocket running 本机 staging 证据；仍不是生产部署、全量 Feishu workspace ingestion 或 productized live。
+日期：2026-04-28
+状态：Staging / Pre-production
 
-## 先看这个
+---
 
-1. 同一个 `Feishu Memory Engine bot` 同一时间只能有一个监听入口：OpenClaw Feishu websocket、`copilot-feishu listen`、legacy `feishu listen` 三选一。
-2. 当前推荐产品化路线是 OpenClaw-native；如果 OpenClaw Feishu websocket 已接管 bot，就不要再启动 `lark-cli event +subscribe`、`scripts/start_copilot_feishu_live.sh` 或 `scripts/start_feishu_bot.sh`。
-3. 如果需要用仓库内 lark-cli sandbox 做回归，只能启动新的 `scripts/start_copilot_feishu_live.sh`；旧 `scripts/start_feishu_bot.sh` 只保留为 legacy fallback。
-4. 真实群聊 ID、open_id、token 和 app secret 只放本机环境变量或 lark-cli/OpenClaw 配置，不写入仓库。
-5. OpenClaw 2026.4.24 中 `openclaw health --json` 的 Feishu running 总览字段可能仍为 `false`；当前 running 证据以 `openclaw channels status --probe --json` 和 gateway 日志为准，并把不一致写为 warning。
-6. 遇到监听冲突时，先停止多余监听，再重跑 preflight；不要靠同时开多个监听“碰运气”验收。
+## 1. 停机流程
 
-## 单监听模式
-
-| 模式 | 什么时候用 | 可以启动什么 | 不能同时启动什么 |
-|---|---|---|---|
-| OpenClaw Feishu websocket | 真实 OpenClaw Agent runtime / Feishu 插件验收 | OpenClaw Feishu channel | `copilot-feishu listen`、legacy `feishu listen`、直接 `lark-cli event +subscribe` |
-| Copilot lark-cli sandbox | 仓库内受控测试群回归 | `scripts/start_copilot_feishu_live.sh` | OpenClaw Feishu websocket、legacy `feishu listen` |
-| Legacy fallback | 只复查旧 Bot handler | `scripts/start_feishu_bot.sh` | OpenClaw Feishu websocket、`copilot-feishu listen` |
-
-## 开始前检查
-
-先确认 OpenClaw 版本锁：
+### 1.1 正常停机
 
 ```bash
+# 1. 停止 Feishu live listener
+# 找到 listener 进程
+ps aux | grep "copilot_feishu_live\|lark-cli.*event" | grep -v grep
+
+# 发送 SIGTERM 优雅停止
+kill -TERM <PID>
+
+# 等待进程退出（最多 10 秒）
+sleep 10
+
+# 如果还在运行，强制停止
+kill -9 <PID> 2>/dev/null
+
+# 2. 停止 OpenClaw websocket（如果有）
+ps aux | grep "openclaw" | grep -v grep
+kill -TERM <PID>
+
+# 3. 确认所有进程已停止
+ps aux | grep -E "copilot|lark-cli|openclaw" | grep -v grep
+# 应该无输出
+
+# 4. 关闭数据库连接（SQLite 自动处理，无需手动操作）
+```
+
+### 1.2 紧急停机
+
+```bash
+# 强制停止所有相关进程
+pkill -f "copilot_feishu_live" 2>/dev/null
+pkill -f "lark-cli.*event" 2>/dev/null
+pkill -f "openclaw" 2>/dev/null
+
+# 确认停止
+ps aux | grep -E "copilot|lark-cli|openclaw" | grep -v grep
+```
+
+---
+
+## 2. 审计数据回滚
+
+### 2.1 审计表特性
+
+- `memory_audit_events` 表只追加不删除（append-only）
+- 审计数据用于合规和复盘，不应随意删除
+- SQLite 无自动清理机制，长期运行需考虑 retention 策略
+
+### 2.2 审计数据清理（谨慎操作）
+
+```bash
+# 查看当前审计事件数量
+python3 scripts/query_audit_events.py --summary --json
+
+# 备份审计数据
+cp data/memory.sqlite data/memory.sqlite.backup.$(date +%Y%m%d)
+
+# 清理 30 天前的审计数据（需要手动执行 SQL）
+sqlite3 data/memory.sqlite "
+DELETE FROM memory_audit_events
+WHERE created_at < strftime('%s', 'now', '-30 days') * 1000;
+VACUUM;
+"
+
+# 验证清理结果
+python3 scripts/query_audit_events.py --summary --json
+```
+
+### 2.3 数据库整体回滚
+
+```bash
+# 停止所有服务
+pkill -f "copilot\|lark-cli\|openclaw"
+
+# 恢复备份
+cp data/memory.sqlite.backup.20260428 data/memory.sqlite
+
+# 重启服务
+python3 -m memory_engine.copilot.feishu_live
+```
+
+---
+
+## 3. 紧急降级流程
+
+### 3.1 Embedding 服务不可用
+
+**症状**：`healthcheck` 中 `embedding_provider.status` 变为 `warning` 或 `not_configured`
+
+**影响**：
+- `memory.search` 降级为基于文本匹配的 retrieval
+- 搜索质量下降但功能可用
+
+**降级操作**：
+```bash
+# 检查 Ollama 状态
+ollama list
+
+# 重启 Ollama 服务
+ollama serve &
+
+# 拉取 embedding 模型
+ollama pull qwen3-embedding:0.6b-fp16
+
+# 验证恢复
+python3 scripts/check_embedding_provider.py --live
+```
+
+**无需停机**：embedding 不可用时系统自动 fallback 到 `DeterministicEmbeddingProvider`。
+
+### 3.2 Cognee 不可用
+
+**症状**：`healthcheck` 中 `cognee_adapter.status` 变为 `fallback_used`
+
+**影响**：
+- `memory.confirm` 后不会同步到 Cognee graph
+- `memory.reject` 后不会从 Cognee withdrawal
+- 搜索仍走 repository fallback
+
+**降级操作**：
+```bash
+# 检查 Cognee 配置
+python3 -c "from memory_engine.copilot.cognee_adapter import _validate_cognee_configuration; _validate_cognee_configuration()"
+
+# 修复 .env 配置
+# 确保 LLM_API_KEY 和 EMBEDDING_MODEL 正确
+
+# 验证恢复
+python3 scripts/check_copilot_health.py --json | jq '.checks.cognee_adapter'
+```
+
+**无需停机**：Cognee 不可用时系统自动 fallback 到 repository-ledger 模式。
+
+### 3.3 OpenClaw WebSocket 断开
+
+**症状**：飞书消息不再触发 Copilot 处理
+
+**影响**：
+- 飞书群聊中的 @Bot 消息不会被处理
+- Card action（confirm/reject 按钮）不会触发
+
+**降级操作**：
+```bash
+# 检查 OpenClaw websocket 状态
+python3 scripts/check_openclaw_feishu_websocket.py
+
+# 重启 websocket
+# 方式 1: 通过 start 脚本
+bash scripts/start_copilot_feishu_live.sh
+
+# 方式 2: 手动启动
+lark-cli event +subscribe --as bot --event-types "im.message.receive_v1,card.action.trigger" --quiet
+
+# 验证恢复
+# 在飞书测试群发送 @Bot /health
+```
+
+**需要停机重启**：websocket 断开需要重新建立连接。
+
+### 3.4 数据库损坏
+
+**症状**：SQLite 报错 "database disk image is malformed"
+
+**影响**：
+- 所有读写操作失败
+
+**恢复操作**：
+```bash
+# 停止所有服务
+pkill -f "copilot\|lark-cli\|openclaw"
+
+# 尝试修复
+sqlite3 data/memory.sqlite "PRAGMA integrity_check;"
+
+# 如果无法修复，从备份恢复
+cp data/memory.sqlite.backup.latest data/memory.sqlite
+
+# 如果没有备份，重新初始化
+python3 scripts/init_db.py
+
+# 重启服务
+python3 -m memory_engine.copilot.feishu_live
+```
+
+---
+
+## 4. 健康检查命令
+
+```bash
+# 完整健康检查
+python3 scripts/check_copilot_health.py --json
+
+# 审计告警检查
+python3 scripts/check_audit_alerts.py --json
+
+# 审计查询
+python3 scripts/query_audit_events.py --summary --json
+
+# Embedding 检查
+python3 scripts/check_embedding_provider.py --live
+
+# OpenClaw 版本检查
 python3 scripts/check_openclaw_version.py
+
+# 编译检查
+python3 -m compileall memory_engine scripts
 ```
 
-如果准备让 OpenClaw Feishu websocket 接管 bot：
+---
+
+## 5. 日志位置
+
+| 组件 | 日志位置 |
+|---|---|
+| Feishu live listener | `logs/feishu_live_*.log` |
+| Healthcheck | stdout (通过 `check_copilot_health.py`) |
+| 审计事件 | `data/memory.sqlite` → `memory_audit_events` 表 |
+
+---
+
+## 6. 数据库维护
+
+### 6.1 定期备份
 
 ```bash
-python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
-python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
+# 每日备份
+cp data/memory.sqlite data/memory.sqlite.backup.$(date +%Y%m%d)
+
+# 清理 7 天前的备份
+find data/ -name "memory.sqlite.backup.*" -mtime +7 -delete
 ```
 
-如果准备让仓库内 Copilot lark-cli sandbox 接管 bot：
+### 6.2 审计数据 retention
+
+建议保留 90 天审计数据。超过 90 天的数据可按需清理。
 
 ```bash
-python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
+# 清理 90 天前的审计数据
+sqlite3 data/memory.sqlite "
+DELETE FROM memory_audit_events
+WHERE created_at < strftime('%s', 'now', '-90 days') * 1000;
+VACUUM;
+"
 ```
-
-如果准备跑 legacy fallback：
-
-```bash
-python3 scripts/check_feishu_listener_singleton.py --planned-listener legacy-lark-cli
-```
-
-这个检查会拦截以下已知冲突：
-
-- `python3 -m memory_engine copilot-feishu listen`
-- `python3 -m memory_engine feishu listen`
-- 直接运行的 `lark-cli event +subscribe`
-- 命令行可识别的 OpenClaw Feishu / Lark websocket 进程
-
-如果只看到 `openclaw-gateway`，单监听脚本会给 warning：进程列表无法判断该 gateway 是否已经启用 Feishu websocket。此时继续运行 `scripts/check_openclaw_feishu_websocket.py`，用 `channels.status`、credential probe 和 Feishu channel logs 判断是否真的 running；如果 OpenClaw 正在接收同一个 bot 的飞书事件，就不要再启动仓库内 lark-cli 监听。
-
-## 推荐测试顺序
-
-### A. OpenClaw Feishu websocket owns the bot
-
-用于 OpenClaw-native 真实入口验收和后期打磨 staging 证据。
-
-1. 运行单监听检查：
-
-```bash
-python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
-python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
-```
-
-2. 确认没有 legacy `memory_engine feishu listen`、`memory_engine copilot-feishu listen` 或直接 `lark-cli event +subscribe`。
-3. 检查 `check_openclaw_feishu_websocket.py` 结果：
-   - `ok=true`
-   - `channels_status.channel_running=true`
-   - `channels_status.account_running=true`
-   - `channels_status.probe_ok=true`
-   - `feishu_logs.missing_required_events=[]`
-4. 在 OpenClaw Agent 里跑三条 flow：
-   - 历史决策召回：触发 `memory.search`。
-   - 候选确认：触发 `memory.create_candidate`，再触发 `memory.confirm` 或 `memory.reject`。
-   - 任务前上下文：触发 `memory.prefetch`，让 Agent 输出 checklist / plan / report。
-5. 把每条 flow 的 input、output、tool、request_id、trace_id、permission_decision 和失败回退写入 `docs/productization/openclaw-runtime-evidence.md` 或对应 handoff。
-
-已知边界：2026-04-28 本机 staging 证据中，真实 DM 已进入 OpenClaw Agent dispatch，但工具调用落到 OpenClaw 内置 `memory_search`，还不是本项目 first-class `memory.search` runner。这个不影响 websocket running 证据，但不能写成 Feishu DM 已完成项目 `memory.*` tool routing。
-
-### B. Copilot lark-cli sandbox owns the bot
-
-用于仓库内受控测试群回归，不代表 productized live。
-
-```bash
-python3 scripts/check_openclaw_version.py
-python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
-scripts/start_copilot_feishu_live.sh
-```
-
-测试群里按顺序发送：
-
-```text
-@Feishu Memory Engine bot /health
-@Feishu Memory Engine bot /remember 决定：Copilot live sandbox 验收口径是 candidate 先确认再 active
-@Feishu Memory Engine bot /confirm <candidate_id>
-@Feishu Memory Engine bot Copilot live sandbox 验收口径是什么？
-@Feishu Memory Engine bot /reject <candidate_id>
-```
-
-完成标准：
-
-- `/remember` 只创建 candidate（待确认记忆），不会自动 active。
-- `/confirm` / `/reject` 必须由 reviewer 执行，且走 `CopilotService` / `handle_tool_request()`。
-- 普通提问触发 `memory.search`，回复包含 request_id / trace_id。
-- 日志写入 `logs/feishu-copilot-live/`，不提交真实日志。
-
-### C. Legacy fallback owns the bot
-
-只在明确复查旧 handler 时使用：
-
-```bash
-python3 scripts/check_feishu_listener_singleton.py --planned-listener legacy-lark-cli
-scripts/start_feishu_bot.sh
-```
-
-legacy fallback 不作为 OpenClaw-native 主线证据；测试结束后必须停止。
-
-## 停止监听
-
-优先用启动终端里的 `Ctrl-C` 停止。
-
-如果监听被留在后台，先查看：
-
-```bash
-ps -axo pid,ppid,command | rg 'lark-cli event \+subscribe|memory_engine (feishu|copilot-feishu) listen|openclaw.*(feishu|lark|websocket)'
-```
-
-只在确认 PID 属于本项目监听后再停止：
-
-```bash
-kill <pid>
-```
-
-不要停止无关 OpenClaw gateway、其他项目 bot 或用户正在使用的进程。
-
-## 失败记录
-
-如果 preflight 失败，把以下内容写入 runtime evidence 或 handoff：
-
-- planned listener 是什么。
-- 冲突进程的 pid、kind、command。
-- 最终选择哪个监听作为唯一入口。
-- 是否仍保留 OpenClaw gateway running，以及为什么。
-
-如果需要临时绕过，可以设置：
-
-```bash
-FEISHU_SINGLE_LISTENER_ALLOW_CONFLICT=1
-```
-
-这个开关只允许 throwaway debugging；不能用于正式验收、handoff 或看板完成证据。

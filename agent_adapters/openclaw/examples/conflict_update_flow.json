@@ -6,7 +6,7 @@
   "demo_fallback": "python3 scripts/demo_seed.py --json-output reports/demo_replay.json",
   "steps": [
     {
-      "tool": "memory.create_candidate",
+      "tool": "fmc_memory_create_candidate",
       "arguments": {
         "text": "Correction: production deployment region is ap-shanghai from now on.",
         "scope": "project:feishu_ai_challenge",
@@ -34,7 +34,7 @@
               "workspace_id": "project:feishu_ai_challenge",
               "chat_id": "chat_demo_project"
             },
-            "requested_action": "memory.create_candidate",
+            "requested_action": "fmc_memory_create_candidate",
             "requested_visibility": "team",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }
@@ -43,7 +43,7 @@
       }
     },
     {
-      "tool": "memory.confirm",
+      "tool": "fmc_memory_confirm",
       "arguments": {
         "candidate_id": "<candidate_id_from_step_1>",
         "scope": "project:feishu_ai_challenge",
@@ -65,7 +65,7 @@
               "workspace_id": "project:feishu_ai_challenge",
               "chat_id": "chat_demo_project"
             },
-            "requested_action": "memory.confirm",
+            "requested_action": "fmc_memory_confirm",
             "requested_visibility": "team",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }
@@ -73,7 +73,7 @@
       }
     },
     {
-      "tool": "memory.explain_versions",
+      "tool": "fmc_memory_explain_versions",
       "arguments": {
         "memory_id": "<memory_id_from_step_2>",
         "scope": "project:feishu_ai_challenge",
@@ -94,7 +94,7 @@
               "workspace_id": "project:feishu_ai_challenge",
               "chat_id": "chat_demo_project"
             },
-            "requested_action": "memory.explain_versions",
+            "requested_action": "fmc_memory_explain_versions",
             "requested_visibility": "team",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }

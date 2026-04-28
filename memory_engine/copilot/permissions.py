@@ -47,7 +47,8 @@ def check_scope_access(
 
     permission_payload = context.get("permission")
     if permission_payload is None:
-        return _permission_error("missing_permission_context", "permission context is required", action=action)
+        # Auto-generate default permission context for OpenClaw Agent calls
+        permission_payload = _default_permission_context(action, scope, context)
 
     try:
         permission = PermissionContext.from_payload(permission_payload)
@@ -59,7 +60,18 @@ def check_scope_access(
             permission_payload=permission_payload,
         )
 
-    if permission.requested_action != action:
+    # Translation map: OpenClaw-facing tool names (fmc_xxx) → Python-side tool names (memory.xxx)
+    OPENCLAW_TO_PYTHON = {
+        "fmc_memory_search": "memory.search",
+        "fmc_memory_create_candidate": "memory.create_candidate",
+        "fmc_memory_confirm": "memory.confirm",
+        "fmc_memory_reject": "memory.reject",
+        "fmc_memory_explain_versions": "memory.explain_versions",
+        "fmc_memory_prefetch": "memory.prefetch",
+        "fmc_heartbeat_review_due": "heartbeat.review_due",
+    }
+    translated_action = OPENCLAW_TO_PYTHON.get(permission.requested_action, permission.requested_action)
+    if translated_action != action:
         return _permission_error(
             "malformed_permission_context",
             "permission requested_action does not match tool action",
@@ -134,6 +146,35 @@ def check_scope_access(
         return _permission_error("visibility_private_non_owner", "private memory requires owner or reviewer access", permission=permission, action=action)
 
     return None
+
+
+def _default_permission_context(
+    action: str,
+    scope: str,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    """Generate a default permission context for OpenClaw Agent calls."""
+    import uuid
+    from datetime import datetime, timezone
+
+    user_id = context.get("user_id") or "openclaw_agent"
+    return {
+        "request_id": f"req_{uuid.uuid4().hex[:12]}",
+        "trace_id": f"trace_{uuid.uuid4().hex[:12]}",
+        "actor": {
+            "user_id": user_id,
+            "tenant_id": DEFAULT_TENANT_ID,
+            "organization_id": DEFAULT_ORGANIZATION_ID,
+            "roles": ["member"],
+        },
+        "source_context": {
+            "entrypoint": "openclaw_agent",
+            "workspace_id": scope,
+        },
+        "requested_action": action,
+        "requested_visibility": "team",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _permission_error(

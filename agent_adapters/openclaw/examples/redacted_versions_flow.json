@@ -6,7 +6,7 @@
   "demo_fallback": "python3 -m unittest tests.test_copilot_permissions",
   "steps": [
     {
-      "tool": "memory.explain_versions",
+      "tool": "fmc_memory_explain_versions",
       "arguments": {
         "memory_id": "mem_demo_private",
         "scope": "project:feishu_ai_challenge",
@@ -26,7 +26,7 @@
               "entrypoint": "openclaw",
               "workspace_id": "project:feishu_ai_challenge"
             },
-            "requested_action": "memory.explain_versions",
+            "requested_action": "fmc_memory_explain_versions",
             "requested_visibility": "private",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }

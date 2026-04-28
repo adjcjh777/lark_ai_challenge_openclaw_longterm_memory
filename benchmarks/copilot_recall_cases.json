@@ -159,5 +159,582 @@
     "failure_debug_hint": "如果失败，先检查最终决策是否进入 active，再看临时建议短语是否被错误提升。",
     "failure_category": "vector_miss",
     "note": "hard-case：群聊里出现过未采纳方案，召回时必须选择最终决策。"
+  },
+  {
+    "case_id": "copilot_recall_multi_turn_chain_003",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "生产环境容器编排用 Docker Compose，先跑起来。",
+      "不对，Docker Compose 不够弹性，换成 Kubernetes。",
+      "K8s 运维成本太高了，团队消化不了，还是回 Docker Compose 吧。"
+    ],
+    "query": "生产环境容器编排用什么",
+    "expected_active_value": "Docker Compose",
+    "forbidden_value": "Kubernetes",
+    "evidence_keyword": "还是回 Docker Compose",
+    "expected_memory_intent": "记录容器编排最终选型，排除中间方案 Kubernetes 的干扰。",
+    "failure_debug_hint": "检查三轮覆盖链中 Kubernetes 是否被 superseded，active 是否指向 Docker Compose。",
+    "failure_category": "stale_conflict",
+    "note": "四轮覆盖链，中间方案干扰最强，验证最终版本召回。"
+  },
+  {
+    "case_id": "copilot_recall_multi_turn_chain_004",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "代码评审先自测就行，不用 formal review。",
+      "还是得做 peer review，但只需要一个人看。",
+      "最终决定：代码评审必须两人 review，合并需要两人 approve。"
+    ],
+    "query": "代码评审需要几个人 approve",
+    "expected_active_value": "两人 approve",
+    "forbidden_value": "一人看就行",
+    "evidence_keyword": "必须两人 review，合并需要两人 approve",
+    "expected_memory_intent": "记录代码评审规则的最终版本，避免早期宽松规则泄漏。",
+    "failure_debug_hint": "检查三轮修正后 review 人数是否正确召回两人，禁止值一人不出现。",
+    "failure_category": "stale_conflict",
+    "note": "三轮覆盖链，评审人数逐步收紧，验证最终标准召回。"
+  },
+  {
+    "case_id": "copilot_recall_multi_turn_chain_005",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "新项目数据库用 MySQL，团队最熟。",
+      "PostgreSQL 功能更强大，切 PostgreSQL 吧。",
+      "PostgreSQL 运维文档没跟上，暂时切回 MySQL，等基础设施补齐再迁移。"
+    ],
+    "query": "新项目数据库现在选什么",
+    "expected_active_value": "MySQL",
+    "forbidden_value": "PostgreSQL",
+    "evidence_keyword": "暂时切回 MySQL",
+    "expected_memory_intent": "记录数据库临时回退决策，避免 PostgreSQL 被当作最终选型。",
+    "failure_debug_hint": "检查 PostgreSQL 是否被 superseded，active 是否回退到 MySQL。",
+    "failure_category": "stale_conflict",
+    "note": "三轮覆盖链含回退场景，验证最终回退版本正确召回。"
+  },
+  {
+    "case_id": "copilot_recall_multi_turn_chain_006",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "日志格式用纯文本，方便 grep。",
+      "纯文本不好解析，改成 JSON 格式。",
+      "JSON 里要加 trace_id 字段，方便链路追踪。"
+    ],
+    "query": "日志格式最终要求是什么",
+    "expected_active_value": "JSON 格式含 trace_id",
+    "forbidden_value": "纯文本",
+    "evidence_keyword": "JSON 里要加 trace_id 字段",
+    "expected_memory_intent": "记录日志格式最终要求，包含 JSON 和 trace_id 两个要素。",
+    "failure_debug_hint": "检查召回结果是否包含 trace_id 要求，纯文本是否被完全覆盖。",
+    "failure_category": "stale_conflict",
+    "note": "三轮递进式修正，最终版本含两个关键字段。"
+  },
+  {
+    "case_id": "copilot_recall_multi_turn_chain_007",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "单元测试覆盖率先定 60%，快速跑通流水线。",
+      "60% 太低了，提高到 80%。",
+      "80% 导致很多无意义 mock，调到 70% 是合理平衡点。"
+    ],
+    "query": "单测覆盖率阈值定多少",
+    "expected_active_value": "70%",
+    "forbidden_value": "80%",
+    "evidence_keyword": "调到 70% 是合理平衡点",
+    "expected_memory_intent": "记录测试覆盖率最终阈值，避免过高或过低的标准泄漏。",
+    "failure_debug_hint": "检查覆盖率阈值是否为 70%，80% 是否被 superseded。",
+    "failure_category": "stale_conflict",
+    "note": "三轮调整链，标准先升后降，验证最终平衡点召回。"
+  },
+  {
+    "case_id": "copilot_recall_synonym_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "发布 pipeline 统一用 GitHub Actions，禁止 Jenkins 触发。"
+    ],
+    "query": "上线发布流程现在跑什么 CI 工具",
+    "expected_active_value": "GitHub Actions",
+    "forbidden_value": "Jenkins",
+    "evidence_keyword": "发布 pipeline 统一用 GitHub Actions",
+    "expected_memory_intent": "记录 CI 工具选型，query 用语义改写（上线发布流程/pipeline），靠 vector 信号命中。",
+    "failure_debug_hint": "检查 vector 检索是否将'上线发布流程'与'发布 pipeline'关联，keyword 可能无法直接匹配。",
+    "failure_category": "vector_miss",
+    "note": "同义词改写：query 不使用事件原文关键词'pipeline'，靠语义相似度命中。"
+  },
+  {
+    "case_id": "copilot_recall_synonym_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "源码仓库全部迁到 GitHub org：feishu-ai-challenge，GitLab 只留镜像。"
+    ],
+    "query": "代码托管平台现在统一用哪个",
+    "expected_active_value": "GitHub",
+    "forbidden_value": "GitLab",
+    "evidence_keyword": "源码仓库全部迁到 GitHub org",
+    "expected_memory_intent": "记录代码托管迁移结果，query 用'代码托管'替代'源码仓库'，靠 vector 命中。",
+    "failure_debug_hint": "检查 vector 是否将'代码托管'与'源码仓库'关联，keyword 检索可能缺失。",
+    "failure_category": "vector_miss",
+    "note": "同义词改写：query 用'代码托管平台'指代'源码仓库'。"
+  },
+  {
+    "case_id": "copilot_recall_synonym_003",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "项目管理面板用飞书多维表格，不引入 Jira 或 Linear。"
+    ],
+    "query": "团队用什么工具跟踪任务进度",
+    "expected_active_value": "飞书多维表格",
+    "forbidden_value": "Jira",
+    "evidence_keyword": "项目管理面板用飞书多维表格",
+    "expected_memory_intent": "记录任务跟踪工具选型，query 用'跟踪任务进度'替代'项目管理面板'。",
+    "failure_debug_hint": "检查 vector 是否将'跟踪任务进度'与'项目管理面板'关联。",
+    "failure_category": "vector_miss",
+    "note": "语义改写：query 完全不复用事件中的'面板'字面词。"
+  },
+  {
+    "case_id": "copilot_recall_synonym_004",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "访问控制策略统一走飞书应用权限，不单独建 RBAC。"
+    ],
+    "query": "权限管控现在怎么做",
+    "expected_active_value": "飞书应用权限",
+    "forbidden_value": "RBAC",
+    "evidence_keyword": "访问控制策略统一走飞书应用权限",
+    "expected_memory_intent": "记录权限管理方案，query 用'权限管控'替代'访问控制策略'。",
+    "failure_debug_hint": "检查 vector 是否将'权限管控'与'访问控制策略'语义关联。",
+    "failure_category": "vector_miss",
+    "note": "同义词改写：'权限管控'与'访问控制策略'语义等价但字面不同。"
+  },
+  {
+    "case_id": "copilot_recall_synonym_005",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "生产环境异常处理流程：先止血再复盘，止血窗口 15 分钟内。"
+    ],
+    "query": "线上故障响应的止血时间要求是多少",
+    "expected_active_value": "15 分钟",
+    "forbidden_value": "30 分钟",
+    "evidence_keyword": "止血窗口 15 分钟内",
+    "expected_memory_intent": "记录故障响应时效，query 用'线上故障'替代'生产环境异常'。",
+    "failure_debug_hint": "检查 vector 是否将'线上故障'与'生产环境异常'关联，同时确认时效数值正确。",
+    "failure_category": "vector_miss",
+    "note": "语义改写加数值召回：query 和事件用不同表述指同一概念。"
+  },
+  {
+    "case_id": "copilot_recall_cross_topic_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "本周部署窗口改到周三下午两点，避开周一早高峰。",
+      "周报模板更新了，加上'本周部署记录'列。",
+      "前端框架从 Vue 2 升级到 Vue 3，本周五前完成迁移。"
+    ],
+    "query": "本周部署窗口是什么时候",
+    "expected_active_value": "周三下午两点",
+    "forbidden_value": "周五前",
+    "evidence_keyword": "部署窗口改到周三下午两点",
+    "expected_memory_intent": "从多主题事件中精准召回部署时间，排除周报模板和框架迁移的干扰。",
+    "failure_debug_hint": "检查 Top 3 是否只返回部署相关记忆，周报和 Vue 迁移不应出现在召回结果中。",
+    "failure_category": "topic_bleed",
+    "note": "三主题干扰：部署+周报+框架，query 只问部署时间。"
+  },
+  {
+    "case_id": "copilot_recall_cross_topic_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "数据库密码每月轮换一次，存 Vault 里。",
+      "前端组件库升级到 Element Plus 2.4。",
+      "下周三和客户 demo，准备 PPT 和录屏。"
+    ],
+    "query": "数据库密码多久轮换一次",
+    "expected_active_value": "每月轮换一次",
+    "forbidden_value": "每周",
+    "evidence_keyword": "数据库密码每月轮换一次",
+    "expected_memory_intent": "从安全+前端+Demo 三主题中精准召回安全约束。",
+    "failure_debug_hint": "检查召回结果是否只含安全约束，前端升级和 Demo 安排不应干扰。",
+    "failure_category": "topic_bleed",
+    "note": "三主题干扰：安全+前端+Demo，query 只问安全策略。"
+  },
+  {
+    "case_id": "copilot_recall_cross_topic_003",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "飞书文档协作规范：所有设计文档必须放 wiki 知识库。",
+      "后端 API 超时设置统一 30 秒。",
+      "竞品分析报告下周一前提交给 PM。"
+    ],
+    "query": "设计文档应该放在哪里",
+    "expected_active_value": "wiki 知识库",
+    "forbidden_value": "飞书云盘",
+    "evidence_keyword": "所有设计文档必须放 wiki 知识库",
+    "expected_memory_intent": "从协作规范+技术配置+竞品分析中精准召回文档存放规则。",
+    "failure_debug_hint": "检查 Top 3 是否只含文档协作规则，API 超时和竞品报告不应出现。",
+    "failure_category": "topic_bleed",
+    "note": "三主题干扰：文档协作+API配置+竞品分析，query 只问文档存放。"
+  },
+  {
+    "case_id": "copilot_recall_cross_topic_004",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "监控告警阈值：CPU > 80% 持续 5 分钟触发 P2 告警。",
+      "代码分支策略改成 trunk-based，feature branch 生命周期不超过 3 天。",
+      "新人 onboarding 文档更新了第三章。"
+    ],
+    "query": "CPU 使用率告警阈值是多少",
+    "expected_active_value": "80% 持续 5 分钟触发 P2 告警",
+    "forbidden_value": "90%",
+    "evidence_keyword": "CPU > 80% 持续 5 分钟触发 P2 告警",
+    "expected_memory_intent": "从监控+分支策略+onboarding 中精准召回告警阈值。",
+    "failure_debug_hint": "检查召回是否只含监控告警信息，分支策略和 onboarding 文档不应干扰。",
+    "failure_category": "topic_bleed",
+    "note": "三主题干扰：监控+分支策略+文档更新，query 只问监控阈值。"
+  },
+  {
+    "case_id": "copilot_recall_cross_topic_005",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "API 版本管理：v1 接口 2026-06-01 下线，v2 已全量。",
+      "看板每周五下午更新里程碑状态。",
+      "安全扫描工具从 SonarQube 换成 Trivy。"
+    ],
+    "query": "v1 接口什么时候下线",
+    "expected_active_value": "2026-06-01",
+    "forbidden_value": "已下线",
+    "evidence_keyword": "v1 接口 2026-06-01 下线",
+    "expected_memory_intent": "从 API 版本+看板管理+安全扫描中精准召回 API 下线时间。",
+    "failure_debug_hint": "检查召回是否只含 API 下线时间，看板和安全工具不应干扰。",
+    "failure_category": "topic_bleed",
+    "note": "三主题干扰：API版本+看板+安全扫描，query 只问 API 下线时间。"
+  },
+  {
+    "case_id": "copilot_recall_noise_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "今天午饭吃什么，食堂有麻辣烫。",
+      "周末天气不错，适合出去走走。",
+      "那个 bug 修了吗，就是列表页的问题。",
+      "新来的实习生表现还不错。",
+      "下午三点开会，记得带笔记本。",
+      "代码审查工具换成 SonarQube 了，下周一生效。",
+      "昨天团建玩得很开心。",
+      "咖啡机又坏了，报修一下。",
+      "年底要评优了，大家加油。",
+      "新版本的设计稿在 Figma 上了。"
+    ],
+    "noise_count": 50,
+    "query": "代码审查工具现在用什么",
+    "expected_active_value": "SonarQube",
+    "forbidden_value": "ESLint",
+    "evidence_keyword": "代码审查工具换成 SonarQube",
+    "expected_memory_intent": "在大量闲聊噪声中精准召回代码审查工具选型。",
+    "failure_debug_hint": "检查 Top 3 是否只含 SonarQube 记忆，大量闲聊不应出现在结果中。",
+    "failure_category": "noise_overwhelm",
+    "note": "高噪声环境（noise_count=50），大量闲聊中唯一技术决策。"
+  },
+  {
+    "case_id": "copilot_recall_noise_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "晚上聚餐去哪吃，海底捞还是烤肉？",
+      "今天摸鱼了一天，啥也没干。",
+      "那个接口返回 500 了，查一下日志。",
+      "周末看了个电影，还不错。",
+      "新来的同事挺帅的。",
+      "生产环境部署必须走审批流，任何人不能直接 push 到 main。",
+      "明天团建爬山，记得穿运动鞋。",
+      "午饭外卖到了，一起去拿。",
+      "年终奖还没发，等通知。",
+      "设计稿又改了，看看飞书文档。"
+    ],
+    "noise_count": 50,
+    "query": "生产部署需要什么流程才能上线",
+    "expected_active_value": "走审批流",
+    "forbidden_value": "直接 push",
+    "evidence_keyword": "必须走审批流，任何人不能直接 push 到 main",
+    "expected_memory_intent": "在 50 条噪声中召回部署审批流程规则。",
+    "failure_debug_hint": "检查审批流是否在 Top 3，闲聊内容不应干扰召回。",
+    "failure_category": "noise_overwhelm",
+    "note": "噪声环境，部署审批是唯一正式规则。"
+  },
+  {
+    "case_id": "copilot_recall_noise_003",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "今天心情不好，不想写代码。",
+      "外卖真难吃，再也不点那家了。",
+      "那个需求又变了，产品经理真烦。",
+      "周末想去游泳。",
+      "新来的 QA 问了个奇怪的问题。",
+      "API rate limit 默认 100 次/分钟，超过会被限流。",
+      "下午茶是奶茶还是咖啡？",
+      "昨晚追剧到凌晨三点。",
+      "代码重构进度如何？",
+      "国庆放假通知还没出来。"
+    ],
+    "noise_count": 50,
+    "query": "接口限流的阈值是多少",
+    "expected_active_value": "100 次/分钟",
+    "forbidden_value": "200 次/分钟",
+    "evidence_keyword": "API rate limit 默认 100 次/分钟",
+    "expected_memory_intent": "在噪声环境中召回 API 限流配置。",
+    "failure_debug_hint": "检查限流阈值是否正确召回，噪声内容不应出现在 Top 3。",
+    "failure_category": "noise_overwhelm",
+    "note": "噪声环境，限流配置是唯一技术参数。"
+  },
+  {
+    "case_id": "copilot_recall_noise_004",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "今天不想上班，好累。",
+      "食堂的红烧肉不错。",
+      "那个 PR 谁来 review？",
+      "周末约了朋友打篮球。",
+      "新来的实习生问了我一个技术问题。",
+      "飞书机器人消息推送频率限制为每用户每天 500 条。",
+      "下午开会要带需求文档。",
+      "昨晚失眠了，今天状态不好。",
+      "测试环境的数据库密码是什么？",
+      "年底 KPI 还没定。"
+    ],
+    "noise_count": 50,
+    "query": "飞书机器人每天能给同一个用户发多少条消息",
+    "expected_active_value": "500 条",
+    "forbidden_value": "不限量",
+    "evidence_keyword": "每用户每天 500 条",
+    "expected_memory_intent": "在噪声中召回飞书机器人推送限制。",
+    "failure_debug_hint": "检查推送限制是否正确召回，日常闲聊不应干扰。",
+    "failure_category": "noise_overwhelm",
+    "note": "噪声环境，消息推送限制是唯一配置规则。"
+  },
+  {
+    "case_id": "copilot_recall_noise_005",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "今天天气真好，适合出去走走。",
+      "午饭吃啥？随便吧。",
+      "那个 bug 好难调，搞了一天。",
+      "周末想去露营。",
+      "新来的同事人挺好的。",
+      "项目 README 必须包含：项目简介、快速启动、API 文档链接。",
+      "下午三点开 standup，别忘了。",
+      "昨晚打游戏打到很晚。",
+      "设计稿第三版还没定稿。",
+      "年终总结要写了。"
+    ],
+    "noise_count": 50,
+    "query": "项目 README 需要包含哪些内容",
+    "expected_active_value": "项目简介、快速启动、API 文档链接",
+    "forbidden_value": "随便写写就行",
+    "evidence_keyword": "必须包含：项目简介、快速启动、API 文档链接",
+    "expected_memory_intent": "在噪声中召回 README 规范要求。",
+    "failure_debug_hint": "检查 README 规范是否完整召回，闲聊内容不应出现。",
+    "failure_category": "noise_overwhelm",
+    "note": "噪声环境，文档规范是唯一正式要求。"
+  },
+  {
+    "case_id": "copilot_recall_long_chain_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "测试环境用 SQLite，轻量快速。",
+      "SQLite 不支持并发，换成 MySQL。",
+      "MySQL 配置太麻烦，试试 PostgreSQL。",
+      "PostgreSQL 镜像拉不下来，换回 MySQL 吧。",
+      "MySQL 8.0 的认证插件有问题，改用 5.7。",
+      "最终确认：测试环境统一用 MySQL 5.7，版本锁定。"
+    ],
+    "query": "测试环境数据库最终定什么",
+    "expected_active_value": "MySQL 5.7",
+    "forbidden_value": "SQLite",
+    "evidence_keyword": "测试环境统一用 MySQL 5.7，版本锁定",
+    "expected_memory_intent": "六轮迭代后记录测试环境数据库最终选型及版本。",
+    "failure_debug_hint": "检查六轮迭代后 active 是否指向 MySQL 5.7，SQLite/PostgreSQL/MySQL 8.0 是否全部 superseded。",
+    "failure_category": "stale_conflict",
+    "note": "六轮长链迭代，包含多次方向回退，验证最终状态一致。"
+  },
+  {
+    "case_id": "copilot_recall_long_chain_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "看板列用 TODO / DOING / DONE 三列。",
+      "加上 BLOCKED 列，方便标记阻塞任务。",
+      "BLOCKED 不够，加上 IN REVIEW 列。",
+      "列太多了，砍掉 BLOCKED，保留 IN REVIEW。",
+      "最终看板列：TODO / IN REVIEW / DOING / DONE。"
+    ],
+    "query": "看板现在有哪些列",
+    "expected_active_value": "TODO / IN REVIEW / DOING / DONE",
+    "forbidden_value": "BLOCKED",
+    "evidence_keyword": "最终看板列：TODO / IN REVIEW / DOING / DONE",
+    "expected_memory_intent": "五轮演进后记录看板列最终配置。",
+    "failure_debug_hint": "检查五轮演进后看板列是否为四列，BLOCKED 是否已删除。",
+    "failure_category": "stale_conflict",
+    "note": "五轮迭代含增删操作，验证最终配置一致。"
+  },
+  {
+    "case_id": "copilot_recall_long_chain_003",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "Git 分支命名用 feature/xxx。",
+      "加上 bugfix/xxx 分支规范。",
+      "hotfix 也加个规范：hotfix/xxx。",
+      "不用 hotfix 了，bugfix 就够了。",
+      "feature 和 bugfix 前面加上日期：feature/2026-04-28-xxx。",
+      "最终分支命名：feature/日期-xxx 或 bugfix/日期-xxx。"
+    ],
+    "query": "Git 分支命名规范是什么",
+    "expected_active_value": "feature/日期-xxx 或 bugfix/日期-xxx",
+    "forbidden_value": "hotfix/xxx",
+    "evidence_keyword": "最终分支命名：feature/日期-xxx 或 bugfix/日期-xxx",
+    "expected_memory_intent": "六轮迭代后记录分支命名最终规范。",
+    "failure_debug_hint": "检查分支命名是否含日期格式，hotfix 是否已移除。",
+    "failure_category": "stale_conflict",
+    "note": "六轮迭代含添加、删除、格式变更，验证最终状态。"
+  },
+  {
+    "case_id": "copilot_recall_long_chain_004",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "CI 构建超时设 10 分钟。",
+      "10 分钟不够，改成 15 分钟。",
+      "15 分钟还是偶尔超时，改成 20 分钟。",
+      "20 分钟太慢了，优化构建脚本后改回 15 分钟。",
+      "最终确认：CI 构建超时 15 分钟，附带构建优化任务。"
+    ],
+    "query": "CI 构建超时设多少分钟",
+    "expected_active_value": "15 分钟",
+    "forbidden_value": "20 分钟",
+    "evidence_keyword": "最终确认：CI 构建超时 15 分钟",
+    "expected_memory_intent": "五轮调整后记录构建超时最终配置。",
+    "failure_debug_hint": "检查超时值是否为 15 分钟，20 分钟是否已被 superseded。",
+    "failure_category": "stale_conflict",
+    "note": "五轮调整含回退，验证最终配置稳定。"
+  },
+  {
+    "case_id": "copilot_recall_long_chain_005",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "项目用 npm 管理依赖。",
+      "换成 yarn，lock 文件更稳定。",
+      "yarn 安装太慢，试试 pnpm。",
+      "pnpm 在 CI 上有兼容问题，回 yarn。",
+      "yarn v1 有 bug，升级 yarn berry。",
+      "yarn berry 配置太复杂，最终回 npm，锁文件用 package-lock.json。"
+    ],
+    "query": "项目包管理器最终用什么",
+    "expected_active_value": "npm",
+    "forbidden_value": "pnpm",
+    "evidence_keyword": "最终回 npm，锁文件用 package-lock.json",
+    "expected_memory_intent": "六轮技术选型迭代后记录包管理器最终决策。",
+    "failure_debug_hint": "检查最终是否回到 npm，yarn/pnpm 是否全部 superseded。",
+    "failure_category": "stale_conflict",
+    "note": "六轮技术选型迭代，含多次切换和回退，验证最终回到原点的稳定性。"
+  },
+  {
+    "case_id": "copilot_recall_multilingual_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "Production deployment must use canary release strategy.",
+      "不对，canary 太慢了，改成 blue-green deployment。"
+    ],
+    "query": "生产发布策略用什么",
+    "expected_active_value": "blue-green deployment",
+    "forbidden_value": "canary release",
+    "evidence_keyword": "改成 blue-green deployment",
+    "expected_memory_intent": "中英混用场景下正确召回发布策略最终版本。",
+    "failure_debug_hint": "检查 blue-green 是否在 Top 3，canary 是否被 superseded。",
+    "failure_category": "stale_conflict",
+    "note": "中英混用：事件全英文，query 用中文。"
+  },
+  {
+    "case_id": "copilot_recall_multilingual_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "项目代码规范要求所有函数必须写 TypeScript 类型。",
+      "React components 应该用 functional component，不用 class component。"
+    ],
+    "query": "What coding standards does the project follow for frontend components?",
+    "expected_active_value": "functional component with TypeScript types",
+    "forbidden_value": "class component",
+    "evidence_keyword": "functional component，TypeScript 类型",
+    "expected_memory_intent": "英文 query 检索中文事件记忆，验证跨语言语义匹配。",
+    "failure_debug_hint": "检查 vector 是否跨语言匹配，中英文混合内容是否正确召回。",
+    "failure_category": "vector_miss",
+    "note": "中英混用：事件中英混合，query 全英文。"
+  },
+  {
+    "case_id": "copilot_recall_multilingual_003",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "API 接口文档用 Swagger/OpenAPI 3.0 格式。",
+      "所有 endpoint 必须有 request/response schema，不能只写 description。",
+      "文档放在 docs/api/ 目录下，用 Markdown 格式存一份副本。"
+    ],
+    "query": "API documentation format and where to store it",
+    "expected_active_value": "Swagger/OpenAPI 3.0 format, stored in docs/api/ with Markdown backup",
+    "forbidden_value": "Postman collection",
+    "evidence_keyword": "Swagger/OpenAPI 3.0 格式，docs/api/",
+    "expected_memory_intent": "英文 query 召回中文事件中的 API 文档规范，验证跨语言召回。",
+    "failure_debug_hint": "检查是否同时召回格式和存储路径两个信息，Postman 不应出现。",
+    "failure_category": "vector_miss",
+    "note": "中英混用：全中文事件，英文 query 问同一主题。"
+  },
+  {
+    "case_id": "copilot_recall_hf_consistency_001",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "数据库连接池最大连接数设为 50。"
+    ],
+    "query": "数据库最大连接数",
+    "expected_active_value": "50",
+    "forbidden_value": "100",
+    "evidence_keyword": "最大连接数设为 50",
+    "expected_memory_intent": "同一 query 多次执行验证结果稳定，不出现漂移。",
+    "failure_debug_hint": "多次执行同一 query，检查是否每次返回 50，不能出现 100 或其他值。",
+    "failure_category": "result_drift",
+    "note": "高频 query 一致性：验证多次查询同一事实结果稳定不漂移。"
+  },
+  {
+    "case_id": "copilot_recall_hf_consistency_002",
+    "type": "copilot_recall",
+    "layer_hint": "L2",
+    "events": [
+      "staging 环境每天凌晨 2 点自动 reset 数据库。"
+    ],
+    "query": "staging 环境什么时候重置数据库",
+    "expected_active_value": "每天凌晨 2 点",
+    "forbidden_value": "每周一凌晨",
+    "evidence_keyword": "每天凌晨 2 点自动 reset 数据库",
+    "expected_memory_intent": "验证同一 query 反复执行结果一致，时间信息不漂移。",
+    "failure_debug_hint": "多次执行同一 query，检查是否每次返回凌晨 2 点，不能出现其他时间。",
+    "failure_category": "result_drift",
+    "note": "高频 query 一致性：验证定时任务信息多次查询结果稳定。"
   }
 ]

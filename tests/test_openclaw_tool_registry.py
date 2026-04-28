@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest, native_tool_registrations
+from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest, native_tool_registrations, OPENCLAW_TO_PYTHON
 from memory_engine.copilot.openclaw_tool_runner import run_envelope
 from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.tools import supported_tool_names
@@ -22,7 +22,10 @@ class OpenClawToolRegistryTest(unittest.TestCase):
     def test_registry_entries_match_supported_copilot_tools(self) -> None:
         registrations = native_tool_registrations()
 
-        self.assertEqual(supported_tool_names(), sorted(registration.name for registration in registrations))
+        # Schema uses fmc_xxx names; translate to Python-side memory.xxx for comparison
+        schema_names = sorted(registration.name for registration in registrations)
+        translated_names = sorted(OPENCLAW_TO_PYTHON.get(name, name) for name in schema_names)
+        self.assertEqual(supported_tool_names(), translated_names)
         self.assertTrue(all(registration.input_schema["type"] == "object" for registration in registrations))
         self.assertTrue(all(registration.output_schema for registration in registrations))
 

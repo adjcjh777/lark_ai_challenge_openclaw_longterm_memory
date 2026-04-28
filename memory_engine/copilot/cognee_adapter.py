@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import importlib
+import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from memory_engine.models import parse_scope
@@ -14,8 +15,82 @@ class CogneeAdapterNotConfigured(RuntimeError):
     """Raised when the boundary is called before a Cognee client is injected."""
 
 
+class CogneeConfigurationError(RuntimeError):
+    """Raised when Cognee configuration is invalid or missing."""
+
+
 def load_cognee_client() -> CogneeClient:
-    return importlib.import_module("cognee")
+    """Load the Cognee SDK client.
+
+    Returns:
+        The cognee module as a client.
+
+    Raises:
+        ModuleNotFoundError: If cognee SDK is not installed.
+        CogneeConfigurationError: If required environment variables are missing.
+    """
+    try:
+        cognee_module = importlib.import_module("cognee")
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "cognee SDK is not installed. Install it with: pip install cognee"
+        ) from exc
+
+    # Validate configuration
+    _validate_cognee_configuration()
+
+    # Configure Cognee LLM provider
+    provider = os.environ.get("LLM_PROVIDER", "openai").lower()
+    if provider == "ollama":
+        cognee_module.config.set_llm_provider("ollama")
+        # Ollama OpenAI-compatible endpoint needs /v1 suffix
+        base_endpoint = os.environ.get("LLM_ENDPOINT", "http://localhost:11434")
+        llm_endpoint = base_endpoint.rstrip("/") + "/v1"
+        cognee_module.config.set_llm_endpoint(llm_endpoint)
+        cognee_module.config.set_llm_model(os.environ.get("LLM_MODEL", "qwen3.5:0.8b"))
+        # Ollama doesn't need an API key, but Cognee's OpenAI client requires a non-empty value
+        cognee_module.config.set_llm_api_key("ollama")
+    elif provider == "custom":
+        cognee_module.config.set_llm_provider("openai")
+        cognee_module.config.set_llm_endpoint(os.environ.get("LLM_ENDPOINT"))
+        cognee_module.config.set_llm_model(os.environ.get("LLM_MODEL"))
+        api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            cognee_module.config.set_llm_api_key(api_key)
+
+    return cognee_module
+
+
+def _validate_cognee_configuration() -> None:
+    """Validate that required Cognee configuration is present.
+
+    Raises:
+        CogneeConfigurationError: If required environment variables are missing.
+    """
+    provider = os.environ.get("LLM_PROVIDER", "openai").lower()
+    llm_api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+
+    # Ollama doesn't require an API key
+    if provider != "ollama" and not llm_api_key:
+        raise CogneeConfigurationError(
+            "Missing LLM API key. Set OPENAI_API_KEY or LLM_API_KEY in .env file."
+        )
+
+    if provider == "custom" and not os.environ.get("LLM_ENDPOINT"):
+        raise CogneeConfigurationError(
+            "LLM_ENDPOINT is required for Cognee custom provider. Set it in .env file."
+        )
+
+    embedding_model = os.environ.get("EMBEDDING_MODEL")
+    if not embedding_model:
+        raise CogneeConfigurationError(
+            "EMBEDDING_MODEL is required for Cognee embeddings. Set it in .env file."
+        )
+
+    if embedding_model.startswith("ollama/") and not os.environ.get("EMBEDDING_ENDPOINT"):
+        raise CogneeConfigurationError(
+            "EMBEDDING_ENDPOINT is required for local Ollama embeddings. Set it in .env file."
+        )
 
 
 class CogneeClient(Protocol):
@@ -52,10 +127,37 @@ class CogneeMemoryAdapter:
 
     client: CogneeClient | None = None
     dataset_prefix: str = "feishu_memory_copilot"
+    _auto_load_attempted: bool = field(default=False, repr=False)
 
     @property
     def is_configured(self) -> bool:
         return self.client is not None
+
+    def ensure_client(self) -> CogneeClient:
+        """Ensure a Cognee client is loaded, attempting auto-load if needed.
+
+        Returns:
+            The configured Cognee client.
+
+        Raises:
+            CogneeAdapterNotConfigured: If client cannot be loaded.
+            CogneeConfigurationError: If configuration is invalid.
+        """
+        if self.client is not None:
+            return self.client
+
+        if self._auto_load_attempted:
+            raise CogneeAdapterNotConfigured(
+                "Cognee client auto-load was attempted but failed. "
+                "Check .env configuration and ensure cognee SDK is installed."
+            )
+
+        self._auto_load_attempted = True
+        try:
+            self.client = load_cognee_client()
+            return self.client
+        except (ModuleNotFoundError, CogneeConfigurationError) as exc:
+            raise CogneeAdapterNotConfigured(str(exc)) from exc
 
     def dataset_for_scope(self, scope: str) -> str:
         parsed = parse_scope(scope)
@@ -136,18 +238,13 @@ class CogneeMemoryAdapter:
         return self._normalize_search_results(raw_results)
 
     def _call(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
-        if self.client is None:
-            raise CogneeAdapterNotConfigured(
-                "Cognee client is not configured; inject a local SDK client in the 2026-04-27 spike"
-            )
+        self.ensure_client()
+        assert self.client is not None  # for type checker
         method = getattr(self.client, method_name)
         return method(*args, **kwargs)
 
     def _search(self, query: str, **kwargs: Any) -> Any:
-        if self.client is None:
-            raise CogneeAdapterNotConfigured(
-                "Cognee client is not configured; inject a local SDK client in the 2026-04-27 spike"
-            )
+        self.ensure_client()
 
         try:
             from cognee.api.v1.search.search_v2 import SearchType

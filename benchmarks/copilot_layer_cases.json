@@ -198,5 +198,342 @@
     "evidence_keyword": "1000 条 raw/noise events",
     "failure_debug_hint": "如果失败，优先检查 Day7 历史评测报告的数量证据是否完整。",
     "layer_reason": "Cold 是历史评测报告证据，适合答辩或白皮书引用时再查。"
+  },
+  {
+    "case_id": "copilot_layer_l1_git_branch_naming_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "新功能分支统一用 feature/xxx 命名，bug 修复用 bugfix/xxx，消融实验用 ablation/xxx，这是团队每天都要遵守的。"
+    ],
+    "query": "git 分支怎么命名",
+    "expected_active_value": "feature/xxx",
+    "evidence_keyword": "每天都要遵守",
+    "failure_debug_hint": "检查 L1 是否返回分支命名规则。",
+    "layer_reason": "Hot 是每天使用的分支管理规则。"
+  },
+  {
+    "case_id": "copilot_layer_l1_commit_message_002",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "提交代码时 commit message 必须以简洁的中文描述开头，例如 '修复权限门控 bug'，不要写英文或无意义的 message。"
+    ],
+    "query": "commit message 用什么格式",
+    "expected_active_value": "简洁的中文描述",
+    "forbidden_value": "英文或无意义",
+    "evidence_keyword": "不要写英文",
+    "failure_debug_hint": "检查 L1 是否返回 commit message 中文规范。",
+    "layer_reason": "Hot 是团队提交规范，每天都要用。"
+  },
+  {
+    "case_id": "copilot_layer_l1_code_review_003",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "代码审查流程：所有 PR 必须有至少一人 review，涉及权限相关代码必须两人 review，这是团队长期遵守的。"
+    ],
+    "query": "代码审查需要几个人",
+    "expected_active_value": "至少一人",
+    "evidence_keyword": "两人 review",
+    "failure_debug_hint": "检查 L1 是否返回代码审查人数要求。",
+    "layer_reason": "Hot 是代码质量守则，每天都需要遵守。"
+  },
+  {
+    "case_id": "copilot_layer_l1_test_before_merge_004",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "合并代码前必须本地跑通 tests/ 下所有测试，包括 unit 和 integration，这是合并前的硬性要求。"
+    ],
+    "query": "合并代码前要跑什么",
+    "expected_active_value": "tests/ 下所有测试",
+    "evidence_keyword": "硬性要求",
+    "failure_debug_hint": "检查 L1 是否返回测试要求。",
+    "layer_reason": "Hot 是合并前检查，每天都要执行。"
+  },
+  {
+    "case_id": "copilot_layer_l1_no_force_push_001",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "绝对禁止 git push --force 到 main/master 分支，这是安全红线，任何情况下都不能违反。"
+    ],
+    "query": "能不能 force push 到 main",
+    "expected_active_value": "绝对禁止",
+    "evidence_keyword": "安全红线",
+    "failure_debug_hint": "检查 L1 是否返回禁止 force push 规则。",
+    "layer_reason": "Hot 是安全红线，永远不可违反。"
+  },
+  {
+    "case_id": "copilot_layer_l1_no_plain_password_002",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "禁止在代码或配置文件中提交明文密码、token、API key，必须使用 .env 或 secrets 管理，这是安全红线。"
+    ],
+    "query": "能直接提交密码到代码吗",
+    "expected_active_value": "禁止",
+    "forbidden_value": "可以",
+    "evidence_keyword": "安全红线",
+    "failure_debug_hint": "检查 L1 是否返回禁止明文密码规则。",
+    "layer_reason": "Hot 是安全红线，永远不可违反。"
+  },
+  {
+    "case_id": "copilot_layer_l1_no_delete_audit_003",
+    "type": "copilot_layer",
+    "expected_layer": "L1",
+    "events": [
+      "禁止删除 memory_audit_events 表中的任何记录，审计日志是不可变的，这是安全红线。"
+    ],
+    "query": "能删除审计日志吗",
+    "expected_active_value": "禁止",
+    "forbidden_value": "可以删除",
+    "evidence_keyword": "不可变",
+    "failure_debug_hint": "检查 L1 是否返回禁止删除审计日志规则。",
+    "layer_reason": "Hot 是安全红线，审计日志永远不可删除。"
+  },
+  {
+    "case_id": "copilot_layer_l2_todo_today_benchmark_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 待办任务：完成 copilot_layer_cases.json 从 15 条扩充到 40 条，覆盖分层场景验证。"
+    ],
+    "query": "今天要完成什么 benchmark 任务",
+    "expected_active_value": "copilot_layer_cases.json",
+    "evidence_keyword": "扩充到 40 条",
+    "failure_debug_hint": "检查 L2 是否返回今天的 benchmark 扩充任务。",
+    "layer_reason": "Warm 是当天待办，跟当前日期强相关。"
+  },
+  {
+    "case_id": "copilot_layer_l2_todo_today_feishu_api_002",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 待办任务：接通真实飞书 API 拉取任务、会议、Bitable 数据进入 candidate-only pipeline。"
+    ],
+    "query": "今天飞书 API 接入要做什么",
+    "expected_active_value": "candidate-only pipeline",
+    "evidence_keyword": "任务、会议、Bitable",
+    "failure_debug_hint": "检查 L2 是否返回今天的飞书 API 接入任务。",
+    "layer_reason": "Warm 是当天待办，跟当前日期强相关。"
+  },
+  {
+    "case_id": "copilot_layer_l2_todo_today_prd_003",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 待办任务：完成 PRD 审计和 gap tasks 清单，确认评委版文档入口。"
+    ],
+    "query": "今天 PRD 相关要做什么",
+    "expected_active_value": "PRD 审计和 gap tasks",
+    "evidence_keyword": "评委版文档入口",
+    "failure_debug_hint": "检查 L2 是否返回今天的 PRD 审计任务。",
+    "layer_reason": "Warm 是当天待办，跟当前日期强相关。"
+  },
+  {
+    "case_id": "copilot_layer_l2_todo_today_demo_004",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 待办任务：完成 Demo readiness 检查脚本，确保一键验收通过。"
+    ],
+    "query": "今天 Demo 验收要做什么",
+    "expected_active_value": "Demo readiness 检查脚本",
+    "evidence_keyword": "一键验收",
+    "failure_debug_hint": "检查 L2 是否返回今天的 Demo 验收任务。",
+    "layer_reason": "Warm 是当天待办，跟当前日期强相关。"
+  },
+  {
+    "case_id": "copilot_layer_l2_decision_cognee_adapter_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 决策：Cognee 主路径已完成本地闭环，确认通过窄 adapter 接入而非替换整个检索链路。"
+    ],
+    "query": "Cognee 怎么接入项目",
+    "expected_active_value": "窄 adapter",
+    "forbidden_value": "替换检索链路",
+    "evidence_keyword": "本地闭环",
+    "failure_debug_hint": "检查 L2 是否返回本周 Cognee 接入决策。",
+    "layer_reason": "Warm 是本周做出的技术决策，尚未沉淀为长期规则。"
+  },
+  {
+    "case_id": "copilot_layer_l2_decision_permission_model_002",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 决策：权限门控采用 fail-closed 模型，即任何权限检查失败都拒绝访问，确保安全优先。"
+    ],
+    "query": "权限检查失败时怎么处理",
+    "expected_active_value": "拒绝访问",
+    "forbidden_value": "允许访问",
+    "evidence_keyword": "fail-closed",
+    "failure_debug_hint": "检查 L2 是否返回本周权限模型决策。",
+    "layer_reason": "Warm 是本周做出的安全决策，尚未沉淀为长期规则。"
+  },
+  {
+    "case_id": "copilot_layer_l2_decision_embedding_model_003",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "2026-04-28 决策：embedding 服务采用 Ollama 本地运行 qwen3-embedding:0.6b-fp16，而非云端 API。"
+    ],
+    "query": "embedding 用什么服务",
+    "expected_active_value": "Ollama 本地运行",
+    "forbidden_value": "云端 API",
+    "evidence_keyword": "qwen3-embedding:0.6b-fp16",
+    "failure_debug_hint": "检查 L2 是否返回本周 embedding 服务决策。",
+    "layer_reason": "Warm 是本周做出的技术决策，尚未沉淀为长期规则。"
+  },
+  {
+    "case_id": "copilot_layer_l2_boundary_cognee_status_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "当前 Cognee adapter 状态是 fallback_used，说明真实 Cognee 服务未启动，使用的是本地 fallback 机制。"
+    ],
+    "query": "Cognee 现在是什么状态",
+    "expected_active_value": "fallback_used",
+    "evidence_keyword": "本地 fallback 机制",
+    "failure_debug_hint": "检查 L2 是否返回 Cognee 当前状态而非历史状态。",
+    "layer_reason": "Warm 是近期运行状态，可能被 L1 的历史规则抢占。"
+  },
+  {
+    "case_id": "copilot_layer_l2_boundary_embedding_warning_002",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "当前 embedding provider 状态是 warning，说明真实 Ollama embedding 未启动，使用的是 DeterministicEmbeddingProvider。"
+    ],
+    "query": "embedding provider 现在是什么状态",
+    "expected_active_value": "warning",
+    "evidence_keyword": "DeterministicEmbeddingProvider",
+    "failure_debug_hint": "检查 L2 是否返回 embedding 当前状态。",
+    "layer_reason": "Warm 是近期运行状态，可能被 L1 的历史规则抢占。"
+  },
+  {
+    "case_id": "copilot_layer_l2_boundary_live_sandbox_003",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "飞书 live sandbox 当前仅支持测试群联调，尚未接入真实生产飞书 workspace。"
+    ],
+    "query": "飞书 live sandbox 支持什么环境",
+    "expected_active_value": "测试群联调",
+    "forbidden_value": "生产飞书 workspace",
+    "evidence_keyword": "尚未接入",
+    "failure_debug_hint": "检查 L2 是否返回 sandbox 当前边界。",
+    "layer_reason": "Warm 是近期运行边界，可能被 L1 的历史规则抢占。"
+  },
+  {
+    "case_id": "copilot_layer_l3_historical_mem0_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "早期讨论过使用 Mem0 作为 memory 核心，但后来因为架构不兼容放弃了，最终选择了 Cognee。"
+    ],
+    "query": "Mem0 为什么没被选中",
+    "expected_active_value": "架构不兼容",
+    "forbidden_value": "采用 Mem0",
+    "evidence_keyword": "放弃了",
+    "failure_debug_hint": "检查 L3 是否返回 Mem0 被放弃的历史记录。",
+    "layer_reason": "Cold 是历史选型记录，通常只在复盘时需要。"
+  },
+  {
+    "case_id": "copilot_layer_l3_historical_graphiti_002",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "早期讨论过 Graphiti 作为知识图谱方案，但因为复杂度过高、维护成本大而放弃。"
+    ],
+    "query": "Graphiti 方案为什么没用",
+    "expected_active_value": "复杂度过高",
+    "forbidden_value": "采用 Graphiti",
+    "evidence_keyword": "放弃了",
+    "failure_debug_hint": "检查 L3 是否返回 Graphiti 被放弃的历史记录。",
+    "layer_reason": "Cold 是历史选型记录，通常只在复盘时需要。"
+  },
+  {
+    "case_id": "copilot_layer_l3_historical_zep_003",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "早期讨论过 Zep 作为记忆存储方案，但因为社区活跃度下降、文档不全而放弃。"
+    ],
+    "query": "Zep 为什么没被选中",
+    "expected_active_value": "社区活跃度下降",
+    "forbidden_value": "采用 Zep",
+    "evidence_keyword": "文档不全",
+    "failure_debug_hint": "检查 L3 是否返回 Zep 被放弃的历史记录。",
+    "layer_reason": "Cold 是历史选型记录，通常只在复盘时需要。"
+  },
+  {
+    "case_id": "copilot_layer_l3_completed_day7_001",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "Day7 benchmark 已完成，使用 50 条 curated memories、1000 条 raw/noise events 和 50 条 queries 自证抗干扰召回。"
+    ],
+    "query": "Day7 benchmark 做了什么",
+    "expected_active_value": "50 条 curated memories",
+    "evidence_keyword": "1000 条 raw/noise events",
+    "failure_debug_hint": "检查 L3 是否返回 Day7 benchmark 的完成记录。",
+    "layer_reason": "Cold 是已完成任务，只在复盘时需要。"
+  },
+  {
+    "case_id": "copilot_layer_l3_completed_demo_002",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "2026-04-26 Demo 已完成展示，演示了 memory.search trace、L0/L1/L2/L3 分层架构和候选记忆治理流程。"
+    ],
+    "query": "之前 Demo 演示了什么",
+    "expected_active_value": "memory.search trace",
+    "evidence_keyword": "候选记忆治理流程",
+    "failure_debug_hint": "检查 L3 是否返回 Demo 的完成记录。",
+    "layer_reason": "Cold 是已完成任务，只在复盘时需要。"
+  },
+  {
+    "case_id": "copilot_layer_l3_completed_migration_003",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "2026-04-27 存储迁移已完成 dry-run 验证，确认 SQLite 到 PostgreSQL 迁移路径可行，但生产环境尚未执行。"
+    ],
+    "query": "存储迁移做了什么",
+    "expected_active_value": "dry-run 验证",
+    "forbidden_value": "生产环境执行",
+    "evidence_keyword": "迁移路径可行",
+    "failure_debug_hint": "检查 L3 是否返回迁移的完成记录。",
+    "layer_reason": "Cold 是已完成任务，只在复盘时需要。"
+  },
+  {
+    "case_id": "copilot_layer_fallback_l1_to_l2_001",
+    "type": "copilot_layer",
+    "expected_layer": "L2",
+    "events": [
+      "用户问：今天要完成什么任务？L1 中没有具体日期相关的待办任务规则，需要 fallback 到 L2 查找当天待办。"
+    ],
+    "query": "今天要完成什么任务",
+    "expected_active_value": "copilot_layer_cases.json",
+    "evidence_keyword": "今天待办",
+    "failure_debug_hint": "检查当 L1 无结果时是否正确 fallback 到 L2。",
+    "layer_reason": "跨层 fallback：L1 无匹配时应降级到 L2。"
+  },
+  {
+    "case_id": "copilot_layer_fallback_l2_to_l3_002",
+    "type": "copilot_layer",
+    "expected_layer": "L3",
+    "events": [
+      "用户问：为什么选择 Cognee 而不是 Mem0？L2 中没有历史选型记录，需要 fallback 到 L3 查找早期决策。"
+    ],
+    "query": "为什么选择 Cognee 而不是 Mem0",
+    "expected_active_value": "架构不兼容",
+    "forbidden_value": "采用 Mem0",
+    "evidence_keyword": "早期决策",
+    "failure_debug_hint": "检查当 L2 无结果时是否正确 fallback 到 L3。",
+    "layer_reason": "跨层 fallback：L2 无匹配时应降级到 L3。"
   }
 ]

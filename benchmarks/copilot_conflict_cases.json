@@ -166,5 +166,327 @@
     "expected_action": "confirm",
     "expected_reason": "Demo 编排流程更新，旧 Bot-first 叙事不能再作为当前版本。",
     "failure_debug_hint": "检查 Demo 录屏流程 subject 是否稳定，以及旧流程是否仍进入默认 search。"
+  },
+  {
+    "case_id": "conflict_triple_override_013",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：日志保留 7 天。"}
+    ],
+    "text": "刚才说错了，日志保留改成 30 天。但后来又确认了，最终统一改成 14 天。",
+    "query": "日志保留天数",
+    "expected_active_value": "14 天",
+    "forbidden_value": "7 天",
+    "expected_action": "confirm",
+    "expected_reason": "三轮覆盖链 A(7)->B(30)->C(14)，最终值应为 14 天。",
+    "failure_debug_hint": "检查最终 active 是否为 14 天，旧值 7 天和中间值 30 天是否均 superseded。"
+  },
+  {
+    "case_id": "conflict_triple_override_014",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：CI 并行度设为 4。"}
+    ],
+    "text": "之前改成 8 了，但最终讨论下来还是用 2 比较稳。",
+    "query": "CI 并行度",
+    "expected_active_value": "2",
+    "forbidden_value": "4",
+    "expected_action": "confirm",
+    "expected_reason": "三轮覆盖链 4->8->2，最终值应为 2。",
+    "failure_debug_hint": "检查 CI 并行度最终值是否为 2，中间值 8 不应被召回。"
+  },
+  {
+    "case_id": "conflict_triple_override_015",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：API 超时设为 30 秒。"}
+    ],
+    "text": "上次说改成 60 秒，后来又调回 15 秒，最终拍板 10 秒。",
+    "query": "API 超时时间",
+    "expected_active_value": "10 秒",
+    "forbidden_value": "30 秒",
+    "expected_action": "confirm",
+    "expected_reason": "三轮覆盖链 30->60->15->10，最终值应为 10 秒。",
+    "failure_debug_hint": "检查 API 超时 subject 最终 active 为 10 秒，中间值不应泄漏。"
+  },
+  {
+    "case_id": "conflict_triple_override_016",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：缓存策略使用 Redis。"}
+    ],
+    "text": "后来换成 Memcached，但最终又确认用 Redis Cluster。",
+    "query": "缓存策略",
+    "expected_active_value": "Redis Cluster",
+    "forbidden_value": "使用 Redis",
+    "expected_action": "confirm",
+    "expected_reason": "三轮覆盖链 Redis->Memcached->Redis Cluster，最终值应为 Redis Cluster。",
+    "failure_debug_hint": "检查缓存策略最终值为 Redis Cluster，旧 Redis 和 Memcached 均 superseded。"
+  },
+  {
+    "case_id": "conflict_triple_override_017",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：数据库连接池大小 50。"}
+    ],
+    "text": "之前调到 100 了，但压测发现太多连接反而慢，最终改回 30。",
+    "query": "数据库连接池大小",
+    "expected_active_value": "30",
+    "forbidden_value": "50",
+    "expected_action": "confirm",
+    "expected_reason": "三轮覆盖链 50->100->30，最终值应为 30。",
+    "failure_debug_hint": "检查连接池大小最终值为 30，旧值 50 和中间值 100 均不应生效。"
+  },
+  {
+    "case_id": "conflict_implicit_coverage_018",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：测试覆盖率达到 80%。"}
+    ],
+    "text": "覆盖率标准改成 90%，之前 80% 太低了。",
+    "query": "测试覆盖率标准",
+    "expected_active_value": "90%",
+    "forbidden_value": "80%",
+    "expected_action": "confirm",
+    "expected_reason": "措辞不同（覆盖率标准 vs 覆盖率达到）但指向同一主题，新值 90% 应覆盖旧值 80%。",
+    "failure_debug_hint": "检查系统是否将覆盖率标准和测试覆盖率达到归为同一主题，以及是否正确触发冲突检测。"
+  },
+  {
+    "case_id": "conflict_implicit_log_level_019",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：生产环境日志级别设为 INFO。"}
+    ],
+    "text": "生产日志输出调成 WARN，INFO 太多了不好排查问题。",
+    "query": "生产日志级别",
+    "expected_active_value": "WARN",
+    "forbidden_value": "INFO",
+    "expected_action": "confirm",
+    "expected_reason": "日志级别和日志输出是同一主题的不同表达方式，新值应覆盖旧值。",
+    "failure_debug_hint": "检查日志级别/日志输出 subject 归一化是否一致，以及旧 INFO 是否被 superseded。"
+  },
+  {
+    "case_id": "conflict_implicit_retry_count_020",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：RPC 调用最多重试 3 次。"}
+    ],
+    "text": "远程调用失败重试次数改成 1 次，3 次太多了影响延迟。",
+    "query": "RPC 重试次数",
+    "expected_active_value": "1 次",
+    "forbidden_value": "3 次",
+    "expected_action": "confirm",
+    "expected_reason": "RPC 调用和远程调用是同义表述，重试次数从 3 次改为 1 次应触发冲突。",
+    "failure_debug_hint": "检查 RPC/远程调用 subject 归一化，以及 3 次重试是否被正确 superseded。"
+  },
+  {
+    "case_id": "conflict_implicit_codec_021",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：音频编码使用 MP3。"}
+    ],
+    "text": "音频压缩格式统一改成 AAC，兼容性更好。",
+    "query": "音频编码格式",
+    "expected_active_value": "AAC",
+    "forbidden_value": "MP3",
+    "expected_action": "confirm",
+    "expected_reason": "编码和压缩格式是同义表述，同一音频主题下新值应覆盖旧值。",
+    "failure_debug_hint": "检查音频编码/压缩格式 subject 是否归一，以及旧 MP3 是否被 superseded。"
+  },
+  {
+    "case_id": "conflict_implicit_chunk_size_022",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：文档分块大小为 512 token。"}
+    ],
+    "text": "文本切分粒度调整到 1024 token，512 太碎了检索效果差。",
+    "query": "文档分块大小",
+    "expected_active_value": "1024 token",
+    "forbidden_value": "512 token",
+    "expected_action": "confirm",
+    "expected_reason": "分块大小和切分粒度是同义表述，1024 token 应覆盖 512 token。",
+    "failure_debug_hint": "检查分块/切分 subject 归一化是否触发冲突检测，旧值 512 token 是否被 superseded。"
+  },
+  {
+    "case_id": "conflict_partial_update_region_023",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：生产环境 region 为 ap-shanghai，实例类型为 ecs.g7.xlarge。"}
+    ],
+    "text": "生产部署 region 改成 cn-hangzhou，其他不变。",
+    "query": "生产环境配置",
+    "expected_active_value": "cn-hangzhou",
+    "forbidden_value": "ap-shanghai",
+    "expected_action": "confirm",
+    "expected_reason": "同主题多字段部分更新，仅更新 region 为 cn-hangzhou，实例类型 ecs.g7.xlarge 保持不变。",
+    "failure_debug_hint": "检查 region 是否被更新为 cn-hangzhou，同时确认实例类型 ecs.g7.xlarge 仍保留。"
+  },
+  {
+    "case_id": "conflict_partial_update_timeout_024",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：API 网关超时 30 秒，限流 1000 QPS。"}
+    ],
+    "text": "网关超时改成 60 秒，限流不用动。",
+    "query": "API 网关配置",
+    "expected_active_value": "60 秒",
+    "forbidden_value": "30 秒",
+    "expected_action": "confirm",
+    "expected_reason": "同主题部分更新，仅超时时间从 30 秒改为 60 秒，限流 1000 QPS 保持不变。",
+    "failure_debug_hint": "检查超时时间是否为 60 秒，同时确认限流 1000 QPS 未被修改。"
+  },
+  {
+    "case_id": "conflict_partial_update_retention_025",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：备份保留 30 天，存储桶为 prod-backup-cn。"}
+    ],
+    "text": "备份保留期改成 90 天，存储桶不变。",
+    "query": "备份策略",
+    "expected_active_value": "90 天",
+    "forbidden_value": "30 天",
+    "expected_action": "confirm",
+    "expected_reason": "同主题部分更新，仅保留期从 30 天改为 90 天，存储桶保持不变。",
+    "failure_debug_hint": "检查保留期是否为 90 天，确认存储桶 prod-backup-cn 未被修改。"
+  },
+  {
+    "case_id": "conflict_confirm_then_reject_026",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：前端框架使用 Vue 3。"}
+    ],
+    "text": "前端框架改成 React 吧。",
+    "query": "前端框架",
+    "expected_active_value": "Vue 3",
+    "forbidden_value": "React",
+    "expected_action": "reject",
+    "expected_reason": "创建候选记忆后 reject，旧记忆 Vue 3 应保持不变。",
+    "failure_debug_hint": "检查 reject 后 active memory 是否仍为 Vue 3，React 是否被丢弃。"
+  },
+  {
+    "case_id": "conflict_confirm_then_reject_027",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：代码审查必须两人批准。"}
+    ],
+    "text": "代码审查改成一个人批准就行。",
+    "query": "代码审查规则",
+    "expected_active_value": "两人批准",
+    "forbidden_value": "一个人批准",
+    "expected_action": "reject",
+    "expected_reason": "创建候选记忆后 reject，旧记忆两人批准应保持不变。",
+    "failure_debug_hint": "检查 reject 后 active memory 是否仍为两人批准，一人批准是否被丢弃。"
+  },
+  {
+    "case_id": "conflict_confirm_then_reject_028",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：监控告警阈值 CPU 80%。"}
+    ],
+    "text": "CPU 告警阈值改成 50%。",
+    "query": "CPU 告警阈值",
+    "expected_active_value": "80%",
+    "forbidden_value": "50%",
+    "expected_action": "reject",
+    "expected_reason": "创建候选记忆后 reject，旧记忆 CPU 80% 应保持不变。",
+    "failure_debug_hint": "检查 reject 后 active memory 是否仍为 80%，50% 是否被丢弃。"
+  },
+  {
+    "case_id": "conflict_cross_topic_deploy_region_029",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：部署 region 固定 ap-shanghai。"}
+    ],
+    "text": "服务器 region 改成 cn-beijing。",
+    "query": "部署 region",
+    "expected_active_value": "ap-shanghai",
+    "forbidden_value": "cn-beijing",
+    "expected_action": "reject",
+    "expected_reason": "部署 region 和服务器 region 是跨主题但用词相似，不应归为同一主题，旧值保持不变。",
+    "failure_debug_hint": "检查系统是否误将部署 region 和服务器 region 归为同一主题，导致错误覆盖。"
+  },
+  {
+    "case_id": "conflict_cross_topic_db_pool_030",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：应用连接池大小 50。"}
+    ],
+    "text": "数据库连接池改成 100。",
+    "query": "应用连接池",
+    "expected_active_value": "50",
+    "forbidden_value": "100",
+    "expected_action": "reject",
+    "expected_reason": "应用连接池和数据库连接池是不同主题，不应互相覆盖。",
+    "failure_debug_hint": "检查系统是否误将应用连接池和数据库连接池视为同一主题。"
+  },
+  {
+    "case_id": "conflict_cross_topic_api_key_031",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：内部 API Key 前缀为 sk-int-。"}
+    ],
+    "text": "外部 API Key 前缀改成 pk-ext-。",
+    "query": "内部 API Key 前缀",
+    "expected_active_value": "sk-int-",
+    "forbidden_value": "pk-ext-",
+    "expected_action": "reject",
+    "expected_reason": "内部 API Key 和外部 API Key 是不同主题，不应互相覆盖。",
+    "failure_debug_hint": "检查系统是否误将内部/外部 API Key 视为同一主题导致错误覆盖。"
+  },
+  {
+    "case_id": "conflict_numeric_version_032",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：MySQL 版本固定 5.7。"}
+    ],
+    "text": "MySQL 版本升级到 8.0.35。",
+    "query": "MySQL 版本",
+    "expected_active_value": "8.0.35",
+    "forbidden_value": "5.7",
+    "expected_action": "confirm",
+    "expected_reason": "数值型冲突，版本号从 5.7 更新为 8.0.35。",
+    "failure_debug_hint": "检查版本号数值是否正确更新，旧版本 5.7 是否被 superseded。"
+  },
+  {
+    "case_id": "conflict_numeric_port_033",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：服务端口配置为 8080。"}
+    ],
+    "text": "服务端口改成 9090，8080 有冲突。",
+    "query": "服务端口",
+    "expected_active_value": "9090",
+    "forbidden_value": "8080",
+    "expected_action": "confirm",
+    "expected_reason": "数值型冲突，端口号从 8080 更新为 9090。",
+    "failure_debug_hint": "检查端口数值是否正确更新，旧端口 8080 是否被 superseded。"
+  },
+  {
+    "case_id": "conflict_time_deadline_034",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "决定：每周五下午 5 点提交周报。"}
+    ],
+    "text": "周报截止时间改成每周五下午 3 点。",
+    "query": "周报截止时间",
+    "expected_active_value": "每周五下午 3 点",
+    "forbidden_value": "每周五下午 5 点",
+    "expected_action": "confirm",
+    "expected_reason": "时间型冲突，截止时间从下午 5 点更新为下午 3 点。",
+    "failure_debug_hint": "检查时间值是否正确更新，旧时间下午 5 点是否被 superseded。"
+  },
+  {
+    "case_id": "conflict_time_cron_035",
+    "type": "copilot_conflict",
+    "existing_memories": [
+      {"content": "规则：数据同步 cron 表达式为 0 2 * * *（每天凌晨 2 点）。"}
+    ],
+    "text": "数据同步改成每 6 小时执行一次，cron 改成 0 */6 * * *。",
+    "query": "数据同步频率",
+    "expected_active_value": "0 */6 * * *",
+    "forbidden_value": "0 2 * * *",
+    "expected_action": "confirm",
+    "expected_reason": "时间型冲突，cron 表达式从每天凌晨 2 点更新为每 6 小时一次。",
+    "failure_debug_hint": "检查 cron 表达式是否正确更新，旧表达式 0 2 * * * 是否被 superseded。"
   }
 ]

@@ -120,7 +120,8 @@ def _configure_local_cognee_paths() -> None:
 def _missing_provider_configuration() -> str | None:
     provider = os.environ.get("LLM_PROVIDER", "openai").lower()
     llm_api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
-    if not llm_api_key:
+    # Ollama doesn't require an API key
+    if provider != "ollama" and not llm_api_key:
         return "missing OPENAI_API_KEY or LLM_API_KEY"
     if provider == "custom" and not os.environ.get("LLM_ENDPOINT"):
         return "LLM_ENDPOINT is required for Cognee custom provider"

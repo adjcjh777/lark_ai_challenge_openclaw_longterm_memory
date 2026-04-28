@@ -6,7 +6,7 @@
   "demo_fallback": "python3 -m unittest tests.test_document_ingestion tests.test_copilot_tools",
   "steps": [
     {
-      "tool": "memory.create_candidate",
+      "tool": "fmc_memory_create_candidate",
       "arguments": {
         "text": "Decision: production deployment must use --canary --region cn-shanghai.",
         "scope": "project:feishu_ai_challenge",
@@ -34,7 +34,7 @@
               "workspace_id": "project:feishu_ai_challenge",
               "document_id": "doc_demo_phase4"
             },
-            "requested_action": "memory.create_candidate",
+            "requested_action": "fmc_memory_create_candidate",
             "requested_visibility": "team",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }

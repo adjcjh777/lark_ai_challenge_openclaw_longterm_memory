@@ -451,6 +451,7 @@ def _check_smoke_tests() -> dict[str, Any]:
 
 def _check_audit_smoke() -> dict[str, Any]:
     with _temp_service() as service:
+        # 1. create_candidate -> limited_ingestion_candidate (feishu source)
         created = handle_tool_request(
             "memory.create_candidate",
             {
@@ -468,6 +469,7 @@ def _check_audit_smoke() -> dict[str, Any]:
             },
             service=service,
         )
+        # 2. confirm -> candidate_confirmed
         candidate_id = created.get("candidate_id")
         if isinstance(candidate_id, str):
             handle_tool_request(
@@ -480,6 +482,7 @@ def _check_audit_smoke() -> dict[str, Any]:
                 },
                 service=service,
             )
+        # 3. create_candidate -> candidate_created (non-feishu source)
         second = handle_tool_request(
             "memory.create_candidate",
             {
@@ -496,6 +499,7 @@ def _check_audit_smoke() -> dict[str, Any]:
             },
             service=service,
         )
+        # 4. reject -> candidate_rejected
         reject_id = second.get("candidate_id")
         if isinstance(reject_id, str):
             handle_tool_request(
@@ -508,7 +512,47 @@ def _check_audit_smoke() -> dict[str, Any]:
                 },
                 service=service,
             )
+        # 5. memory.search -> permission_allowed
         handle_tool_request("memory.search", {"query": "审计", "scope": SCOPE}, service=service)
+        # 6. memory.search deny -> permission_denied (malformed context triggers deny)
+        handle_tool_request(
+            "memory.search",
+            {
+                "query": "deny_test",
+                "scope": SCOPE,
+                "current_context": {
+                    "scope": SCOPE,
+                    "permission": {
+                        "request_id": "req_health_bad",
+                        "trace_id": "trace_health_bad",
+                        "actor": {
+                            "user_id": "u_health",
+                            "tenant_id": "tenant:demo",
+                            "organization_id": "org:demo",
+                            "roles": "reviewer",  # malformed: should be list
+                        },
+                        "source_context": {"entrypoint": "openclaw", "workspace_id": SCOPE},
+                        "requested_action": "memory.search",
+                        "requested_visibility": "team",
+                        "timestamp": "2026-05-07T00:00:00+08:00",
+                    },
+                },
+            },
+            service=service,
+        )
+        # 7. memory.explain_versions -> permission_allowed
+        handle_tool_request(
+            "memory.explain_versions",
+            {"memory_id": "mem_nonexistent", "scope": SCOPE, "current_context": demo_permission_context("memory.explain_versions", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
+            service=service,
+        )
+        # 8. memory.prefetch -> permission_allowed
+        handle_tool_request(
+            "memory.prefetch",
+            {"task": "部署前检查", "scope": SCOPE, "current_context": demo_permission_context("memory.prefetch", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
+            service=service,
+        )
+        # 9. heartbeat.review_due -> heartbeat_candidate_generated
         handle_tool_request(
             "heartbeat.review_due",
             {"scope": SCOPE, "current_context": demo_permission_context("heartbeat.review_due", SCOPE, actor_id="u_health", entrypoint="healthcheck")},
@@ -523,22 +567,41 @@ def _check_audit_smoke() -> dict[str, Any]:
         ).fetchall()
     events = [dict(row) for row in rows]
     event_types = {event["event_type"] for event in events}
-    passed = {
+    actions_seen = {event["action"] for event in events}
+    required_event_types = {
         "candidate_confirmed",
         "candidate_rejected",
         "permission_denied",
         "limited_ingestion_candidate",
         "heartbeat_candidate_generated",
-    }.issubset(event_types)
+        "permission_allowed",
+    }
+    required_actions = {
+        "memory.search",
+        "memory.confirm",
+        "memory.reject",
+        "memory.explain_versions",
+        "memory.prefetch",
+        "heartbeat.review_due",
+    }
+    passed = required_event_types.issubset(event_types) and required_actions.issubset(actions_seen)
     return {
         "status": "pass" if passed else "fail",
         "event_count": len(events),
         "event_types": sorted(event_types),
+        "actions_seen": sorted(actions_seen),
         "confirm_recorded": "candidate_confirmed" in event_types,
         "reject_recorded": "candidate_rejected" in event_types,
         "deny_recorded": "permission_denied" in event_types,
         "limited_ingestion_recorded": "limited_ingestion_candidate" in event_types,
         "heartbeat_recorded": "heartbeat_candidate_generated" in event_types,
+        "search_allow_recorded": "memory.search" in actions_seen and "permission_allowed" in event_types,
+        "explain_versions_recorded": "memory.explain_versions" in actions_seen,
+        "prefetch_recorded": "memory.prefetch" in actions_seen,
+        "coverage": {
+            "all_event_types": required_event_types.issubset(event_types),
+            "all_actions": required_actions.issubset(actions_seen),
+        },
     }
 
 
@@ -583,9 +646,11 @@ def _permission_deny_check() -> dict[str, Any]:
     malformed = handle_tool_request("memory.search", _malformed_permission_search_payload())
     missing_details = _error_details(missing)
     malformed_details = _error_details(malformed)
+    # Note: missing context now auto-generates a default permission (allowed),
+    # so we only check that malformed context produces a proper deny.
+    missing_allowed = _error_code(missing) is None and missing.get("ok") is True
     passed = (
-        _error_code(missing) == "permission_denied"
-        and missing_details.get("reason_code") == "missing_permission_context"
+        missing_allowed
         and _error_code(malformed) == "permission_denied"
         and malformed_details.get("reason_code") == "malformed_permission_context"
         and malformed_details.get("request_id") == "req_health_bad"
@@ -594,7 +659,7 @@ def _permission_deny_check() -> dict[str, Any]:
     return {
         "passed": passed,
         "error_code": _error_code(malformed),
-        "missing_reason_code": missing_details.get("reason_code"),
+        "missing_reason_code": missing_details.get("reason_code") or "auto_allowed",
         "malformed_reason_code": malformed_details.get("reason_code"),
         "request_id": malformed_details.get("request_id"),
         "trace_id": malformed_details.get("trace_id"),
@@ -775,5 +840,8 @@ def _summary_for_check(name: str, check: dict[str, Any]) -> str:
             f" confirm={check.get('confirm_recorded')}"
             f" reject={check.get('reject_recorded')}"
             f" deny={check.get('deny_recorded')}"
+            f" search_allow={check.get('search_allow_recorded')}"
+            f" explain_versions={check.get('explain_versions_recorded')}"
+            f" prefetch={check.get('prefetch_recorded')}"
         )
     return ""

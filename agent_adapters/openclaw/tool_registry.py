@@ -7,6 +7,17 @@ from typing import Any
 
 from memory_engine.copilot.tools import supported_tool_names
 
+# Translation map: OpenClaw-facing tool names (fmc_xxx) → Python-side tool names (memory.xxx)
+OPENCLAW_TO_PYTHON = {
+    "fmc_memory_search": "memory.search",
+    "fmc_memory_create_candidate": "memory.create_candidate",
+    "fmc_memory_confirm": "memory.confirm",
+    "fmc_memory_reject": "memory.reject",
+    "fmc_memory_explain_versions": "memory.explain_versions",
+    "fmc_memory_prefetch": "memory.prefetch",
+    "fmc_heartbeat_review_due": "heartbeat.review_due",
+}
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = ROOT / "agent_adapters" / "openclaw" / "memory_tools.schema.json"
@@ -54,8 +65,10 @@ def native_tool_registrations(path: Path = SCHEMA_PATH) -> list[OpenClawToolRegi
         )
 
     schema_tools = sorted(registration.name for registration in registrations)
+    # Translate OpenClaw-facing names (fmc_xxx) to Python-side names (memory.xxx) for validation
+    translated_tools = sorted(OPENCLAW_TO_PYTHON.get(name, name) for name in schema_tools)
     supported = supported_tool_names()
-    if schema_tools != supported:
+    if translated_tools != supported:
         raise ValueError(f"schema tools do not match Copilot tool handlers: schema={schema_tools}, supported={supported}")
     return registrations
 

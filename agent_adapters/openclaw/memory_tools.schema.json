@@ -6,7 +6,7 @@
   "description": "OpenClaw tool contract for the Feishu Memory Copilot MVP.",
   "tools": [
     {
-      "name": "memory.search",
+      "name": "fmc_memory_search",
       "description": "Search active curated memory for a scope and return evidence-backed top-k results.",
       "input_schema": {
         "type": "object",
@@ -32,13 +32,13 @@
               }
             }
           },
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
         }
       },
       "output_schema": {"$ref": "#/$defs/search_output"}
     },
     {
-      "name": "memory.create_candidate",
+      "name": "fmc_memory_create_candidate",
       "description": "Create an evidence-backed memory candidate from an explicit note, Feishu message, document, or benchmark fixture.",
       "input_schema": {
         "type": "object",
@@ -47,15 +47,15 @@
         "properties": {
           "text": {"type": "string", "minLength": 1},
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
-          "source": {"$ref": "#/$defs/source"},
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1},
+          "source": {"type": "object", "additionalProperties": true, "minProperties": 1},
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1},
           "auto_confirm": {"type": "boolean", "default": false}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
-      "name": "memory.confirm",
+      "name": "fmc_memory_confirm",
       "description": "Confirm a candidate as active memory, superseding older active versions when needed.",
       "input_schema": {
         "type": "object",
@@ -66,13 +66,13 @@
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "actor_id": {"type": "string", "minLength": 1},
           "reason": {"type": "string"},
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
-      "name": "memory.reject",
+      "name": "fmc_memory_reject",
       "description": "Reject a candidate while keeping an audit record outside default recall.",
       "input_schema": {
         "type": "object",
@@ -83,13 +83,13 @@
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "actor_id": {"type": "string", "minLength": 1},
           "reason": {"type": "string"},
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
-      "name": "memory.explain_versions",
+      "name": "fmc_memory_explain_versions",
       "description": "Explain a memory version chain, superseded values, and source evidence.",
       "input_schema": {
         "type": "object",
@@ -99,13 +99,13 @@
           "memory_id": {"type": "string", "minLength": 1},
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "include_archived": {"type": "boolean", "default": false},
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1}
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
-      "name": "memory.prefetch",
+      "name": "fmc_memory_prefetch",
       "description": "Prefetch a compact context pack before an OpenClaw agent task.",
       "input_schema": {
         "type": "object",
@@ -114,14 +114,14 @@
         "properties": {
           "task": {"type": "string", "minLength": 1},
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1},
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1},
           "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
     },
     {
-      "name": "heartbeat.review_due",
+      "name": "fmc_heartbeat_review_due",
       "description": "Generate controlled reminder candidates from active memory without real Feishu push or automatic activation.",
       "input_schema": {
         "type": "object",
@@ -129,7 +129,7 @@
         "additionalProperties": false,
         "properties": {
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
-          "current_context": {"$ref": "#/$defs/current_context", "minProperties": 1},
+          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1},
           "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
         }
       },
@@ -225,7 +225,7 @@
         },
         "requested_action": {
           "type": "string",
-          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch", "heartbeat.review_due"]
+          "enum": ["fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_confirm", "fmc_memory_reject", "fmc_memory_explain_versions", "fmc_memory_prefetch", "fmc_heartbeat_review_due"]
         },
         "requested_visibility": {
           "type": "string",
@@ -242,7 +242,7 @@
         "entrypoint": {"const": "openclaw_tool"},
         "tool": {
           "type": "string",
-          "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch", "heartbeat.review_due"]
+          "enum": ["fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_confirm", "fmc_memory_reject", "fmc_memory_explain_versions", "fmc_memory_prefetch", "fmc_heartbeat_review_due"]
         },
         "request_id": {"type": "string", "minLength": 1},
         "trace_id": {"type": "string", "minLength": 1},
@@ -255,7 +255,7 @@
             "reason_code": {"type": "string", "minLength": 1},
             "requested_action": {
               "type": "string",
-               "enum": ["memory.search", "memory.create_candidate", "memory.confirm", "memory.reject", "memory.explain_versions", "memory.prefetch", "heartbeat.review_due"]
+               "enum": ["fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_confirm", "fmc_memory_reject", "fmc_memory_explain_versions", "fmc_memory_prefetch", "fmc_heartbeat_review_due"]
             },
             "requested_visibility": {
               "type": "string",

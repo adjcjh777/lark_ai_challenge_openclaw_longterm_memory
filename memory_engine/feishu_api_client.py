@@ -377,11 +377,11 @@ def _extract_field_value(value: Any) -> str:
     if isinstance(value, str):
         return value
 
-    if isinstance(value, (int, float)):
-        return str(value)
-
     if isinstance(value, bool):
         return "是" if value else "否"
+
+    if isinstance(value, (int, float)):
+        return str(value)
 
     if isinstance(value, list):
         # 处理多选、人员等数组字段

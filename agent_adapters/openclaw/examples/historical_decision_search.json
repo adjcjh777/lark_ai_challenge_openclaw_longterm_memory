@@ -5,7 +5,7 @@
   "demo_fallback": "python3 scripts/demo_seed.py --json-output reports/demo_replay.json",
   "steps": [
     {
-      "tool": "memory.search",
+      "tool": "fmc_memory_search",
       "arguments": {
         "query": "production deployment region",
         "scope": "project:feishu_ai_challenge",
@@ -33,7 +33,7 @@
               "entrypoint": "openclaw",
               "workspace_id": "project:feishu_ai_challenge"
             },
-            "requested_action": "memory.search",
+            "requested_action": "fmc_memory_search",
             "requested_visibility": "team",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }

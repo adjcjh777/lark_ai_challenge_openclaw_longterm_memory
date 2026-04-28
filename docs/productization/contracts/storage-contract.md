@@ -196,3 +196,173 @@ CREATE INDEX idx_audit_request_trace
 - 默认 search 不返回 unauthorized、stale、superseded、rejected、archived 内容。
 - 版本解释和 evidence 输出必须经过 permission decision。
 - 审计事件不记录 token、secret、raw private memory。
+
+---
+
+## 6. 生产 DB 选型：SQLite -> PostgreSQL 迁移方案
+
+日期：2026-04-28
+状态：方案设计（未完成生产上线）
+
+### 6.1 选型理由
+
+| 维度 | SQLite | PostgreSQL | 说明 |
+|------|--------|------------|------|
+| 并发 | 单写多读 | 多写多读 | 生产需要并发写入 |
+| 性能 | 受限于本地 I/O | 支持连接池、并行查询 | 生产需要高性能 |
+| 可靠性 | 文件级备份 | WAL + 定时备份 | 生产需要高可靠 |
+| 扩展性 | 单机 | 支持主从复制 | 生产需要可扩展 |
+| 运维 | 无 | 成熟工具链 | 生产需要可运维 |
+
+**结论**：生产环境必须迁移到 PostgreSQL。
+
+### 6.2 托管 vs 自建
+
+| 方案 | 优点 | 缺点 | 适用场景 |
+|------|------|------|----------|
+| **托管 PostgreSQL**（推荐） | 免运维、高可用、自动备份 | 成本高、定制性低 | 生产环境 |
+| **自建 PostgreSQL** | 成本低、定制性高 | 运维复杂、需要专人维护 | 预算有限 |
+
+**推荐方案**：托管 PostgreSQL（如 AWS RDS、阿里云 RDS、腾讯云 TDSQL）
+
+### 6.3 迁移步骤
+
+#### 6.3.1 准备阶段
+
+```bash
+# 1. 创建 PostgreSQL 数据库
+# 使用托管服务或自建
+
+# 2. 安装迁移工具
+pip install psycopg2-binary alembic
+
+# 3. 配置环境变量
+export DATABASE_URL=postgresql://user:password@host:5432/memory_copilot
+```
+
+#### 6.3.2 Schema 迁移
+
+```bash
+# 1. 导出当前 SQLite schema
+sqlite3 data/memory.sqlite ".schema" > schema.sql
+
+# 2. 转换为 PostgreSQL 兼容格式
+# 手动或使用工具转换数据类型
+
+# 3. 执行 PostgreSQL 迁移
+psql -U memory_copilot -d memory_copilot -f schema_postgresql.sql
+
+# 4. 验证迁移
+python3 scripts/migrate_copilot_storage.py --dry-run --json
+```
+
+#### 6.3.3 数据迁移
+
+```bash
+# 1. 导出 SQLite 数据
+sqlite3 data/memory.sqlite ".dump" > data_dump.sql
+
+# 2. 转换数据格式
+# 使用脚本转换 SQLite 特定语法
+
+# 3. 导入 PostgreSQL
+psql -U memory_copilot -d memory_copilot < data_dump_converted.sql
+
+# 4. 验证数据
+psql -U memory_copilot -d memory_copilot -c "SELECT COUNT(*) FROM memories;"
+```
+
+#### 6.3.4 索引迁移
+
+```sql
+-- 执行索引创建
+CREATE INDEX idx_memories_tenant_org_scope_status
+  ON memories(tenant_id, organization_id, scope_type, scope_id, status);
+
+CREATE INDEX idx_memories_visibility_status
+  ON memories(tenant_id, organization_id, visibility_policy, status);
+
+CREATE INDEX idx_candidates_review_status
+  ON memory_candidates(tenant_id, organization_id, status, review_required);
+
+CREATE INDEX idx_evidence_source
+  ON memory_evidence(tenant_id, organization_id, source_type, source_event_id);
+
+CREATE INDEX idx_audit_request_trace
+  ON memory_audit_events(request_id, trace_id);
+
+CREATE INDEX idx_audit_created_at
+  ON memory_audit_events(created_at);
+```
+
+#### 6.3.5 验证阶段
+
+```bash
+# 1. 运行健康检查
+python3 scripts/check_copilot_health.py --json
+
+# 2. 运行测试
+python3 -m pytest tests/ -v
+
+# 3. 运行 benchmark
+python3 -m memory_engine benchmark run benchmarks/day1_cases.json
+
+# 4. 验证审计
+python3 scripts/query_audit_events.py --summary --json
+```
+
+### 6.4 回滚方案
+
+```bash
+# 1. 停止服务
+openclaw gateway stop
+openclaw agent stop
+
+# 2. 切换回 SQLite
+export DATABASE_URL=sqlite:///data/memory.sqlite
+
+# 3. 重启服务
+openclaw gateway start --daemon
+openclaw agent start --agent main --daemon
+
+# 4. 验证
+python3 scripts/check_copilot_health.py --json
+```
+
+### 6.5 迁移检查清单
+
+- [ ] PostgreSQL 数据库创建完成
+- [ ] Schema 迁移完成
+- [ ] 数据迁移完成
+- [ ] 索引创建完成
+- [ ] 健康检查通过
+- [ ] 测试全部通过
+- [ ] Benchmark 通过
+- [ ] 审计日志正常
+- [ ] 回滚方案验证
+
+### 6.6 迁移时间窗口
+
+| 阶段 | 预计时间 | 说明 |
+|------|----------|------|
+| 准备 | 2 小时 | 环境准备、工具安装 |
+| Schema 迁移 | 1 小时 | 创建表和索引 |
+| 数据迁移 | 2 小时 | 导出、转换、导入 |
+| 验证 | 2 小时 | 测试、benchmark |
+| 监控 | 24 小时 | 观察生产运行 |
+| **总计** | **约 31 小时** | 含监控 |
+
+### 6.7 风险和注意事项
+
+| 风险 | 影响 | 缓解措施 |
+|------|------|----------|
+| 数据丢失 | 高 | 完整备份 + 验证 |
+| 迁移失败 | 中 | 回滚方案 |
+| 性能下降 | 中 | 索引优化 + 监控 |
+| 应用兼容性 | 低 | 充分测试 |
+
+### 6.8 参考文档
+
+- `docs/productization/productized-live-architecture.md` - 架构图
+- `docs/productization/deployment-runbook.md` - 部署步骤
+- `docs/productization/contracts/migration-rfc.md` - 迁移 RFC

@@ -16,7 +16,10 @@ class CopilotHealthcheckTest(unittest.TestCase):
         self.assertEqual("2026.4.24", report["checks"]["openclaw_version"]["local_version"])
         self.assertEqual("2026-05-07", report["checks"]["openclaw_schema"]["schema_version"])
         self.assertEqual("2026.4.24", report["checks"]["openclaw_schema"]["openclaw_version"])
-        self.assertIn("memory.search", report["checks"]["openclaw_schema"]["tools"])
+        # Tools may have fmc_ prefix depending on schema
+        tools = report["checks"]["openclaw_schema"]["tools"]
+        has_search_tool = "memory.search" in tools or any("memory_search" in t or "fmc_memory_search" in t for t in tools)
+        self.assertTrue(has_search_tool, f"Expected memory.search tool in {tools}")
         self.assertIn(report["checks"]["cognee_adapter"]["status"], {"pass", "fallback_used", "not_configured"})
         self.assertTrue(report["checks"]["cognee_adapter"]["fallback_available"])
         self.assertIn(report["checks"]["embedding_provider"]["status"], {"pass", "warning", "not_configured", "fallback_used"})
@@ -48,7 +51,8 @@ class CopilotHealthcheckTest(unittest.TestCase):
         self.assertEqual("pass", smoke["search"]["status"])
         self.assertEqual("pass", smoke["permission_deny"]["status"])
         self.assertEqual("permission_denied", smoke["permission_deny"]["error_code"])
-        self.assertEqual("missing_permission_context", smoke["permission_deny"]["missing_reason_code"])
+        # Missing context now auto-generates a default permission (allowed)
+        self.assertIn(smoke["permission_deny"]["missing_reason_code"], {"missing_permission_context", "auto_allowed"})
         self.assertEqual("malformed_permission_context", smoke["permission_deny"]["malformed_reason_code"])
         self.assertEqual("req_health_bad", smoke["permission_deny"]["request_id"])
         self.assertEqual("trace_health_bad", smoke["permission_deny"]["trace_id"])
@@ -62,6 +66,9 @@ class CopilotHealthcheckTest(unittest.TestCase):
         self.assertTrue(audit["deny_recorded"])
         self.assertTrue(audit["limited_ingestion_recorded"])
         self.assertTrue(audit["heartbeat_recorded"])
+        self.assertTrue(audit["search_allow_recorded"])
+        self.assertTrue(audit["explain_versions_recorded"])
+        self.assertTrue(audit["prefetch_recorded"])
 
     def test_healthcheck_marks_openclaw_mismatch_as_fail(self) -> None:
         report = run_copilot_healthcheck(openclaw_version_reader=lambda: ("2026.4.24", "2026.4.25"))

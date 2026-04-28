@@ -90,5 +90,225 @@
     "expected_memory_keyword": "lark-cli base",
     "forbidden_value": "sheets 单元格 API",
     "failure_debug_hint": "prefetch 只能把 active 的 Bitable 写入链路带给 Agent，不能把 superseded Sheets 写法放进 context pack。"
+  },
+  {
+    "case_id": "prefetch_deploy_full_context_07",
+    "type": "copilot_prefetch",
+    "task": "执行生产部署全流程",
+    "current_context": {
+      "intent": "生产部署全流程",
+      "thread_topic": "部署"
+    },
+    "events": [
+      {"content": "生产部署 region 固定 ap-shanghai，必须加 --canary 参数。"},
+      {"content": "部署前必须跑 git diff --check 和单元测试。"},
+      {"content": "部署后必须检查回滚脚本是否可用。"}
+    ],
+    "expected_memory_keyword": "--canary",
+    "failure_debug_hint": "context pack 应同时包含部署 region、参数和部署前后检查清单。"
+  },
+  {
+    "case_id": "prefetch_feishu_onboard_08",
+    "type": "copilot_prefetch",
+    "task": "准备飞书接入联调",
+    "current_context": {
+      "intent": "飞书多维表格接入",
+      "thread_topic": "飞书接入"
+    },
+    "events": [
+      {"content": "飞书接入必须用 lark-cli base record 写入，不能用 sheets 单元格 API。"},
+      {"content": "Bitable 共享看板必须保留 Candidate Review 和 Reminder Candidates 两张 dry-run 表。"},
+      {"content": "飞书 App 的权限 scope 只能开 bitable:read 和 bitable:write。"}
+    ],
+    "expected_memory_keyword": "lark-cli base",
+    "failure_debug_hint": "context pack 应包含飞书接入的写入方式、dry-run 表约束和权限 scope 三条记忆。"
+  },
+  {
+    "case_id": "prefetch_ci_pipeline_09",
+    "type": "copilot_prefetch",
+    "task": "检查 CI/CD 流水线配置",
+    "current_context": {
+      "intent": "CI/CD 流水线",
+      "thread_topic": "流水线"
+    },
+    "events": [
+      {"content": "CI 流水线的 lint stage 必须用 ruff check --select E,F。"},
+      {"content": "test stage 必须在 Python 3.11 环境下运行 pytest。"},
+      {"content": "deploy stage 的 region 必须是 ap-shanghai。"}
+    ],
+    "expected_memory_keyword": "ruff check",
+    "failure_debug_hint": "context pack 应包含 lint/test/deploy 三个 stage 的配置记忆。"
+  },
+  {
+    "case_id": "prefetch_vague_prep_10",
+    "type": "copilot_prefetch",
+    "task": "准备一下",
+    "current_context": {
+      "intent": "准备",
+      "thread_topic": "准备"
+    },
+    "events": [
+      {"content": "飞书接入的权限 scope 只能开 bitable:read 和 bitable:write。"}
+    ],
+    "expected_memory_keyword": "bitable:read",
+    "failure_debug_hint": "即使 task 描述含糊（'准备一下'），prefetch 仍应基于当前 thread_topic 返回相关记忆。"
+  },
+  {
+    "case_id": "prefetch_vague_review_11",
+    "type": "copilot_prefetch",
+    "task": "看看代码",
+    "current_context": {
+      "intent": "代码审查",
+      "thread_topic": "代码质量"
+    },
+    "events": [
+      {"content": "代码提交前必须通过 ruff check --select E,F 和 mypy 检查。"},
+      {"content": "CI lint stage 必须用 Python 3.11。"}
+    ],
+    "expected_memory_keyword": "ruff check",
+    "failure_debug_hint": "task 含糊（'看看代码'），prefetch 应从 thread_topic 推断出代码质量相关记忆。"
+  },
+  {
+    "case_id": "prefetch_vague_fix_12",
+    "type": "copilot_prefetch",
+    "task": "修一下",
+    "current_context": {
+      "intent": "修复问题",
+      "thread_topic": "Bug 修复"
+    },
+    "events": [
+      {"content": "修复 Bug 后必须补充对应的单元测试。"},
+      {"content": "提交前必须跑 git diff --check。"}
+    ],
+    "expected_memory_keyword": "单元测试",
+    "failure_debug_hint": "task 极度含糊（'修一下'），prefetch 应基于 thread_topic 返回 Bug 修复相关的记忆。"
+  },
+  {
+    "case_id": "prefetch_empty_novel_13",
+    "type": "copilot_prefetch",
+    "task": "搭建一个新的 AI 推理服务",
+    "current_context": {
+      "intent": "AI 推理服务架构",
+      "thread_topic": "新服务"
+    },
+    "events": [],
+    "expected_memory_keyword": "",
+    "failure_debug_hint": "记忆库中没有任何 AI 推理服务相关记忆时，prefetch 应返回空 context pack 而非报错。"
+  },
+  {
+    "case_id": "prefetch_empty_unknown_14",
+    "type": "copilot_prefetch",
+    "task": "调研竞品的技术栈",
+    "current_context": {
+      "intent": "竞品分析",
+      "thread_topic": "竞品调研"
+    },
+    "events": [],
+    "expected_memory_keyword": "",
+    "failure_debug_hint": "记忆库中没有竞品调研相关记忆时，prefetch 应优雅返回空结果而非异常。"
+  },
+  {
+    "case_id": "prefetch_priority_security_15",
+    "type": "copilot_prefetch",
+    "task": "配置生产环境访问权限",
+    "current_context": {
+      "intent": "生产环境权限配置",
+      "thread_topic": "安全"
+    },
+    "events": [
+      {"content": "生产环境不允许直接 SSH 登录，必须通过堡垒机。"},
+      {"content": "生产数据库密码必须存放在 Vault 中。"},
+      {"content": "个人偏好：终端用 dark theme，字体用 Fira Code。"},
+      {"content": "个人偏好：IDE 用 VSCode，快捷键用 Vim 模式。"}
+    ],
+    "expected_memory_keyword": "堡垒机",
+    "failure_debug_hint": "context pack 中安全规则（堡垒机、Vault）应排在个人偏好（theme、IDE）之前。"
+  },
+  {
+    "case_id": "prefetch_priority_deploy_safety_16",
+    "type": "copilot_prefetch",
+    "task": "准备部署上线",
+    "current_context": {
+      "intent": "部署上线",
+      "thread_topic": "部署"
+    },
+    "events": [
+      {"content": "部署后必须检查回滚脚本是否可用。"},
+      {"content": "部署前必须跑 git diff --check 和单元测试。"},
+      {"content": "个人偏好：commit message 用中文。"},
+      {"content": "个人偏好：PR 标题用 emoji 前缀。"}
+    ],
+    "expected_memory_keyword": "回滚脚本",
+    "failure_debug_hint": "部署安全检查（回滚脚本、测试）应优先于个人编码偏好出现在 context pack 中。"
+  },
+  {
+    "case_id": "prefetch_priority_data_protect_17",
+    "type": "copilot_prefetch",
+    "task": "设置数据导出任务",
+    "current_context": {
+      "intent": "数据导出",
+      "thread_topic": "数据安全"
+    },
+    "events": [
+      {"content": "导出数据必须脱敏，用户手机号和身份证号用 * 替换。"},
+      {"content": "导出文件只能存放在加密的 OSS bucket 中。"},
+      {"content": "个人偏好：导出格式用 CSV 而非 Excel。"},
+      {"content": "个人偏好：文件命名用日期前缀。"}
+    ],
+    "expected_memory_keyword": "脱敏",
+    "failure_debug_hint": "数据安全规则（脱敏、加密存储）应优先于格式偏好出现在 context pack 中。"
+  },
+  {
+    "case_id": "prefetch_superseded_endpoint_18",
+    "type": "copilot_prefetch",
+    "task": "检查 API 接口配置",
+    "current_context": {
+      "intent": "API 接口配置"
+    },
+    "events": [
+      {"content": "API 接口必须走 https://api.internal.example.com/v2。"}
+    ],
+    "conflict_updates": [
+      "API 接口已迁移，现在必须走 https://api.internal.example.com/v3。"
+    ],
+    "expected_memory_keyword": "v3",
+    "forbidden_value": "v2",
+    "failure_debug_hint": "旧 API endpoint (v2) 应被 superseded 过滤，context pack 只包含当前 active 的 v3 endpoint。"
+  },
+  {
+    "case_id": "prefetch_superseded_branch_19",
+    "type": "copilot_prefetch",
+    "task": "创建新功能分支",
+    "current_context": {
+      "intent": "分支命名",
+      "thread_topic": "Git 规范"
+    },
+    "events": [
+      {"content": "新功能分支命名规范为 feature/xxx。"}
+    ],
+    "conflict_updates": [
+      "分支命名已变更，现在必须用 feat/xxx 前缀。"
+    ],
+    "expected_memory_keyword": "feat/",
+    "forbidden_value": "feature/",
+    "failure_debug_hint": "旧的 feature/ 前缀应被 superseded 过滤，context pack 只包含当前 active 的 feat/ 前缀。"
+  },
+  {
+    "case_id": "prefetch_superseded_team_config_20",
+    "type": "copilot_prefetch",
+    "task": "配置团队通知渠道",
+    "current_context": {
+      "intent": "团队通知",
+      "thread_topic": "通知配置"
+    },
+    "events": [
+      {"content": "团队通知必须发到飞书群 bot-notify-general。"}
+    ],
+    "conflict_updates": [
+      "通知渠道已变更，现在必须发到飞书群 bot-notify-engineering。"
+    ],
+    "expected_memory_keyword": "bot-notify-engineering",
+    "forbidden_value": "bot-notify-general",
+    "failure_debug_hint": "旧通知渠道 (bot-notify-general) 应被 superseded 过滤，context pack 只包含当前 active 的 bot-notify-engineering。"
   }
 ]

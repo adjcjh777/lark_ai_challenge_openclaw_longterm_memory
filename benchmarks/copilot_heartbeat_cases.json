@@ -81,5 +81,161 @@
     "expected_status": "withheld",
     "forbidden_value": "abcdefghi123456789",
     "failure_debug_hint": "非 reviewer 只能看到 withheld/redacted reminder candidate，不能看到敏感明文或 evidence。"
+  },
+  {
+    "case_id": "heartbeat_cooldown_dedup_1",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "检查部署参数"},
+    "events": [
+      {"content": "生产部署必须加 --canary --region ap-shanghai。"}
+    ],
+    "mark_recalled_query": "生产部署参数",
+    "cooldown_ms": 0,
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "生产部署",
+    "failure_debug_hint": "已召回的记忆在 cooldown 期间不应重复触发 reminder。"
+  },
+  {
+    "case_id": "heartbeat_cooldown_dedup_2",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "查看部署状态"},
+    "events": [
+      {"content": "生产部署必须加 --canary --region ap-shanghai。"}
+    ],
+    "mark_recalled_query": "生产部署参数",
+    "cooldown_ms": 3600000,
+    "expected_trigger": null,
+    "expected_subject": "生产部署",
+    "failure_debug_hint": "同一条记忆刚被召回，cooldown 窗口内（1小时）不应再次触发。"
+  },
+  {
+    "case_id": "heartbeat_multi_reminder_sort_1",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "准备周会材料"},
+    "events": [
+      {"content": "周报截止时间是每周五 18:00，必须在飞书文档中填写。"},
+      {"content": "OKR 季度复盘需要在下周一前完成自评。"},
+      {"content": "生产部署必须加 --canary --region ap-shanghai。"}
+    ],
+    "expected_trigger": "deadline",
+    "expected_subject": "截止时间",
+    "failure_debug_hint": "多条记忆同时触发时，deadline 类应排在 important_not_recalled 之前。"
+  },
+  {
+    "case_id": "heartbeat_multi_reminder_sort_2",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "整理本周工作"},
+    "events": [
+      {"content": "周报收件人：junhaocheng@company.com，抄送 team-lead。"},
+      {"content": "生产部署必须加 --canary --region ap-shanghai。"},
+      {"content": "API 网关超时设置为 30s，不能改。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "生产部署",
+    "failure_debug_hint": "多条 important_not_recalled 同时触发时，应按重要性降序排列。"
+  },
+  {
+    "case_id": "heartbeat_no_trigger_noisy_1",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "闲聊天气"},
+    "events": [
+      {"content": "今天天气不错，适合出去散步。"}
+    ],
+    "expected_trigger": null,
+    "expected_subject": null,
+    "failure_debug_hint": "闲聊类低价值记忆不应触发 heartbeat reminder。"
+  },
+  {
+    "case_id": "heartbeat_no_trigger_noisy_2",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "讨论午餐吃什么"},
+    "events": [
+      {"content": "中午想吃黄焖鸡，楼下那家新开的味道还行。"}
+    ],
+    "expected_trigger": null,
+    "expected_subject": null,
+    "failure_debug_hint": "日常闲聊记忆（餐饮选择）不应触发 heartbeat reminder。"
+  },
+  {
+    "case_id": "heartbeat_conflict_update_review_1",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "查看周报配置"},
+    "events": [
+      {"content": "周报收件人已从 team-lead 更改为 cto@company.com。"}
+    ],
+    "expected_trigger": "review_due",
+    "expected_subject": "周报收件人",
+    "failure_debug_hint": "记忆被 conflict 更新后应触发 review_due reminder，让用户确认新版本。"
+  },
+  {
+    "case_id": "heartbeat_conflict_update_review_2",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "检查部署流程"},
+    "events": [
+      {"content": "生产部署流程已更新：新增 --staging 预发步骤，再执行 --canary。"}
+    ],
+    "expected_trigger": "review_due",
+    "expected_subject": "生产部署流程",
+    "failure_debug_hint": "部署流程记忆被 conflict 更新后应触发 review_due，确保用户知晓流程变更。"
+  },
+  {
+    "case_id": "heartbeat_unused_memory_remind_1",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "调试 API 问题"},
+    "events": [
+      {"content": "API 网关超时设置为 30s，不能改。"}
+    ],
+    "days_since_recall": 21,
+    "expected_trigger": "unused_memory",
+    "expected_subject": "API 网关超时",
+    "failure_debug_hint": "超过 14 天未被召回的重要记忆应生成 unused_memory 提醒候选。"
+  },
+  {
+    "case_id": "heartbeat_unused_memory_remind_2",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "审查权限配置"},
+    "events": [
+      {"content": "权限变更需要走飞书审批流，不能直接改线上。"}
+    ],
+    "days_since_recall": 30,
+    "expected_trigger": "unused_memory",
+    "expected_subject": "权限变更审批",
+    "failure_debug_hint": "超过 14 天未被召回的权限类记忆应生成 unused_memory 提醒候选。"
+  },
+  {
+    "case_id": "heartbeat_sensitive_password_redaction_1",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "数据库运维"},
+    "events": [
+      {"content": "数据库连接密码是 P@ssw0rd_2026! 只能在 .env 中配置。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "数据库运维安全",
+    "forbidden_value": "P@ssw0rd_2026!",
+    "failure_debug_hint": "密码类敏感信息在 reminder 中必须脱敏，不能出现明文密码。"
+  },
+  {
+    "case_id": "heartbeat_sensitive_private_key_redaction_2",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "SSH 登录服务器"},
+    "events": [
+      {"content": "SSH 私钥路径 ~/.ssh/id_rsa_produ，连接 prod-server 时使用。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "SSH 登录配置",
+    "forbidden_value": "~/.ssh/id_rsa_produ",
+    "failure_debug_hint": "私钥路径类敏感信息在 reminder 中应脱敏，不能暴露具体路径。"
+  },
+  {
+    "case_id": "heartbeat_sensitive_oauth_token_redaction_3",
+    "type": "copilot_heartbeat",
+    "current_context": {"intent": "飞书应用调试"},
+    "events": [
+      {"content": "飞书 OAuth refresh_token=rt_xk8NpQw2zLmVbC3dF5gH 只能存在服务端。"}
+    ],
+    "expected_trigger": "important_not_recalled",
+    "expected_subject": "飞书 OAuth 配置",
+    "forbidden_value": "rt_xk8NpQw2zLmVbC3dF5gH",
+    "failure_debug_hint": "OAuth refresh_token 在 reminder 中必须完全脱敏，不能泄漏任何片段。"
   }
 ]

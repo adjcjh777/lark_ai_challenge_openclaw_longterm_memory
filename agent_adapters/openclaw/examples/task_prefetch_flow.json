@@ -5,7 +5,7 @@
   "demo_fallback": "python3 scripts/demo_seed.py --json-output reports/demo_replay.json",
   "steps": [
     {
-      "tool": "memory.prefetch",
+      "tool": "fmc_memory_prefetch",
       "arguments": {
         "task": "deployment_checklist",
         "scope": "project:feishu_ai_challenge",
@@ -32,7 +32,7 @@
               "entrypoint": "openclaw",
               "workspace_id": "project:feishu_ai_challenge"
             },
-            "requested_action": "memory.prefetch",
+            "requested_action": "fmc_memory_prefetch",
             "requested_visibility": "team",
             "timestamp": "2026-05-07T00:00:00+08:00"
           }
@@ -43,7 +43,7 @@
   ],
   "expected_output": {
     "ok": true,
-    "tool": "memory.prefetch",
+    "tool": "fmc_memory_prefetch",
     "context_pack_contains": ["relevant_memories", "evidence", "risks", "deadlines", "trace_summary"],
     "must_include": ["bridge.request_id", "bridge.trace_id", "bridge.permission_decision"],
     "bridge_permission_decision": "allow",
