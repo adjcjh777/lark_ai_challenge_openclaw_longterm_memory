@@ -241,5 +241,177 @@
     "text": "刚才有人提到 lark-oapi，但还没定，先别写进计划。",
     "expected_candidate": false,
     "expected_reason": "这是未采纳的临时想法，不能作为待确认记忆。"
+  },
+  {
+    "case_id": "cand_should_018",
+    "type": "copilot_candidate",
+    "text": "部署密钥 deploy_token=sk-prod-abc123def456 只能放 CI/CD 变量，绝对不能写进代码仓库或 .env 文件。",
+    "expected_candidate": true,
+    "expected_reason": "包含敏感 token 但属于密钥管理规则，应进入 candidate 并触发 risk_flags。"
+  },
+  {
+    "case_id": "cand_should_019",
+    "type": "copilot_candidate",
+    "text": "生产数据库连接串 mysql://admin:R3alP@ssw0rd!@db-prod.internal:3306/main 只允许在 prod 环境使用，禁止在测试环境引用。",
+    "expected_candidate": true,
+    "expected_reason": "包含数据库密码但属于环境隔离规则，高价值决策应进 candidate 并标记风险。"
+  },
+  {
+    "case_id": "cand_should_020",
+    "type": "copilot_candidate",
+    "text": "AWS Access Key AKIAIOSFODNN7EXAMPLE 的 Secret Key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY 只存放在 vault，任何人不得复制到本地。",
+    "expected_candidate": true,
+    "expected_reason": "包含完整 AWS 凭证但属于安全合规规则，应进入 candidate 并触发 risk_flags。"
+  },
+  {
+    "case_id": "cand_should_021",
+    "type": "copilot_candidate",
+    "text": "关于飞书消息卡片的交互规范，我们团队经过讨论后达成以下共识：第一，所有用户操作按钮必须带有 loading 状态反馈，避免用户重复点击；第二，卡片内容区域的 markdown 渲染必须支持代码块折叠，默认超过 500 字的代码块自动折叠；第三，卡片底部的操作栏固定显示时间戳和操作人信息，便于后续审计追溯；第四，如果消息发送失败，卡片必须保留本地草稿并在下次打开时提示恢复。",
+    "expected_candidate": true,
+    "expected_reason": "超长文本包含多条具体可执行规则，属于团队 UI 规范决策。"
+  },
+  {
+    "case_id": "cand_should_022",
+    "type": "copilot_candidate",
+    "text": "本次 Q2 OKR 制定流程的最终版本如下：首先各小组在本周五之前提交初稿，由 PM 统一汇总后在下周一组织跨组评审会议，评审会上每个小组有 15 分钟的展示时间和 10 分钟的质询环节，评审结束后由技术负责人和产品负责人联合打分并给出修改意见，最终版本必须在下周三下班前锁定并录入飞书 OKR 系统，逾期未提交的小组需在下周一的周会上做书面说明。",
+    "expected_candidate": true,
+    "expected_reason": "长文本包含完整流程规则和时间节点，是团队协作流程决策。"
+  },
+  {
+    "case_id": "cand_should_023",
+    "type": "copilot_candidate",
+    "text": "我们决定采用三层告警分级策略：P0 级别故障（影响全部用户）在 2 分钟内电话通知 oncall 并同步飞书群，P1 级别故障（影响部分用户）在 5 分钟内飞书群通知并创建 Jira 工单，P2 级别故障（体验降级但功能可用）在 30 分钟内飞书群通知即可。每次告警触发后必须在 1 小时内更新处理进度，超时未更新自动升级为上一级别。",
+    "expected_candidate": true,
+    "expected_reason": "长文本定义了完整的告警分级规则，影响运维流程和团队响应机制。"
+  },
+  {
+    "case_id": "cand_should_024",
+    "type": "copilot_candidate",
+    "text": "Code review 规则：所有 PR 必须有至少 2 个 reviewer approved 才能 merge；bugfix 分支命名用 bugfix/xxx 格式；CI 必须全绿，flaky test 允许 re-run 一次。",
+    "expected_candidate": true,
+    "expected_reason": "中英文混合的团队协作规则，包含可执行的代码审查流程约束。"
+  },
+  {
+    "case_id": "cand_should_025",
+    "type": "copilot_candidate",
+    "text": "Deployment 策略确认：canary release 先放 5% 流量观察 10 分钟，确认 error rate < 0.1% 后再全量。如果 metrics 异常，立即 rollback 到上一个 stable version。",
+    "expected_candidate": true,
+    "expected_reason": "中英混合的部署决策，包含具体的流量比例和回滚条件。"
+  },
+  {
+    "case_id": "cand_should_026",
+    "type": "copilot_candidate",
+    "text": "API 接口规范：所有对外接口必须遵循 RESTful 设计，返回格式统一用 JSON envelope 包装，error code 定义参考飞书开放平台 error code 体系。request body 大小限制 1MB，超限返回 413。",
+    "expected_candidate": true,
+    "expected_reason": "中英混合的技术规范，定义了接口设计和错误处理规则。"
+  },
+  {
+    "case_id": "cand_should_027",
+    "type": "copilot_candidate",
+    "text": "部署策略改为 blue-green，不再使用 canary 发布。新版本先部署到 blue 环境，验证通过后切换流量，出问题直接切回 green。",
+    "existing_memories": [
+      {
+        "content": "决定：生产部署必须加 --canary --region cn-shanghai。"
+      }
+    ],
+    "expected_candidate": true,
+    "expected_reason": "与已有记忆语义重复（部署策略）但值不同（canary 改为 blue-green），应进入 conflict candidate。"
+  },
+  {
+    "case_id": "cand_should_028",
+    "type": "copilot_candidate",
+    "text": "周报收件人变更：以后周报统一发给 team-lead@example.com，不再抄送 ops-weekly 邮箱。",
+    "existing_memories": [
+      {
+        "content": "以后周报统一发给 ops-weekly@example.com，并抄送项目群。"
+      }
+    ],
+    "expected_candidate": true,
+    "expected_reason": "与已有记忆语义重复（周报发送规则）但收件人不同，应进入 conflict candidate。"
+  },
+  {
+    "case_id": "cand_should_029",
+    "type": "copilot_candidate",
+    "text": "后端发布窗口负责人变更：从下个版本开始，后端发布由 Bob 维护，Alice 专注前端发布。",
+    "existing_memories": [
+      {
+        "content": "负责人：后端发布窗口由 Alice 维护。"
+      }
+    ],
+    "expected_candidate": true,
+    "expected_reason": "与已有记忆语义重复（发布负责人）但负责人变更，应进入 conflict candidate。"
+  },
+  {
+    "case_id": "cand_skip_018",
+    "type": "copilot_candidate",
+    "text": "👍👍👍",
+    "expected_candidate": false,
+    "expected_reason": "纯 emoji 消息，不包含任何可沉淀的决策或规则。"
+  },
+  {
+    "case_id": "cand_skip_019",
+    "type": "copilot_candidate",
+    "text": "😂😂😂 这个表情包太搞笑了哈哈哈哈",
+    "expected_candidate": false,
+    "expected_reason": "以表情描述为主的消息，不包含可复用的决策信息。"
+  },
+  {
+    "case_id": "cand_skip_020",
+    "type": "copilot_candidate",
+    "text": "有人说可以试试用 Redis 做缓存层，但还没定。",
+    "expected_candidate": false,
+    "expected_reason": "转述他人观点但未形成团队决策，不能作为候选记忆。"
+  },
+  {
+    "case_id": "cand_skip_021",
+    "type": "copilot_candidate",
+    "text": "之前听 Alice 说可以用 Cognee，不过这个方案还没正式评估。",
+    "expected_candidate": false,
+    "expected_reason": "引用他人意见但未表态采纳，属于讨论阶段的信息。"
+  },
+  {
+    "case_id": "cand_skip_022",
+    "type": "copilot_candidate",
+    "text": "Bob 建议我们把日志统一到 ELK，但目前只是建议，没有形成共识。",
+    "expected_candidate": false,
+    "expected_reason": "引用他人建议但明确标注未达成共识，不应进入候选。"
+  },
+  {
+    "case_id": "cand_skip_023",
+    "type": "copilot_candidate",
+    "text": "这个技术方案可行吗？有没有更好的替代方案？",
+    "expected_candidate": false,
+    "expected_reason": "技术讨论中的疑问句，是提问而非决策。"
+  },
+  {
+    "case_id": "cand_skip_024",
+    "type": "copilot_candidate",
+    "text": "用 gRPC 替代 REST 的方案大家觉得怎么样？性能提升是否值得迁移成本？",
+    "expected_candidate": false,
+    "expected_reason": "讨论中的征求意见，尚未形成明确结论。"
+  },
+  {
+    "case_id": "cand_skip_025",
+    "type": "copilot_candidate",
+    "text": "决定：生产部署必须加 --canary --region cn-shanghai。",
+    "existing_memories": [
+      {
+        "content": "决定：生产部署必须加 --canary --region cn-shanghai。"
+      }
+    ],
+    "expected_candidate": false,
+    "expected_reason": "与已有记忆完全相同，不应重复创建 candidate。"
+  },
+  {
+    "case_id": "cand_skip_026",
+    "type": "copilot_candidate",
+    "text": "以后周报统一发给 ops-weekly@example.com，并抄送项目群。",
+    "existing_memories": [
+      {
+        "content": "以后周报统一发给 ops-weekly@example.com，并抄送项目群。"
+      }
+    ],
+    "expected_candidate": false,
+    "expected_reason": "与已有记忆完全重复，不应重复创建 candidate。"
   }
 ]
