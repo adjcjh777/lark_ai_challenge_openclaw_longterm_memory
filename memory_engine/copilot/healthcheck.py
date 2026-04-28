@@ -35,12 +35,15 @@ def run_copilot_healthcheck(
     *,
     openclaw_version_reader: OpenClawVersionReader | None = None,
     root: Path | None = None,
+    live_embedding_check: bool = False,
 ) -> dict[str, Any]:
     """Run non-live deployability checks for the Phase 6 handoff.
 
     The default path avoids real Feishu pushes, production deployment, and live
     embedding calls. Provider checks inspect configuration and local import
     readiness, then report fallback/not_configured states instead of crashing.
+
+    Set live_embedding_check=True to perform actual embedding API calls.
     """
 
     repo_root = root or ROOT
@@ -52,7 +55,10 @@ def run_copilot_healthcheck(
         "storage_schema": _check_storage_schema(),
         "permission_contract": _check_permission_contract(),
         "cognee_adapter": _check_cognee_adapter(),
-        "embedding_provider": _check_embedding_provider(repo_root / EMBEDDING_LOCK_FILE.relative_to(ROOT)),
+        "embedding_provider": _check_embedding_provider(
+            repo_root / EMBEDDING_LOCK_FILE.relative_to(ROOT),
+            live_check=live_embedding_check,
+        ),
         "smoke_tests": _check_smoke_tests(),
         "audit_smoke": _check_audit_smoke(),
     }
@@ -303,21 +309,46 @@ def _check_permission_contract() -> dict[str, Any]:
 
 def _check_cognee_adapter() -> dict[str, Any]:
     try:
-        from .cognee_adapter import CogneeMemoryAdapter
+        from .cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter, _validate_cognee_configuration
 
-        adapter = CogneeMemoryAdapter()
         sdk_available = importlib.util.find_spec("cognee") is not None
+
+        # Check configuration validity
+        config_valid = False
+        config_error = None
+        if sdk_available:
+            try:
+                _validate_cognee_configuration()
+                config_valid = True
+            except Exception as exc:
+                config_error = str(exc)
+
+        # Try to create and configure adapter
+        adapter = CogneeMemoryAdapter()
+        configured = False
+        if config_valid:
+            try:
+                adapter.ensure_client()
+                configured = adapter.is_configured
+            except CogneeAdapterNotConfigured as exc:
+                config_error = str(exc)
+
         return {
-            "status": "pass" if sdk_available and adapter.is_configured else "fallback_used",
+            "status": "pass" if sdk_available and configured else ("warning" if sdk_available and config_valid else "fallback_used"),
             "adapter_import": "ok",
-            "configured": adapter.is_configured,
+            "configured": configured,
             "sdk_available": sdk_available,
+            "config_valid": config_valid,
+            "config_error": config_error,
             "fallback_available": True,
             "fallback": "repository_retrieval",
             "next_step": (
                 ""
-                if adapter.is_configured
-                else "需要真实 Cognee 验证时注入本地 SDK client；当前 healthcheck 只确认 adapter 可 import，并使用 repository fallback。"
+                if configured
+                else f"配置 .env 文件中的 LLM_API_KEY 和 EMBEDDING_MODEL，然后重新运行 healthcheck。配置错误: {config_error}" if config_valid and config_error
+                else "配置 .env 文件中的 LLM_API_KEY 和 EMBEDDING_MODEL，然后重新运行 healthcheck。"
+                if sdk_available
+                else "安装 cognee SDK（pip install cognee）并配置 .env 文件。"
             ),
         }
     except Exception as exc:
@@ -331,7 +362,7 @@ def _check_cognee_adapter() -> dict[str, Any]:
         }
 
 
-def _check_embedding_provider(path: Path) -> dict[str, Any]:
+def _check_embedding_provider(path: Path, live_check: bool = False) -> dict[str, Any]:
     try:
         lock = _read_key_value_file(path)
     except Exception as exc:
@@ -345,23 +376,62 @@ def _check_embedding_provider(path: Path) -> dict[str, Any]:
     provider = lock.get("provider") or "unknown"
     model = lock.get("model") or lock.get("litellm_model") or "unknown"
     litellm_available = importlib.util.find_spec("litellm") is not None
-    status = "warning" if litellm_available else "not_configured"
+
+    # Try to create OllamaEmbeddingProvider
+    ollama_available = False
+    live_available = None
+    actual_dimensions = None
+    error_info = None
+
+    if litellm_available:
+        try:
+            from .embeddings import OllamaEmbeddingProvider
+            ollama_provider = OllamaEmbeddingProvider()
+            ollama_available = ollama_provider.is_available()
+
+            if live_check and ollama_available:
+                # Perform live embedding test
+                try:
+                    test_vector = ollama_provider.embed_text("healthcheck test")
+                    actual_dimensions = len(test_vector)
+                    live_available = actual_dimensions == _int_or_none(lock.get("dimensions"))
+                except Exception as exc:
+                    live_available = False
+                    error_info = f"live_embedding_failed: {exc.__class__.__name__}: {exc}"
+        except Exception as exc:
+            ollama_available = False
+            error_info = f"provider_init_failed: {exc.__class__.__name__}: {exc}"
+
+    # Determine status
+    if live_check:
+        if live_available is True:
+            status = "pass"
+        elif live_available is False:
+            status = "warning" if ollama_available else "not_configured"
+        else:
+            status = "warning" if ollama_available else "not_configured"
+    else:
+        status = "pass" if ollama_available else ("warning" if litellm_available else "not_configured")
+
     return {
         "status": status,
-        "check_mode": "configuration_only",
+        "check_mode": "live_embedding" if live_check else "configuration_only",
         "provider": provider,
         "model": model,
         "litellm_model": lock.get("litellm_model"),
         "endpoint": lock.get("endpoint"),
         "expected_dimensions": _int_or_none(lock.get("dimensions")),
+        "actual_dimensions": actual_dimensions,
         "litellm_available": litellm_available,
-        "live_available": None,
+        "ollama_available": ollama_available,
+        "live_available": live_available,
+        "error": error_info,
         "fallback_available": True,
         "fallback": "DeterministicEmbeddingProvider",
         "next_step": (
-            "当前 healthcheck 只做配置可检查；需要真实 embedding 可用性验证时运行 python3 scripts/check_embedding_provider.py。"
-            if litellm_available
-            else "需要真实 embedding 验证时运行 python3 scripts/check_embedding_provider.py；结束后执行 ollama ps 并清理本项目模型。"
+            "运行 python3 scripts/check_embedding_provider.py 进行完整验证。"
+            if ollama_available
+            else "启动 Ollama 服务并拉取 embedding 模型：ollama pull qwen3-embedding:0.6b-fp16"
         ),
     }
 
@@ -684,7 +754,13 @@ def _summary_for_check(name: str, check: dict[str, Any]) -> str:
             f" audit_table_available={check.get('audit_table_available')}"
         )
     if name == "embedding_provider":
-        return f" provider={check.get('provider')} model={check.get('model')} mode={check.get('check_mode')}"
+        mode = check.get("check_mode")
+        ollama_available = check.get("ollama_available", False)
+        live_available = check.get("live_available")
+        actual_dims = check.get("actual_dimensions")
+        if mode == "live_embedding" and live_available is not None:
+            return f" provider={check.get('provider')} model={check.get('model')} live={live_available} dims={actual_dims}"
+        return f" provider={check.get('provider')} model={check.get('model')} ollama={ollama_available} mode={mode}"
     if name == "cognee_adapter":
         return f" configured={check.get('configured')} fallback={check.get('fallback')}"
     if name == "smoke_tests":

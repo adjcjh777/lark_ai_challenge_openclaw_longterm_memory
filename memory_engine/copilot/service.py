@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -7,7 +8,8 @@ from typing import Any
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
-from .cognee_adapter import CogneeMemoryAdapter
+from .cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter
+from .embeddings import OllamaEmbeddingProvider, create_embedding_provider
 from .governance import CopilotGovernance
 from .heartbeat import HeartbeatReminderEngine
 from .orchestrator import MemorySearchOrchestrator
@@ -27,6 +29,8 @@ from .schemas import (
     WORKING_CONTEXT_FIELDS,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class CopilotService:
     """Application service for Copilot-owned memory contracts."""
@@ -37,10 +41,21 @@ class CopilotService:
         repository: MemoryRepository | None = None,
         db_path: str | Path | None = None,
         cognee_adapter: CogneeMemoryAdapter | None = None,
+        embedding_provider: OllamaEmbeddingProvider | None = None,
+        auto_init_cognee: bool = True,
     ) -> None:
         self.repository = repository
         self.db_path = db_path
         self.cognee_adapter = cognee_adapter
+        self._cognee_initialization_attempted = False
+
+        # Initialize embedding provider
+        self._embedding_provider = embedding_provider
+        self._embedding_provider_initialized = False
+
+        # Auto-initialize Cognee adapter if not provided
+        if self.cognee_adapter is None and auto_init_cognee:
+            self._try_auto_init_cognee()
 
     def search(self, request: SearchRequest) -> dict[str, object]:
         permission_denied = self._permission_denied(
@@ -52,7 +67,14 @@ class CopilotService:
         if permission_denied is not None:
             return permission_denied
 
-        retriever = LayerAwareRetriever(self._repository(), cognee_adapter=self.cognee_adapter)
+        # Initialize embedding provider if needed
+        embedding_provider = self._get_or_init_embedding_provider()
+
+        retriever = LayerAwareRetriever(
+            self._repository(),
+            cognee_adapter=self.cognee_adapter,
+            embedding_provider=embedding_provider,
+        )
         orchestrator = MemorySearchOrchestrator(
             retriever,
             cognee_available=self.cognee_adapter is not None and self.cognee_adapter.is_configured,
@@ -262,6 +284,37 @@ class CopilotService:
         )
         return response
 
+    def _get_or_init_embedding_provider(self) -> OllamaEmbeddingProvider | None:
+        """Get or initialize the embedding provider.
+
+        Returns the OllamaEmbeddingProvider if available, otherwise None
+        (which will cause LayerAwareRetriever to use DeterministicEmbeddingProvider).
+        """
+        if self._embedding_provider_initialized:
+            return self._embedding_provider
+
+        self._embedding_provider_initialized = True
+
+        # Use provided provider if available
+        if self._embedding_provider is not None:
+            return self._embedding_provider
+
+        # Try to create OllamaEmbeddingProvider
+        try:
+            provider = create_embedding_provider(provider="ollama", fallback=False)
+            if isinstance(provider, OllamaEmbeddingProvider):
+                self._embedding_provider = provider
+                logger.info("OllamaEmbeddingProvider initialized successfully")
+                return self._embedding_provider
+        except Exception as exc:
+            logger.debug(
+                "Failed to initialize OllamaEmbeddingProvider: %s. "
+                "Will use DeterministicEmbeddingProvider as fallback.",
+                exc,
+            )
+
+        return None
+
     def _repository(self) -> MemoryRepository:
         if self.repository is not None:
             return self.repository
@@ -269,6 +322,37 @@ class CopilotService:
         init_db(conn)
         self.repository = MemoryRepository(conn)
         return self.repository
+
+    def _try_auto_init_cognee(self) -> None:
+        """Attempt to auto-initialize Cognee adapter with configuration validation.
+
+        This method logs at debug level instead of raising exceptions to allow
+        graceful fallback to repository-based retrieval without noisy warnings
+        in test environments.
+        """
+        if self._cognee_initialization_attempted:
+            return
+
+        self._cognee_initialization_attempted = True
+        try:
+            self.cognee_adapter = CogneeMemoryAdapter()
+            # Attempt to load client to validate configuration
+            self.cognee_adapter.ensure_client()
+            logger.info("Cognee adapter auto-initialized successfully")
+        except CogneeAdapterNotConfigured as exc:
+            logger.debug(
+                "Cognee adapter auto-initialization skipped: %s. "
+                "Falling back to repository-based retrieval.",
+                exc
+            )
+            self.cognee_adapter = None
+        except Exception as exc:
+            logger.debug(
+                "Unexpected error during Cognee adapter auto-initialization: %s. "
+                "Falling back to repository-based retrieval.",
+                exc
+            )
+            self.cognee_adapter = None
 
     def _permission_denied(
         self,

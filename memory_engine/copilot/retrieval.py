@@ -11,7 +11,13 @@ from memory_engine.models import normalize_subject, parse_scope
 from memory_engine.repository import MemoryRepository
 
 from .cognee_adapter import CogneeMemoryAdapter
-from .embeddings import CuratedMemoryEmbeddingText, DeterministicEmbeddingProvider, cosine_similarity
+from .embeddings import (
+    CuratedMemoryEmbeddingText,
+    DeterministicEmbeddingProvider,
+    OllamaEmbeddingProvider,
+    cosine_similarity,
+    create_embedding_provider,
+)
 from .schemas import Evidence, MemoryLayer, MemoryResult, RetrievalTraceStep, SearchRequest
 
 
@@ -109,11 +115,16 @@ class LayerAwareRetriever:
         repository: MemoryRepository,
         *,
         cognee_adapter: CogneeMemoryAdapter | None = None,
-        embedding_provider: DeterministicEmbeddingProvider | None = None,
+        embedding_provider: DeterministicEmbeddingProvider | OllamaEmbeddingProvider | None = None,
     ) -> None:
         self.repository = repository
         self.cognee_adapter = cognee_adapter
-        self.embedding_provider = embedding_provider or DeterministicEmbeddingProvider()
+
+        # Use provided provider or create one automatically
+        if embedding_provider is not None:
+            self.embedding_provider = embedding_provider
+        else:
+            self.embedding_provider = _load_ollama_embedding_provider()
 
     def search_layer(self, request: SearchRequest, layer: MemoryLayer) -> LayerSearchResult:
         trace_steps: list[RetrievalTraceStep] = []
@@ -550,6 +561,30 @@ def _recency_score(now_ms: int, updated_at: int) -> float:
         return 0.0
     age_days = max((now_ms - updated_at) / 86_400_000, 0.0)
     return max(0.0, 10.0 - age_days)
+
+
+def _load_ollama_embedding_provider() -> OllamaEmbeddingProvider | DeterministicEmbeddingProvider:
+    """Load OllamaEmbeddingProvider with fallback to DeterministicEmbeddingProvider.
+
+    This function tries to create an OllamaEmbeddingProvider first. If it fails
+    (e.g., litellm not available, Ollama not running), it falls back to
+    DeterministicEmbeddingProvider.
+    """
+    try:
+        provider = create_embedding_provider(provider="ollama", fallback=False)
+        if isinstance(provider, OllamaEmbeddingProvider):
+            return provider
+    except Exception as exc:
+        # Log at debug level to avoid noise in test environments
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug(
+            "Failed to create OllamaEmbeddingProvider: %s. "
+            "Falling back to DeterministicEmbeddingProvider.",
+            exc,
+        )
+
+    return DeterministicEmbeddingProvider()
 
 
 def _event_loop_is_running() -> bool:

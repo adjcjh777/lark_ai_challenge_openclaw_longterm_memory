@@ -18,9 +18,14 @@ def main() -> int:
         description="Run Phase 6 deployability and healthcheck diagnostics without production deployment or real Feishu push."
     )
     parser.add_argument("--json", action="store_true", help="Print the full healthcheck report as JSON.")
+    parser.add_argument(
+        "--live-embedding-check",
+        action="store_true",
+        help="Perform live embedding API calls to verify Ollama provider availability.",
+    )
     args = parser.parse_args()
 
-    report = run_copilot_healthcheck()
+    report = run_copilot_healthcheck(live_embedding_check=args.live_embedding_check)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:

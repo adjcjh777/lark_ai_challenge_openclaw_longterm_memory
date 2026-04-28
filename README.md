@@ -92,7 +92,63 @@ data/memory.sqlite
 export MEMORY_DB_PATH=/tmp/memory.sqlite
 ```
 
-### 2.3 运行本地健康检查
+### 2.3 配置 Cognee（可选，用于真实 Cognee 运行）
+
+Cognee 是可选的 recall channel，用于增强记忆检索能力。如需使用真实 Cognee 运行：
+
+#### 2.3.1 配置环境变量
+
+复制 `.env.example` 到 `.env`，并配置必要的环境变量：
+
+```bash
+cp .env.example .env
+```
+
+编辑 `.env` 文件，配置以下关键变量：
+
+```text
+# LLM 配置（Cognee 推理需要）
+LLM_PROVIDER=custom
+LLM_MODEL=gpt-5.3-codex-high
+LLM_ENDPOINT=https://right.codes/codex/v1
+LLM_API_KEY=your_rightcode_api_key_here  # 必填
+
+# Embedding 配置（本地 Ollama）
+EMBEDDING_MODEL=ollama/qwen3-embedding:0.6b-fp16
+EMBEDDING_ENDPOINT=http://localhost:11434
+EMBEDDING_DIMENSIONS=1024
+```
+
+#### 2.3.2 确保 Ollama 服务运行
+
+```bash
+# 启动 Ollama 服务（如果未运行）
+ollama serve
+
+# 拉取 embedding 模型
+ollama pull qwen3-embedding:0.6b-fp16
+```
+
+#### 2.3.3 验证 Cognee 配置
+
+```bash
+# 运行 dry-run 测试
+python3 scripts/spike_cognee_local.py --dry-run
+
+# 运行真实 Cognee spike 测试
+python3 scripts/spike_cognee_local.py --scope project:feishu_ai_challenge --query "测试查询"
+```
+
+#### 2.3.4 Cognee 配置说明
+
+- **LLM_PROVIDER**: 使用 `custom` 配合 RightCode 服务
+- **LLM_API_KEY**: 必填，RightCode API 密钥
+- **EMBEDDING_MODEL**: 默认使用本地 Ollama 的 `qwen3-embedding:0.6b-fp16`
+- **EMBEDDING_ENDPOINT**: Ollama 服务地址，默认 `http://localhost:11434`
+
+如需使用其他 embedding 模型，可参考 `docs/reference/local-windows-cognee-embedding-setup.md` 中的备选方案。
+
+### 2.4 运行本地健康检查
 
 ```bash
 python3 scripts/check_copilot_health.py
@@ -109,8 +165,55 @@ python3 scripts/check_copilot_health.py --json
 - search smoke test。
 - candidate review smoke test。
 - audit smoke test。
-- Cognee adapter / embedding provider 状态。
+- Cognee adapter 状态（检查 SDK 可用性、配置有效性、是否已注入客户端）。
+- Embedding provider 状态（检查配置和本地 Ollama 服务）。
 - first-class OpenClaw tool registry 状态。
+
+#### Cognee Adapter 状态说明
+
+健康检查中 `cognee_adapter` 的状态含义：
+
+- **pass**: Cognee SDK 已安装，配置有效，客户端已注入，可正常使用。
+- **warning**: Cognee SDK 已安装，配置有效，但客户端未自动注入（需要在代码中显式初始化）。
+- **fallback_used**: Cognee SDK 未安装或配置无效，使用 repository 回退。
+- **fail**: Cognee adapter 导入或初始化失败。
+
+如需真实 Cognee 运行，请确保：
+
+1. Cognee SDK 已安装（`pip install cognee`）
+2. `.env` 文件中配置了有效的 `LLM_API_KEY`
+3. Ollama 服务正在运行并已拉取 embedding 模型
+
+#### Embedding Provider 状态说明
+
+健康检查中 `embedding_provider` 的状态含义：
+
+- **pass**: OllamaEmbeddingProvider 已配置并可用，可生成真实语义向量。
+- **warning**: litellm 已安装但 Ollama 服务不可用，使用 DeterministicEmbeddingProvider 作为 fallback。
+- **not_configured**: litellm 未安装，无法使用真实 embedding。
+
+验证 embedding 服务：
+
+```bash
+# 检查 embedding 提供者状态
+python3 scripts/check_embedding_provider.py --timeout 60
+
+# 运行完整的 live embedding gate 测试
+python3 scripts/check_live_embedding_gate.py --json
+
+# 运行带有 live embedding check 的健康检查
+python3 scripts/check_copilot_health.py --json --live-embedding-check
+```
+
+Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中）：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| provider | ollama | Embedding 提供者 |
+| model | qwen3-embedding:0.6b-fp16 | Ollama 模型名称 |
+| litellm_model | ollama/qwen3-embedding:0.6b-fp16 | litellm 模型标识 |
+| endpoint | http://localhost:11434 | Ollama 服务地址 |
+| dimensions | 1024 | 向量维度 |
 
 ### 2.4 运行 Demo readiness
 
@@ -407,6 +510,22 @@ python3 scripts/check_copilot_health.py --json
 python3 scripts/check_demo_readiness.py --json
 ```
 
+Cognee 相关验证：
+
+```bash
+# 检查 Cognee SDK 可用性
+python3 -c "import cognee; print('Cognee SDK available')"
+
+# 运行 Cognee dry-run 测试
+python3 scripts/spike_cognee_local.py --dry-run
+
+# 运行真实 Cognee spike 测试
+python3 scripts/spike_cognee_local.py --scope project:feishu_ai_challenge --query "生产部署参数"
+
+# 检查 embedding 服务状态
+python3 scripts/check_embedding_provider.py
+```
+
 Benchmark：
 
 ```bash
@@ -440,6 +559,6 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 全量飞书 workspace ingestion。
 - 多租户企业后台。
 - 真实权限后台。
-- 长期在线 embedding 服务。
+- 生产级长期在线 embedding 服务（本地 Ollama 已集成，非生产级）。
 - 长期监控、告警、回滚。
 - 真实 Feishu DM 稳定路由到本项目 first-class `memory.*` 工具。
