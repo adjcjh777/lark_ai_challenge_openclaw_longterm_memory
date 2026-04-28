@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成。下一步验收从 Phase B 真实 OpenClaw Agent Runtime 证据开始，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`。下一步验收从 Phase D live embedding gate 和 Phase E no-overclaim 审查开始，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
@@ -146,7 +146,7 @@ Checks:
 - [x] missing/malformed permission context fail closed。
 - [x] 文档明确不是 Feishu live ingestion。
 
-当前状态：permission fail-closed 和 OpenClaw live bridge 已完成，见 commit `cb21bc7`。仍不是 Feishu live ingestion。
+当前状态：permission fail-closed 和 OpenClaw live bridge 已完成，见 commit `cb21bc7`。Phase B runtime evidence 已补：OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用证据脚本，三条 Copilot flow 全部 `ok=true`。仍不是 Feishu live ingestion，也不宣称 `memory.*` 已作为 OpenClaw first-class 原生工具注册。
 
 Commands:
 
