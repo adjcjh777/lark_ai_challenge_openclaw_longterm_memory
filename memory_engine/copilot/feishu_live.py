@@ -381,11 +381,17 @@ def _current_context(
     thread_topic: str,
 ) -> dict[str, Any]:
     request_suffix = re.sub(r"[^A-Za-z0-9_]+", "_", action)
+    tenant_id = os.environ.get("COPILOT_FEISHU_TENANT_ID", DEFAULT_TENANT_ID)
+    organization_id = os.environ.get("COPILOT_FEISHU_ORGANIZATION_ID", DEFAULT_ORGANIZATION_ID)
+    visibility = os.environ.get("COPILOT_FEISHU_VISIBILITY", "team")
     return {
         "session_id": f"feishu:{event.chat_id}",
         "chat_id": event.chat_id,
         "scope": scope,
         "user_id": event.sender_id,
+        "tenant_id": tenant_id,
+        "organization_id": organization_id,
+        "visibility_policy": visibility,
         "intent": intent,
         "thread_topic": thread_topic[:80],
         "allowed_scopes": [scope],
@@ -399,8 +405,8 @@ def _current_context(
             "trace_id": f"trace_feishu_{_short_id(event.message_id)}",
             "actor": {
                 "open_id": event.sender_id or "unknown_feishu_actor",
-                "tenant_id": os.environ.get("COPILOT_FEISHU_TENANT_ID", DEFAULT_TENANT_ID),
-                "organization_id": os.environ.get("COPILOT_FEISHU_ORGANIZATION_ID", DEFAULT_ORGANIZATION_ID),
+                "tenant_id": tenant_id,
+                "organization_id": organization_id,
                 "roles": _roles_for_sender(event.sender_id),
             },
             "source_context": {
@@ -409,7 +415,7 @@ def _current_context(
                 "chat_id": event.chat_id,
             },
             "requested_action": action,
-            "requested_visibility": os.environ.get("COPILOT_FEISHU_VISIBILITY", "team"),
+            "requested_visibility": visibility,
             "timestamp": _event_time_iso(event),
         },
     }

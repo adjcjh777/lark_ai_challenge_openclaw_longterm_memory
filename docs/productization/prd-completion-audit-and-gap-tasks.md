@@ -9,7 +9,7 @@
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
 4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、OpenClaw Feishu websocket running 本机 staging 证据和 P1 生产存储/索引/迁移方案。
+5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、OpenClaw Feishu websocket running 本机 staging 证据、P1 生产存储/索引/迁移方案和真实飞书权限映射。
 6. 所有未完成任务仍由程俊豪负责，后续不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
 
 ## 结论总览
@@ -71,6 +71,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 | 实现 `memory.*` first-class OpenClaw 原生工具注册 | P0 | 程俊豪 | 2026-04-28 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/tool_registry.py`、`memory_engine/copilot/openclaw_tool_runner.py`、[first-class tools handoff](first-class-openclaw-tools-handoff.md) | `feishu-memory-copilot` 插件可安装启用；`openclaw plugins inspect feishu-memory-copilot --json` 读回 7 个 `toolNames`；runner 调用仍进入 `handle_tool_request()` / `CopilotService` 并保留 bridge metadata。 |
 | 补 OpenClaw Feishu websocket running 本机 staging 证据 | P0 | 程俊豪 | 2026-04-28 | `scripts/check_openclaw_feishu_websocket.py`、`tests/test_openclaw_feishu_websocket_evidence.py`、[websocket handoff](openclaw-feishu-websocket-handoff.md)、[Feishu staging runbook](feishu-staging-runbook.md) | `channels.status` 显示 Feishu channel 和 default account running；真实 DM 已进入 OpenClaw Agent dispatch；没有 repo 内 lark-cli listener 冲突；health running 字段不一致写为 warning；真实 ID 不写仓库。 |
 | 补生产存储、索引和迁移方案 | P1 | 程俊豪 | 2026-04-28 | `memory_engine/storage_migration.py`、`scripts/migrate_copilot_storage.py`、`memory_engine/copilot/healthcheck.py`、[storage migration handoff](storage-migration-productization-handoff.md) | dry-run 不改库并报告缺失表/列/索引；apply 可重复执行；healthcheck 报告 schema version、index status、audit status；文档写清 SQLite 与托管 PostgreSQL 试点边界、备份恢复、审计保留和数据删除策略。 |
+| 补真实飞书权限映射 | P0 | 程俊豪 | 2026-04-28 | `memory_engine/copilot/permissions.py`、`memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/governance.py`、[permission mapping handoff](real-feishu-permission-mapping-handoff.md) | 非 demo tenant/org 在目标上下文一致时允许；tenant/org/private/source context mismatch fail closed；真实飞书 candidate 写入 tenant/org/visibility ledger；deny 不返回明文 evidence/current_value。 |
 
 ## 仍未完成任务拆分
 

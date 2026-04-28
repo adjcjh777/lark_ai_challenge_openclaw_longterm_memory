@@ -15,16 +15,23 @@ from memory_engine.repository import MemoryRepository
 SCOPE = "project:feishu_ai_challenge"
 
 
-def current_context(action: str = "memory.search") -> dict[str, object]:
+def current_context(
+    action: str = "memory.search",
+    *,
+    tenant_id: str = "tenant:demo",
+    organization_id: str = "org:demo",
+) -> dict[str, object]:
     return {
         "scope": SCOPE,
+        "tenant_id": tenant_id,
+        "organization_id": organization_id,
         "permission": {
             "request_id": f"req_{action.replace('.', '_')}",
             "trace_id": f"trace_{action.replace('.', '_')}",
             "actor": {
                 "user_id": "ou_test",
-                "tenant_id": "tenant:demo",
-                "organization_id": "org:demo",
+                "tenant_id": tenant_id,
+                "organization_id": organization_id,
                 "roles": ["member", "reviewer"],
             },
             "source_context": {"entrypoint": "unit_test", "workspace_id": SCOPE},
@@ -208,6 +215,36 @@ class CopilotRetrievalTest(unittest.TestCase):
         l1_rerank = _trace_step(response, layer="L1", stage="rerank")
         self.assertEqual("dropped_missing_evidence", l1_rerank["note"])
         self.assertEqual(1, l1_rerank["dropped_count"])
+
+    def test_search_filters_active_memories_by_permission_tenant_and_org(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "生产部署必须加 --canary --region cn-shanghai。",
+                source_type="unit_test",
+            )
+            conn.execute(
+                "UPDATE memories SET tenant_id = 'tenant:other', organization_id = 'org:other'"
+            )
+            conn.commit()
+
+            response = CopilotService(repository=repo).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "生产部署参数",
+                        "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertEqual([], response["results"])
+        self.assertNotIn("--canary", str(response))
 
     def test_cognee_result_missing_provenance_is_backfilled_from_ledger(self) -> None:
         class FakeCogneeAdapter:

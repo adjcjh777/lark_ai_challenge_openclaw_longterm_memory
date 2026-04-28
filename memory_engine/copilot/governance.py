@@ -57,9 +57,13 @@ class CopilotGovernance:
         parsed_scope = parse_scope(request.scope)
         ts = now_ms()
         event_id = self._insert_raw_event(request, extracted.current_value, ts)
+        tenant_id = _tenant_id(request.current_context)
+        organization_id = _organization_id(request.current_context)
         existing = self._find_existing(
             parsed_scope.scope_type,
             parsed_scope.scope_id,
+            tenant_id,
+            organization_id,
             extracted.type,
             extracted.normalized_subject,
             allow_type_fallback=True,
@@ -201,13 +205,18 @@ class CopilotGovernance:
         self.repository.conn.execute(
             """
             INSERT INTO raw_events (
-              id, source_type, source_id, scope_type, scope_id, sender_id,
+              id, tenant_id, organization_id, workspace_id, visibility_policy,
+              source_type, source_id, scope_type, scope_id, sender_id,
               event_time, content, raw_json, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event_id,
+                _tenant_id(request.current_context),
+                _organization_id(request.current_context),
+                _workspace_id(request.current_context, request.scope),
+                _visibility_policy(request.current_context),
                 request.source.source_type,
                 request.source.source_id,
                 parsed_scope.scope_type,
@@ -235,15 +244,20 @@ class CopilotGovernance:
         self.repository.conn.execute(
             """
             INSERT INTO memories (
-              id, scope_type, scope_id, type, subject, normalized_subject,
+              id, tenant_id, organization_id, workspace_id, visibility_policy,
+              scope_type, scope_id, type, subject, normalized_subject,
               current_value, reason, status, confidence, importance,
-              created_by, updated_by, source_event_id, active_version_id,
+              owner_id, created_by, updated_by, source_event_id, active_version_id,
               created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 memory_id,
+                _tenant_id(request.current_context),
+                _organization_id(request.current_context),
+                _workspace_id(request.current_context, request.scope),
+                _visibility_policy(request.current_context),
                 parsed_scope.scope_type,
                 parsed_scope.scope_id,
                 extracted.type,
@@ -253,6 +267,7 @@ class CopilotGovernance:
                 extracted.reason,
                 extracted.confidence,
                 extracted.importance,
+                request.source.actor_id,
                 request.source.actor_id,
                 request.source.actor_id,
                 event_id,
@@ -529,14 +544,18 @@ class CopilotGovernance:
         self.repository.conn.execute(
             """
             INSERT INTO memory_versions (
-              id, memory_id, version_no, value, reason, status,
+              id, memory_id, tenant_id, organization_id, visibility_policy,
+              version_no, value, reason, status,
               source_event_id, created_by, created_at, supersedes_version_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 version_id,
                 memory_id,
+                _tenant_id_from_memory_context(self.repository.conn, memory_id),
+                _organization_id_from_memory_context(self.repository.conn, memory_id),
+                _visibility_policy_from_memory_context(self.repository.conn, memory_id),
                 version_no,
                 extracted.current_value,
                 extracted.reason,
@@ -552,18 +571,34 @@ class CopilotGovernance:
         self.repository.conn.execute(
             """
             INSERT INTO memory_evidence (
-              id, memory_id, version_id, source_type, source_url,
+              id, memory_id, version_id, tenant_id, organization_id, visibility_policy,
+              source_type, source_url,
               source_event_id, quote, actor_id, ingested_at, created_at
             )
-            VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
             """,
-            (new_id("evi"), memory_id, version_id, source_type, event_id, quote, None, ts, ts),
+            (
+                new_id("evi"),
+                memory_id,
+                version_id,
+                _tenant_id_from_memory_context(self.repository.conn, memory_id),
+                _organization_id_from_memory_context(self.repository.conn, memory_id),
+                _visibility_policy_from_memory_context(self.repository.conn, memory_id),
+                source_type,
+                event_id,
+                quote,
+                None,
+                ts,
+                ts,
+            ),
         )
 
     def _find_existing(
         self,
         scope_type: str,
         scope_id: str,
+        tenant_id: str,
+        organization_id: str,
         memory_type: str,
         normalized_subject: str,
         *,
@@ -575,10 +610,12 @@ class CopilotGovernance:
             FROM memories
             WHERE scope_type = ?
               AND scope_id = ?
+              AND tenant_id = ?
+              AND organization_id = ?
               AND type = ?
               AND normalized_subject = ?
             """,
-            (scope_type, scope_id, memory_type, normalized_subject),
+            (scope_type, scope_id, tenant_id, organization_id, memory_type, normalized_subject),
         ).fetchone()
         if exact is not None or not allow_type_fallback:
             return exact
@@ -588,12 +625,14 @@ class CopilotGovernance:
             FROM memories
             WHERE scope_type = ?
               AND scope_id = ?
+              AND tenant_id = ?
+              AND organization_id = ?
               AND normalized_subject = ?
               AND status = 'active'
             ORDER BY updated_at DESC, id
             LIMIT 1
             """,
-            (scope_type, scope_id, normalized_subject),
+            (scope_type, scope_id, tenant_id, organization_id, normalized_subject),
         ).fetchone()
 
     def _memory_by_id(self, memory_id: str) -> Any:
@@ -719,6 +758,68 @@ def _context_for_auto_confirm(current_context: dict[str, Any]) -> dict[str, Any]
             confirm_permission["request_id"] = f"{confirm_permission['request_id']}:confirm"
         context["permission"] = confirm_permission
     return context
+
+
+def _tenant_id(context: dict[str, Any]) -> str:
+    value = context.get("tenant_id")
+    if isinstance(value, str) and value:
+        return value
+    permission = context.get("permission")
+    actor = permission.get("actor") if isinstance(permission, dict) else {}
+    actor = actor if isinstance(actor, dict) else {}
+    value = actor.get("tenant_id")
+    return value if isinstance(value, str) and value else "tenant:demo"
+
+
+def _organization_id(context: dict[str, Any]) -> str:
+    value = context.get("organization_id")
+    if isinstance(value, str) and value:
+        return value
+    permission = context.get("permission")
+    actor = permission.get("actor") if isinstance(permission, dict) else {}
+    actor = actor if isinstance(actor, dict) else {}
+    value = actor.get("organization_id")
+    return value if isinstance(value, str) and value else "org:demo"
+
+
+def _visibility_policy(context: dict[str, Any]) -> str:
+    value = context.get("visibility_policy")
+    if isinstance(value, str) and value:
+        return value
+    permission = context.get("permission")
+    if isinstance(permission, dict):
+        value = permission.get("requested_visibility")
+        if isinstance(value, str) and value:
+            return value
+    return "team"
+
+
+def _workspace_id(context: dict[str, Any], fallback_scope: str) -> str:
+    permission = context.get("permission")
+    source_context = permission.get("source_context") if isinstance(permission, dict) else {}
+    source_context = source_context if isinstance(source_context, dict) else {}
+    value = source_context.get("workspace_id")
+    return value if isinstance(value, str) and value else fallback_scope
+
+
+def _tenant_id_from_memory_context(conn: Any, memory_id: str) -> str:
+    return _memory_context_value(conn, memory_id, "tenant_id", "tenant:demo")
+
+
+def _organization_id_from_memory_context(conn: Any, memory_id: str) -> str:
+    return _memory_context_value(conn, memory_id, "organization_id", "org:demo")
+
+
+def _visibility_policy_from_memory_context(conn: Any, memory_id: str) -> str:
+    return _memory_context_value(conn, memory_id, "visibility_policy", "team")
+
+
+def _memory_context_value(conn: Any, memory_id: str, column: str, fallback: str) -> str:
+    row = conn.execute(f"SELECT {column} FROM memories WHERE id = ?", (memory_id,)).fetchone()
+    if row is None:
+        return fallback
+    value = row[column]
+    return value if isinstance(value, str) and value else fallback
 
 
 def _recommended_action(risk_flags: list[str], conflict: dict[str, Any]) -> str:

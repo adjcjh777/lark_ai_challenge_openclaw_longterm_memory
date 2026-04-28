@@ -228,6 +228,9 @@ class LayerAwareRetriever:
             return [], "l3_raw_events_blocked_for_default_search"
 
         parsed_scope = parse_scope(request.scope)
+        context = request.current_context.to_dict()
+        tenant_id = _target_context_value(context, "tenant_id")
+        organization_id = _target_context_value(context, "organization_id")
         rows = self.repository.conn.execute(
             """
             SELECT
@@ -253,10 +256,12 @@ class LayerAwareRetriever:
             LEFT JOIN raw_events r ON r.id = e.source_event_id
             WHERE m.scope_type = ?
               AND m.scope_id = ?
+              AND m.tenant_id = ?
+              AND m.organization_id = ?
               AND m.status = 'active'
             ORDER BY m.updated_at DESC, m.id
             """,
-            (parsed_scope.scope_type, parsed_scope.scope_id),
+            (parsed_scope.scope_type, parsed_scope.scope_id, tenant_id, organization_id),
         ).fetchall()
 
         expected_type = request.filters.get("type")
@@ -521,6 +526,23 @@ def _tokens(text: str) -> list[str]:
     if current:
         ascii_chunks.append("".join(current))
     return words + cjk_chars + ascii_chunks
+
+
+def _target_context_value(context: dict[str, Any], field_name: str) -> str:
+    value = context.get(field_name)
+    if isinstance(value, str) and value:
+        return value
+    permission = context.get("permission")
+    actor = permission.get("actor") if isinstance(permission, dict) else {}
+    actor = actor if isinstance(actor, dict) else {}
+    value = actor.get(field_name)
+    if isinstance(value, str) and value:
+        return value
+    if field_name == "tenant_id":
+        return "tenant:demo"
+    if field_name == "organization_id":
+        return "org:demo"
+    return ""
 
 
 def _recency_score(now_ms: int, updated_at: int) -> float:

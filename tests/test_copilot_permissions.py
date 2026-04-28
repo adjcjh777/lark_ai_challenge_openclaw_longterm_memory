@@ -21,8 +21,12 @@ def permission_context(
     roles: list[str] | None = None,
     visibility: str = "team",
     workspace_id: str = SCOPE,
+    context_tenant_id: str | None = None,
+    context_organization_id: str | None = None,
+    context_chat_id: str | None = None,
+    source_chat_id: str | None = None,
 ) -> dict[str, object]:
-    return {
+    context: dict[str, object] = {
         "scope": SCOPE,
         "permission": {
             "request_id": f"req_{action.replace('.', '_')}",
@@ -42,6 +46,15 @@ def permission_context(
             "timestamp": "2026-05-07T00:00:00+08:00",
         },
     }
+    if context_tenant_id:
+        context["tenant_id"] = context_tenant_id
+    if context_organization_id:
+        context["organization_id"] = context_organization_id
+    if context_chat_id:
+        context["chat_id"] = context_chat_id
+    if source_chat_id:
+        context["permission"]["source_context"]["chat_id"] = source_chat_id  # type: ignore[index]
+    return context
 
 
 class CopilotPermissionTest(unittest.TestCase):
@@ -111,6 +124,68 @@ class CopilotPermissionTest(unittest.TestCase):
 
         self.assert_permission_denied(response, "organization_mismatch")
         self.assertNotIn("results", response)
+
+    def test_real_feishu_tenant_and_org_are_allowed_when_context_matches(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_perm_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            service = CopilotService(repository=MemoryRepository(conn))
+            response = handle_tool_request(
+                "memory.create_candidate",
+                {
+                    "text": "决定：真实飞书试点群只进入 candidate。",
+                    "scope": SCOPE,
+                    "source": {
+                        "source_type": "feishu_message",
+                        "source_id": "om_real_tenant",
+                        "actor_id": "ou_real_user",
+                        "created_at": "2026-04-28T10:00:00+08:00",
+                        "quote": "决定：真实飞书试点群只进入 candidate。",
+                        "source_chat_id": "oc_real_chat",
+                    },
+                    "current_context": permission_context(
+                        action="memory.create_candidate",
+                        user_id="u_real_user",
+                        tenant_id="tenant:feishu-prod",
+                        organization_id="org:feishu-ai",
+                        context_tenant_id="tenant:feishu-prod",
+                        context_organization_id="org:feishu-ai",
+                        context_chat_id="oc_real_chat",
+                        source_chat_id="oc_real_chat",
+                    ),
+                },
+                service=service,
+            )
+            memory_row = conn.execute("SELECT tenant_id, organization_id FROM memories").fetchone()
+            raw_row = conn.execute("SELECT tenant_id, organization_id FROM raw_events").fetchone()
+            conn.close()
+
+        self.assertTrue(response["ok"], response)
+        self.assertEqual("candidate", response["status"])
+        self.assertEqual("tenant:feishu-prod", memory_row["tenant_id"])
+        self.assertEqual("org:feishu-ai", memory_row["organization_id"])
+        self.assertEqual("tenant:feishu-prod", raw_row["tenant_id"])
+        self.assertEqual("org:feishu-ai", raw_row["organization_id"])
+
+    def test_source_context_chat_mismatch_denies_without_evidence(self) -> None:
+        with seeded_service() as service:
+            response = handle_tool_request(
+                "memory.search",
+                {
+                    "query": "生产部署参数",
+                    "scope": SCOPE,
+                    "current_context": permission_context(
+                        action="memory.search",
+                        context_chat_id="oc_expected_chat",
+                        source_chat_id="oc_other_chat",
+                    ),
+                },
+                service=service,
+            )
+
+        self.assert_permission_denied(response, "source_context_mismatch")
+        self.assertNotIn("results", response)
+        self.assertNotIn("--canary", str(response))
 
     def test_private_visibility_denies_non_owner_member(self) -> None:
         response = handle_tool_request(

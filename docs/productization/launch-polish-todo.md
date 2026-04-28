@@ -106,7 +106,7 @@ git diff --check
 ollama ps
 ```
 
-### 3. P0：把 demo 权限模型升级为真实飞书权限映射
+### 3. P0：把 demo 权限模型升级为真实飞书权限映射（已完成本地映射闭环）
 
 要做什么：把当前 `tenant:demo` / `org:demo` 常量式权限检查，升级为从飞书用户、群聊、文档、组织和角色解析出的真实 permission context。
 
@@ -123,11 +123,18 @@ ollama ps
 
 完成标准：
 
-- permission context 能映射真实飞书 actor、tenant、organization、chat、document。
-- tenant mismatch、organization mismatch、private non-owner、source context mismatch 全部 deny。
-- deny response 不返回 `current_value`、`summary`、`evidence` 明文。
-- confirm / reject 仍要求 reviewer / owner / admin。
-- 真实 Feishu doc fetch 前必须先通过 permission gate。
+- 已完成：permission context 能映射真实飞书 actor、tenant、organization、chat；`WorkingContext` 已支持 tenant、organization、visibility、document 字段。
+- 已完成：tenant mismatch、organization mismatch、private non-owner、source context mismatch 全部 deny。
+- 已完成：deny response 不返回 `current_value`、`summary`、`evidence` 明文。
+- 已完成：confirm / reject 仍要求 reviewer / owner / admin。
+- 已完成：真实 Feishu doc fetch 前必须先通过 permission gate；本阶段保留 candidate-only 边界，不声明全量 ingestion。
+
+已完成证据：
+
+- `memory_engine/copilot/permissions.py` 不再只允许 `tenant:demo` / `org:demo`，而是优先用 `current_context.tenant_id` / `organization_id` 作为目标上下文。
+- `memory_engine/copilot/feishu_live.py` 会把 `COPILOT_FEISHU_TENANT_ID`、`COPILOT_FEISHU_ORGANIZATION_ID`、`COPILOT_FEISHU_VISIBILITY` 映射到 `current_context` 和 `current_context.permission`。
+- `memory_engine/copilot/governance.py` 创建真实飞书 candidate 时会把 tenant、organization、workspace、visibility 写入 `raw_events`、`memories`、`memory_versions` 和 `memory_evidence`。
+- 新增 [真实飞书权限映射 handoff](real-feishu-permission-mapping-handoff.md)。
 
 建议验证：
 
