@@ -16,7 +16,7 @@
 - 新增 [scripts/openclaw_runtime_evidence.py](../../scripts/openclaw_runtime_evidence.py)：用临时 SQLite 跑 `memory.search`、`memory.create_candidate + memory.confirm`、`memory.prefetch` 三条 Phase B flow。
 - 新增 [tests/test_openclaw_runtime_evidence.py](../../tests/test_openclaw_runtime_evidence.py)：锁住三条 flow 的工具名、成功状态、request/trace 元数据和 candidate -> active 状态变化。
 - 新增 [openclaw-runtime-evidence.md](openclaw-runtime-evidence.md)：记录 OpenClaw ping、Agent runtime run id、三条 flow 和边界说明。
-- 更新 README 顶部任务区：Phase B 已有 runtime evidence；Phase D 已补 live embedding gate，下一步进入 Phase E no-overclaim 审查。
+- 更新 README 顶部任务区：Phase B 已有 runtime evidence；Phase D 已补 live embedding gate；Phase E no-overclaim 审查已完成，后续按需评估 `memory.*` first-class OpenClaw 原生工具注册。
 - 更新产品化主控文档和 PRD gap tasks：把真实 OpenClaw runtime 验收从未完成项移到已完成项，同时保留 first-class tool registry 和 Feishu websocket 的风险边界。
 
 ## 怎么复现

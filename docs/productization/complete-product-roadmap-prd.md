@@ -21,7 +21,8 @@ Metadata:
 2. Phase B：真实 OpenClaw Agent Runtime 验收（已完成受控证据，见 [Phase B evidence](openclaw-runtime-evidence.md)）。
 3. Phase C：Feishu Staging Runbook（已完成单监听守卫和 runbook）。
 4. Phase D：Live Cognee / Ollama Embedding Gate（已完成，见 [Phase D handoff](phase-d-live-embedding-handoff.md)）。
-5. Phase E：Product QA + No-overclaim 审查（下一步）。
+5. Phase E：Product QA + No-overclaim 审查（已完成，见 [Phase E handoff](phase-e-no-overclaim-handoff.md)）。
+6. 后续若继续推进，优先评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live，但当前不宣称这些已经完成。
 
 ---
 

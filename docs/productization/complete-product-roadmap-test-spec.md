@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`。下一步验收从 Phase E no-overclaim 审查开始，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`。后续若继续推进，优先评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live；当前不宣称这些已经完成。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）

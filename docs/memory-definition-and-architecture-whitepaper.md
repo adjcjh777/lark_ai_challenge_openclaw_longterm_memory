@@ -5,6 +5,8 @@
 阶段：初赛可提交初稿
 
 > **状态更新（2026-04-28）**：本白皮书对应的 2026-05-05 文档任务已经完成，保留为初赛证明材料和产品化参考。后续不要从 2026-05-05 implementation plan 继续执行；新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
+>
+> **Phase E 审查补充（2026-04-28）**：白皮书原始边界是 2026-05-05 初赛初稿口径；当前仓库已经补齐 Phase B OpenClaw Agent runtime 受控证据和 Phase D live Cognee / Ollama embedding gate。可以说 runtime evidence 和 live embedding gate 已完成；仍不能说生产部署、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台或 `memory.*` first-class OpenClaw 原生工具注册已经完成。
 
 ## 先看这个
 
@@ -276,7 +278,7 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 | copilot_conflict | 12 | Conflict Accuracy = 1.0；Superseded Leakage = 0.0 | 能处理 old -> new 覆盖关系 |
 | copilot_layer | 15 | Layer Accuracy = 1.0；L1 Hot Recall p95 = 1.602 ms | 分层召回和 trace 字段可验收 |
 | copilot_prefetch | 6 | Agent Task Context Use Rate = 1.0 | Agent 任务前能拿到可用上下文包 |
-| copilot_heartbeat | 6 | Reminder Candidate Rate = 1.0；Sensitive Reminder Leakage Rate = 0.0 | 主动提醒候选克制且不泄漏敏感内容 |
+| copilot_heartbeat | 7 | Reminder Candidate Rate = 1.0；Sensitive Reminder Leakage Rate = 0.0 | 主动提醒候选克制且不泄漏敏感内容 |
 | day1 fallback | 10 | case_pass_rate = 1.0 | 旧本地 memory demo 仍可复现 |
 
 ### 6.3 代表样例
@@ -345,8 +347,8 @@ MVP 预留 `tenant_id`、`organization_id`、`visibility_policy` 等权限字段
 
 本阶段需要诚实说明这些风险：
 
-- Live OpenClaw gateway 不是 2026-05-05 白皮书硬验收项；Demo 以 schema examples 和 `scripts/demo_seed.py` dry-run 保底。
-- 真实 Cognee / Ollama embedding 不在本日验证范围；不能把白皮书写成所有 benchmark 都跑了真实 Cognee 搜索。
+- OpenClaw Agent runtime 已有受控证据：Agent 通过 `exec` 调用仓库证据脚本进入 `handle_tool_request()` / `CopilotService`，但 `memory.*` 仍未声明为 OpenClaw first-class 原生工具列表项，OpenClaw Feishu websocket running 证据也未完成。
+- 真实 Cognee / Ollama embedding 已由 Phase D live gate 单独验证，但不能把它写成长期 embedding 服务、默认生产门禁，或说所有 benchmark 都跑了真实 Cognee 搜索。
 - heartbeat 仍是 reminder candidate / dry-run，不真实发群。
 - Bitable / Card 是 review surface，不是 source of truth。
 - 完整多租户权限后台、审计 UI、管理员配置和跨组织隔离还未完成。
@@ -357,13 +359,14 @@ MVP 预留 `tenant_id`、`organization_id`、`visibility_policy` 等权限字段
 
 复赛路线按“先增强可信度，再扩大规模”的顺序推进：
 
-1. Live OpenClaw E2E：跑通真实 OpenClaw Agent 调用 memory tools，并把失败路径写入 runbook。
-2. Feishu review loop：让 Candidate Review card 和 Bitable review surface 与 Copilot Core 状态机联动，但仍不绕过 evidence gate。
-3. Cognee recall channel：在 benchmark 中明确区分 structured、keyword、vector、Cognee 的贡献，并记录 p50/p95。
-4. 权限后台：实现 tenant、organization、scope、visibility_policy 的管理和审计。
-5. 复赛级 benchmark：扩展更多真实企业对话、多轮冲突、跨文档证据、权限边界和长时间 heartbeat 样例。
-6. 录屏和部署体验：把 5 分钟 Demo 固定成一键 replay、截图清单和失败降级包。
-7. 旧入口收敛：把旧 CLI/Bot handler 继续封装到 Copilot Core 后面，避免双轨逻辑长期分叉。
+1. OpenClaw first-class 工具注册：让 `memory.*` 出现在 OpenClaw Agent 原生工具列表中，而不是只通过 `exec` 跑证据脚本。
+2. OpenClaw Feishu websocket running 证据：证明同一个 `Feishu Memory Engine bot` 只由一个监听入口接管。
+3. Feishu review loop：让 Candidate Review card 和 Bitable review surface 与 Copilot Core 状态机联动，但仍不绕过 evidence gate。
+4. Cognee recall channel：在 benchmark 中明确区分 structured、keyword、vector、Cognee 的贡献，并记录 p50/p95。
+5. 权限后台：实现 tenant、organization、scope、visibility_policy 的管理和审计。
+6. 复赛级 benchmark：扩展更多真实企业对话、多轮冲突、跨文档证据、权限边界和长时间 heartbeat 样例。
+7. 录屏和部署体验：把 5 分钟 Demo 固定成一键 replay、截图清单和失败降级包。
+8. 旧入口收敛：把旧 CLI/Bot handler 继续封装到 Copilot Core 后面，避免双轨逻辑长期分叉。
 
 ## 11. 一句话收口
 

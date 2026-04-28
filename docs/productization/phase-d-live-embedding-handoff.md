@@ -83,22 +83,23 @@ python3 -m compileall scripts memory_engine
 Phase D 备注：
 
 ```text
-Phase D live embedding gate 已通过：python3 scripts/check_live_embedding_gate.py --json 返回 ok=true；真实 provider ollama/qwen3-embedding:0.6b-fp16 endpoint http://localhost:11434，actual_dimensions=1024；Cognee dry-run adapter 通过；脚本已执行 ollama stop qwen3-embedding:0.6b-fp16，最终 running_after_cleanup=[]。验证还包括 tests.test_live_embedding_gate、compileall、git diff --check。边界：不是生产部署、长期 embedding 服务或 productized live；Phase E no-overclaim 审查仍待完成。
+Phase D live embedding gate 已通过：python3 scripts/check_live_embedding_gate.py --json 返回 ok=true；真实 provider ollama/qwen3-embedding:0.6b-fp16 endpoint http://localhost:11434，actual_dimensions=1024；Cognee dry-run adapter 通过；脚本已执行 ollama stop qwen3-embedding:0.6b-fp16，最终 running_after_cleanup=[]。验证还包括 tests.test_live_embedding_gate、compileall、git diff --check。边界：不是生产部署、长期 embedding 服务或 productized live；Phase E no-overclaim 审查已在 2026-04-28 完成，见 phase-e-no-overclaim-handoff.md。
 ```
 
 ## 下一步从哪里开始
 
-下一轮执行 Phase E：Product QA + No-overclaim 审查。
+Phase E：Product QA + No-overclaim 审查已完成。后续若继续产品化，优先评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live。
 
 直接入口：
 
 - [full-copilot-next-execution-doc.md](full-copilot-next-execution-doc.md)
 - [prd-completion-audit-and-gap-tasks.md](prd-completion-audit-and-gap-tasks.md)
+- [phase-e-no-overclaim-handoff.md](phase-e-no-overclaim-handoff.md)
 - [demo-runbook.md](../demo-runbook.md)
 - [benchmark-report.md](../benchmark-report.md)
 - [memory-definition-and-architecture-whitepaper.md](../memory-definition-and-architecture-whitepaper.md)
 
-Phase E 要交付：
+Phase E 已交付：
 
 - README、demo runbook、benchmark report、whitepaper、handoff 口径一致。
 - 不把 replay / dry-run / 测试群 sandbox / live embedding gate 写成生产 live。

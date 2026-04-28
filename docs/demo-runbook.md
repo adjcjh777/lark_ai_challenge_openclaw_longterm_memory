@@ -219,7 +219,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 |---|---|---|
 | OpenClaw gateway 不稳定 | 展示 `agent_adapters/openclaw/examples/*.json` | 用 `scripts/demo_seed.py` 的 tool dry-run 输出证明 contract |
 | 飞书权限或 Bitable 权限失败 | 不真实写生产空间 | 展示 `memory_engine/bitable_sync.py` dry-run 字段和 `docs/benchmark-report.md#bitable-dry-run-对齐` |
-| Cognee / Ollama 没启动 | 不把 demo 说成真实 embedding 验收 | 说明当前 demo 验证 Copilot Core、状态机、hybrid retrieval 和 dry-run；真实 Cognee spike 见 README |
+| Cognee / Ollama 没启动 | 不把 demo 说成长期 embedding 服务 | 说明当前 demo 验证 Copilot Core、状态机、hybrid retrieval 和 dry-run；Phase D live embedding gate 已单独证明本机 Ollama provider 可返回 1024 维，但这不等于 productized live |
 | 旧 Bot 被问到 | 明确旧 Bot 是 fallback | 展示 README 的“旧 CLI / Bot 兜底”，但叙事保持 OpenClaw-first |
 | benchmark 跑失败 | 保留失败输出 | 按 `failure_type`、case_id、recommended fix 记录到 handoff，不删除失败样例 |
 
@@ -241,4 +241,4 @@ reports/demo_replay.json
 
 ## 最后一页口径
 
-> Feishu Memory Copilot 把飞书协作里的“长期有效规则”从聊天噪声里提炼出来。OpenClaw Agent 用 tools 读取当前 active 记忆，Copilot Core 管状态和版本，Cognee 做本地 knowledge / memory substrate，飞书/Bitable/card 负责证据展示和审核。今天的 Demo 证明：它能记住当前结论、解释旧版本、任务前主动预取、生成克制的提醒候选，并且这些能力都有 benchmark 入口。
+> Feishu Memory Copilot 把飞书协作里的“长期有效规则”从聊天噪声里提炼出来。OpenClaw Agent 用 tools 读取当前 active 记忆，Copilot Core 管状态和版本，Cognee 做本地 knowledge / memory substrate，飞书/Bitable/card 负责证据展示和审核。今天的 Demo 证明：它能记住当前结论、解释旧版本、任务前主动预取、生成克制的提醒候选，并且这些能力都有 benchmark 入口。当前可补充说明：OpenClaw Agent runtime 已有受控证据，Phase D live embedding gate 已通过；但 demo 仍不等于生产部署、全量 Feishu workspace ingestion 或长期 embedding 服务。

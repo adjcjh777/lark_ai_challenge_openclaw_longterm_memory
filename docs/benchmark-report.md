@@ -50,7 +50,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | copilot_conflict | 12 | 1.0000 | Conflict Accuracy = 1.0000；Superseded Leakage = 0.0000；Evidence Coverage = 1.0000 | 无失败 |
 | copilot_layer | 15 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 1.602 ms | 无失败 |
 | copilot_prefetch | 6 | 1.0000 | Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000 | 无失败 |
-| copilot_heartbeat | 6 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000 | 无失败 |
+| copilot_heartbeat | 7 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000 | 无失败 |
 | day1 fallback | 10 | 1.0000 | 旧本地 memory demo 仍可复现 | 无失败 |
 
 ## 样例证据
@@ -130,7 +130,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 ## 当前局限
 
-- 样例规模仍是 MVP 级：recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 6 条。适合证明链路，不代表最终复赛级压力测试。
+- 样例规模仍是 MVP 级：recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 7 条。适合证明链路，不代表最终复赛级压力测试。
 - `reports/` 的 JSON / CSV 是本地运行证据，没有提交；评委材料优先读本报告和可复现命令。
 - Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。真实 Cognee / Ollama embedding 已由 Phase D live gate 单独验证，不把本 benchmark 报告写成长期 embedding 服务证明。
 - heartbeat 仍是 reminder candidate / dry-run，不真实发群，不绕过治理层自动写 active memory。

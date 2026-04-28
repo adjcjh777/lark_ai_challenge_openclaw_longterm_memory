@@ -13,7 +13,7 @@
 1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate。当前最大的产品化缺口是：no-overclaim 交付物审查，以及后续是否把 `memory.*` 注册成 OpenClaw first-class 原生工具。
+4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate；Phase E 已完成 no-overclaim 交付物审查。当前最大的后续产品化缺口是：是否把 `memory.*` 注册成 OpenClaw first-class 原生工具，以及是否继续补 OpenClaw Feishu websocket running 证据和 productized live。
 5. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
 6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
 
@@ -57,6 +57,7 @@ docs/productization/feishu-single-listener-handoff.md
 - Phase D live embedding gate：`python3 scripts/check_live_embedding_gate.py --json` 已真实调用 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维，并确认清理后无本项目 Ollama 模型驻留；healthcheck 仍保留 configuration-only，不把它写成长期 embedding 服务。
 - Demo readiness：`python3 scripts/check_demo_readiness.py --json` 已可通过。
 - Benchmark：recall、candidate、conflict、layer、prefetch、heartbeat 六类 runner 已有。
+- Phase E no-overclaim 审查：README、Demo runbook、Benchmark Report、白皮书、产品化主控和 handoff 口径已对齐；heartbeat 样例数统一为 7；白皮书已更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实；仍不宣称生产部署、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台或 `memory.*` first-class OpenClaw 原生工具注册。
 
 仍未完成：
 
@@ -245,7 +246,7 @@ ollama ps
 
 ## Phase D：Live Cognee / Ollama Embedding Gate
 
-状态：已完成可复现 live gate，详见 [Phase D handoff](phase-d-live-embedding-handoff.md)。下一步进入 Phase E no-overclaim 审查。
+状态：已完成可复现 live gate，详见 [Phase D handoff](phase-d-live-embedding-handoff.md)。Phase E no-overclaim 审查也已完成，见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。
 
 目标：把 embedding 从 configuration-only warning 推进到可选 live check，并保持可清理。
 
@@ -287,6 +288,8 @@ git diff --check
 
 ## Phase E：Product QA + No-overclaim 审查
 
+状态：已完成，详见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。下一步只有在明确继续产品化时，才评估 `memory.*` first-class OpenClaw 原生工具注册、OpenClaw Feishu websocket running 证据和 productized live。
+
 目标：让所有交付物讲同一个产品故事。
 
 主要文件：
@@ -303,12 +306,12 @@ docs/plans/*handoff.md
 
 必须检查：
 
-- 不把 replay 写成 live。
-- 不把 live sandbox 写成生产部署。
-- 不把 limited ingestion 写成全量 workspace ingestion。
-- 不把 configuration-only embedding 写成 live embedding 已通过。
-- 不把 local bridge 写成真实 OpenClaw runtime，除非 Phase B 已补证据。
-- 不把 candidate-only 写成自动 active。
+- 已完成：不把 replay 写成 live。
+- 已完成：不把 live sandbox 写成生产部署。
+- 已完成：不把 limited ingestion 写成全量 workspace ingestion。
+- 已完成：不把 configuration-only embedding 写成 live embedding 已通过；当前可说 Phase D live embedding gate 已单独通过。
+- 已完成：不把 local bridge 写成真实 OpenClaw runtime；当前可说 Phase B 已有 OpenClaw Agent runtime 受控证据，但仍不是 first-class tool registry。
+- 已完成：不把 candidate-only 写成自动 active。
 
 验收命令：
 
@@ -322,9 +325,9 @@ ollama ps
 
 完成标准：
 
-- README、runbook、benchmark report、whitepaper、handoff 口径一致。
-- 每个未完成项都有下一步任务入口。
-- 飞书共享看板与 README 顶部任务一致。
+- 已完成：README、runbook、benchmark report、whitepaper、handoff 口径一致。
+- 已完成：每个未完成项都有下一步任务入口。
+- 已完成：飞书共享看板与 README 顶部任务一致。
 
 ## 每轮执行前固定动作
 
@@ -400,14 +403,15 @@ docs/productization/contracts/negative-permission-test-plan.md
 docs/plans/2026-05-08-demo-readiness-handoff.md
 docs/productization/phase-a-storage-audit-handoff.md
 docs/productization/phase-d-live-embedding-handoff.md
+docs/productization/phase-e-no-overclaim-handoff.md
 
-Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agent Runtime 受控证据也已完成，详见 docs/productization/openclaw-runtime-evidence.md 和 docs/productization/phase-b-openclaw-runtime-handoff.md。Phase D Live Cognee / Ollama Embedding Gate 已完成，详见 docs/productization/phase-d-live-embedding-handoff.md。优先执行 Phase E：Product QA + No-overclaim 审查。
+Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agent Runtime 受控证据也已完成，详见 docs/productization/openclaw-runtime-evidence.md 和 docs/productization/phase-b-openclaw-runtime-handoff.md。Phase D Live Cognee / Ollama Embedding Gate 已完成，详见 docs/productization/phase-d-live-embedding-handoff.md。Phase E Product QA + No-overclaim 审查已完成，详见 docs/productization/phase-e-no-overclaim-handoff.md。
 
 目标：
-1. 做 no-overclaim 审查：README、demo runbook、benchmark report、whitepaper 不能把 replay/dry-run/test group sandbox 写成 productized live。
-2. 核对 Phase D 之后的 wording：可以说 live embedding gate 已通过，不能说长期 embedding 服务、生产部署或 productized live 已完成。
-3. 更新 README、full execution doc 或 handoff，把 Phase E 的剩余风险和完成标准写清。
-4. 同步飞书共享任务看板，记录验证结果、commit hash 和仍未完成风险。
+1. 不要重复执行 Phase E 文档审查；先读取 Phase E handoff 和当前 README 顶部任务。
+2. 若用户明确继续产品化，优先评估 `memory.*` first-class OpenClaw 原生工具注册。
+3. 若做 OpenClaw Feishu websocket running 证据，先跑单监听检查，保证同一个 bot 只有一个监听入口。
+4. 若做 productized live 方案，先写部署、监控、回滚、权限后台、审计 UI 和运维边界，不要直接写成已经上线。
 
 必须遵守：
 - Copilot Core 是事实源，所有入口必须走 CopilotService / handle_tool_request。
@@ -418,21 +422,20 @@ Phase A Storage Migration + Audit Table 已完成。Phase B 真实 OpenClaw Agen
 - 同一个 Feishu Memory Engine bot 只能有一个监听：OpenClaw Feishu websocket、Copilot lark-cli sandbox、legacy fallback 三选一；真实 runtime 验收时不要同时运行 `lark-cli event +subscribe`。
 
 建议文件：
-scripts/check_embedding_provider.py
-scripts/check_live_embedding_gate.py
-scripts/spike_cognee_local.py
-memory_engine/copilot/cognee_adapter.py
-memory_engine/copilot/embedding-provider.lock
+agent_adapters/openclaw/
+memory_engine/copilot/tools.py
+memory_engine/copilot/service.py
+docs/productization/openclaw-runtime-evidence.md
+docs/productization/feishu-staging-runbook.md
 docs/productization/full-copilot-next-execution-doc.md
-docs/productization/phase-d-live-embedding-handoff.md
+docs/productization/phase-e-no-overclaim-handoff.md
 docs/productization/prd-completion-audit-and-gap-tasks.md
 README.md
 
 验收命令：
 python3 scripts/check_openclaw_version.py
-python3 scripts/check_live_embedding_gate.py --json
-python3 scripts/check_embedding_provider.py
-python3 scripts/spike_cognee_local.py --dry-run
+python3 scripts/check_demo_readiness.py --json
+python3 scripts/check_copilot_health.py --json
 git diff --check
 ollama ps
 

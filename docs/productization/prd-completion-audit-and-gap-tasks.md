@@ -9,8 +9,8 @@
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
 4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；接下来补的不是“再做一个 demo”，而是 no-overclaim 审查。
-6. 所有未完成任务仍由程俊豪负责，任务完成前不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
+5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查。
+6. 所有未完成任务仍由程俊豪负责，后续不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
 
 ## 结论总览
 
@@ -73,7 +73,19 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 | 任务 | 优先级 | 负责人 | 截止建议 | 文件/页面位置 | 完成标准 |
 |---|---|---|---|---|---|
-| 做 no-overclaim 交付物审查 | P1 | 程俊豪 | 2026-05-10 | `README.md`、`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md` | 所有材料统一口径：已完成 demo/pre-production 和测试群 sandbox；未完成生产部署、全量 ingestion、多租户后台和 productized live。 |
+当前 P1 no-overclaim 审查已完成，剩余项只在继续产品化时启动：
+
+| 任务 | 优先级 | 负责人 | 截止建议 | 文件/页面位置 | 完成标准 |
+|---|---|---|---|---|---|
+| 评估 `memory.*` first-class OpenClaw 原生工具注册 | P1 | 程俊豪 | 待定 | `agent_adapters/openclaw/`、OpenClaw runtime evidence、`docs/productization/full-copilot-next-execution-doc.md` | `memory.*` 出现在 OpenClaw Agent 原生工具列表；有 request_id、trace_id、permission_decision；文档仍区分 first-class tool registry 与 Feishu production live。 |
+| 补 OpenClaw Feishu websocket running 证据 | P1 | 程俊豪 | 待定 | `docs/productization/feishu-staging-runbook.md`、`docs/productization/openclaw-runtime-evidence.md` | `openclaw health --json` 显示 Feishu channel running；同一个 bot 没有 lark-cli listener 冲突；真实 ID 不写仓库。 |
+| 设计 productized live 长期运行方案 | P2 | 程俊豪 | 待定 | `docs/productization/full-copilot-next-execution-doc.md` 或后续 handoff | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界；本阶段不把它写成已完成。 |
+
+## Phase E 已完成审查
+
+| 任务 | 优先级 | 负责人 | 完成时间 | 文件/页面位置 | 完成标准 |
+|---|---|---|---|---|---|
+| 做 no-overclaim 交付物审查 | P1 | 程俊豪 | 2026-04-28 | `README.md`、`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md`、[Phase E handoff](phase-e-no-overclaim-handoff.md) | 所有材料统一口径：已完成 demo/pre-production、受控测试群 sandbox、OpenClaw Agent runtime 受控证据和 Phase D live embedding gate；未完成生产部署、全量 ingestion、多租户后台、长期 embedding 服务、OpenClaw first-class 工具注册和 productized live。 |
 
 ## 对外汇报口径
 
