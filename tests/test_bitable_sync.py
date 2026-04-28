@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from memory_engine.bitable_sync import collect_sync_payload, setup_commands, sync_payload, table_schema_spec
+from unittest.mock import patch
+
+from memory_engine.bitable_sync import build_commands, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
 from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
@@ -135,6 +137,7 @@ class BitableSyncTest(unittest.TestCase):
         self.assertEqual("req_memory_create_candidate", row[review["fields"].index("request_id")])
         self.assertEqual("trace_memory_create_candidate", row[review["fields"].index("trace_id")])
         self.assertEqual("allow", row[review["fields"].index("permission_decision")])
+        self.assertEqual(created["candidate_id"], row[review["fields"].index("sync_key")])
 
     def test_candidate_review_rows_redact_permission_denied_tool_output(self) -> None:
         service = CopilotService(repository=self.repo)
@@ -215,6 +218,7 @@ class BitableSyncTest(unittest.TestCase):
         candidate_fields = {field["name"] for field in tables["Candidate Review"]["fields"]}
         self.assertTrue(
             {
+                "sync_key",
                 "status",
                 "subject",
                 "new_value",
@@ -321,6 +325,96 @@ class BitableSyncTest(unittest.TestCase):
         self.assertEqual("sensitive_content_redacted", row[table["fields"].index("permission_reason")])
         self.assertNotIn("api_key", rendered)
         self.assertNotIn("abcdefghi123456789", rendered)
+
+    def test_candidate_review_write_uses_stable_upsert_key(self) -> None:
+        service = CopilotService(repository=self.repo)
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：Candidate Review 写回必须按候选 ID 幂等。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "test",
+                    "source_id": "msg_review_upsert",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：Candidate Review 写回必须按候选 ID 幂等。",
+                },
+                "current_context": demo_permission_context(
+                    "memory.create_candidate",
+                    "project:feishu_ai_challenge",
+                    actor_id="ou_test",
+                    entrypoint="unit_test",
+                ),
+            },
+            service=service,
+        )
+        payload = collect_sync_payload(self.conn, candidate_review_outputs=[created])
+
+        commands = build_commands(payload, setup_target())
+
+        review_commands = [command for command in commands if command["table"] == "candidate_review"]
+        self.assertEqual(1, len(review_commands))
+        self.assertIn("+record-upsert", review_commands[0]["argv"])
+        self.assertEqual(created["candidate_id"], review_commands[0]["body"]["sync_key"])
+        self.assertEqual(created["candidate_id"], review_commands[0]["body"]["candidate_id"])
+
+    def test_write_sync_reads_existing_record_and_verifies_readback(self) -> None:
+        service = CopilotService(repository=self.repo)
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：Candidate Review 写回后必须读回确认。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "test",
+                    "source_id": "msg_review_readback",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：Candidate Review 写回后必须读回确认。",
+                },
+                "current_context": demo_permission_context(
+                    "memory.create_candidate",
+                    "project:feishu_ai_challenge",
+                    actor_id="ou_test",
+                    entrypoint="unit_test",
+                ),
+            },
+            service=service,
+        )
+        payload = collect_sync_payload(self.conn, candidate_review_outputs=[created])
+        calls: list[list[str]] = []
+
+        def fake_run(argv, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append(list(argv))
+
+            class Completed:
+                returncode = 0
+                stderr = ""
+
+                if "+record-list" in argv:
+                    stdout = (
+                        '{"records":[{"record_id":"rec_existing","fields":{"sync_key":"'
+                        + created["candidate_id"]
+                        + '"}}]}'
+                    )
+                else:
+                    stdout = '{"record":{"record_id":"rec_existing"}}'
+
+            return Completed()
+
+        with patch("memory_engine.bitable_sync.subprocess.run", side_effect=fake_run):
+            result = sync_payload(payload, setup_target(), dry_run=False, retries=0)
+
+        self.assertTrue(result["ok"])
+        upsert_calls = [argv for argv in calls if "+record-upsert" in argv]
+        read_calls = [argv for argv in calls if "+record-list" in argv]
+        self.assertEqual(1, len(upsert_calls))
+        self.assertGreaterEqual(len(read_calls), 2)
+        self.assertIn("--record-id", upsert_calls[0])
+        self.assertIn("rec_existing", upsert_calls[0])
+        self.assertTrue(result["readback"]["ok"])
+        self.assertEqual([created["candidate_id"]], result["readback"]["candidate_review"]["verified_keys"])
 
 
 def setup_target():

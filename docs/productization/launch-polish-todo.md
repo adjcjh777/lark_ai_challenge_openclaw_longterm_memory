@@ -277,7 +277,7 @@ ollama ps
 ollama stop qwen3-embedding:0.6b-fp16
 ```
 
-### 7. P1：把 review surface 接成真实可操作界面
+### 7. P1：把 review surface 接成真实可操作界面（已完成 Bitable 可追踪写回闭环）
 
 要做什么：让 Feishu card / Bitable review surface 从 dry-run payload 走到真实可操作、可追踪、可回滚。
 
@@ -294,11 +294,17 @@ ollama stop qwen3-embedding:0.6b-fp16
 
 完成标准：
 
-- Candidate Review card、Version Chain card、Reminder Candidate card 都能真实触发 action。
-- confirm / reject / view versions 只通过 `CopilotService` / `handle_tool_request()`。
-- non-reviewer 操作被拒绝，且 candidate 状态不变。
-- Bitable 写回有幂等、失败重试和读回确认。
-- card / Bitable 不展示未授权 evidence/current_value。
+- 已完成：Candidate Review card action 的 confirm / reject 只通过 `CopilotService` / `handle_tool_request()`，不直接改 repository。
+- 已完成：non-reviewer 操作被拒绝，candidate 状态不变，card / Bitable 不展示未授权 evidence/current_value。
+- 已完成：Candidate Review 和 Reminder Candidate Bitable 写回带稳定 `sync_key`，非 dry-run 写入前会查已有记录，命中时使用 `+record-upsert --record-id` 更新。
+- 已完成：Bitable 写回失败会返回错误；写入成功后会用 `+record-list` 按 `sync_key` 读回确认。
+- 边界：本轮补的是本地可验证的 Bitable review 写回闭环，不等于真实飞书 card action 已在生产环境长期运行。
+
+已完成证据：
+
+- `memory_engine/bitable_sync.py`：Candidate Review / Reminder Candidate 增加 `sync_key`，review 表改为 upsert + readback。
+- `tests/test_bitable_sync.py`：覆盖稳定写回键、已有记录更新、读回确认和权限拒绝脱敏。
+- 新增 [review surface operability handoff](review-surface-operability-handoff.md)。
 
 建议验证：
 

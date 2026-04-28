@@ -196,7 +196,8 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 1. 把真实飞书消息进入 OpenClaw Agent 后自然选择本项目 first-class `memory.*` tool 的端到端证据补齐。
 2. 在 limited ingestion 底座之上，接真实飞书任务、会议、Bitable API 拉取，并保留失败 fallback。
 3. 扩充真实测试群消息样本的人工复核集。
-4. 设计 productized live 长期运行方案，包括部署、监控、回滚、权限后台和审计 UI。
+4. 补审计、监控和运维面，让权限拒绝、ingestion 失败、websocket down、embedding unavailable 能被查询和告警。
+5. 设计 productized live 长期运行方案，包括部署、监控、回滚、权限后台和审计 UI。
 
 ## 判断项目是否健康的标准
 

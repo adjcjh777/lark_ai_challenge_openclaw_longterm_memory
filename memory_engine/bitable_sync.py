@@ -69,6 +69,7 @@ BENCHMARK_FIELDS = [
 ]
 
 CANDIDATE_REVIEW_FIELDS = [
+    "sync_key",
     "candidate_id",
     "memory_id",
     "scope",
@@ -88,6 +89,7 @@ CANDIDATE_REVIEW_FIELDS = [
 ]
 
 REMINDER_CANDIDATE_FIELDS = [
+    "sync_key",
     "reminder_id",
     "memory_id",
     "scope",
@@ -113,6 +115,11 @@ DEFAULT_TABLES = {
     "candidate_review": "Candidate Review",
     "benchmark": "Benchmark Results",
     "reminder_candidates": "Reminder Candidates",
+}
+
+UPSERT_TABLE_KEYS = {
+    "candidate_review": "sync_key",
+    "reminder_candidates": "sync_key",
 }
 
 
@@ -295,6 +302,7 @@ def candidate_review_output_rows(outputs: list[dict[str, Any]], *, scope: str | 
         conflict = payload.get("conflict") if isinstance(payload.get("conflict"), dict) else {}
         rows.append(
             [
+                _candidate_review_sync_key(payload),
                 payload.get("candidate_id"),
                 payload.get("memory_id"),
                 output_scope,
@@ -324,6 +332,7 @@ def reminder_candidate_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
         permission_decision = payload.get("permission_decision") if isinstance(payload.get("permission_decision"), dict) else {}
         rows.append(
             [
+                _reminder_candidate_sync_key(payload),
                 payload.get("reminder_id"),
                 payload.get("memory_id"),
                 payload.get("scope"),
@@ -400,6 +409,7 @@ def sync_payload(
     *,
     dry_run: bool = True,
     retries: int = 2,
+    readback: bool = True,
 ) -> dict[str, Any]:
     if not dry_run and target.base_token == "app_xxx":
         return {
@@ -422,11 +432,26 @@ def sync_payload(
 
     results = []
     errors = []
+    existing_records = _read_existing_upsert_records(payload, target, retries=retries)
+    if existing_records["errors"]:
+        return {
+            "ok": False,
+            "dry_run": False,
+            "tables": _table_summary(payload),
+            "results": existing_records["results"],
+            "errors": existing_records["errors"],
+            "error_summary": _error_summary(existing_records["errors"]),
+        }
+    commands = _commands_with_existing_record_ids(commands, existing_records["records"])
     for command in commands:
         result = _run_with_retry(command["argv"], command["body"], retries=retries)
         results.append(result)
         if not result["ok"]:
             errors.append(result)
+    readback_result = _verify_upsert_readback(payload, target, retries=retries) if readback and not errors else None
+    if readback_result is not None:
+        results.extend(readback_result["results"])
+        errors.extend(readback_result["errors"])
 
     return {
         "ok": not errors,
@@ -435,6 +460,7 @@ def sync_payload(
         "results": results,
         "errors": errors,
         "error_summary": _error_summary(errors),
+        **({"readback": readback_result["summary"]} if readback_result is not None else {}),
     }
 
 
@@ -450,6 +476,26 @@ def build_commands(payload: dict[str, Any], target: BitableTarget) -> list[dict[
     for key, table in payload["tables"].items():
         rows = table["rows"]
         if not rows:
+            continue
+        if key in UPSERT_TABLE_KEYS:
+            for row in rows:
+                body = dict(zip(table["fields"], row))
+                argv = [
+                    target.lark_cli,
+                    "base",
+                    "+record-upsert",
+                    "--base-token",
+                    target.base_token,
+                    "--table-id",
+                    table_ids[key],
+                    "--json",
+                    "<temp-json>",
+                ]
+                if target.profile:
+                    argv.extend(["--profile", target.profile])
+                if target.as_identity:
+                    argv.extend(["--as", target.as_identity])
+                commands.append({"table": key, "argv": argv, "body": body, "sync_key": body.get(UPSERT_TABLE_KEYS[key])})
             continue
         for chunk in _chunks(rows, 200):
             body = {"fields": table["fields"], "rows": chunk}
@@ -613,10 +659,177 @@ def _run_with_retry(argv: list[str], body: dict[str, Any], *, retries: int) -> d
         tmp_path.unlink(missing_ok=True)
 
 
+def _read_existing_upsert_records(payload: dict[str, Any], target: BitableTarget, *, retries: int) -> dict[str, Any]:
+    table_ids = _target_table_ids(target)
+    records: dict[tuple[str, str], str] = {}
+    results = []
+    errors = []
+    for key, field_name in UPSERT_TABLE_KEYS.items():
+        table = payload["tables"].get(key)
+        if not table or not table.get("rows"):
+            continue
+        result = _run_record_list(target, table_ids[key], field_name, retries=retries)
+        results.append(result)
+        if not result["ok"]:
+            errors.append(result)
+            continue
+        for record in _records_from_stdout(result.get("stdout")):
+            fields = record.get("fields") if isinstance(record.get("fields"), dict) else {}
+            sync_key = fields.get(field_name)
+            record_id = record.get("record_id") or record.get("id")
+            if isinstance(sync_key, str) and sync_key and isinstance(record_id, str) and record_id:
+                records[(key, sync_key)] = record_id
+    return {"records": records, "results": results, "errors": errors}
+
+
+def _commands_with_existing_record_ids(
+    commands: list[dict[str, Any]],
+    existing_records: dict[tuple[str, str], str],
+) -> list[dict[str, Any]]:
+    updated = []
+    for command in commands:
+        next_command = dict(command)
+        sync_key = command.get("sync_key")
+        if isinstance(sync_key, str) and sync_key:
+            record_id = existing_records.get((str(command.get("table")), sync_key))
+            if record_id:
+                argv = list(command["argv"])
+                json_index = argv.index("--json")
+                argv[json_index:json_index] = ["--record-id", record_id]
+                next_command["argv"] = argv
+                next_command["record_id"] = record_id
+        updated.append(next_command)
+    return updated
+
+
+def _verify_upsert_readback(payload: dict[str, Any], target: BitableTarget, *, retries: int) -> dict[str, Any]:
+    table_ids = _target_table_ids(target)
+    results = []
+    errors = []
+    summary: dict[str, Any] = {"ok": True}
+    for key, field_name in UPSERT_TABLE_KEYS.items():
+        table = payload["tables"].get(key)
+        expected_keys = _expected_sync_keys(table, field_name)
+        if not expected_keys:
+            continue
+        result = _run_record_list(target, table_ids[key], field_name, retries=retries)
+        results.append(result)
+        if not result["ok"]:
+            errors.append(result)
+            summary[key] = {"ok": False, "verified_keys": [], "missing_keys": expected_keys}
+            summary["ok"] = False
+            continue
+        found = {
+            fields.get(field_name)
+            for record in _records_from_stdout(result.get("stdout"))
+            for fields in [record.get("fields") if isinstance(record.get("fields"), dict) else {}]
+            if isinstance(fields.get(field_name), str)
+        }
+        missing = [key_value for key_value in expected_keys if key_value not in found]
+        summary[key] = {
+            "ok": not missing,
+            "verified_keys": [key_value for key_value in expected_keys if key_value in found],
+            "missing_keys": missing,
+        }
+        if missing:
+            summary["ok"] = False
+            errors.append(
+                {
+                    "ok": False,
+                    "attempts": 1,
+                    "argv": [target.lark_cli, "base", "+record-list", "--base-token", target.base_token, "--table-id", table_ids[key]],
+                    "returncode": 0,
+                    "stdout": result.get("stdout", ""),
+                    "stderr": f"readback missing {field_name}: {', '.join(missing)}",
+                }
+            )
+    return {"summary": summary, "results": results, "errors": errors}
+
+
+def _run_record_list(target: BitableTarget, table_id: str, field_name: str, *, retries: int) -> dict[str, Any]:
+    argv = [
+        target.lark_cli,
+        "base",
+        "+record-list",
+        "--base-token",
+        target.base_token,
+        "--table-id",
+        table_id,
+        "--field-id",
+        field_name,
+        "--offset",
+        "0",
+        "--limit",
+        "200",
+    ]
+    if target.profile:
+        argv.extend(["--profile", target.profile])
+    if target.as_identity:
+        argv.extend(["--as", target.as_identity])
+    return _run_plain_with_retry(argv, retries=retries)
+
+
+def _run_plain_with_retry(argv: list[str], *, retries: int) -> dict[str, Any]:
+    for attempt in range(1, retries + 2):
+        try:
+            completed = subprocess.run(argv, check=False, text=True, capture_output=True)
+        except OSError as exc:
+            return {"ok": False, "attempts": attempt, "argv": argv, "returncode": None, "stdout": "", "stderr": str(exc)}
+        if completed.returncode == 0:
+            return {"ok": True, "attempts": attempt, "argv": argv, "stdout": completed.stdout.strip()}
+        if attempt <= retries:
+            time.sleep(min(0.5 * attempt, 2.0))
+            continue
+        return {
+            "ok": False,
+            "attempts": attempt,
+            "argv": argv,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout.strip(),
+            "stderr": completed.stderr.strip(),
+        }
+
+
+def _records_from_stdout(stdout: object) -> list[dict[str, Any]]:
+    if not isinstance(stdout, str) or not stdout.strip():
+        return []
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return []
+    records = payload.get("records")
+    if records is None and isinstance(payload.get("data"), dict):
+        records = payload["data"].get("records") or payload["data"].get("items")
+    if records is None:
+        records = payload.get("items")
+    return [record for record in records or [] if isinstance(record, dict)]
+
+
+def _expected_sync_keys(table: dict[str, Any] | None, field_name: str) -> list[str]:
+    if not table or field_name not in table.get("fields", []):
+        return []
+    index = table["fields"].index(field_name)
+    keys = []
+    for row in table.get("rows", []):
+        if len(row) > index and isinstance(row[index], str) and row[index]:
+            keys.append(row[index])
+    return keys
+
+
 def _table_summary(payload: dict[str, Any]) -> dict[str, int]:
     return {
         key: len(table["rows"])
         for key, table in payload["tables"].items()
+    }
+
+
+def _target_table_ids(target: BitableTarget) -> dict[str, str]:
+    return {
+        "ledger": target.ledger_table,
+        "versions": target.versions_table,
+        "candidate_review": target.candidate_review_table,
+        "benchmark": target.benchmark_table,
+        "reminder_candidates": target.reminder_candidates_table,
     }
 
 
@@ -652,6 +865,24 @@ def _json_cell(value: dict[str, Any]) -> str:
     if not value:
         return ""
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _candidate_review_sync_key(payload: dict[str, Any]) -> str:
+    candidate_id = payload.get("candidate_id")
+    if isinstance(candidate_id, str) and candidate_id:
+        return candidate_id
+    memory_id = payload.get("memory_id")
+    request_id = payload.get("request_id")
+    return "candidate_review:" + ":".join(str(part) for part in (memory_id or "unknown", request_id or "unknown"))
+
+
+def _reminder_candidate_sync_key(payload: dict[str, Any]) -> str:
+    reminder_id = payload.get("reminder_id")
+    if isinstance(reminder_id, str) and reminder_id:
+        return reminder_id
+    memory_id = payload.get("memory_id")
+    request_id = payload.get("request_id")
+    return "reminder_candidate:" + ":".join(str(part) for part in (memory_id or "unknown", request_id or "unknown"))
 
 
 def _chunks(rows: list[list[Any]], size: int) -> list[list[list[Any]]]:

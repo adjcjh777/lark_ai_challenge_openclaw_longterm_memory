@@ -85,6 +85,7 @@
 | [productization/openclaw-runtime-evidence.md](productization/openclaw-runtime-evidence.md) | OpenClaw Agent runtime 受控证据和仍未完成边界。 |
 | [productization/first-class-openclaw-tools-handoff.md](productization/first-class-openclaw-tools-handoff.md) | `memory.*` first-class OpenClaw 原生工具注册本机证据。 |
 | [productization/limited-feishu-ingestion-handoff.md](productization/limited-feishu-ingestion-handoff.md) | 群聊、文档、任务、会议、Bitable 来源文本进入 candidate-only pipeline 的本地底座证据。 |
+| [productization/review-surface-operability-handoff.md](productization/review-surface-operability-handoff.md) | Bitable review 写回的幂等、失败重试和读回确认闭环证据。 |
 | [productization/phase-e-no-overclaim-handoff.md](productization/phase-e-no-overclaim-handoff.md) | 当前 no-overclaim 审查完成证据。 |
 
 ### 4. 契约和参考资料

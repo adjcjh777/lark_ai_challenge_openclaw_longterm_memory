@@ -68,6 +68,7 @@ docs/productization/feishu-single-listener-handoff.md
 - 生产存储、索引和迁移方案：`memory_engine/storage_migration.py` 和 `scripts/migrate_copilot_storage.py` 已提供 dry-run / apply 入口；healthcheck `storage_schema` 已报告 schema version、index status、audit status；文档已写清本地 SQLite 与托管 PostgreSQL 上线试点边界、备份恢复、审计保留和数据删除策略。这不是生产 DB 部署或完整多租户后台。
 - 真实飞书权限映射：`memory_engine/copilot/feishu_live.py` 会把真实飞书 sender、chat、tenant、organization、visibility 映射到 `current_context.permission`；`permissions.py` 按目标上下文判断 tenant/org/source context；真实飞书 candidate 会把 tenant/org/visibility 写入本地 ledger。详见 [真实飞书权限映射 handoff](real-feishu-permission-mapping-handoff.md)。
 - Limited Feishu ingestion 底座：`memory_engine/document_ingestion.py` 支持 `feishu_message`、`document_feishu` / `lark_doc`、`feishu_task`、`feishu_meeting`、`lark_bitable` 来源文本进入 candidate-only pipeline；source context mismatch 会 fail closed；source 删除或权限撤销后 active memory 会标记为 `stale` 并默认从 recall 隐藏。详见 [limited Feishu ingestion handoff](limited-feishu-ingestion-handoff.md)。这不是全量 Feishu workspace ingestion，也不是任务/会议/Bitable OpenAPI live 拉取完成。
+- Review surface 可操作写回：Feishu card action 的 confirm / reject 已通过 `handle_tool_request()` / `CopilotService`，Bitable Candidate Review / Reminder Candidate 写回已补稳定 `sync_key`、upsert、失败重试和读回确认。详见 [review surface operability handoff](review-surface-operability-handoff.md)。这不是生产级 card action 长期运行。
 
 仍未完成：
 

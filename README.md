@@ -352,6 +352,7 @@ scripts/start_copilot_feishu_live.sh
 | OpenClaw runtime evidence | `docs/productization/openclaw-runtime-evidence.md` | OpenClaw Agent 受控验收证据 |
 | Feishu websocket handoff | `docs/productization/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
 | Storage migration handoff | `docs/productization/storage-migration-productization-handoff.md` | 存储迁移和生产存储试点方案 |
+| Review surface handoff | `docs/productization/review-surface-operability-handoff.md` | Bitable review 写回幂等和读回确认 |
 
 答辩时可以用这句话概括：
 
@@ -367,6 +368,7 @@ scripts/start_copilot_feishu_live.sh
 |---|---|---|
 | 打通真实 Feishu DM 到 first-class `memory.*` tool routing | `agent_adapters/openclaw/plugin/`、`memory_engine/copilot/openclaw_tool_runner.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` | 真实 Feishu DM 进入 OpenClaw Agent 后自然选择本项目 memory 工具 |
 | 扩大真实 Feishu ingestion 范围 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/feishu_live.py`、`docs/productization/full-copilot-next-execution-doc.md` | 真实飞书来源继续 candidate-only，权限和审计可检查 |
+| 补审计、监控和运维面 | `memory_engine/copilot/healthcheck.py`、`memory_engine/db.py`、`docs/productization/contracts/audit-observability-contract.md` | audit 可查询、healthcheck 能看到 deny / failure / redaction 等运维指标 |
 | 设计 productized live 长期运行方案 | `docs/productization/full-copilot-next-execution-doc.md` | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | 保持 no-overclaim 文档口径 | README、白皮书、Demo runbook、Benchmark report | 不把 demo、dry-run、sandbox、staging 写成 production live |
 
