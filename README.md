@@ -4,7 +4,7 @@
 
 从 2026-04-27 起，本项目按程俊豪单人执行；原先拆出去的评测、文案、QA 和检查任务都并入我的补充任务。打开 GitHub 首页时先看这里，再进入当天计划。
 
-当前主线已经升级为 **完整产品推进路线**：先保护初赛提交闭环，再补齐产品化契约，最后按阶段推进 OpenClaw live bridge、Feishu review surface、有限飞书 ingestion、heartbeat、healthcheck 和 Product QA。这里的“完整产品”不是零散 demo，也不是一上来做完整企业后台，而是按 PRD 做一个可用、可复现、可治理、可审计的 OpenClaw-native Feishu Memory Copilot。
+当前主线已经升级为 **完整产品推进路线**。2026-05-05 及以前的 implementation plan 已经全部完成，保留为历史计划和验收证据，不再作为后续执行入口；后续只围绕完整可用 Copilot 产品化继续推进。这里的“完整产品”不是零散 demo，也不是一上来做完整企业后台，而是按 PRD 做一个可用、可复现、可治理、可审计的 OpenClaw-native Feishu Memory Copilot。
 
 | 当前任务 | 直接入口 | 交付物 | 完成标准 |
 |---|---|---|---|
@@ -180,19 +180,27 @@ ollama stop qwen3-embedding:0.6b-fp16
 
 `check_embedding_provider.py` 会拉起本地 Ollama embedding 模型；验证结束后需要检查 `ollama ps`，并停止本项目拉起的 `qwen3-embedding:0.6b-fp16`，避免持续占用 Mac mini GPU/内存。
 
-## 每日任务入口
+## 执行入口
 
-每天开工前先读：
+从现在起，2026-05-05 及以前的 implementation plan 不再需要执行。它们只用于查历史背景、验收证据和风险记录；不要按旧日期计划继续补任务，也不要把旧 handoff 里的“下一步”当成当前待办。
+
+后续开工前先读：
 
 1. `AGENTS.md`
-2. `docs/feishu-memory-copilot-implementation-plan.md`
-3. 当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`
+2. `README.md`
+3. `docs/productization/full-copilot-next-execution-doc.md`
+4. `docs/productization/prd-completion-audit-and-gap-tasks.md`
+5. 和当前产品化阶段直接相关的 contract / runbook / handoff
 
-总控文档里已经提供可复制的每日启动 Prompt：
+当前唯一推荐执行主线：
 
-- `docs/feishu-memory-copilot-implementation-plan.md` 的 `1.2 每日任务启动 Prompt`
+- Phase A：Storage Migration + Audit Table
+- Phase B：真实 OpenClaw Agent Runtime 验收
+- Phase C：Feishu Staging Runbook
+- Phase D：Live Cognee / Ollama Embedding Gate
+- Phase E：Product QA + No-overclaim 审查
 
-当前日期计划：
+已完成的历史计划和证据：
 
 - `docs/plans/2026-04-26-implementation-plan.md`
 - `docs/plans/2026-04-27-implementation-plan.md`
@@ -213,6 +221,9 @@ ollama stop qwen3-embedding:0.6b-fp16
 - `docs/plans/2026-05-04-handoff.md`
 - `docs/plans/2026-05-05-implementation-plan.md`
 - `docs/plans/2026-05-05-handoff.md`
+
+仍可作为产品化参考，但不是 2026-05-05 及以前的待执行项：
+
 - `docs/plans/2026-05-06-implementation-plan.md`
 - `docs/plans/2026-05-07-implementation-plan.md`
 - `docs/plans/2026-05-07-handoff.md`
@@ -279,7 +290,8 @@ scripts/start_feishu_bot.sh --dry-run
 
 ## 关键文档
 
-- 主控计划：`docs/feishu-memory-copilot-implementation-plan.md`
+- 当前执行入口：`docs/productization/full-copilot-next-execution-doc.md`
+- 历史主控计划/产品化参考：`docs/feishu-memory-copilot-implementation-plan.md`
 - PRD：`docs/feishu-memory-copilot-prd.md`
 - 日期计划索引：`docs/plans/README.md`
 - 2026-04-27 handoff：`docs/plans/2026-04-27-handoff.md`
@@ -289,7 +301,8 @@ scripts/start_feishu_bot.sh --dry-run
 - 2026-05-04 handoff：`docs/plans/2026-05-04-handoff.md`
 - 2026-05-05 白皮书：`docs/memory-definition-and-architecture-whitepaper.md`
 - 2026-05-05 handoff：`docs/plans/2026-05-05-handoff.md`
-- 下一执行计划：`docs/plans/2026-05-06-implementation-plan.md`
+- 产品化 PRD：`docs/productization/complete-product-roadmap-prd.md`
+- PRD 完成度核对：`docs/productization/prd-completion-audit-and-gap-tasks.md`
 - Windows embedding 配置：`docs/reference/local-windows-cognee-embedding-setup.md`
 - 旧资料归档：`docs/archive/`
 - 长期参考资料：`docs/reference/`

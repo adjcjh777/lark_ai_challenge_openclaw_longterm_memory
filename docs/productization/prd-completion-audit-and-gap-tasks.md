@@ -6,10 +6,11 @@
 ## 先看这个
 
 1. 今天的真实日期是 2026-04-28；仓库里已经存在 2026-05-03 到 2026-05-08 的计划、handoff 和交付文档，本审计按“当前仓库状态”核对完成度。
-2. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
-3. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-4. 接下来补的不是“再做一个 demo”，而是把 storage migration、audit table、真实 OpenClaw runtime 证据、Feishu staging 边界和 live embedding 验证补齐。
-5. 所有未完成任务仍由程俊豪负责，任务完成前不要把 dry-run、replay、测试群 sandbox 写成生产 live。
+2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
+3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
+4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
+5. 接下来补的不是“再做一个 demo”，而是把 storage migration、audit table、真实 OpenClaw runtime 证据、Feishu staging 边界和 live embedding 验证补齐。
+6. 所有未完成任务仍由程俊豪负责，任务完成前不要把 dry-run、replay、测试群 sandbox 写成生产 live。
 
 ## 结论总览
 

@@ -1,5 +1,7 @@
 # 2026-04-26 Implementation Plan
 
+> **历史状态更新（2026-04-28）**：本文件对应的 2026-05-05 及以前任务已经完成，保留为历史计划/交接证据，不再作为后续执行入口。新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`，下一步优先 Phase A：Storage Migration + Audit Table。
+
 阶段：主控切换、P0/P1 调研落盘、OpenClaw tool schema、Copilot package skeleton
 主控：`docs/feishu-memory-copilot-implementation-plan.md`
 当天目标：把执行入口从旧 Day 文档切换到 OpenClaw-native Copilot 主线，把正式写代码前的技术调研结论写入总控和后续日期计划，并为第一批 Copilot 代码实现准备清晰边界。

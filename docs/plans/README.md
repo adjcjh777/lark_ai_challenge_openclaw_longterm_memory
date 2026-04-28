@@ -1,18 +1,29 @@
 # Dated Implementation Plans
 
-本目录是 Feishu Memory Copilot 新主线的每日执行入口。后续任务不再新增 `day1`、`day2` 这种相对日期文档，而是使用绝对日期命名：
+本目录保存 Feishu Memory Copilot 新主线的日期计划和交接证据。**2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口**；这些文件只用于查历史背景、验收证据和风险记录。
+
+后续执行入口已经切到完整可用 Copilot 产品化主线：
+
+```text
+docs/productization/full-copilot-next-execution-doc.md
+docs/productization/prd-completion-audit-and-gap-tasks.md
+docs/productization/complete-product-roadmap-prd.md
+```
+
+如果后续还需要新增日期计划，继续使用绝对日期命名：
 
 ```text
 docs/plans/YYYY-MM-DD-implementation-plan.md
 ```
 
-默认读取顺序：
+新的默认读取顺序：
 
 1. `AGENTS.md`
-2. `docs/feishu-memory-copilot-implementation-plan.md`
-3. 当天的 `docs/plans/YYYY-MM-DD-implementation-plan.md`
-4. 必要时读取上一日 handoff / 执行记录，例如 `2026-04-27-handoff.md`
-5. 只有被当天计划明确引用时，才读取 `docs/archive/legacy-day-docs/` 或 `docs/reference/`
+2. `README.md`
+3. `docs/productization/full-copilot-next-execution-doc.md`
+4. 当前产品化阶段直接相关的 contract / runbook / handoff
+5. 必要时读取本目录下的历史 handoff / execution record
+6. 只有被当前产品化阶段明确引用时，才读取 `docs/archive/legacy-day-docs/` 或 `docs/reference/`
 
 ## 每日计划必须包含的执行粒度
 
@@ -31,24 +42,25 @@ docs/plans/YYYY-MM-DD-implementation-plan.md
 
 | 日期 | 文件 | 阶段 |
 |---|---|---|
-| 2026-04-26 | `2026-04-26-implementation-plan.md` | 主控切换、OpenClaw tool schema、Copilot package skeleton |
-| 2026-04-27 | `2026-04-27-implementation-plan.md` | Cognee local spike、adapter contract、Copilot schemas、`memory.search` fallback |
-| 2026-04-27 | `2026-04-27-handoff.md` | 2026-04-26/27 完成总结和 2026-04-28 接续说明 |
-| 2026-04-28 | `2026-04-28-implementation-plan.md` | `memory.search` service contract、L0/L1/L2/L3 和 query cascade |
-| 2026-04-28 | `2026-04-28-handoff.md` | 2026-04-28 分层查询、评测脚本硬化完成总结和 2026-04-29 接续说明 |
-| 2026-04-29 | `2026-04-29-implementation-plan.md` | hybrid retrieval、RecallIndex 短索引、Cognee recall/search fallback、curated memory embedding |
-| 2026-04-29 | `2026-04-29-handoff.md` | 2026-04-29 混合召回、Recall@3 评测入口和 2026-04-30 接续说明 |
-| 2026-04-30 | `2026-04-30-implementation-plan.md` | candidate、manual memory、evidence gate、governance、document candidate source |
-| 2026-04-30 | `2026-04-30-handoff.md` | 2026-04-30 候选记忆治理、confirm/reject、candidate benchmark 和 2026-05-01 接续说明 |
-| 2026-05-01 | `2026-05-01-implementation-plan.md` | conflict update、versions、Cold evidence、stale leakage、Card/Bitable review surface |
-| 2026-05-01 | `2026-05-01-handoff.md` | 2026-05-01 冲突更新、版本解释、conflict benchmark、Card/Bitable dry-run 和 2026-05-02 接续说明 |
-| 2026-05-02 | `2026-05-02-implementation-plan.md` | prefetch、heartbeat、agent run summary candidate、OpenClaw demo/card dry-run flow |
-| 2026-05-02 | `2026-05-02-handoff.md` | 2026-05-02 prefetch、heartbeat reminder candidate、OpenClaw demo dry-run 和 2026-05-03 接续说明 |
-| 2026-05-03 | `2026-05-03-implementation-plan.md` | Benchmark expansion、metrics report、review surface evidence check |
-| 2026-05-04 | `2026-05-04-implementation-plan.md` | Demo runbook、README、OpenClaw examples freeze |
-| 2026-05-04 | `2026-05-04-handoff.md` | 2026-05-04 Demo runbook、README 快速开始、demo dry-run 和 2026-05-05 接续说明 |
-| 2026-05-05 | `2026-05-05-implementation-plan.md` | 白皮书、architecture proof、competition narrative |
-| 2026-05-05 | `2026-05-05-handoff.md` | 2026-05-05 Memory 定义与架构白皮书初稿和 2026-05-06 接续说明 |
-| 2026-05-06 | `2026-05-06-implementation-plan.md` | 提交材料、录屏、QA、scope freeze |
-| 2026-05-07 | `2026-05-07-implementation-plan.md` | 完整产品 Phase 1 契约冻结和 Phase 2 权限前置实现 |
-| 2026-05-07 | `2026-05-07-handoff.md` | 2026-05-07 Phase 1 contract freeze、Phase 2 permission pre-implementation 和下一步 OpenClaw live bridge |
+| 2026-04-26 | `2026-04-26-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-04-27 | `2026-04-27-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-04-27 | `2026-04-27-handoff.md` | 已完成；历史交接证据 |
+| 2026-04-28 | `2026-04-28-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-04-28 | `2026-04-28-handoff.md` | 已完成；历史交接证据 |
+| 2026-04-29 | `2026-04-29-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-04-29 | `2026-04-29-handoff.md` | 已完成；历史交接证据 |
+| 2026-04-30 | `2026-04-30-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-04-30 | `2026-04-30-handoff.md` | 已完成；历史交接证据 |
+| 2026-05-01 | `2026-05-01-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-05-01 | `2026-05-01-handoff.md` | 已完成；历史交接证据 |
+| 2026-05-02 | `2026-05-02-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-05-02 | `2026-05-02-handoff.md` | 已完成；历史交接证据 |
+| 2026-05-03 | `2026-05-03-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-05-03 | `2026-05-03-handoff.md` | 已完成；历史交接证据 |
+| 2026-05-04 | `2026-05-04-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-05-04 | `2026-05-04-handoff.md` | 已完成；历史交接证据 |
+| 2026-05-05 | `2026-05-05-implementation-plan.md` | 已完成；历史计划，不再执行 |
+| 2026-05-05 | `2026-05-05-handoff.md` | 已完成；历史交接证据 |
+| 2026-05-06 | `2026-05-06-implementation-plan.md` | 产品化参考；当前入口以 `full-copilot-next-execution-doc.md` 为准 |
+| 2026-05-07 | `2026-05-07-implementation-plan.md` | 产品化参考；当前入口以 `full-copilot-next-execution-doc.md` 为准 |
+| 2026-05-07 | `2026-05-07-handoff.md` | 产品化阶段完成证据和风险参考 |

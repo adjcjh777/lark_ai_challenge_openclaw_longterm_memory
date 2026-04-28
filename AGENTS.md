@@ -7,26 +7,28 @@
 ## 飞书 openclaw 官方插件 https://bytedance.larkoffice.com/docx/MFK7dDFLFoVlOGxWCv5cTXKmnMh
 
 # 主控计划入口
-## 新的项目主控执行文档是 `docs/feishu-memory-copilot-implementation-plan.md`。
-## 后续每个新对话、新阶段任务或每日开发任务，必须先读取并遵循该 implementation plan 中的当前日期/阶段安排，再结合用户最新指令执行。
+## 当前项目主控执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
+## `docs/feishu-memory-copilot-implementation-plan.md` 已降级为历史主控计划和产品化参考；2026-05-05 及以前的 implementation plan 事实上已经完成，不再作为后续执行入口。
+## 后续每个新对话、新阶段任务或产品化开发任务，必须先读取 `docs/productization/full-copilot-next-execution-doc.md`，再结合 `README.md` 顶部任务、产品化 PRD/测试规格、当前代码状态和用户最新指令执行。
 ## 旧主控文档 `docs/archive/legacy-master/competition-master-execution-plan.md` 已降级为归档参考；不要再把它作为默认执行入口。
 ## 当前项目主线：从 CLI-first / Bot-first memory demo 切换为 OpenClaw-native Feishu Memory Copilot。OpenClaw Agent 是主入口和工具编排层，Cognee 是开源知识/记忆引擎核心，Memory Copilot Core 是企业记忆治理层，Feishu / lark-cli / Feishu OpenAPI 是办公数据和动作集成层，Bitable / card 是展示和交互层。
-## 当前执行周期：2026-04-26 至 2026-05-02 完成 MVP 可演示闭环；2026-05-03 至 2026-05-07 完成 Benchmark、Demo、白皮书、答辩材料和初赛提交缓冲。
-## 初赛优先级最高：先保证《Memory 定义与架构白皮书》、可运行 Demo、自证 Benchmark Report 三大交付物闭环，再做复赛加分项。
-## 每日任务应按新主控计划拆分为：我的主线任务、我的补充任务、范围边界、验收标准、以绝对日期命名的 implementation-plan 文档。不要再新增 `day1`、`day2` 这种日期不明确的主线计划文件。
-## 如果当天 `docs/plans/YYYY-MM-DD-implementation-plan.md` 不存在，先根据新主控计划创建该日期计划，再开始代码实现。
+## 历史执行周期：2026-04-26 至 2026-05-05 的 MVP、Benchmark、Demo 和白皮书任务已经完成；这些日期计划只保留为历史计划、验收证据和风险参考。
+## 当前优先级最高：把已经证明可跑的 MVP 升级成完整可用 Copilot，优先补齐 Storage Migration + Audit Table、真实 OpenClaw Agent runtime 验收、Feishu staging runbook、live embedding gate 和 no-overclaim QA。
+## 后续阶段任务应按产品化执行文档拆分为：目标、要改的文件、完成标准、验证命令、handoff 和看板同步；只有用户明确要求新建绝对日期计划时，才新增 `docs/plans/YYYY-MM-DD-implementation-plan.md`。
+## 不要再新增 `day1`、`day2` 这种日期不明确的主线计划文件。
 
-# 每日任务上下文读取规则
-## 执行某个日期任务时默认读取：`AGENTS.md`、`docs/feishu-memory-copilot-implementation-plan.md`、`docs/plans/YYYY-MM-DD-implementation-plan.md`。
-## 如果存在上一日 handoff 或执行记录，再读取对应绝对日期文件；不要默认读取所有旧 day 文档。
+# 任务上下文读取规则
+## 执行当前产品化任务时默认读取：`AGENTS.md`、`README.md`、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/complete-product-roadmap-prd.md`、`docs/productization/complete-product-roadmap-test-spec.md`，以及当前阶段直接相关的 contract / runbook / handoff。
+## 只有用户明确要求执行某个绝对日期任务时，才读取对应 `docs/plans/YYYY-MM-DD-implementation-plan.md`；2026-05-05 及以前的日期计划只作为历史证据，不再继续执行。
+## 如果存在当前产品化阶段 handoff 或执行记录，再读取对应文件；不要默认读取所有旧 day 文档。
 ## `docs/archive/legacy-day-docs/` 里的旧 day 文档只作为 reference / fallback。只有当新主控计划明确依赖旧能力时，才按需读取对应归档文档。
-## 当前代码库是事实源；历史文档只作为背景、验收标准和风险参考。如果历史文档与代码不一致，以代码和最新 implementation plan 为准。
+## 当前代码库是事实源；历史文档只作为背景、验收标准和风险参考。如果历史文档与代码不一致，以代码和最新产品化执行文档为准。
 ## 相关历史读取示例：改 Feishu card 时可按需读 `docs/archive/legacy-day-docs/day6-handoff.md`；做 Benchmark 时可按需读 `docs/archive/legacy-day-docs/day7-implementation-plan.md`；做 Bitable 时可按需读 `docs/reference/bitable-ledger-views.md`。
 
 # Copilot-first 开发边界
 ## 新功能优先进入 `memory_engine/copilot/` 和 `agent_adapters/openclaw/`；不要从大改 `memory_engine/repository.py`、`memory_engine/feishu_runtime.py` 或旧 CLI 命令开始。
 ## OpenClaw tools schema 先行：先冻结 `agent_adapters/openclaw/memory_tools.schema.json`，再实现 `memory_engine/copilot/schemas.py`、`tools.py`、`service.py`。
-## 正式写代码前的技术调研结论必须落到 `docs/feishu-memory-copilot-implementation-plan.md` 和后续 `docs/plans/YYYY-MM-DD-implementation-plan.md`，不能只留在聊天记录里；调研结论进入计划后，后续按计划执行并用代码状态校准。
+## 正式写代码前的技术调研结论必须落到 `docs/productization/full-copilot-next-execution-doc.md`、相关 productization contract / runbook / handoff，或用户明确要求的新日期计划里，不能只留在聊天记录里；调研结论进入计划后，后续按计划执行并用代码状态校准。
 ## Cognee 是当前选定的 memory 系统核心：优先复用其本地知识/记忆引擎能力和 `remember / recall / improve / forget`、低层 `add / cognify / search` 流程；不要改成 Mem0、Graphiti、MemOS、Letta、Zep 或 TiMem，除非用户明确重新做选型。
 ## Cognee 接入优先走本地 Python SDK spike 和窄 adapter；MVP 第一阶段不要先起 Cognee server / Docker，不要让业务代码到处直接 `import cognee`。
 ## Memory Copilot Core 负责企业记忆治理；candidate / active / superseded / rejected / stale / archived 状态机、证据链、版本解释、权限门控、OpenClaw tools、Feishu card 和 Benchmark 仍由本项目实现，不能交给 Cognee 或任何外部 API 黑盒。
@@ -61,7 +63,7 @@
 ## 日期 implementation plan、handoff、补充任务和看板备注必须用浅显中文；先讲要做什么，再讲为什么，不要先堆技术名词。
 ## `README.md` 是打开 GitHub 后看到的第一入口；当前我必须处理的任务要放在 README 顶部标题后的第一个主要小节，不能埋在文档末尾或只放在 `docs/` 目录里。
 ## README 顶部任务必须使用可点击 Markdown 链接，直接指向日期计划、handoff、具体文件、具体示例文件或 GitHub 新建文件入口；不要只写“去某个文件夹里找”。
-## 当补充任务发生变化时，必须同步更新 README 顶部任务区、当前日期 implementation plan / handoff，以及飞书共享任务看板，三处任务描述、负责人、截止日期和完成标准要一致。
+## 当补充任务发生变化时，必须同步更新 README 顶部任务区、当前产品化执行文档或 handoff，以及飞书共享任务看板，三处任务描述、负责人、截止日期和完成标准要一致。
 ## 每份日期计划或 handoff 必须包含“执行前先看这个”或“先看这个”小节，用 3-5 条说明：今天做了什么、我接下来从哪里开始、要交付什么、怎么判断做对、遇到问题记录什么。
 ## 补充任务最多 5 条，每条都要有明确动作、文件/页面位置和完成标准；不要只写“检查/优化/研究”，必须写清检查什么、改哪里、什么算通过。
 ## 技术词第一次出现要顺手解释，例如：Benchmark（评测脚本）、candidate（待确认记忆）、Recall@3（前三条结果里能找到正确答案）。
@@ -71,21 +73,21 @@
 # 执行规则
 ## 本地已经安装了 lark-cli (https://github.com/larksuite/cli), 可以直接使用 `lark-cli` 命令，这是最重要的工具！！！！
 ## 飞书 openclaw 插件 （https://github.com/larksuite/openclaw-lark），如果需要的话可以直接安装并使用！！！！
-## 在执行每次对话前，必须先确认当前日期和阶段任务安排，确保执行内容与 `docs/feishu-memory-copilot-implementation-plan.md` 和 `docs/plans/YYYY-MM-DD-implementation-plan.md` 一致。
+## 在执行每次对话前，必须先确认当前日期和阶段任务安排，确保执行内容与 `docs/productization/full-copilot-next-execution-doc.md`、README 顶部任务和用户最新指令一致；不要再默认执行 2026-05-05 及以前日期计划。
 
 ## 飞书共享任务看板同步规则
 ### 项目任务同步看板是 `https://jcneyh7qlo8i.feishu.cn/wiki/DlikwJHLGi2MjdkaC5LcZeIznAe?from=from_copylink`，标题为“飞书挑战赛任务跟进看板”，用于同步程俊豪个人项目进度和任务状态。
 ### 从 2026-04-27 起，看板只维护程俊豪负责的比赛任务；不再新增非本人任务记录，所有补充任务也归程俊豪负责。
-### 每次开始新阶段、完成当日闭环、更新日期计划、更新 handoff、或用户要求同步进度时，必须先读取 `docs/feishu-memory-copilot-implementation-plan.md`、当前绝对日期 implementation plan、上一日 handoff/执行记录和当前代码状态，再更新该看板。
-### 每日任务开始前同步：执行某个 `docs/plans/YYYY-MM-DD-implementation-plan.md` 前，必须创建或更新当天程俊豪主线任务记录，`任务描述` 写清 `YYYY-MM-DD 程俊豪` 和当日交付物，`状态=进行中`，`指派给=程俊豪`，填写截止日期和优先级，不得提前勾选 `完成情况-程俊豪`。
-### 每日任务开始前还必须把当日计划或上一日 handoff 的“我的补充任务”同步为程俊豪的独立任务记录；这些任务可以是评测样例、文档自查、Demo 文案、录屏截图或 QA，全部按程俊豪任务处理。
+### 每次开始新阶段、完成阶段闭环、更新产品化执行文档、更新 handoff、或用户要求同步进度时，必须先读取 `docs/productization/full-copilot-next-execution-doc.md`、README 顶部任务、相关 productization 文档 / handoff 和当前代码状态，再更新该看板。
+### 阶段任务开始前同步：执行产品化阶段任务前，必须创建或更新程俊豪主线任务记录，`任务描述` 写清绝对日期、程俊豪和阶段交付物，`状态=进行中`，`指派给=程俊豪`，填写截止日期和优先级，不得提前勾选 `完成情况-程俊豪`。
+### 阶段任务开始前还必须把执行文档或 handoff 里的“补充任务”同步为程俊豪的独立任务记录；这些任务可以是评测样例、文档自查、Demo 文案、录屏截图或 QA，全部按程俊豪任务处理。
 ### 每日任务完成后同步：当程俊豪的当日任务已有代码/文档/验证证据时，必须精确更新对应任务记录，设置 `完成情况-程俊豪=true` 且 `状态=已完成`，备注写入验证命令结果、commit hash、文档路径和仍未解决的风险。
 ### 如果 lark-cli 登录、权限或 API 错误导致看板同步失败，不能声称已同步；必须在最终回复和 handoff 中写清失败命令、错误摘要和本地替代入口，并保持 README 顶部任务链接最新。
 ### 该链接是 Wiki 包装的 Sheets 页面，且页面内嵌 Bitable block。操作流程必须是：先用 `lark-cli wiki spaces get_node --params '{"token":"DlikwJHLGi2MjdkaC5LcZeIznAe"}'` 解析真实 `obj_token`；再用 `lark-cli api GET /open-apis/sheets/v2/spreadsheets/<spreadsheet_token>/metainfo` 读取 `blockInfo.blockToken`；将 `blockToken` 按 `_` 拆成 `app_token` 和 `table_id`；最后用 `lark-cli base +...` 操作记录。
 ### 不要直接用 `lark-cli sheets +read/+write` 修改该看板的数据区；这个页面的数据区是 Bitable block，Sheets 单元格 API 可能返回 `not found sheetId`。
 ### 看板字段语义固定：`任务描述` 写清 `YYYY-MM-DD`、负责人和交付物；`状态` 只用 `待启动`、`进行中`、`已完成`、`延期`、`暂停`；`优先级` 只用 `P0/P1/P2`；`指派给` 使用程俊豪；`任务截止日期` 使用绝对日期；`备注` 写验收证据、文档路径或剩余风险。
 ### 同步看板时不得覆盖或改写无关历史记录；阶段任务应优先追加为新记录，只有精确匹配同一绝对日期、负责人和任务描述的记录时才更新该记录。
-### 每次同步后必须用 `lark-cli base +record-list` 读回确认：程俊豪已完成项已勾选且状态为已完成；新增任务负责人、截止日期和备注与新主控文档/最新日期计划一致。
+### 每次同步后必须用 `lark-cli base +record-list` 读回确认：程俊豪已完成项已勾选且状态为已完成；新增任务负责人、截止日期和备注与当前产品化执行文档/最新 handoff 一致。
 
 ## 飞书 Bot 测试约定（legacy fallback）
 ### 新主线的主入口是 OpenClaw Agent；当前飞书 Bot 是旧实现的可复现测试面和 fallback，不得把 Bot handler 当作新 Copilot 主架构。
@@ -128,7 +130,7 @@ python3 -m unittest tests.test_copilot_retrieval tests.test_copilot_benchmark
 python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
 ```
-### 当前还没有落地的治理、candidate、conflict、prefetch、heartbeat 测试或 benchmark，不要写成强制命令；实现对应文件后，再把它们加入当日计划和本段专项验证。计划中的目标命令可以先写在 `docs/feishu-memory-copilot-implementation-plan.md`，但提交报告必须区分“已运行”和“尚未实现”。
+### 当前还没有落地的治理、candidate、conflict、prefetch、heartbeat 测试或 benchmark，不要写成强制命令；实现对应文件后，再把它们加入产品化执行文档、相关 handoff 和本段专项验证。计划中的目标命令可以先写在 `docs/productization/full-copilot-next-execution-doc.md` 或对应 contract/runbook 中，但提交报告必须区分“已运行”和“尚未实现”。
 ### 只有触达旧实现 fallback、旧 Bot、旧 CLI、本地 repository、文档摄取、Bitable 同步或历史 benchmark runner 时，才追加 legacy 回归：
 ```bash
 # 旧本地 memory 闭环保底，不代表 OpenClaw-native Copilot 的主验收
@@ -140,7 +142,7 @@ python3 -m unittest tests.test_benchmark_day7 tests.test_document_ingestion test
 python3 -m unittest tests.test_feishu_day3 tests.test_feishu_day5 tests.test_feishu_day6 tests.test_feishu_interactive_cards tests.test_feishu_runtime_logging
 ```
 ### 每次运行 `scripts/check_embedding_provider.py`、`scripts/spike_cognee_local.py` 或任何真实 Cognee / Ollama embedding 验证后，必须按“本地模型与 Ollama 清理规则”执行 `ollama ps`，必要时只关闭本项目模型，并在最终回复和 commit message 的 `Tested:` / `Not-tested:` 中写清清理状态。
-### 阶段闭环、提交材料、白皮书或 Demo freeze 前，使用主控计划中的最终验收思路，但只运行当前仓库已经存在并且 runner 已实现的命令；缺失项必须写入 `Not-tested:` 或 handoff 风险：
+### 阶段闭环、提交材料、白皮书或 Demo freeze 前，使用产品化执行文档中的最终验收思路，但只运行当前仓库已经存在并且 runner 已实现的命令；缺失项必须写入 `Not-tested:` 或 handoff 风险：
 ```bash
 python3 scripts/check_openclaw_version.py
 git diff --check

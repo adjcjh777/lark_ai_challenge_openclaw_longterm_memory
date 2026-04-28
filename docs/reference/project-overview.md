@@ -1,5 +1,7 @@
 # 项目总览：Feishu Memory Engine
 
+> **状态更新（2026-04-28）**：本文是旧项目总览和架构说明，保留为背景资料。2026-05-05 及以前的 implementation plan 已经完成，不再作为后续执行入口；当前产品化入口是 `docs/productization/full-copilot-next-execution-doc.md`。
+
 本文用来回答一个问题：我们到底在做什么。
 
 ## 一句话版
@@ -508,7 +510,7 @@ SQLite memories / memory_versions / benchmark summary
 | 矛盾更新测试 | 先输入旧规则，再输入“不对，改成新规则” | 系统理解时序和覆盖关系，不返回旧结论 |
 | 效能指标验证 | 对比使用前后需要输入的字符数、操作步骤、查找时间 | 系统能节省实际工作成本 |
 
-当前 D7 已经完成抗干扰评测闭环，并输出 `docs/benchmark-report.md`。后续 D8/D9 要继续补齐矛盾更新专项和效能指标章节。
+当前 D7 抗干扰评测闭环、2026-05-03 Benchmark Report、2026-05-04 Demo runbook 和 2026-05-05 白皮书都已经完成。后续不要再按旧 D8/D9 或 2026-05-05 及以前 implementation plan 补任务；如果继续扩展评测，应服务 `docs/productization/full-copilot-next-execution-doc.md` 里的完整产品化缺口。
 
 ## 我们不做什么
 

@@ -3,6 +3,8 @@
 日期：2026-04-26
 用途：记录围绕“企业办公效率 Copilot”逐步形成的产品理解，后续重构代码、白皮书、Demo 路线和 Benchmark 时优先参考本文。
 
+> **状态更新（2026-04-28）**：本文是产品理解形成过程记录。2026-05-05 及以前的 implementation plan 已完成，不再作为后续执行入口；白皮书、Demo 和 Benchmark 证明材料已经闭环。当前执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
+
 ## 1. 背景
 
 当前仓库已经具备本地 Memory Engine、飞书 Bot、interactive card、Bitable 同步、文档 ingestion 和 D7 抗干扰评测等能力。但这些能力如果只以 `/remember`、`/recall`、OpenClaw 插件或 CLI 工具的形式呈现，产品感会偏“手动工具”，不够像主动帮助用户的 Copilot。
@@ -27,7 +29,7 @@
   - 记忆定义：当前有效结论 + 状态 + 版本 + 来源证据 + 覆盖关系。
   - 已实现能力对照：CLI、本地 SQLite、飞书 Bot、interactive card、Bitable、文档 ingestion、Benchmark。
   - 证明价值：抗干扰、矛盾更新、效能指标。
-  - 当前限制：白皮书未完成、D8/D9 专项评测待补、遗忘预警仍待实现。
+  - 历史限制：当时白皮书、D8/D9 专项评测和遗忘预警仍待补；当前白皮书、Benchmark Report、Demo runbook 已完成，后续重点转向完整产品化缺口。
 
 对后续重构的影响：
 

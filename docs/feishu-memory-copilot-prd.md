@@ -1,9 +1,11 @@
 # Feishu Memory Copilot PRD
 
 日期：2026-04-26
-状态：Draft for implementation planning
+状态：PRD baseline；2026-05-05 及以前 MVP / Benchmark / Demo / 白皮书任务已完成，当前作为完整产品化参考
 目标读者：项目负责人、评委、后续重构执行者
 产品定位：OpenClaw-native enterprise memory copilot for Feishu collaboration
+
+> **执行入口更新（2026-04-28）**：旧 implementation plan 已经不再作为后续执行入口。后续围绕本 PRD 补齐完整可用 Copilot 产品化时，先读 `docs/productization/full-copilot-next-execution-doc.md`。
 
 ## 1. Executive Summary
 

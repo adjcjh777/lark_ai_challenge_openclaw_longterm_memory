@@ -12,5 +12,6 @@
 
 使用规则：
 
-- OpenClaw-native Copilot 主线以 `docs/feishu-memory-copilot-implementation-plan.md` 为准。
-- 参考文档中的 CLI-first / Bot-first 表述如果与新主控计划冲突，以新主控为准。
+- OpenClaw-native Copilot 当前主线以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
+- `docs/feishu-memory-copilot-implementation-plan.md` 和 2026-05-05 及以前日期计划已经是历史计划/验收证据，不再作为后续执行入口。
+- 参考文档中的 CLI-first / Bot-first 表述如果与当前产品化执行文档冲突，以产品化执行文档为准。

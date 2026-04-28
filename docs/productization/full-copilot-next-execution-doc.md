@@ -11,10 +11,11 @@
 ## 先看这个
 
 1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
-2. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-3. 当前最大的产品化缺口是：storage migration、audit table、真实 OpenClaw Agent runtime 验收、Feishu staging runbook、live Cognee/Ollama embedding 验证、no-overclaim 交付物审查。
-4. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
-5. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
+2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
+3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
+4. 当前最大的产品化缺口是：storage migration、audit table、真实 OpenClaw Agent runtime 验收、Feishu staging runbook、live Cognee/Ollama embedding 验证、no-overclaim 交付物审查。
+5. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
+6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
 
 ## 必读文件
 
@@ -32,11 +33,10 @@ docs/productization/contracts/audit-observability-contract.md
 docs/productization/contracts/openclaw-payload-contract.md
 docs/productization/contracts/migration-rfc.md
 docs/productization/contracts/negative-permission-test-plan.md
-docs/plans/2026-04-28-handoff.md
 docs/plans/2026-05-08-demo-readiness-handoff.md
 ```
 
-如果这些文件与当前代码冲突，以当前代码和本执行文档的产品化目标为准；旧 Day1-Day7 文档只作 reference，不要回到 CLI-first / Bot-first 主线。
+如果这些文件与当前代码冲突，以当前代码和本执行文档的产品化目标为准；2026-05-05 及以前日期计划和旧 Day1-Day7 文档只作 reference，不要回到 CLI-first / Bot-first 主线。
 
 ## 当前事实基线
 
@@ -376,7 +376,6 @@ docs/productization/contracts/audit-observability-contract.md
 docs/productization/contracts/openclaw-payload-contract.md
 docs/productization/contracts/migration-rfc.md
 docs/productization/contracts/negative-permission-test-plan.md
-docs/plans/2026-04-28-handoff.md
 docs/plans/2026-05-08-demo-readiness-handoff.md
 
 优先执行 Phase A：Storage Migration + Audit Table。

@@ -11,6 +11,20 @@ Metadata:
 
 ---
 
+## 0. Current Execution Baseline
+
+2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口。它们只保留为历史计划、验收证据和风险参考。当前目标已经从“初赛 MVP 完成”升级为“完整可用 Copilot 产品化”，新的执行入口是 [full-copilot-next-execution-doc.md](full-copilot-next-execution-doc.md)。
+
+下一步优先级：
+
+1. Phase A：Storage Migration + Audit Table。
+2. Phase B：真实 OpenClaw Agent Runtime 验收。
+3. Phase C：Feishu Staging Runbook。
+4. Phase D：Live Cognee / Ollama Embedding Gate。
+5. Phase E：Product QA + No-overclaim 审查。
+
+---
+
 ## 1. Requirements Summary
 
 本路线把 Feishu Memory Copilot 从当前“Proof MVP / dry-run / benchmark / whitepaper 证明层”推进为 PRD 定义的完整产品闭环。完整产品不是先做大型企业后台，而是先形成一个可用、可复现、可治理、可审计的 OpenClaw-native Copilot：

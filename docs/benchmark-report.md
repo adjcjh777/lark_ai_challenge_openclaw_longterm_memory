@@ -4,6 +4,8 @@
 主线：OpenClaw-native Feishu Memory Copilot
 证据来源：`memory_engine/benchmark.py`、`benchmarks/copilot_*_cases.json`、本地 `reports/copilot_*.json` / `reports/copilot_*.csv`
 
+> **状态更新（2026-04-28）**：本报告对应的 2026-05-03 指标自证任务已经完成，不再作为后续待执行计划。后续若继续扩展 Benchmark（评测脚本），必须服务完整可用 Copilot 产品化，入口见 `docs/productization/full-copilot-next-execution-doc.md`。
+
 ## 先看这个
 
 1. 这份报告证明 Copilot MVP 已经有可复现的评测入口，不只是“看起来能用”。
@@ -136,4 +138,4 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 ## 下一步
 
-2026-05-04 已把 README、Demo runbook、OpenClaw examples 和 `scripts/demo_seed.py` 固定成可复现演示路径。2026-05-05 从 `docs/plans/2026-05-05-implementation-plan.md` 继续写《Memory 定义与架构白皮书》，引用本报告和 `docs/demo-runbook.md` 作为证明材料。
+2026-05-04 Demo runbook、OpenClaw examples 和 `scripts/demo_seed.py` 已完成；2026-05-05《Memory 定义与架构白皮书》也已完成。后续不要再按旧日期 implementation plan 继续执行，本报告作为历史评测证据；新的 Benchmark 扩展应围绕产品化 Phase A-E 的 storage/audit、runtime、staging、embedding 和 QA 缺口展开。

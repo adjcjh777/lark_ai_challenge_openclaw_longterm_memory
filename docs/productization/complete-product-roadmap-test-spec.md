@@ -1,5 +1,7 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
+> **状态更新（2026-04-28）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口。本测试规格只验收“完整可用 Copilot 产品化”后续路线，执行入口以 `docs/productization/full-copilot-next-execution-doc.md` 为准。
+
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
 - Date: 2026-04-27

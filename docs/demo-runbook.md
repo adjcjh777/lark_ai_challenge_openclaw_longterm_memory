@@ -2,13 +2,15 @@
 
 目标：用 5 分钟证明 Feishu Memory Copilot 不是普通聊天搜索，而是能在 OpenClaw Agent 任务前主动调取“有证据、有版本、有状态”的企业协作记忆。
 
+> **状态更新（2026-04-28）**：本 runbook 对应的 2026-05-04 Demo 固定任务已经完成，保留为可复现演示证据。后续不要从 2026-05-04 日期计划继续补任务；新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
+
 ## 执行前先看这个
 
 1. 今天演示主入口是 OpenClaw tools，不是旧 CLI 或旧 Feishu Bot。
 2. Cognee 是本地 knowledge / memory engine；企业记忆治理、candidate（待确认记忆）、active（当前有效记忆）、superseded（被新版本覆盖的旧记忆）、evidence（证据）和版本链由本项目 Copilot Core 负责。
 3. 现场优先走 `agent_adapters/openclaw/examples/*.json` 和 `scripts/demo_seed.py` 的 dry-run；OpenClaw gateway 或飞书权限不稳时，不真实写飞书生产空间。
 4. Demo 只展示可复现能力：历史决策召回、冲突更新、任务前 prefetch、heartbeat reminder candidate、benchmark 证明。
-5. 若现场卡住，把失败命令、卡住步骤和替代路径写回 `docs/plans/2026-05-04-handoff.md`。
+5. 若现场卡住，把失败命令、卡住步骤和替代路径写回当前产品化 handoff；`docs/plans/2026-05-04-handoff.md` 只作为历史交接证据。
 
 ## 演示前准备，60 秒
 

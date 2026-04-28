@@ -1,5 +1,7 @@
 # 2026-05-01 Implementation Plan
 
+> **历史状态更新（2026-04-28）**：本文件对应的 2026-05-05 及以前任务已经完成，保留为历史计划/交接证据，不再作为后续执行入口。新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`，下一步优先 Phase A：Storage Migration + Audit Table。
+
 阶段：conflict update、versions、stale leakage、Card/Bitable review surface design
 主控：`docs/feishu-memory-copilot-implementation-plan.md`
 

@@ -4,6 +4,8 @@
 项目：Feishu Memory Copilot
 阶段：初赛可提交初稿
 
+> **状态更新（2026-04-28）**：本白皮书对应的 2026-05-05 文档任务已经完成，保留为初赛证明材料和产品化参考。后续不要从 2026-05-05 implementation plan 继续执行；新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
+
 ## 先看这个
 
 1. 本文回答初赛材料里的三个问题：Define it、Build it、Prove it。
