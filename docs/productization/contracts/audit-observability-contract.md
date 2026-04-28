@@ -1,12 +1,14 @@
 # Audit & Observability Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase A 已实现本地 SQLite audit table 和 healthcheck audit smoke；仍不是生产监控系统。
+状态：Phase A 已实现本地 SQLite audit table 和 healthcheck audit smoke；后期打磨 P1 已让 healthcheck 报告 audit status；仍不是生产监控系统。
 适用范围：Copilot service、permission decisions、Feishu review surface、OpenClaw tool trace、healthcheck。
 
 ## 1. 目标
 
 让完整产品能解释每次记忆读写和提醒为什么发生、谁触发、谁能看、哪些字段被遮挡。Phase A 已把最小审计事件写入 `memory_audit_events`，覆盖 confirm/reject/deny/limited ingestion candidate/heartbeat candidate。
+
+2026-04-28 后期打磨 P1 补充：`python3 scripts/check_copilot_health.py --json` 的 `storage_schema.audit_status` 已报告 audit 是否可用、event_count、recent_failure_count、permission_deny_count 和 redaction_count。
 
 ## 2. Audit Events
 

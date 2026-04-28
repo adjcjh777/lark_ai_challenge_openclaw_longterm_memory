@@ -139,7 +139,7 @@ git diff --check
 ollama ps
 ```
 
-### 4. P1：生产存储、索引和迁移方案
+### 4. P1：生产存储、索引和迁移方案（已完成本地迁移入口和上线试点方案）
 
 要做什么：从本地 SQLite 产品化迁移，推进到可上线试点的生产存储设计和迁移流程。
 
@@ -156,19 +156,28 @@ ollama ps
 
 完成标准：
 
-- 明确生产 DB 选择和本地 SQLite 的边界。
-- migration 支持 dry-run、rollback、重复执行安全。
-- 全文索引、结构化索引、向量索引职责清楚。
-- audit retention、备份恢复、数据删除策略写入文档。
-- healthcheck 能报告 schema version、index status、audit status。
+- 已完成：明确生产 DB 选择和本地 SQLite 的边界；当前默认 SQLite 只用于 demo / pre-production / 本机 staging，上线试点建议托管 PostgreSQL，但本阶段未部署生产 DB。
+- 已完成：migration 支持 dry-run、回滚说明、重复执行安全；入口是 `scripts/migrate_copilot_storage.py --dry-run --json` 和 `--apply --json`。
+- 已完成：全文索引、结构化索引、向量索引职责清楚；本阶段只补结构化 / 来源 / 审计索引，全文搜索仍由现有 retrieval 层承担，向量路径仍走 curated memory embedding / Cognee adapter。
+- 已完成：audit retention、备份恢复、数据删除策略写入 [storage handoff](storage-migration-productization-handoff.md)。
+- 已完成：healthcheck 能报告 schema version、index status、audit status。
+
+已完成证据：
+
+- 新增 `memory_engine/storage_migration.py`，提供 `inspect_copilot_storage()` 和 `apply_copilot_storage_migration()`。
+- 新增 `scripts/migrate_copilot_storage.py`，支持 `--dry-run`、`--apply` 和 `--json`。
+- `memory_engine/copilot/healthcheck.py` 的 `storage_schema` 新增 `index_status` 和 `audit_status`。
+- 新增 `tests/test_copilot_storage_migration.py`，覆盖 dry-run 不改库、apply 可重复执行、产品化索引存在。
+- 新增 [生产存储、索引和迁移方案 handoff](storage-migration-productization-handoff.md)。
 
 建议验证：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/migrate_copilot_storage.py --dry-run --json
 python3 scripts/check_copilot_health.py --json
 python3 -m compileall memory_engine scripts
-python3 -m unittest tests.test_copilot_healthcheck tests.test_copilot_permissions
+python3 -m unittest tests.test_copilot_healthcheck tests.test_copilot_permissions tests.test_copilot_storage_migration
 git diff --check
 ollama ps
 ```

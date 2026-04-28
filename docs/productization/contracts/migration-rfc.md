@@ -1,7 +1,7 @@
 # Migration RFC：Scope-first -> Tenant-aware Storage
 
 日期：2026-05-07
-状态：Phase 1 contract freeze（文档冻结，待代码实现）
+状态：后期打磨 P1 已实现本地 SQLite dry-run / apply 迁移入口；仍不是生产数据库部署。
 适用范围：后续数据库迁移脚本、repository fallback、benchmark fixture、demo seed。
 
 ## 1. 背景
@@ -30,15 +30,15 @@
 
 ## 4. Migration Steps
 
-后续实现建议：
+当前实现路径：
 
-1. Add nullable columns to existing tables.
-2. Backfill default tenant/org/visibility for existing rows.
-3. Create new audit table.
-4. Add indexes.
-5. Run compatibility benchmark.
-6. Switch product path permission check to fail-closed.
-7. Keep legacy fallback scope-only path only for explicit demo/benchmark mode until later migration.
+1. 已实现：Add nullable columns to existing tables。
+2. 已实现：Backfill default tenant/org/visibility for existing rows。
+3. 已实现：Create new audit table。
+4. 已实现：Add indexes。
+5. 已实现：新增 `scripts/migrate_copilot_storage.py --dry-run --json` 和 `--apply --json`。
+6. 已实现：healthcheck 报告 schema version、index status、audit status。
+7. 后续仍需：真实生产 DB 部署、长期监控、真实备份恢复演练。
 
 ## 5. Rollback / Dry-run
 

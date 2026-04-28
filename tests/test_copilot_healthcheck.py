@@ -33,6 +33,10 @@ class CopilotHealthcheckTest(unittest.TestCase):
         self.assertTrue(all(storage["tenant_visibility_columns"].values()))
         self.assertTrue(storage["audit_table_available"])
         self.assertTrue(storage["audit_required_columns"])
+        self.assertEqual("pass", storage["index_status"]["status"])
+        self.assertEqual([], storage["index_status"]["missing_indexes"])
+        self.assertEqual("pass", storage["audit_status"]["status"])
+        self.assertTrue(storage["audit_status"]["available"])
         self.assertIn("memory_audit_events", storage["boundary"])
 
     def test_healthcheck_smoke_covers_search_permission_deny_and_candidate_review(self) -> None:

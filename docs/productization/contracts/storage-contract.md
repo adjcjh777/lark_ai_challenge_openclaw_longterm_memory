@@ -1,12 +1,12 @@
 # Storage Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-05-07
-状态：Phase A 已实现本地 SQLite 兼容迁移和 audit table；仍不是生产级多租户后台。
+状态：Phase A 已实现本地 SQLite 兼容迁移和 audit table；后期打磨 P1 已补 dry-run / apply 迁移入口、索引检查和上线试点存储方案；仍不是生产级多租户后台。
 适用范围：后续实现 `memory_engine/db.py`、`memory_engine/copilot/schemas.py`、`memory_engine/copilot/service.py`、repository adapter 和 benchmark fixture 时必须遵循。
 
 ## 1. 目标
 
-本契约把当前 scope-first 存储模型升级为 tenant / organization / visibility-aware 的产品模型。Phase A 已把字段、索引、迁移兼容和 `memory_audit_events` 落到本地 SQLite；后续生产化仍需真实部署、长期监控和更完整的多租户后台。
+本契约把当前 scope-first 存储模型升级为 tenant / organization / visibility-aware 的产品模型。Phase A 已把字段、索引、迁移兼容和 `memory_audit_events` 落到本地 SQLite；后期打磨 P1 已新增 `scripts/migrate_copilot_storage.py` 和 healthcheck index/audit status。后续生产化仍需真实部署、长期监控和更完整的多租户后台。
 
 当前历史差距：
 
@@ -19,6 +19,12 @@
 - `raw_events`、`memories`、`memory_versions`、`memory_evidence` 已有 `tenant_id`、`organization_id`、`visibility_policy` 兼容字段。
 - 已新增 `memory_audit_events`。
 - `python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass`、`audit_smoke.status=pass`。
+
+2026-04-28 后期打磨 P1 补充：
+
+- 已新增 `memory_engine/storage_migration.py` 和 `scripts/migrate_copilot_storage.py`，支持 dry-run / apply / JSON 输出。
+- `python3 scripts/check_copilot_health.py --json` 中 `storage_schema.index_status.status=pass`、`storage_schema.audit_status.status=pass`。
+- 当前默认 SQLite 仍只作为 demo / pre-production / 本机 staging；上线试点建议托管 PostgreSQL，但本阶段未部署生产 DB。
 
 ## 2. Scope / Tenant 语义
 

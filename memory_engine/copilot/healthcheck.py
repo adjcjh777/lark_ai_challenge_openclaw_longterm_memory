@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from memory_engine.db import SCHEMA_VERSION, init_db
+from memory_engine.storage_migration import inspect_copilot_storage
 from memory_engine.repository import MemoryRepository
 from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest
 
@@ -231,6 +232,9 @@ def _check_storage_schema() -> dict[str, Any]:
         }
         audit_required_columns = required_audit_columns.issubset(audit_columns)
         user_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        migration = inspect_copilot_storage(conn)
+        missing_indexes = list(migration.get("missing_indexes") or [])
+        audit = dict(migration.get("audit") or {})
         status = (
             "pass"
             if has_core_tables
@@ -238,6 +242,7 @@ def _check_storage_schema() -> dict[str, Any]:
             and all(tenant_visibility_columns.values())
             and audit_table_available
             and audit_required_columns
+            and not missing_indexes
             else "warning"
         )
         return {
@@ -249,11 +254,24 @@ def _check_storage_schema() -> dict[str, Any]:
             "tenant_visibility_columns": tenant_visibility_columns,
             "audit_table_available": audit_table_available,
             "audit_required_columns": audit_required_columns,
+            "index_status": {
+                "status": "pass" if not missing_indexes else "warning",
+                "missing_indexes": missing_indexes,
+                "available_indexes": (migration.get("indexes") or {}).get("available", []),
+            },
+            "audit_status": {
+                "status": "pass" if audit.get("available") else "warning",
+                "available": bool(audit.get("available")),
+                "event_count": int(audit.get("event_count") or 0),
+                "recent_failure_count": int(audit.get("recent_failure_count") or 0),
+                "permission_deny_count": int(audit.get("permission_deny_count") or 0),
+                "redaction_count": int(audit.get("redaction_count") or 0),
+            },
             "boundary": "storage schema includes tenant/org/visibility compatibility and memory_audit_events; this is still local SQLite, not production deployment.",
             "next_step": (
                 ""
                 if status == "pass"
-                else "后续 migration 阶段再加入 tenant_id / organization_id / visibility_policy 和 audit table。"
+                else "后续 migration 阶段再加入 tenant_id / organization_id / visibility_policy、audit table 和产品化索引。"
             ),
         }
     except Exception as exc:
