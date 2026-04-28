@@ -60,12 +60,16 @@ Actors：
 - member confirm/reject denied。
 - member `create_candidate(auto_confirm=True)` 不能绕过 reviewer / owner / admin。
 - 真实 Feishu document ingestion 缺失/畸形 permission 时在 fetch 前 fail closed。
+- 真实 Feishu tenant / organization 配置后不再被 demo 常量误拒。
+- chat source_context mismatch 会 fail closed，reason_code 为 `source_context_mismatch`。
+- Feishu live sender open_id 到 tenant / organization 的映射有单测覆盖。
 
 仍待后续补齐：
 
 - heartbeat sensitive reminder 的完整权限反例矩阵。
 - revoked source evidence 的 redaction / stale 行为。
 - 每个工具独立覆盖 requested_action mismatch、workspace mismatch 的机械矩阵。
+- 真实飞书通讯录、群聊成员权限和文档 ACL 的端到端反例。
 
 ## 4. Assertions
 

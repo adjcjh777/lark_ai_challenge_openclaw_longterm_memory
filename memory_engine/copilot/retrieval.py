@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import threading
 import time
 from dataclasses import dataclass, replace
@@ -12,7 +13,7 @@ from memory_engine.repository import MemoryRepository
 
 from .cognee_adapter import CogneeMemoryAdapter
 from .embeddings import CuratedMemoryEmbeddingText, DeterministicEmbeddingProvider, cosine_similarity
-from .schemas import Evidence, MemoryLayer, MemoryResult, RetrievalTraceStep, SearchRequest
+from .schemas import Evidence, MemoryLayer, MemoryResult, PermissionContext, RetrievalTraceStep, SearchRequest, ValidationError
 
 
 MATCH_ORDER = ("keyword_index", "vector", "cognee", "repository_fallback")
@@ -260,9 +261,12 @@ class LayerAwareRetriever:
         ).fetchall()
 
         expected_type = request.filters.get("type")
+        permission = _permission_context(request)
         entries = []
         for row in rows:
             if expected_type and row["type"] != expected_type:
+                continue
+            if permission is not None and not _row_visible_to_actor(row, permission):
                 continue
             entries.append(self._row_to_index_entry(row, layer=layer))
         return entries, None
@@ -534,6 +538,65 @@ def _event_loop_is_running() -> bool:
     try:
         asyncio.get_running_loop()
     except RuntimeError:
+        return False
+    return True
+
+
+def _permission_context(request: SearchRequest) -> PermissionContext | None:
+    try:
+        return PermissionContext.from_payload(request.current_context.permission)
+    except ValidationError:
+        return None
+
+
+def _row_visible_to_actor(row: Any, permission: PermissionContext) -> bool:
+    visibility = str(row["visibility_policy"] or "team")
+    if str(row["tenant_id"] or "") != permission.actor.tenant_id:
+        return False
+    if visibility in {"private", "team", "organization"} and str(row["organization_id"] or "") != permission.actor.organization_id:
+        return False
+    if visibility == "private" and not _private_visible(row, permission):
+        return False
+    if not _row_source_context_matches(row, permission):
+        return False
+    return True
+
+
+def _private_visible(row: Any, permission: PermissionContext) -> bool:
+    roles = {role.strip().lower() for role in permission.actor.roles}
+    if roles.intersection({"reviewer", "owner", "admin"}):
+        return True
+    actor_id = permission.actor.primary_id()
+    return actor_id in {str(row["owner_id"] or ""), str(row["created_by"] or "")}
+
+
+def _row_source_context_matches(row: Any, permission: PermissionContext) -> bool:
+    raw = row["raw_json"]
+    if not raw:
+        return True
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return True
+    if not isinstance(parsed, dict):
+        return True
+    source = parsed.get("source")
+    source = source if isinstance(source, dict) else {}
+    source_chat_id = source.get("source_chat_id")
+    if (
+        isinstance(source_chat_id, str)
+        and source_chat_id
+        and permission.source_context.chat_id
+        and source_chat_id != permission.source_context.chat_id
+    ):
+        return False
+    source_doc_id = source.get("source_doc_id") or parsed.get("document_token")
+    if (
+        isinstance(source_doc_id, str)
+        and source_doc_id
+        and permission.source_context.document_id
+        and source_doc_id != permission.source_context.document_id
+    ):
         return False
     return True
 

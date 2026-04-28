@@ -106,7 +106,7 @@ git diff --check
 ollama ps
 ```
 
-### 3. P0：把 demo 权限模型升级为真实飞书权限映射
+### 3. P0：把 demo 权限模型升级为真实飞书权限映射（已完成首批本机 staging 映射）
 
 要做什么：把当前 `tenant:demo` / `org:demo` 常量式权限检查，升级为从飞书用户、群聊、文档、组织和角色解析出的真实 permission context。
 
@@ -123,11 +123,21 @@ ollama ps
 
 完成标准：
 
-- permission context 能映射真实飞书 actor、tenant、organization、chat、document。
-- tenant mismatch、organization mismatch、private non-owner、source context mismatch 全部 deny。
-- deny response 不返回 `current_value`、`summary`、`evidence` 明文。
-- confirm / reject 仍要求 reviewer / owner / admin。
-- 真实 Feishu doc fetch 前必须先通过 permission gate。
+- 已完成首批：permission context 能按飞书 sender open_id 映射真实 actor、tenant、organization，并带上 chat source_context。
+- 已完成首批：tenant mismatch、organization mismatch、private non-owner、chat / document source context mismatch 会 fail closed。
+- 已完成首批：deny response 不返回 `current_value`、`summary`、`evidence` 明文。
+- 已完成首批：confirm / reject 仍要求 reviewer / owner / admin。
+- 已完成首批：真实 Feishu doc fetch 前必须先通过 permission gate；document source context mismatch 已在现有 ingestion 测试里覆盖。
+- 后续仍未完成：飞书通讯录 / 组织架构 API 自动解析、真实文档 ACL、群聊成员权限和长期权限缓存。
+
+已完成证据：
+
+- 新增 [真实飞书权限映射 handoff](real-feishu-permission-mapping-handoff.md)。
+- `memory_engine/copilot/feishu_live.py` 支持 `COPILOT_FEISHU_ACTOR_TENANT_MAP` 和 `COPILOT_FEISHU_ACTOR_ORGANIZATION_MAP`。
+- `memory_engine/copilot/permissions.py` 接受项目配置里的真实 Feishu tenant / organization，并继续拒绝未配置的 tenant / organization。
+- `memory_engine/copilot/retrieval.py` 会按 memory 行上的 tenant / organization / visibility / source context 做搜索过滤，真实 actor 不会因为通过入口校验就读到其他租户记录。
+- `tests/test_copilot_permissions.py` 覆盖真实 Feishu tenant/org allow、chat source_context mismatch deny。
+- `tests/test_copilot_feishu_live.py` 覆盖 sender open_id 到 tenant/org 的映射。
 
 建议验证：
 

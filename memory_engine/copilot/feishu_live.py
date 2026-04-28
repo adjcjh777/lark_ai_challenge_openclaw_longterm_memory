@@ -399,8 +399,10 @@ def _current_context(
             "trace_id": f"trace_feishu_{_short_id(event.message_id)}",
             "actor": {
                 "open_id": event.sender_id or "unknown_feishu_actor",
-                "tenant_id": os.environ.get("COPILOT_FEISHU_TENANT_ID", DEFAULT_TENANT_ID),
-                "organization_id": os.environ.get("COPILOT_FEISHU_ORGANIZATION_ID", DEFAULT_ORGANIZATION_ID),
+                "tenant_id": _mapped_env_value("COPILOT_FEISHU_ACTOR_TENANT_MAP", event.sender_id)
+                or os.environ.get("COPILOT_FEISHU_TENANT_ID", DEFAULT_TENANT_ID),
+                "organization_id": _mapped_env_value("COPILOT_FEISHU_ACTOR_ORGANIZATION_MAP", event.sender_id)
+                or os.environ.get("COPILOT_FEISHU_ORGANIZATION_ID", DEFAULT_ORGANIZATION_ID),
                 "roles": _roles_for_sender(event.sender_id),
             },
             "source_context": {
@@ -421,6 +423,16 @@ def _roles_for_sender(sender_id: str) -> list[str]:
     if "*" in reviewers or (sender_id and sender_id in reviewers):
         return sorted(set(base + ["reviewer"]))
     return base
+
+
+def _mapped_env_value(name: str, key: str) -> str | None:
+    if not key:
+        return None
+    for item in _csv_env(name):
+        mapped_key, separator, mapped_value = item.partition("=")
+        if separator and mapped_key.strip() == key and mapped_value.strip():
+            return mapped_value.strip()
+    return None
 
 
 def _format_search(result: dict[str, Any]) -> str:

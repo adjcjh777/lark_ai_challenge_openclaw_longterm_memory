@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -88,15 +89,55 @@ def check_scope_access(
             workspace_id=workspace_id,
         )
 
-    if permission.actor.tenant_id != DEFAULT_TENANT_ID:
+    if not _value_allowed(permission.actor.tenant_id, DEFAULT_TENANT_ID, "COPILOT_FEISHU_TENANT_ID", "COPILOT_ALLOWED_TENANT_IDS", "COPILOT_FEISHU_ACTOR_TENANT_MAP"):
         return _permission_error("tenant_mismatch", "actor tenant cannot access requested memory scope", permission=permission, action=action)
 
-    if permission.actor.organization_id != DEFAULT_ORGANIZATION_ID:
+    if not _value_allowed(
+        permission.actor.organization_id,
+        DEFAULT_ORGANIZATION_ID,
+        "COPILOT_FEISHU_ORGANIZATION_ID",
+        "COPILOT_ALLOWED_ORGANIZATION_IDS",
+        "COPILOT_FEISHU_ACTOR_ORGANIZATION_MAP",
+    ):
         return _permission_error(
             "organization_mismatch",
             "actor organization cannot access requested memory scope",
             permission=permission,
             action=action,
+        )
+
+    context_chat_id = context.get("chat_id")
+    if (
+        isinstance(context_chat_id, str)
+        and context_chat_id
+        and permission.source_context.chat_id
+        and permission.source_context.chat_id != context_chat_id
+    ):
+        return _permission_error(
+            "source_context_mismatch",
+            "permission source_context.chat_id does not match current_context.chat_id",
+            permission=permission,
+            action=action,
+            context_chat_id=context_chat_id,
+            source_chat_id=permission.source_context.chat_id,
+        )
+
+    metadata = context.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    context_document_id = metadata.get("document_id") or metadata.get("source_doc_id")
+    if (
+        isinstance(context_document_id, str)
+        and context_document_id
+        and permission.source_context.document_id
+        and permission.source_context.document_id != context_document_id
+    ):
+        return _permission_error(
+            "source_context_mismatch",
+            "permission source_context.document_id does not match current_context metadata",
+            permission=permission,
+            action=action,
+            context_document_id=context_document_id,
+            source_document_id=permission.source_context.document_id,
         )
 
     roles = {role.strip().lower() for role in permission.actor.roles}
@@ -138,6 +179,28 @@ def _permission_error(
             error_details["trace_id"] = trace_id
     error_details.update(details)
     return CopilotError("permission_denied", message, details=error_details)
+
+
+def _value_allowed(value: str, default_value: str, *env_names: str) -> bool:
+    allowed = {default_value}
+    for name in env_names:
+        allowed.update(_env_values(name))
+    return value in allowed
+
+
+def _env_values(name: str) -> set[str]:
+    raw = os.environ.get(name, "")
+    values: set[str] = set()
+    for item in raw.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" in item:
+            _, _, mapped_value = item.partition("=")
+            item = mapped_value.strip()
+        if item:
+            values.add(item)
+    return values
 
 
 def demo_permission_context(

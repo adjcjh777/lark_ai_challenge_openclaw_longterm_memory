@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
@@ -16,27 +17,38 @@ def permission_context(
     *,
     action: str,
     user_id: str = "u_reviewer",
+    open_id: str | None = None,
     tenant_id: str = "tenant:demo",
     organization_id: str = "org:demo",
     roles: list[str] | None = None,
     visibility: str = "team",
     workspace_id: str = SCOPE,
+    chat_id: str | None = None,
+    context_chat_id: str | None = None,
 ) -> dict[str, object]:
+    actor: dict[str, object] = {
+        "tenant_id": tenant_id,
+        "organization_id": organization_id,
+        "roles": roles if roles is not None else ["member", "reviewer"],
+    }
+    if user_id:
+        actor["user_id"] = user_id
+    if open_id:
+        actor["open_id"] = open_id
+    source_context = {
+        "entrypoint": "openclaw",
+        "workspace_id": workspace_id,
+    }
+    if chat_id:
+        source_context["chat_id"] = chat_id
     return {
         "scope": SCOPE,
+        **({"chat_id": context_chat_id} if context_chat_id else {}),
         "permission": {
             "request_id": f"req_{action.replace('.', '_')}",
             "trace_id": f"trace_{action.replace('.', '_')}",
-            "actor": {
-                "user_id": user_id,
-                "tenant_id": tenant_id,
-                "organization_id": organization_id,
-                "roles": roles if roles is not None else ["member", "reviewer"],
-            },
-            "source_context": {
-                "entrypoint": "openclaw",
-                "workspace_id": workspace_id,
-            },
+            "actor": actor,
+            "source_context": source_context,
             "requested_action": action,
             "requested_visibility": visibility,
             "timestamp": "2026-05-07T00:00:00+08:00",
@@ -111,6 +123,53 @@ class CopilotPermissionTest(unittest.TestCase):
 
         self.assert_permission_denied(response, "organization_mismatch")
         self.assertNotIn("results", response)
+
+    def test_real_feishu_tenant_and_org_from_config_are_allowed(self) -> None:
+        with seeded_service() as service:
+            with patch.dict(
+                "os.environ",
+                {
+                    "COPILOT_FEISHU_TENANT_ID": "tenant:feishu-real",
+                    "COPILOT_FEISHU_ORGANIZATION_ID": "org:feishu-real",
+                },
+                clear=False,
+            ):
+                response = handle_tool_request(
+                    "memory.search",
+                    {
+                        "query": "生产部署参数",
+                        "scope": SCOPE,
+                        "current_context": permission_context(
+                            action="memory.search",
+                            user_id="",
+                            open_id="ou_real_actor",
+                            tenant_id="tenant:feishu-real",
+                            organization_id="org:feishu-real",
+                            chat_id="oc_real_chat",
+                            context_chat_id="oc_real_chat",
+                        ),
+                    },
+                    service=service,
+                )
+
+        self.assertTrue(response["ok"])
+        self.assertNotIn("--canary", str(response))
+
+    def test_source_context_chat_mismatch_fails_closed(self) -> None:
+        response = handle_tool_request(
+            "memory.search",
+            {
+                "query": "生产部署参数",
+                "scope": SCOPE,
+                "current_context": permission_context(
+                    action="memory.search",
+                    chat_id="oc_source_chat",
+                    context_chat_id="oc_other_chat",
+                ),
+            },
+        )
+
+        self.assert_permission_denied(response, "source_context_mismatch")
 
     def test_private_visibility_denies_non_owner_member(self) -> None:
         response = handle_tool_request(

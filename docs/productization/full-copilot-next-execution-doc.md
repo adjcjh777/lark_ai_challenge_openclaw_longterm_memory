@@ -13,7 +13,7 @@
 1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate；Phase E 已完成 no-overclaim 交付物审查；后期打磨 P0 已补 `memory.*` first-class OpenClaw 原生工具注册本机证据和 OpenClaw Feishu websocket running 本机 staging 证据。当前最大的后续产品化缺口是：真实权限映射、真实 Feishu DM 到本项目 first-class `memory.*` 工具路由和 productized live。
+4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate；Phase E 已完成 no-overclaim 交付物审查；后期打磨 P0 已补 `memory.*` first-class OpenClaw 原生工具注册本机证据、OpenClaw Feishu websocket running 本机 staging 证据和首批真实飞书权限映射。当前最大的后续产品化缺口是：真实 Feishu DM 到本项目 first-class `memory.*` 工具路由、完整企业权限后台和 productized live。
 5. 所有真实飞书数据仍先进入 candidate（待确认记忆），不能自动 active；confirm/reject 必须走 `CopilotService` / `handle_tool_request()`。
 6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
 
@@ -64,10 +64,12 @@ docs/productization/feishu-single-listener-handoff.md
 - Phase E no-overclaim 审查：README、Demo runbook、Benchmark Report、白皮书、产品化主控和 handoff 口径已对齐；heartbeat 样例数统一为 7；白皮书已更新 Phase B runtime evidence 和 Phase D live embedding gate 的当前事实；后续又补齐 first-class registry 和 websocket staging 证据；仍不宣称生产部署、全量 Feishu workspace ingestion、长期 embedding 服务、完整多租户后台或 productized live。
 - First-class OpenClaw 原生工具注册：`agent_adapters/openclaw/plugin/` 已提供 `feishu-memory-copilot` 插件；`openclaw plugins inspect feishu-memory-copilot --json` 已读回 7 个 `toolNames`；插件调用 `memory_engine.copilot.openclaw_tool_runner` 后进入 `handle_tool_request()` / `CopilotService`。
 - OpenClaw Feishu websocket running 本机 staging 证据：`python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45` 返回 `ok=true`、`pass=4`、`warning=1`、`fail=0`；`channels_status.channel_running=true`、`account_running=true`、`probe_ok=true`；gateway 日志证明真实 DM 已进入 OpenClaw Agent dispatch；同一时间没有 repo 内 lark-cli listener 冲突。
+- 首批真实飞书权限映射：`memory_engine/copilot/feishu_live.py` 可按 sender open_id 映射 tenant / organization；`memory_engine/copilot/permissions.py` 会接受项目配置里的真实 Feishu tenant / org，并对 chat / document source_context mismatch fail closed；`memory_engine/copilot/retrieval.py` 会按 memory 行的 tenant / organization / visibility / source context 过滤；拒绝响应不展示 `current_value`、`summary`、`evidence`。这不是完整企业权限后台，也没有接真实文档 ACL 或长期权限缓存。
 
 仍未完成：
 
 - Feishu Agent tool routing：真实 Feishu DM 当前触发的是 OpenClaw 内置 `memory_search`，还不是本项目 first-class `memory.search` runner；后续要让真实飞书消息稳定进入 `handle_tool_request()` / `CopilotService`。
+- 完整企业权限后台：首批本机 staging 映射已完成；真实通讯录 / 组织架构解析、文档 ACL、群聊成员权限和长期权限缓存仍未完成。
 - OpenClaw health running 字段一致性：OpenClaw 2026.4.24 的 `openclaw health --json` 总览仍把 Feishu running 报为 `false`，但 `openclaw channels status --probe --json` 和 gateway 日志显示 running；当前作为 warning 记录。
 - productized live：没有生产部署、长期运行监控、完整多租户后台。
 
