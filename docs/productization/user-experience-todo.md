@@ -32,6 +32,20 @@
 | UX-06 | 真实用户表达样本评测 | 进行中 | 否 | P1 | 覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景；指标包含误记率、误提醒率和确认负担 |
 | UX-07 | 10 分钟评委体验包 | 待启动 | 否 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、benchmark、安全边界和架构 |
 
+## 详细执行文档
+
+按下面顺序执行，不要跳过还没有验收的前置体验任务。
+
+| 顺序 | TODO | 详细文档 | 本阶段出口 |
+|---|---|---|---|
+| 1 | UX-01 | [飞书主路径从命令集合升级为完整体验](user-experience-todos/ux-01-feishu-main-path.md) | 普通用户不输入内部 ID 也能完成搜索、候选确认、版本解释和任务前 prefetch。 |
+| 2 | UX-02 | [重做记忆卡片信息架构](user-experience-todos/ux-02-memory-card-information-architecture.md) | 搜索结果、候选审核、版本解释、任务前上下文 4 类卡片模板稳定。 |
+| 3 | UX-03 | [用户可理解的“为什么这样回答”解释层](user-experience-todos/ux-03-user-facing-explanation-layer.md) | 主答案能解释当前结论、证据、版本覆盖和权限原因，工程字段进入审计详情。 |
+| 4 | UX-04 | [记忆收件箱 / 审核队列](user-experience-todos/ux-04-memory-inbox-review-queue.md) | 待我审核、冲突需判断、高风险暂不建议确认三类视图可处理。 |
+| 5 | UX-05 | [主动提醒变成可控提醒体验](user-experience-todos/ux-05-controlled-reminder-experience.md) | reminder candidate 可确认、忽略、延后和关闭同类提醒，不直接真实群推送。 |
+| 6 | UX-06 | [真实用户表达样本评测](user-experience-todos/ux-06-real-user-expression-benchmark.md) | 覆盖真实表达样本和误记率、误提醒率、确认负担等 UX 指标。 |
+| 7 | UX-07 | [10 分钟评委体验包](user-experience-todos/ux-07-ten-minute-judge-experience-pack.md) | 评委按一条脚本在 10 分钟内看懂体验、benchmark、安全边界和架构。 |
+
 ## UX-01：飞书主路径从命令集合升级为完整体验
 
 当前情况：

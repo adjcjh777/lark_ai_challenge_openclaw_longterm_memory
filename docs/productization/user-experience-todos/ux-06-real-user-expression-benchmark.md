@@ -1,0 +1,99 @@
+# UX-06：真实用户表达样本评测
+
+日期：2026-04-29
+负责人：程俊豪
+状态：待执行
+上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
+执行顺序：第 6 个
+
+## 本轮要做什么
+
+在现有 benchmark 上增加真实用户表达样本和 UX 指标，覆盖：
+
+- 口语化提问。
+- 含糊上下文。
+- 多人改口。
+- 闲聊误判。
+- 权限场景。
+- 误提醒和确认负担。
+
+真实用户表达样本必须脱敏。不能提交真实 chat_id、open_id、token 或敏感业务内容。
+
+## 为什么现在做
+
+当前 benchmark 已覆盖 recall、candidate、conflict、layer、prefetch、heartbeat，但很多样例仍偏 fixture。真实飞书用户不会按 schema 说话，会说“这个还按之前那个来吗”“刚才那个废掉”“哈哈这个先别记”。如果不测这些表达，产品体验会在演示外失真。
+
+## 本阶段不用做
+
+- 本阶段不用接全量飞书 workspace。
+- 本阶段不用删除失败样例来保证好看的结果。
+- 本阶段不用把 fixture 通过说成真实用户稳定可用。
+- 本阶段不用提交未脱敏聊天记录。
+
+## 执行任务
+
+| 顺序 | 任务 | 文件位置 | 完成标准 |
+|---|---|---|---|
+| 1 | 定义真实表达样本 schema | `benchmarks/copilot_real_feishu_cases.json` 或新 `benchmarks/copilot_user_expression_cases.json` | 每条样本包含输入、上下文、期望 intent、期望是否记忆、权限预期、失败 debug hint。 |
+| 2 | 补 5 类脱敏样本 | `benchmarks/` | 口语、含糊、多轮改口、闲聊误判、权限场景各至少 5 条；失败样例保留。 |
+| 3 | 扩 benchmark runner 指标 | `tests/test_copilot_benchmark.py`、benchmark runner 相关代码 | 指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率、旧值泄漏率。 |
+| 4 | 对齐报告和阈值 | `docs/benchmark-report.md` | 报告区分 fixture benchmark 和真实表达样本；写清样本规模和不足。 |
+| 5 | 补回归测试 | `tests/test_copilot_benchmark.py`、相关 `tests/test_copilot_*` | 样本文件格式、指标计算和失败输出都有测试。 |
+
+## 样本类型建议
+
+| 类型 | 示例 | 期望行为 |
+|---|---|---|
+| 口语化提问 | 上次说的部署规则是啥？ | 召回 active 记忆，给证据和解释。 |
+| 含糊上下文 | 这个还按之前那个来吗？ | 结合 thread_topic 或上下文判断；不确定时要求补充。 |
+| 多人改口 | 不对，刚才那个废掉 | 进入 candidate / conflict 流程，不直接覆盖 active。 |
+| 闲聊误判 | 哈哈这个先别记 | 不创建 candidate。 |
+| 权限场景 | 别人私聊里的结论能不能搜到？ | permission fail closed，不泄露明文。 |
+
+## 指标建议
+
+| 指标 | 含义 | 建议阈值 |
+|---|---|---|
+| Recall@3 | 正确记忆进入前三结果的比例。 | >= 0.80 |
+| 误记率 | 闲聊或低价值内容被记成 candidate 的比例。 | <= 0.05 |
+| 误提醒率 | 不该触发提醒却生成 reminder candidate 的比例。 | <= 0.05 |
+| 确认负担 | 每 10 条输入需要人工处理的候选数。 | 记录趋势，先不强设绝对阈值。 |
+| 解释覆盖率 | 结果带用户可读原因的比例。 | >= 0.80 |
+| 旧值泄漏率 | superseded 旧值进入默认答案的比例。 | 0.00 |
+
+## 验收命令
+
+代码或 benchmark 实现后运行：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_benchmark tests.test_copilot_retrieval
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+git diff --check
+ollama ps
+```
+
+如果新增了独立真实表达样本 runner，应追加对应命令，并把命令写入 `docs/benchmark-report.md`。
+
+## 完成标准
+
+- 新增真实表达样本集，且全部脱敏。
+- 成功样例和失败样例都保留。
+- 指标覆盖准确率、安全性和用户负担。
+- benchmark 报告不把样本规模夸大成生产结论。
+- 真实飞书来源仍 candidate-only，不自动 active。
+
+## 失败处理
+
+- 如果某类样本失败，保留失败记录和 debug hint，不要删除。
+- 如果样本包含真实 ID 或 token，先脱敏再提交。
+- 如果指标波动来自 fixture 假设过强，先调整样本标注和 runner 说明，不直接放宽安全阈值。
+
+## 顺序执行出口
+
+完成 UX-06 后再进入 [UX-07 10 分钟评委体验包](ux-07-ten-minute-judge-experience-pack.md)。UX-07 会把前 6 个体验改进收敛成评委可执行脚本。
