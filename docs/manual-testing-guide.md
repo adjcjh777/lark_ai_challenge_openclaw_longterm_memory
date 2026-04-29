@@ -202,7 +202,54 @@ trace_id=trace_manual_dm_search_YYYYMMDD_HHMM。
 | 回复没有 request_id / trace_id | 用户答案可见，但工程审计字段不足 | 可读性通过，排障性不足 | 查 session / audit，并记录缺口 |
 | MiMo / RightCode 卡住 | provider 或 LLM 调用慢 | 不是 Copilot 权限逻辑失败 | 记录 provider、run id 和时间 |
 
-## 5. Candidate-only 手动测试
+## 5. 真实飞书互动卡片点击测试
+
+目的：确认 Feishu live interactive 回复不是“文本伪卡片”，而是真实可点击的候选审核卡；点击动作仍按当前操作者权限进入 `handle_tool_request()` / `CopilotService`，不会把按钮里的旧上下文当成权限来源。
+
+前置条件：
+
+- 已通过“Feishu websocket 单监听检查”或 Copilot lark-cli sandbox 单监听检查。
+- `FEISHU_CARD_MODE` 保持默认 `interactive`，或显式设置为 `interactive`。
+- 当前操作者在本机环境的 `COPILOT_FEISHU_REVIEWER_OPEN_IDS` 中，或测试环境明确使用 `*`。
+- 不截图提交真实 `chat_id`、`open_id`、message id、token。
+
+发送给受控测试群或测试私聊 bot：
+
+```text
+/remember 决定：飞书记忆审核卡片必须可点击确认，点击后仍走 CopilotService。
+```
+
+通过标准：
+
+- 飞书机器人回复的是 interactive card，不只是纯文本。
+- 卡片标题是待确认记忆，能看到状态、审核状态、主题、新值、来源、证据、风险、冲突和审计详情。
+- reviewer 能看到 4 个按钮：`确认保存`、`拒绝候选`、`要求补证据`、`标记过期`。
+- 非 reviewer 或 permission denied 情况下不展示审核按钮，也不展示未授权 evidence/current_value。
+- 点击按钮后，回复或审计里能看到对应动作：
+  - `确认保存` -> `memory.confirm`，候选变 active。
+  - `拒绝候选` -> `memory.reject`，候选变 rejected。
+  - `要求补证据` -> `memory.needs_evidence`，候选变 needs_evidence。
+  - `标记过期` -> `memory.expire`，候选变 expired。
+- 按钮 payload 只应包含 action 和 candidate id；权限上下文必须由当前点击 operator 重新生成。
+
+建议每次只测一个新候选，避免同一候选先确认后再测试其他状态。测试完读回审计：
+
+```bash
+python3 scripts/query_audit_events.py --json --limit 20
+```
+
+失败处理：
+
+| 现象 | 判断 | 下一步 |
+|---|---|---|
+| 只发出纯文本，没有卡片 | 可能 `FEISHU_CARD_MODE=text` 或 card 发送失败后 fallback | 检查启动环境和 lark-cli card 发送错误，不宣称真实可点击路径通过 |
+| 点击后 permission denied | 如果操作者不是 reviewer，这是正确 fail-closed | 复核 reviewer allowlist；不要把 `current_context` 塞进按钮 value 规避权限 |
+| 点击确认但 candidate 没变 active | 状态流转或 candidate 定位失败 | 用审计 request_id / trace_id 查 `memory.confirm` 结果 |
+| 非 reviewer 也能确认 | 严重权限问题 | 停止真实飞书测试，优先查 `feishu_live.py`、`feishu_events.py`、`permissions.py` |
+
+本阶段只证明受控 sandbox/pre-production 可点击卡片路径，不代表生产级 card action 长期运行。
+
+## 6. Candidate-only 手动测试
 
 目的：确认真实飞书来源或拟真实来源不会直接写 active memory。
 
@@ -236,7 +283,7 @@ python3 scripts/query_audit_events.py --event-type ingestion_failed --json --lim
 - 失败路径能在审计中看到 `ingestion_failed` 或 permission denied。
 - 审计输出不包含 raw token、secret、完整真实私聊文本。
 
-## 6. 权限 fail-closed 负面测试
+## 7. 权限 fail-closed 负面测试
 
 目的：确认系统不会因为演示需要而泄露未授权记忆。
 
@@ -264,7 +311,7 @@ python3 -m unittest tests.test_copilot_permissions -v
 - 记录 request_id / trace_id。
 - 优先检查 `memory_engine/copilot/permissions.py`、`memory_engine/copilot/service.py`、`agent_adapters/openclaw/plugin/`。
 
-## 7. 审计和告警手动读回
+## 8. 审计和告警手动读回
 
 目的：把自动化里的“审计通过”变成人能检查的 evidence。
 
@@ -295,7 +342,7 @@ python3 scripts/check_copilot_health.py --json
 | critical 是否可解释 |  |
 | 是否泄露敏感信息 |  |
 
-## 8. Review surface / Bitable 手动测试
+## 9. Review surface / Bitable 手动测试
 
 目的：确认 review surface 是展示和操作入口，不是绕过 `CopilotService` 的事实源。
 
@@ -319,7 +366,7 @@ python3 -m unittest tests.test_bitable_sync tests.test_feishu_interactive_cards 
 - candidate 状态不会被 Bitable 直接改坏。
 - permission denied 时不展示未授权 evidence/current_value。
 
-## 9. 手动截图清单
+## 10. 手动截图清单
 
 建议截图只保留脱敏内容：
 
@@ -329,19 +376,21 @@ python3 -m unittest tests.test_bitable_sync tests.test_feishu_interactive_cards 
 | 本地 replay | `reports/demo_replay.json` 搜索结果 | 真实用户 ID |
 | OpenClaw 工具列表 | 7 个 `fmc_*` 工具 | 本机密钥 |
 | Feishu DM 回复 | request_id、trace_id、permission_decision、命中数 | 真实 chat_id、open_id |
+| Feishu 互动卡片 | 脱敏后的候选审核卡、按钮和点击后状态 | 真实 chat_id、open_id、候选原始敏感文本 |
 | 审计 summary | event count、reason code summary | raw 私聊全文 |
 | permission denied | fail-closed 错误和 request_id | 未授权 evidence/current_value |
 | candidate-only | candidate 状态和 evidence quote 脱敏版本 | 真实敏感原文 |
 
 截图文件不要提交到仓库，除非已经确认完全脱敏并放在明确允许的交付目录。
 
-## 10. 最终人工验收口径
+## 11. 最终人工验收口径
 
 如果以上通过，可以说：
 
 - 当前 demo / sandbox / pre-production 手动测试通过。
 - OpenClaw `fmc_*` 工具可见，核心路径能进入 `CopilotService`。
 - 受控 Feishu DM 可以做一次 `fmc_memory_search` allow-path 验收。
+- 受控 Feishu interactive card 可以点击候选审核动作，并按当前 operator 权限进入 CopilotService。
 - 权限缺失或畸形会 fail closed。
 - 真实 Feishu 来源仍遵守 candidate-only。
 - 审计和告警可以人工读回。
@@ -354,8 +403,9 @@ python3 -m unittest tests.test_bitable_sync tests.test_feishu_interactive_cards 
 - 已完成生产级 Prometheus/Grafana。
 - 已完成多租户企业后台。
 - 真实 Feishu DM 已稳定覆盖所有工具动作。
+- 真实飞书 card action 已完成生产级长期运行。
 
-## 11. 测试后收尾
+## 12. 测试后收尾
 
 执行：
 

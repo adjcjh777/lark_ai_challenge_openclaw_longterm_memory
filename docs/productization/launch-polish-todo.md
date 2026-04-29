@@ -277,7 +277,7 @@ ollama ps
 ollama stop qwen3-embedding:0.6b-fp16
 ```
 
-### 7. P1：把 review surface 接成真实可操作界面（已完成 Bitable 可追踪写回闭环）
+### 7. P1：把 review surface 接成真实可操作界面（已完成 Bitable 写回和真实飞书可点击卡片受控路径）
 
 要做什么：让 Feishu card / Bitable review surface 从 dry-run payload 走到真实可操作、可追踪、可回滚。
 
@@ -294,24 +294,28 @@ ollama stop qwen3-embedding:0.6b-fp16
 
 完成标准：
 
-- 已完成：Candidate Review card action 的 confirm / reject 只通过 `CopilotService` / `handle_tool_request()`，不直接改 repository。
+- 已完成：Candidate Review card action 的 confirm / reject / needs_evidence / expire 只通过 `CopilotService` / `handle_tool_request()`，不直接改 repository。
+- 已完成：Feishu live `card_mode=interactive` 会按 Copilot service output 选择 typed card builder，不再只用文本 fallback 卡片；候选审核卡按钮 value 只携带 action + candidate id，不内嵌 `current_context`。
+- 已完成：真实 card action 点击会按当前 operator 重新构造 permission context；非 reviewer 伪造点击 fail closed，candidate 状态不变。
 - 已完成：non-reviewer 操作被拒绝，candidate 状态不变，card / Bitable 不展示未授权 evidence/current_value。
 - 已完成：Candidate Review 和 Reminder Candidate Bitable 写回带稳定 `sync_key`，非 dry-run 写入前会查已有记录，命中时使用 `+record-upsert --record-id` 更新。
 - 已完成：Bitable 写回失败会返回错误；写入成功后会用 `+record-list` 按 `sync_key` 读回确认。
-- 边界：本轮补的是本地可验证的 Bitable review 写回闭环，不等于真实飞书 card action 已在生产环境长期运行。
+- 边界：本轮补的是本地可验证的 Bitable review 写回闭环和真实飞书可点击卡片的受控 sandbox/pre-production 路径，不等于真实飞书 card action 已在生产环境长期运行。
 
 已完成证据：
 
 - `memory_engine/bitable_sync.py`：Candidate Review / Reminder Candidate 增加 `sync_key`，review 表改为 upsert + readback。
+- `memory_engine/copilot/feishu_live.py`：Feishu live interactive 回复改为 typed card，并补 `/needs_evidence`、`/expire` 内部动作路由。
+- `memory_engine/feishu_events.py`：card action value 支持 `needs_evidence` / `expire` 转换为内部命令。
 - `tests/test_bitable_sync.py`：覆盖稳定写回键、已有记录更新、读回确认和权限拒绝脱敏。
-- 新增 [review surface operability handoff](review-surface-operability-handoff.md)。
+- 新增 [review surface operability handoff](review-surface-operability-handoff.md) 和 [真实飞书互动卡片 handoff](handoffs/real-feishu-interactive-cards-handoff.md)。
 
 建议验证：
 
 ```bash
 python3 scripts/check_openclaw_version.py
 python3 -m compileall memory_engine scripts
-python3 -m unittest tests.test_feishu_interactive_cards tests.test_bitable_sync tests.test_copilot_tools
+python3 -m unittest tests.test_copilot_feishu_live tests.test_feishu_interactive_cards tests.test_bitable_sync tests.test_copilot_tools
 git diff --check
 ollama ps
 ```

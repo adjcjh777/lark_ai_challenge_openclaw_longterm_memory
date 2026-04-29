@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from memory_engine.db import connect, db_path_from_env, init_db
-from memory_engine.feishu_cards import build_card_from_text
+from memory_engine.feishu_cards import (
+    build_candidate_review_card,
+    build_card_from_text,
+    build_prefetch_context_card,
+    build_search_result_card,
+    build_version_chain_card,
+)
 from memory_engine.feishu_config import FeishuConfig, load_feishu_config
 from memory_engine.feishu_events import FeishuMessageEvent, message_event_from_payload
 from memory_engine.feishu_listener_guard import assert_single_feishu_listener
@@ -194,7 +200,14 @@ def handle_copilot_message_event(
     invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
     tool_result = handle_tool_request(invocation.tool_name, invocation.payload, service=service)
     reply = format_tool_result(invocation, tool_result)
-    publish_result = _publish(publisher, event, reply, config)
+    publish_result = _publish(
+        publisher,
+        event,
+        reply,
+        config,
+        invocation=invocation,
+        tool_result=tool_result,
+    )
     return _event_result(event, scope, invocation, tool_result, publish_result)
 
 
@@ -215,6 +228,10 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return _review_invocation(event, scope, "memory.confirm", argument, reason="explicit_confirm")
     if command_name == "reject":
         return _review_invocation(event, scope, "memory.reject", argument, reason="explicit_reject")
+    if command_name == "needs_evidence":
+        return _review_invocation(event, scope, "memory.needs_evidence", argument, reason="explicit_needs_evidence")
+    if command_name == "expire":
+        return _review_invocation(event, scope, "memory.expire", argument, reason="explicit_expire")
     if command_name in {"versions", "explain"}:
         return _versions_invocation(event, scope, argument, reason="explicit_versions")
     if command_name == "prefetch":
@@ -258,6 +275,10 @@ def format_tool_result(invocation: CopilotFeishuInvocation, result: dict[str, An
         return _format_review(result, action="确认")
     if invocation.tool_name == "memory.reject":
         return _format_review(result, action="拒绝")
+    if invocation.tool_name == "memory.needs_evidence":
+        return _format_review(result, action="要求补证据")
+    if invocation.tool_name == "memory.expire":
+        return _format_review(result, action="标记过期")
     if invocation.tool_name == "memory.explain_versions":
         return _format_versions(result)
     if invocation.tool_name == "memory.prefetch":
@@ -479,7 +500,13 @@ def _resolve_contextual_invocation(
     repo: MemoryRepository,
     scope: str,
 ) -> CopilotFeishuInvocation:
-    if invocation.tool_name in {"memory.confirm", "memory.reject"} and not invocation.payload.get("candidate_id"):
+    review_tools = {
+        "memory.confirm",
+        "memory.reject",
+        "memory.needs_evidence",
+        "memory.expire",
+    }
+    if invocation.tool_name in review_tools and not invocation.payload.get("candidate_id"):
         candidate = _recent_candidate_id(repo, event, scope)
         if candidate:
             payload = dict(invocation.payload)
@@ -787,18 +814,26 @@ def _format_candidate(result: dict[str, Any]) -> str:
 
 def _format_review(result: dict[str, Any], *, action: str) -> str:
     memory = result.get("memory") if isinstance(result.get("memory"), dict) else {}
+    next_step_by_action = {
+        "确认": "下一步：这条记忆已经成为当前有效结论。",
+        "拒绝": "下一步：这条候选已拒绝，不会成为当前有效记忆。",
+        "要求补证据": "下一步：这条候选已进入 needs_evidence，补齐证据前不会成为当前有效记忆。",
+        "标记过期": "下一步：这条候选已标记 expired，不会进入默认审核队列或当前有效记忆。",
+    }
+    action_name_by_label = {
+        "确认": "confirm",
+        "拒绝": "reject",
+        "要求补证据": "needs_evidence",
+        "标记过期": "expire",
+    }
     return _reply(
         f"Memory Copilot 已{action}候选记忆。",
         [
             f"结论：候选记忆已{action}。",
             f"结论：{memory.get('current_value') or '-'}",
-            (
-                "下一步：这条记忆已经成为当前有效结论。"
-                if action == "确认"
-                else "下一步：这条候选已拒绝，不会成为当前有效记忆。"
-            ),
+            next_step_by_action.get(action, "下一步：候选状态已通过 CopilotService 更新。"),
             *_audit_lines(
-                f"memory.{'confirm' if action == '确认' else 'reject'}",
+                f"memory.{action_name_by_label.get(action, 'review')}",
                 result,
                 extra=[
                     f"状态：{memory.get('status') or result.get('status') or '-'}",
@@ -990,9 +1025,43 @@ def _format_health(*, scope: str, db_path: str, dry_run: bool, config: FeishuCon
     )
 
 
-def _publish(publisher, event: FeishuMessageEvent, reply: str, config: FeishuConfig) -> dict[str, Any]:
-    card = build_card_from_text(reply) if config.card_mode == "interactive" else None
+def _publish(
+    publisher,
+    event: FeishuMessageEvent,
+    reply: str,
+    config: FeishuConfig,
+    *,
+    invocation: CopilotFeishuInvocation | None = None,
+    tool_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    card = _interactive_card(invocation, tool_result, reply) if config.card_mode == "interactive" else None
     return publisher.publish(event, reply, card)
+
+
+def _interactive_card(
+    invocation: CopilotFeishuInvocation | None,
+    tool_result: dict[str, Any] | None,
+    reply: str,
+) -> dict[str, Any]:
+    if invocation is None or tool_result is None:
+        return build_card_from_text(reply)
+    if invocation.tool_name == "memory.search":
+        return build_search_result_card(tool_result)
+    if invocation.tool_name == "memory.create_candidate" and tool_result.get("action") != "ignored":
+        return build_candidate_review_card(tool_result)
+    if invocation.tool_name == "memory.explain_versions":
+        return build_version_chain_card(tool_result)
+    if invocation.tool_name == "memory.prefetch":
+        return build_prefetch_context_card(tool_result)
+    review_tools = {
+        "memory.confirm",
+        "memory.reject",
+        "memory.needs_evidence",
+        "memory.expire",
+    }
+    if invocation.tool_name in review_tools and not tool_result.get("ok"):
+        return build_candidate_review_card(tool_result)
+    return build_card_from_text(reply)
 
 
 def _event_result(

@@ -25,7 +25,7 @@
 | ID | 用户体验缺口 | 当前状态 | 是否完成 | 优先级 | 完成标准 |
 |---|---|---|---|---|---|
 | UX-01 | 飞书主路径从命令集合升级为完整体验 | 已完成 | 是 | P0 | 用户不理解 `candidate_id`、`trace_id`、`memory_id` 也能完成搜索、候选确认、版本解释和任务前预取；边界仍是 sandbox/demo path，不是 production live |
-| UX-02 | 重做记忆卡片信息架构 | 已完成 | 是 | P0 | 搜索结果、候选审核、版本解释、任务前上下文 4 类卡片模板稳定；半成品按钮不暴露给评委 |
+| UX-02 | 重做记忆卡片信息架构 | 已完成 | 是 | P0 | 搜索结果、候选审核、版本解释、任务前上下文 4 类卡片模板稳定；候选审核卡在受控飞书 interactive 路径可点击；半成品按钮不暴露给评委 |
 | UX-03 | 用户可理解的“为什么这样回答”解释层 | 已完成 | 是 | P1 | 主答案讲清当前结论、证据、版本覆盖和权限原因；工程字段进入审计详情；permission denied 不泄露未授权 current_value / summary / evidence |
 | UX-04 | 记忆收件箱 / 审核队列 | 已完成 | 是 | P1 | 有“待我审核、冲突需判断、高风险暂不建议确认”三类视图和候选状态流转 |
 | UX-05 | 主动提醒变成可控提醒体验 | 已完成 | 是 | P1 | reminder candidate 可确认、忽略、延后、关闭同类提醒；不直接真实群推送 |
@@ -104,8 +104,9 @@
 
 - 候选卡片已有 confirm / reject / source / version 等按钮基础。
 - 已完成 4 类稳定 payload builder：`search_result_payload()`、`candidate_review_payload()`、`version_chain_payload()`、`prefetch_context_payload()`。
+- Feishu live `card_mode=interactive` 已按 Copilot service output 选择 typed card builder，候选审核卡不再只是文本 fallback 卡片。
 - 卡片主内容和审计详情已分层：用户先看当前结论、证据、风险和下一步；`request_id`、`trace_id`、`permission_decision` 放入审计详情。
-- 评委版不暴露不可用按钮；候选卡只给 reviewer / owner / admin 显示确认和拒绝，搜索卡只保留已有版本解释动作。
+- 评委版不暴露不可用按钮；候选卡只给 reviewer / owner / admin 显示确认、拒绝、要求补证据和标记过期，搜索卡只保留已有版本解释动作。
 
 要做什么：
 
@@ -120,12 +121,16 @@
 
 - 已完成：4 类卡片都有稳定 payload builder 和测试。
 - 已完成：卡片第一屏回答“这是什么、为什么重要、我该点什么”。
-- 已完成：不可用按钮在评委版隐藏；可见按钮只保留可路由到现有 confirm / reject / versions 动作的按钮。
+- 已完成：不可用按钮在评委版隐藏；可见按钮只保留可路由到现有 confirm / reject / needs_evidence / expire / versions 动作的按钮。
+- 已完成：候选审核卡按钮 value 不内嵌 `current_context`，点击时按当前 operator 重新生成权限上下文；非 reviewer 伪造点击 fail closed，候选不变。
 
 主要文件：
 
 - `memory_engine/feishu_cards.py`
+- `memory_engine/copilot/feishu_live.py`
+- `memory_engine/feishu_events.py`
 - `tests/test_feishu_interactive_cards.py`
+- `tests/test_copilot_feishu_live.py`
 - `memory_engine/bitable_sync.py`
 - `docs/demo-runbook.md`
 

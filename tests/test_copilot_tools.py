@@ -68,6 +68,8 @@ class CopilotToolContractTest(unittest.TestCase):
         }
         python_tools = sorted(openclaw_to_python.get(t, t) for t in schema_tools)
         self.assertEqual(supported_tool_names(), python_tools)
+        self.assertNotIn("memory.needs_evidence", supported_tool_names())
+        self.assertNotIn("memory.expire", supported_tool_names())
 
     def test_schema_matches_parser_edge_contracts(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))

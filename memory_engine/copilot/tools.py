@@ -28,6 +28,11 @@ REQUEST_TYPES: dict[str, Callable[[Any], Any]] = {
     "memory.prefetch": PrefetchRequest.from_payload,
     "heartbeat.review_due": HeartbeatReviewDueRequest.from_payload,
 }
+INTERNAL_REQUEST_TYPES: dict[str, Callable[[Any], Any]] = {
+    **REQUEST_TYPES,
+    "memory.needs_evidence": RejectRequest.from_payload,
+    "memory.expire": RejectRequest.from_payload,
+}
 
 
 def supported_tool_names() -> list[str]:
@@ -52,7 +57,7 @@ def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
     tool-specific outputs such as search results, candidates, and traces.
     """
 
-    parser = REQUEST_TYPES.get(tool_name)
+    parser = INTERNAL_REQUEST_TYPES.get(tool_name)
     if parser is None:
         return error_response(
             "validation_error",
@@ -77,7 +82,7 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
     if tool_name in {"feishu.fetch_task", "feishu.fetch_meeting", "feishu.fetch_bitable"}:
         return _handle_feishu_source_tool(tool_name, payload)
 
-    parser = REQUEST_TYPES.get(tool_name)
+    parser = INTERNAL_REQUEST_TYPES.get(tool_name)
     if parser is None:
         return error_response(
             "validation_error",
@@ -101,6 +106,10 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
         return _with_bridge_metadata(copilot_service.confirm(request), tool_name, request)
     if tool_name == "memory.reject":
         return _with_bridge_metadata(copilot_service.reject(request), tool_name, request)
+    if tool_name == "memory.needs_evidence":
+        return _with_bridge_metadata(copilot_service.needs_evidence(request), tool_name, request)
+    if tool_name == "memory.expire":
+        return _with_bridge_metadata(copilot_service.expire_candidate(request), tool_name, request)
     if tool_name == "memory.explain_versions":
         return _with_bridge_metadata(copilot_service.explain_versions(request), tool_name, request)
     if tool_name == "memory.prefetch":

@@ -68,6 +68,12 @@ ollama ps
 
 ---
 
+## 2026-04-29 追加：真实飞书可点击卡片
+
+已补 [real-feishu-interactive-cards-handoff.md](real-feishu-interactive-cards-handoff.md)。Feishu live `card_mode=interactive` 现在按 `CopilotService` 输出生成 typed card；候选审核卡的确认、拒绝、要求补证据、标记过期会从 card action 回到当前 operator 权限上下文，再进入 `handle_tool_request()` / `CopilotService`。这补的是受控 sandbox/pre-production 路径，仍不是生产级 card action 长期运行。
+
+---
+
 ## UX-04 追加：记忆收件箱 / 审核队列
 
 日期：2026-04-29

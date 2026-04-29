@@ -138,7 +138,7 @@ def _card_action_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEve
 
 def _command_from_card_value(value: dict[str, Any]) -> str:
     action = _string(value.get("memory_engine_action") or value.get("command") or value.get("action"))
-    if action in {"confirm", "reject"}:
+    if action in {"confirm", "reject", "needs_evidence", "expire"}:
         candidate_id = _string(value.get("candidate_id") or value.get("memory_id"))
         return f"/{action} {candidate_id}" if candidate_id else ""
     if action == "versions":

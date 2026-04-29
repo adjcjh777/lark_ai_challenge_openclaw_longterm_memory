@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-29（更新：手动测试指南）
+日期：2026-04-29（更新：真实飞书互动卡片）
 
 ## 先看这个
 
@@ -36,7 +36,7 @@
 |---|---|
 | [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md) | 工作流和测试流程规范 |
 | [human-product-guide.md](human-product-guide.md) | 人类快速理解产品 |
-| [manual-testing-guide.md](manual-testing-guide.md) | 手动测试指南：飞书 DM、本地 replay、权限负例、审计读回、截图记录 |
+| [manual-testing-guide.md](manual-testing-guide.md) | 手动测试指南：飞书 DM、本地 replay、互动卡片点击、权限负例、审计读回、截图记录 |
 | [judge-10-minute-experience.md](judge-10-minute-experience.md) | 10 分钟评委体验包：脚本、固定数据、截图清单、fallback、计时验收 |
 
 ### 契约（6 个，按需读取）
@@ -64,7 +64,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| [productization/handoffs/](productization/handoffs/) | 18 个已完成的 handoff / evidence / runbook |
+| [productization/handoffs/](productization/handoffs/) | 19 个已完成的 handoff / evidence / runbook |
 | [archive/plans/](archive/plans/) | 22 个已完成的日期计划和 handoff |
 | [archive/legacy-day-docs/](archive/legacy-day-docs/) | Day 1-7 旧文档 |
 | [archive/legacy-master/](archive/legacy-master/) | 旧主控计划 |

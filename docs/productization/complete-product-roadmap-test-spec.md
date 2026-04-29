@@ -1,6 +1,6 @@
 # Test Spec：Feishu Memory Copilot 完整产品路线验收规格
 
-> **状态更新（2026-04-29）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`；后续 first-class OpenClaw 原生工具注册和 Agent 本地 `fmc_*` 工具调用验证已补本机证据，见 `docs/productization/first-class-openclaw-tools-handoff.md` 和 `docs/productization/handoffs/feishu-dm-routing-handoff.md`；OpenClaw Feishu websocket running 本机 staging 证据已补，见 `docs/productization/openclaw-feishu-websocket-handoff.md`；一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 已补，见 `docs/productization/handoffs/feishu-dm-routing-handoff.md`；真实权限映射和 limited Feishu ingestion 本地底座已补，见 `docs/productization/real-feishu-permission-mapping-handoff.md` 和 `docs/productization/limited-feishu-ingestion-handoff.md`。后续若继续推进，优先补评委/用户主路径脚本、真实 API 拉取扩样和 productized live；当前不宣称这些已经完成。
+> **状态更新（2026-04-29）**：2026-05-05 及以前的 implementation plan 已经全部完成，不再作为后续执行入口；Phase A storage/audit 本地迁移已完成；Phase B 真实 OpenClaw Agent Runtime 受控证据已完成，见 `docs/productization/openclaw-runtime-evidence.md`；Phase D live embedding gate 已完成，见 `docs/productization/phase-d-live-embedding-handoff.md`；Phase E no-overclaim 审查已完成，见 `docs/productization/phase-e-no-overclaim-handoff.md`；后续 first-class OpenClaw 原生工具注册和 Agent 本地 `fmc_*` 工具调用验证已补本机证据，见 `docs/productization/first-class-openclaw-tools-handoff.md` 和 `docs/productization/handoffs/feishu-dm-routing-handoff.md`；OpenClaw Feishu websocket running 本机 staging 证据已补，见 `docs/productization/openclaw-feishu-websocket-handoff.md`；一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 已补，见 `docs/productization/handoffs/feishu-dm-routing-handoff.md`；真实权限映射、limited Feishu ingestion 本地底座和真实飞书可点击卡片受控路径已补，见 `docs/productization/real-feishu-permission-mapping-handoff.md`、`docs/productization/limited-feishu-ingestion-handoff.md` 和 `docs/productization/handoffs/real-feishu-interactive-cards-handoff.md`。后续若继续推进，优先补真实卡片点击扩样、真实 API 拉取扩样和 productized live；当前不宣称这些已经完成。
 
 Metadata:
 - Workflow: `$ralplan --consensus --direct .omx/specs/deep-interview-complete-product-roadmap.md`（仓库可追踪副本）
@@ -163,19 +163,20 @@ Fallback:
 
 Required artifacts:
 - review card / Bitable / doc page payload
-- approve/reject service call path
+- approve/reject/needs_evidence/expire service call path
 - audit event output
 
 Checks:
 - [x] UI 只消费 permission-aware service output。
 - [x] UI 不直接写 active/rejected/superseded。
-- [x] non-reviewer approve/reject 被拒绝。
+- [x] non-reviewer approve/reject/needs_evidence/expire 被拒绝。
 - [x] Bitable/card payload 不包含未授权 evidence。
+- [x] Feishu live interactive card click 重新使用当前 operator permission context，不复用按钮内上下文。
 
 Commands:
 
 ```bash
-python3 -m unittest tests.test_feishu_interactive_cards tests.test_bitable_sync
+python3 -m unittest tests.test_copilot_feishu_live tests.test_feishu_interactive_cards tests.test_bitable_sync
 ```
 
 Fallback:

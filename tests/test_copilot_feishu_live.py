@@ -38,6 +38,19 @@ def payload(message_id: str, text: str, *, sender_type: str = "user") -> dict:
     }
 
 
+def card_action_payload(action_value: dict) -> dict:
+    return {
+        "schema": "2.0",
+        "header": {"event_type": "card.action.trigger"},
+        "event": {
+            "token": "card_token_live",
+            "operator": {"open_id": "ou_live_user"},
+            "context": {"open_chat_id": CHAT_ID},
+            "action": {"value": action_value},
+        },
+    }
+
+
 class CopilotFeishuLiveTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -269,6 +282,135 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertFalse(denied["tool_result"]["ok"])
         self.assertEqual("permission_denied", denied["tool_result"]["error"]["code"])
         self.assertIn("安全拒绝", self.reply_text(denied))
+
+    def test_interactive_candidate_card_click_confirms_via_current_operator_permission(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        event = message_event_from_payload(
+            payload("om_live_interactive_candidate", "/remember 决定：飞书卡片确认必须可点击。")
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
+            created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(created["ok"])
+        self.assertEqual("interactive", created["publish"]["mode"])
+        card = created["publish"]["card"]
+        self.assertIsNotNone(card)
+        action_blocks = [element for element in card["elements"] if element.get("tag") == "action"]
+        self.assertEqual(1, len(action_blocks))
+        confirm_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存")
+        self.assertEqual("confirm", confirm_button["value"]["memory_engine_action"])
+        self.assertEqual(created["tool_result"]["candidate_id"], confirm_button["value"]["candidate_id"])
+        self.assertNotIn("current_context", confirm_button["value"])
+
+        click_event = message_event_from_payload(card_action_payload(confirm_button["value"]))
+        self.assertIsNotNone(click_event)
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
+            clicked = handle_copilot_message_event(self.conn, click_event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(clicked["ok"])
+        self.assertEqual("memory.confirm", clicked["tool"])
+        self.assertEqual(created["tool_result"]["candidate_id"], clicked["tool_result"]["candidate_id"])
+        self.assertEqual("active", clicked["tool_result"]["memory"]["status"])
+        self.assertTrue(clicked["message_id"].startswith("card_action_"))
+
+    def test_interactive_candidate_card_hides_review_buttons_for_non_reviewer(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        event = message_event_from_payload(
+            payload("om_live_interactive_member_candidate", "/remember 决定：非 reviewer 不能点确认。")
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(created["ok"])
+        card = created["publish"]["card"]
+        rendered = str(card)
+        self.assertNotIn("确认保存", rendered)
+        self.assertNotIn("拒绝候选", rendered)
+
+    def test_interactive_candidate_card_secondary_actions_route_to_service(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        event = message_event_from_payload(
+            payload("om_live_interactive_secondary", "/remember 决定：卡片二级动作也必须可用。")
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
+            created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        action_blocks = [element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"]
+        needs_evidence = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "要求补证据")
+        click_event = message_event_from_payload(card_action_payload(needs_evidence["value"]))
+        self.assertIsNotNone(click_event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
+            clicked = handle_copilot_message_event(self.conn, click_event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(clicked["ok"])
+        self.assertEqual("memory.needs_evidence", clicked["tool"])
+        self.assertEqual("needs_evidence", clicked["tool_result"]["status"])
+        self.assertEqual("needs_evidence", clicked["tool_result"]["review_status"])
+
+    def test_forged_interactive_card_click_by_non_reviewer_fails_closed(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        event = message_event_from_payload(
+            payload("om_live_interactive_forged", "/remember 决定：伪造卡片点击不能越权。")
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
+            created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        candidate_id = created["tool_result"]["candidate_id"]
+        forged_click = message_event_from_payload(
+            card_action_payload({"memory_engine_action": "confirm", "candidate_id": candidate_id})
+        )
+        self.assertIsNotNone(forged_click)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            denied = handle_copilot_message_event(self.conn, forged_click, DryRunPublisher(), config, dry_run=True)
+
+        self.assertFalse(denied["tool_result"]["ok"])
+        self.assertEqual("memory.confirm", denied["tool"])
+        self.assertEqual("permission_denied", denied["tool_result"]["error"]["code"])
+        row = self.conn.execute("SELECT status FROM memories WHERE id = ?", (candidate_id,)).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual("candidate", row["status"])
 
 
 if __name__ == "__main__":
