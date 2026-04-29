@@ -15,6 +15,7 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 .data/
+.local/
 reports/*.csv
 reports/*.json
 .claude-auto-logs/
