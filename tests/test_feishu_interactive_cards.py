@@ -11,10 +11,14 @@ from memory_engine.db import connect, init_db
 from memory_engine.feishu_cards import (
     build_candidate_review_card,
     build_card_from_text,
+    build_prefetch_context_card,
     build_reminder_candidate_card,
+    build_search_result_card,
     build_version_chain_card,
     candidate_review_payload,
+    prefetch_context_payload,
     reminder_candidate_payload,
+    search_result_payload,
     version_chain_payload,
 )
 from memory_engine.feishu_config import FeishuConfig
@@ -265,7 +269,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("send_card", publisher.modes)
         self.assertFalse(result["tool_result"]["ok"])
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
-        self.assertEqual("review_role_required", result["tool_result"]["error"]["details"]["reason_code"])
+        self.assertEqual("missing_permission_context", result["tool_result"]["error"]["details"]["reason_code"])
         status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (row["id"],)).fetchone()["status"]
         self.assertEqual("candidate", status)
 
@@ -325,8 +329,228 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("copilot_candidate_review", payload["surface"])
         self.assertEqual("none", payload["state_mutation"])
         self.assertTrue(payload["conflict"]["has_conflict"])
+        self.assertEqual("pending", payload["review_status"])
+        self.assertEqual("medium", payload["risk_level"])
+        self.assertEqual("overrides_active", payload["conflict_status"])
+        self.assertIn("待我审核", payload["queue_views"])
+        self.assertIn("冲突需判断", payload["queue_views"])
         self.assertIn("确认保存", [action["label"] for action in payload["buttons"]])
+        self.assertIn("要求补证据", [action["label"] for action in payload["buttons"]])
+        self.assertIn("标记过期", [action["label"] for action in payload["buttons"]])
         self.assertEqual("orange", card["header"]["template"])
+
+    def test_copilot_candidate_review_payload_marks_high_risk_review_view(self) -> None:
+        response = {
+            "candidate_id": "mem_secret",
+            "memory_id": "mem_secret",
+            "version_id": "ver_secret",
+            "status": "candidate",
+            "recommended_action": "manual_review_sensitive",
+            "risk_flags": ["sensitive_content"],
+            "evidence": {
+                "source_type": "feishu_message",
+                "source_id": "msg_secret",
+                "quote": "规则：临时 app_secret=abc123456789 只能本地调试。",
+            },
+            "conflict": {"has_conflict": False},
+            "candidate": {
+                "candidate_id": "mem_secret",
+                "memory_id": "mem_secret",
+                "version_id": "ver_secret",
+                "status": "candidate",
+                "type": "risk",
+                "subject": "临时密钥",
+                "current_value": "规则：临时 app_secret=abc123456789 只能本地调试。",
+                "summary": "敏感内容需要人工判断",
+            },
+            "bridge": {
+                "request_id": "req_secret_review",
+                "trace_id": "trace_secret_review",
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "actor": {"user_id": "ou_reviewer", "roles": ["member", "reviewer"]},
+                },
+            },
+        }
+
+        payload = candidate_review_payload(response)
+        card = build_candidate_review_card(response)
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertEqual("high", payload["risk_level"])
+        self.assertEqual("no_conflict", payload["conflict_status"])
+        self.assertIn("高风险暂不建议确认", payload["queue_views"])
+        self.assertEqual("ou_reviewer", payload["reviewer"])
+        self.assertIn("要求补证据", rendered)
+        self.assertIn("标记过期", rendered)
+
+    def test_copilot_candidate_review_payload_hides_reviewer_buttons_for_member(self) -> None:
+        response = {
+            "candidate_id": "ver_member",
+            "memory_id": "mem_member",
+            "status": "candidate",
+            "candidate": {
+                "candidate_id": "ver_member",
+                "memory_id": "mem_member",
+                "type": "workflow",
+                "subject": "生产部署",
+                "current_value": "生产部署必须加 --canary。",
+                "summary": "待确认部署规则",
+            },
+            "evidence": {"quote": "生产部署必须加 --canary。"},
+            "bridge": {
+                "request_id": "req_member_candidate",
+                "trace_id": "trace_member_candidate",
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "actor": {"user_id": "ou_member", "roles": ["member"]},
+                },
+            },
+        }
+
+        payload = candidate_review_payload(response)
+        card = build_candidate_review_card(response)
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertEqual([], payload["buttons"])
+        self.assertEqual("candidate", payload["status"])
+        self.assertNotIn("确认保存", rendered)
+        self.assertNotIn("拒绝候选", rendered)
+
+    def test_copilot_search_result_payload_separates_user_content_and_audit(self) -> None:
+        response = {
+            "ok": True,
+            "query": "生产部署 region",
+            "results": [
+                {
+                    "memory_id": "mem_region",
+                    "subject": "生产部署",
+                    "current_value": "生产部署 region 用 ap-shanghai。",
+                    "status": "active",
+                    "version": 2,
+                    "rank": 1,
+                    "evidence": [
+                        {
+                            "source_type": "feishu_message",
+                            "source_id": "msg_region",
+                            "quote": "不对，生产部署 region 以后统一改成 ap-shanghai。",
+                        }
+                    ],
+                    "matched_via": ["active", "evidence", "superseded_filtered"],
+                    "why_ranked": {"score": 0.98, "reason": "subject_match"},
+                }
+            ],
+            "trace": {"returned_count": 1, "final_reason": "l1_hot_hit"},
+            "bridge": {
+                "request_id": "req_search_card",
+                "trace_id": "trace_search_card",
+                "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+            },
+        }
+
+        payload = search_result_payload(response)
+        card = build_search_result_card(response)
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertEqual("copilot_search_results", payload["surface"])
+        self.assertEqual("none", payload["state_mutation"])
+        self.assertEqual("生产部署 region 用 ap-shanghai。", payload["user_content"]["results"][0]["current_conclusion"])
+        self.assertTrue(payload["user_content"]["results"][0]["superseded_filtered"])
+        self.assertIn("命中当前 active 记忆", payload["user_content"]["results"][0]["rank_reason"])
+        self.assertIn("证据内容与问题相关", payload["user_content"]["results"][0]["rank_reason"])
+        self.assertIn("旧版本已过滤", payload["user_content"]["results"][0]["rank_reason"])
+        self.assertIn("默认结果已过滤 superseded 旧值", payload["user_content"]["results"][0]["explanation"])
+        self.assertEqual("req_search_card", payload["audit_details"]["request_id"])
+        self.assertIn("解释版本", [button["label"] for button in payload["buttons"]])
+        self.assertIn("当前结论", rendered)
+        self.assertIn("为什么采用", rendered)
+        self.assertIn("已过滤旧值", rendered)
+
+    def test_copilot_prefetch_payload_uses_compact_context_pack(self) -> None:
+        response = {
+            "ok": True,
+            "tool": "memory.prefetch",
+            "task": "准备上线 checklist",
+            "context_pack": {
+                "summary": "准备上线 checklist: 找到 2 条 active 记忆。",
+                "relevant_memories": [
+                    {
+                        "memory_id": "mem_rule",
+                        "subject": "部署规则",
+                        "current_value": "生产部署必须加 --canary。",
+                        "status": "active",
+                        "version": 1,
+                        "evidence": [{"quote": "生产部署必须加 --canary。"}],
+                    }
+                ],
+                "risks": [{"subject": "回滚风险", "current_value": "上线前必须提前录屏。"}],
+                "deadlines": [{"subject": "截止时间", "current_value": "周五前提交。"}],
+                "stale_superseded_filtered": True,
+                "raw_events_included": False,
+            },
+            "bridge": {
+                "request_id": "req_prefetch_card",
+                "trace_id": "trace_prefetch_card",
+                "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+            },
+        }
+
+        payload = prefetch_context_payload(response)
+        card = build_prefetch_context_card(response)
+        rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
+
+        self.assertEqual("copilot_prefetch_context", payload["surface"])
+        self.assertEqual("none", payload["state_mutation"])
+        self.assertEqual("准备上线 checklist", payload["user_content"]["task"])
+        self.assertFalse(payload["user_content"]["raw_events_included"])
+        self.assertTrue(payload["user_content"]["superseded_filtered"])
+        self.assertEqual([], payload["buttons"])
+        self.assertIn("生产部署必须加 --canary", rendered)
+        self.assertNotIn("raw events", rendered)
+
+    def test_reminder_candidate_payload_exposes_review_actions_and_redaction(self) -> None:
+        reminder = {
+            "reminder_id": "rem_mem_1_deadline",
+            "memory_id": "mem_1",
+            "scope": "project:feishu_ai_challenge",
+            "subject": "提交材料",
+            "current_value": "提交材料截止时间是 2026-05-07。",
+            "reason": "任务前提醒",
+            "trigger": "deadline",
+            "status": "candidate",
+            "due_at": "2026-05-07",
+            "evidence": {"quote": "提交材料截止时间是 2026-05-07。"},
+            "target_actor": {"user_id": "ou_reviewer", "roles": ["member", "reviewer"]},
+            "cooldown": {"cooldown_ms": 86400000, "passed": True, "next_allowed_at": 1778000000000},
+            "actions": [
+                {"action": "confirm_useful", "label": "确认提醒有用"},
+                {"action": "ignore", "label": "忽略本次"},
+                {"action": "snooze", "label": "延后"},
+                {"action": "mute_same_type", "label": "关闭同类提醒"},
+            ],
+            "permission_trace": {
+                "request_id": "req_reminder_card",
+                "trace_id": "trace_reminder_card",
+                "decision": "allow",
+                "reason_code": "scope_access_granted",
+            },
+        }
+
+        payload = reminder_candidate_payload(reminder)
+        card = build_reminder_candidate_card(reminder)
+        rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
+
+        self.assertEqual(
+            ["confirm_useful", "ignore", "snooze", "mute_same_type"],
+            [button["action"] for button in payload["buttons"]],
+        )
+        self.assertIn("确认提醒有用", rendered)
+        self.assertIn("忽略本次", rendered)
+        self.assertIn("延后", rendered)
+        self.assertIn("关闭同类提醒", rendered)
+        self.assertIn("req_reminder_card", rendered)
 
     def test_copilot_candidate_review_payload_redacts_permission_denied_output(self) -> None:
         service = CopilotService(repository=MemoryRepository(self.conn))
@@ -485,7 +709,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertFalse(result["tool_result"]["ok"])
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
         self.assertEqual(
-            "review_role_required", result["tool_result"]["bridge"]["permission_decision"]["reason_code"]
+            "missing_permission_context", result["tool_result"]["bridge"]["permission_decision"]["reason_code"]
         )
         self.assertEqual("candidate", status)
         self.assertNotIn("权限上下文的卡片点击不能确认候选", rendered)
@@ -520,15 +744,47 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
             ],
             "supersedes": [{"version_id": "ver_2", "supersedes_version_id": "ver_1"}],
             "explanation": "当前有效值是 v2：ap-shanghai。",
+            "user_explanation": {
+                "kind": "memory_version_chain",
+                "current_version": {
+                    "version_id": "ver_2",
+                    "version": 2,
+                    "status": "active",
+                    "value": "ap-shanghai",
+                    "evidence": {"quote": "新值"},
+                    "explanation": "当前采用 v2，因为它是已经确认的 active 版本。",
+                },
+                "old_versions": [
+                    {
+                        "version_id": "ver_1",
+                        "version": 1,
+                        "status": "superseded",
+                        "value": "cn-shanghai",
+                        "evidence": {"quote": "旧值"},
+                        "covered_by": "v2",
+                        "inactive_reason": "旧版本只保留在版本链里，不会进入默认搜索结果。",
+                    }
+                ],
+                "override_reason": "当前采用 v2：ap-shanghai，因为新证据已经覆盖旧结论：cn-shanghai。",
+                "evidence_summary": "当前版本证据：新值；旧版本证据：旧值。",
+                "search_boundary": "默认搜索只返回当前 active 版本；旧版本不会作为当前答案返回。",
+            },
         }
 
         payload = version_chain_payload(response)
         card = build_version_chain_card(response)
+        rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
 
         self.assertEqual("copilot_version_chain", payload["surface"])
         self.assertEqual("none", payload["state_mutation"])
         self.assertEqual("ver_2", payload["active_version"]["version_id"])
-        self.assertIn("superseded", card["elements"][1]["text"]["content"])
+        self.assertEqual("memory_version_chain", payload["user_explanation"]["kind"])
+        self.assertEqual("ap-shanghai", payload["user_content"]["current_version"]["value"])
+        self.assertIn("覆盖旧结论", payload["user_content"]["override_reason"])
+        self.assertIn("默认搜索只返回当前 active 版本", payload["user_content"]["search_boundary"])
+        self.assertIn("为什么采用", rendered)
+        self.assertIn("当前采用 v2：ap-shanghai", rendered)
+        self.assertIn("superseded", rendered)
 
     def test_copilot_version_chain_payload_redacts_permission_denied_output(self) -> None:
         denied = {
@@ -542,6 +798,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
                     "request_id": "req_versions_deny",
                     "trace_id": "trace_versions_deny",
                     "redacted_fields": ["current_value", "summary", "evidence"],
+                    "current_value": "生产部署 region 用 cn-secret。",
+                    "summary": "不应出现在卡片里",
+                    "evidence": {"quote": "secret evidence quote"},
                 },
             },
             "bridge": {
@@ -566,7 +825,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("trace_versions_deny", payload["trace_id"])
         self.assertEqual("deny", payload["permission_decision"]["decision"])
         self.assertNotIn("current_value", rendered)
-        self.assertNotIn("evidence quote", rendered)
+        self.assertNotIn("生产部署 region 用 cn-secret", rendered)
+        self.assertNotIn("不应出现在卡片里", rendered)
+        self.assertNotIn("secret evidence quote", rendered)
 
     def test_copilot_reminder_candidate_payload_is_dry_run(self) -> None:
         reminder = {

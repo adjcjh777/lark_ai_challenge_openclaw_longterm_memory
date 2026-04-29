@@ -17,6 +17,7 @@ from memory_engine.feishu_events import FeishuMessageEvent, message_event_from_p
 from memory_engine.feishu_listener_guard import assert_single_feishu_listener
 from memory_engine.feishu_publisher import DryRunPublisher, LarkCliPublisher
 from memory_engine.feishu_runtime import FeishuRunLogger
+from memory_engine.models import parse_scope
 from memory_engine.repository import MemoryRepository
 
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
@@ -190,6 +191,7 @@ def handle_copilot_message_event(
         return _event_result(event, scope, invocation, {"ok": True, "duplicate": True}, publish_result)
 
     service = CopilotService(repository=repo)
+    invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
     tool_result = handle_tool_request(invocation.tool_name, invocation.payload, service=service)
     reply = format_tool_result(invocation, tool_result)
     publish_result = _publish(publisher, event, reply, config)
@@ -226,14 +228,18 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
     if command_name == "bitable":
         return _bitable_invocation(event, scope, argument, reason="explicit_bitable")
 
-    if text.startswith("确认 "):
+    if _looks_like_confirm(text):
+        target = _natural_review_target(text, "确认")
         return _review_invocation(
-            event, scope, "memory.confirm", text.removeprefix("确认 ").strip(), reason="natural_confirm"
+            event, scope, "memory.confirm", target, reason="natural_confirm"
         )
-    if text.startswith("拒绝 "):
+    if _looks_like_reject(text):
+        target = _natural_review_target(text, "拒绝")
         return _review_invocation(
-            event, scope, "memory.reject", text.removeprefix("拒绝 ").strip(), reason="natural_reject"
+            event, scope, "memory.reject", target, reason="natural_reject"
         )
+    if _looks_like_versions_question(text):
+        return _versions_invocation(event, scope, "", reason="natural_versions")
     if _looks_like_candidate(text):
         return _candidate_invocation(event, scope, text, reason="natural_candidate")
     if _looks_like_prefetch(text):
@@ -479,6 +485,179 @@ def _bitable_invocation(
     )
 
 
+def _resolve_contextual_invocation(
+    invocation: CopilotFeishuInvocation,
+    event: FeishuMessageEvent,
+    repo: MemoryRepository,
+    scope: str,
+) -> CopilotFeishuInvocation:
+    if invocation.tool_name in {"memory.confirm", "memory.reject"} and not invocation.payload.get("candidate_id"):
+        candidate = _recent_candidate_id(repo, event, scope)
+        if candidate:
+            payload = dict(invocation.payload)
+            payload["candidate_id"] = candidate["candidate_id"]
+            context = dict(payload.get("current_context") or {})
+            context["thread_topic"] = str(candidate.get("subject") or candidate["candidate_id"])[:80]
+            context["metadata"] = {
+                **dict(context.get("metadata") or {}),
+                "resolved_from": "recent_candidate",
+                "resolved_candidate_id": candidate["candidate_id"],
+                "resolved_memory_id": candidate.get("memory_id"),
+            }
+            payload["current_context"] = context
+            reason = f"{invocation.reason}_recent_candidate"
+            return CopilotFeishuInvocation(invocation.tool_name, payload, invocation.user_text, reason)
+    if invocation.tool_name == "memory.explain_versions" and not invocation.payload.get("memory_id"):
+        memory = _recent_memory_id(repo, event, scope)
+        if memory:
+            payload = dict(invocation.payload)
+            payload["memory_id"] = memory["memory_id"]
+            context = dict(payload.get("current_context") or {})
+            context["thread_topic"] = str(memory.get("subject") or memory["memory_id"])[:80]
+            context["metadata"] = {
+                **dict(context.get("metadata") or {}),
+                "resolved_from": "recent_memory",
+                "resolved_memory_id": memory["memory_id"],
+            }
+            payload["current_context"] = context
+            return CopilotFeishuInvocation(
+                invocation.tool_name, payload, invocation.user_text, f"{invocation.reason}_recent_memory"
+            )
+    return invocation
+
+
+def _recent_candidate_id(repo: MemoryRepository, event: FeishuMessageEvent, scope: str) -> dict[str, Any] | None:
+    parsed = parse_scope(scope)
+    rows = repo.conn.execute(
+        """
+        SELECT m.id AS memory_id, m.subject, m.updated_at AS sort_time,
+               m.source_event_id, m.status AS memory_status,
+               m.active_version_id, re.raw_json
+        FROM memories m
+        LEFT JOIN raw_events re ON re.id = m.source_event_id
+        WHERE m.scope_type = ?
+          AND m.scope_id = ?
+          AND m.status = 'candidate'
+        ORDER BY m.updated_at DESC
+        LIMIT 20
+        """,
+        (parsed.scope_type, parsed.scope_id),
+    ).fetchall()
+    candidates: list[dict[str, Any]] = [
+        {
+            "candidate_id": str(row["memory_id"]),
+            "memory_id": str(row["memory_id"]),
+            "subject": row["subject"],
+            "sort_time": row["sort_time"],
+            "raw_json": row["raw_json"],
+        }
+        for row in rows
+    ]
+    version_rows = repo.conn.execute(
+        """
+        SELECT mv.id AS candidate_id, mv.memory_id, m.subject, mv.created_at AS sort_time, re.raw_json
+        FROM memory_versions mv
+        JOIN memories m ON m.id = mv.memory_id
+        LEFT JOIN raw_events re ON re.id = mv.source_event_id
+        WHERE m.scope_type = ?
+          AND m.scope_id = ?
+          AND mv.status = 'candidate'
+        ORDER BY mv.created_at DESC
+        LIMIT 20
+        """,
+        (parsed.scope_type, parsed.scope_id),
+    ).fetchall()
+    candidates.extend(
+        {
+            "candidate_id": str(row["candidate_id"]),
+            "memory_id": str(row["memory_id"]),
+            "subject": row["subject"],
+            "sort_time": row["sort_time"],
+            "raw_json": row["raw_json"],
+        }
+        for row in version_rows
+    )
+    return _pick_contextual_row(candidates, event)
+
+
+def _recent_memory_id(repo: MemoryRepository, event: FeishuMessageEvent, scope: str) -> dict[str, Any] | None:
+    parsed = parse_scope(scope)
+    rows = repo.conn.execute(
+        """
+        SELECT m.id AS memory_id, m.subject, m.updated_at AS sort_time, re.raw_json,
+               COUNT(mv.id) AS version_count
+        FROM memories m
+        LEFT JOIN raw_events re ON re.id = m.source_event_id
+        LEFT JOIN memory_versions mv ON mv.memory_id = m.id
+        WHERE m.scope_type = ?
+          AND m.scope_id = ?
+          AND m.status = 'active'
+        GROUP BY m.id
+        ORDER BY CASE WHEN COUNT(mv.id) > 1 THEN 0 ELSE 1 END, m.updated_at DESC
+        LIMIT 20
+        """,
+        (parsed.scope_type, parsed.scope_id),
+    ).fetchall()
+    candidates = [
+        {
+            "memory_id": str(row["memory_id"]),
+            "subject": row["subject"],
+            "sort_time": row["sort_time"],
+            "raw_json": row["raw_json"],
+            "version_count": row["version_count"],
+        }
+        for row in rows
+    ]
+    return _pick_contextual_row(candidates, event)
+
+
+def _pick_contextual_row(rows: list[dict[str, Any]], event: FeishuMessageEvent) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    same_chat = [row for row in rows if _row_chat_id(row) == event.chat_id]
+    pool = same_chat or rows
+    same_sender = [row for row in pool if _row_sender_id(row) == event.sender_id]
+    pool = same_sender or pool
+    return sorted(pool, key=lambda item: int(item.get("sort_time") or 0), reverse=True)[0]
+
+
+def _row_chat_id(row: dict[str, Any]) -> str | None:
+    raw = _json_object(row.get("raw_json"))
+    source = raw.get("source") if isinstance(raw.get("source"), dict) else {}
+    context = raw.get("current_context") if isinstance(raw.get("current_context"), dict) else {}
+    source_context = context.get("source_context") if isinstance(context.get("source_context"), dict) else {}
+    return (
+        _string_or_none(source.get("source_chat_id"))
+        or _string_or_none(context.get("chat_id"))
+        or _string_or_none(source_context.get("chat_id"))
+    )
+
+
+def _row_sender_id(row: dict[str, Any]) -> str | None:
+    raw = _json_object(row.get("raw_json"))
+    source = raw.get("source") if isinstance(raw.get("source"), dict) else {}
+    context = raw.get("current_context") if isinstance(raw.get("current_context"), dict) else {}
+    permission = context.get("permission") if isinstance(context.get("permission"), dict) else {}
+    actor = permission.get("actor") if isinstance(permission.get("actor"), dict) else {}
+    return _string_or_none(source.get("actor_id")) or _string_or_none(actor.get("open_id"))
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str) or not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _string_or_none(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
 def _current_context(
     event: FeishuMessageEvent,
     scope: str,
@@ -542,20 +721,14 @@ def _format_search(result: dict[str, Any]) -> str:
         return _reply(
             "Memory Copilot 没找到当前有效记忆。",
             [
-                "工具：memory.search",
-                f"查询：{result.get('query') or '-'}",
-                "状态：not_found",
-                "处理结果：默认只搜索 active memory，没有返回 candidate/superseded/raw events。",
-                f"trace：{_trace_summary(result)}",
-                f"request_id：{_bridge_field(result, 'request_id')}",
-                f"trace_id：{_bridge_field(result, 'trace_id')}",
+                "结论：没有找到可直接采用的当前有效结论。",
+                "证据：默认只搜索 active memory，没有返回 candidate、superseded 或 raw events。",
+                "下一步：可以补充更具体的主题，或先创建一条待确认记忆。",
+                *_audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", "状态：not_found"]),
             ],
         )
     lines = [
-        "工具：memory.search",
-        f"查询：{result.get('query') or '-'}",
-        "状态：ok",
-        "处理结果：只返回 active 当前结论。",
+        "结论：找到当前有效记忆，只返回 active 当前结论。",
     ]
     for index, item in enumerate(rows[:3], start=1):
         evidence = item.get("evidence") if isinstance(item.get("evidence"), list) else []
@@ -566,18 +739,12 @@ def _format_search(result: dict[str, Any]) -> str:
             [
                 f"{index}. {item.get('subject') or '-'}",
                 f"   结论：{item.get('current_value') or '-'}",
-                f"   状态：{item.get('status') or '-'} / v{item.get('version') or '-'} / {item.get('layer') or '-'}",
                 f"   证据：{_clip(quote)}",
-                f"   命中：{', '.join(item.get('matched_via') or []) or '-'}",
-                f"   memory_id：{item.get('memory_id') or '-'}",
+                f"   下一步：按这条当前结论执行；如果要看旧值，回复“为什么旧值不用了”。",
             ]
         )
     lines.extend(
-        [
-            f"trace：{_trace_summary(result)}",
-            f"request_id：{_bridge_field(result, 'request_id')}",
-            f"trace_id：{_bridge_field(result, 'trace_id')}",
-        ]
+        _audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", f"trace：{_trace_summary(result)}"])
     )
     return _reply("Memory Copilot 找到当前有效记忆。", lines)
 
@@ -587,34 +754,37 @@ def _format_candidate(result: dict[str, Any]) -> str:
         return _reply(
             "Memory Copilot 没有把这条消息写入候选记忆。",
             [
-                "工具：memory.create_candidate",
-                "状态：not_candidate",
-                f"理由：{result.get('reason') or '-'}",
-                f"risk_flags：{', '.join(result.get('risk_flags') or []) or '-'}",
-                f"request_id：{_bridge_field(result, 'request_id')}",
-                f"trace_id：{_bridge_field(result, 'trace_id')}",
+                "结论：这条消息没有进入待确认记忆。",
+                f"证据：{result.get('reason') or '-'}",
+                "下一步：如果确实要记录，请用“记住：...”重新描述成明确规则。",
+                *_audit_lines(
+                    "memory.create_candidate",
+                    result,
+                    extra=["状态：not_candidate", f"risk_flags：{', '.join(result.get('risk_flags') or []) or '-'}"],
+                ),
             ],
         )
     candidate = result.get("candidate") if isinstance(result.get("candidate"), dict) else {}
     candidate_id = result.get("candidate_id") or candidate.get("candidate_id") or result.get("memory_id")
     lines = [
-        "工具：memory.create_candidate",
-        f"状态：{candidate.get('status') or result.get('status') or 'candidate'}",
-        "处理结果：已进入待确认队列，不会自动成为 active memory。",
+        "结论：已生成待确认记忆，不会自动成为 active memory。",
         f"主题：{candidate.get('subject') or '-'}",
-        f"候选结论：{candidate.get('current_value') or '-'}",
-        f"candidate_id：{candidate_id or '-'}",
-        f"推荐动作：/confirm {candidate_id} 或 /reject {candidate_id}" if candidate_id else "推荐动作：等待人工复核",
+        f"证据：{_clip(candidate.get('current_value') or '-')}",
+        "下一步：你可以直接回复：确认这条 / 不要记这个 / 查看来源。",
         f"risk_flags：{', '.join(result.get('risk_flags') or []) or '-'}",
-        f"recommended_action：{result.get('recommended_action') or '-'}",
     ]
     if result.get("auto_confirm_ignored"):
         lines.append("说明：真实飞书来源不会自动 active，auto_confirm 已被忽略。")
     lines.extend(
-        [
-            f"request_id：{_bridge_field(result, 'request_id')}",
-            f"trace_id：{_bridge_field(result, 'trace_id')}",
-        ]
+        _audit_lines(
+            "memory.create_candidate",
+            result,
+            extra=[
+                f"状态：{candidate.get('status') or result.get('status') or 'candidate'}",
+                f"candidate_id：{candidate_id or '-'}",
+                f"recommended_action：{result.get('recommended_action') or '-'}",
+            ],
+        )
     )
     return _reply("Memory Copilot 已创建待确认记忆。", lines)
 
@@ -624,14 +794,23 @@ def _format_review(result: dict[str, Any], *, action: str) -> str:
     return _reply(
         f"Memory Copilot 已{action}候选记忆。",
         [
-            f"工具：memory.{'confirm' if action == '确认' else 'reject'}",
-            f"状态：{memory.get('status') or result.get('status') or '-'}",
-            f"处理结果：{result.get('action') or '-'}",
+            f"结论：候选记忆已{action}。",
             f"结论：{memory.get('current_value') or '-'}",
-            f"memory_id：{result.get('memory_id') or '-'}",
-            f"candidate_id：{result.get('candidate_id') or '-'}",
-            f"request_id：{_bridge_field(result, 'request_id')}",
-            f"trace_id：{_bridge_field(result, 'trace_id')}",
+            (
+                "下一步：这条记忆已经成为当前有效结论。"
+                if action == "确认"
+                else "下一步：这条候选已拒绝，不会成为当前有效记忆。"
+            ),
+            *_audit_lines(
+                f"memory.{'confirm' if action == '确认' else 'reject'}",
+                result,
+                extra=[
+                    f"状态：{memory.get('status') or result.get('status') or '-'}",
+                    f"处理结果：{result.get('action') or '-'}",
+                    f"memory_id：{result.get('memory_id') or '-'}",
+                    f"candidate_id：{result.get('candidate_id') or '-'}",
+                ],
+            ),
         ],
     )
 
@@ -640,21 +819,20 @@ def _format_versions(result: dict[str, Any]) -> str:
     versions = result.get("versions") if isinstance(result.get("versions"), list) else []
     active = result.get("active_version") if isinstance(result.get("active_version"), dict) else {}
     lines = [
-        "工具：memory.explain_versions",
-        f"主题：{result.get('subject') or '-'}",
-        f"当前结论：{active.get('value') or '-'}",
-        f"状态：{result.get('status') or '-'}",
-        f"版本数量：{len(versions)}",
+        f"结论：当前结论是 {active.get('value') or '-'}",
+        f"证据：{result.get('explanation') or '-'}",
+        "下一步：默认搜索只采用当前 active 版本；旧版本只作为版本证据保留。",
+        "旧版本：",
     ]
     for item in versions[:6]:
         if isinstance(item, dict):
             lines.append(f"- v{item.get('version_no')} [{item.get('status')}] {item.get('value')}")
     lines.extend(
-        [
-            f"解释：{result.get('explanation') or '-'}",
-            f"request_id：{_bridge_field(result, 'request_id')}",
-            f"trace_id：{_bridge_field(result, 'trace_id')}",
-        ]
+        _audit_lines(
+            "memory.explain_versions",
+            result,
+            extra=[f"主题：{result.get('subject') or '-'}", f"状态：{result.get('status') or '-'}", f"版本数量：{len(versions)}"],
+        )
     )
     return _reply("Memory Copilot 已返回版本链。", lines)
 
@@ -663,20 +841,23 @@ def _format_prefetch(result: dict[str, Any]) -> str:
     pack = result.get("context_pack") if isinstance(result.get("context_pack"), dict) else {}
     memories = pack.get("relevant_memories") if isinstance(pack.get("relevant_memories"), list) else []
     lines = [
-        "工具：memory.prefetch",
-        f"任务：{result.get('task') or '-'}",
-        f"摘要：{pack.get('summary') or '-'}",
-        f"raw_events_included：{str(pack.get('raw_events_included')).lower()}",
-        f"stale_superseded_filtered：{str(pack.get('stale_superseded_filtered')).lower()}",
+        f"结论：已生成任务前上下文包。",
+        f"证据：{pack.get('summary') or '-'}",
+        "下一步：把下面相关记忆带入任务；缺失信息需要人工补充。",
     ]
     for item in memories[:3]:
         if isinstance(item, dict):
             lines.append(f"- {item.get('subject')}: {item.get('current_value')}")
     lines.extend(
-        [
-            f"request_id：{_bridge_field(result, 'request_id')}",
-            f"trace_id：{_bridge_field(result, 'trace_id')}",
-        ]
+        _audit_lines(
+            "memory.prefetch",
+            result,
+            extra=[
+                f"任务：{result.get('task') or '-'}",
+                f"raw_events_included：{str(pack.get('raw_events_included')).lower()}",
+                f"stale_superseded_filtered：{str(pack.get('stale_superseded_filtered')).lower()}",
+            ],
+        )
     )
     return _reply("Memory Copilot 已生成任务前上下文包。", lines)
 
@@ -873,6 +1054,31 @@ def _normalize_user_text(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip())
 
 
+def _looks_like_confirm(text: str) -> bool:
+    normalized = text.strip()
+    return normalized in {"确认", "确认这条", "确认这个", "可以记", "记这个"} or normalized.startswith("确认 ")
+
+
+def _looks_like_reject(text: str) -> bool:
+    normalized = text.strip()
+    return normalized in {"不要记这个", "不要记这条", "别记这个", "别记这条", "拒绝这条", "拒绝这个"} or normalized.startswith(
+        "拒绝 "
+    )
+
+
+def _natural_review_target(text: str, verb: str) -> str:
+    normalized = text.strip()
+    if normalized.startswith(f"{verb} "):
+        return normalized.removeprefix(f"{verb} ").strip()
+    return ""
+
+
+def _looks_like_versions_question(text: str) -> bool:
+    return ("为什么" in text and any(word in text for word in ("旧值", "旧版本", "之前", "以前", "不用了", "覆盖"))) or (
+        "版本" in text and any(word in text for word in ("解释", "为什么", "旧"))
+    )
+
+
 def _looks_like_candidate(text: str) -> bool:
     return any(signal in text for signal in MEMORY_SIGNALS)
 
@@ -902,6 +1108,27 @@ def _bridge_field(result: dict[str, Any], field: str) -> str:
     bridge = result.get("bridge") if isinstance(result.get("bridge"), dict) else {}
     value = bridge.get(field)
     return str(value) if value else "-"
+
+
+def _audit_lines(tool_name: str, result: dict[str, Any], *, extra: list[str] | None = None) -> list[str]:
+    lines = ["审计详情", f"工具：{tool_name}"]
+    lines.extend(extra or [])
+    lines.extend(
+        [
+            f"permission_decision：{_permission_decision_summary(result)}",
+            f"request_id：{_bridge_field(result, 'request_id')}",
+            f"trace_id：{_bridge_field(result, 'trace_id')}",
+        ]
+    )
+    return lines
+
+
+def _permission_decision_summary(result: dict[str, Any]) -> str:
+    bridge = result.get("bridge") if isinstance(result.get("bridge"), dict) else {}
+    decision = bridge.get("permission_decision")
+    if isinstance(decision, dict):
+        return f"{decision.get('decision') or '-'} / {decision.get('reason_code') or '-'}"
+    return "-"
 
 
 def _trace_summary(result: dict[str, Any]) -> str:

@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-28（更新：文档收敛后）
+日期：2026-04-29（更新：UX-07 评委体验包）
 
 ## 先看这个
 
@@ -35,6 +35,7 @@
 |---|---|
 | [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md) | 工作流和测试流程规范 |
 | [human-product-guide.md](human-product-guide.md) | 人类快速理解产品 |
+| [judge-10-minute-experience.md](judge-10-minute-experience.md) | 10 分钟评委体验包：脚本、固定数据、截图清单、fallback、计时验收 |
 
 ### 契约（6 个，按需读取）
 
@@ -51,6 +52,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [judge-10-minute-experience.md](judge-10-minute-experience.md) | 10 分钟评委体验入口 |
 | [demo-runbook.md](demo-runbook.md) | 5 分钟 demo replay 演示脚本 |
 | [benchmark-report.md](benchmark-report.md) | 六类评测证据 |
 | [memory-definition-and-architecture-whitepaper.md](memory-definition-and-architecture-whitepaper.md) | 初赛白皮书 |
@@ -97,11 +99,15 @@
 
 ### 评审或复盘证据
 
-1. [productization/prd-completion-audit-and-gap-tasks.md](productization/prd-completion-audit-and-gap-tasks.md)
-2. [productization/handoffs/openclaw-runtime-evidence.md](productization/handoffs/openclaw-runtime-evidence.md)
-3. [productization/handoffs/phase-a-storage-audit-handoff.md](productization/handoffs/phase-a-storage-audit-handoff.md)
-4. [productization/handoffs/phase-d-live-embedding-handoff.md](productization/handoffs/phase-d-live-embedding-handoff.md)
-5. [productization/handoffs/phase-e-no-overclaim-handoff.md](productization/handoffs/phase-e-no-overclaim-handoff.md)
+1. [judge-10-minute-experience.md](judge-10-minute-experience.md)
+2. [demo-runbook.md](demo-runbook.md)
+3. [benchmark-report.md](benchmark-report.md)
+4. [diagrams/README.md](diagrams/README.md)
+5. [productization/prd-completion-audit-and-gap-tasks.md](productization/prd-completion-audit-and-gap-tasks.md)
+6. [productization/handoffs/openclaw-runtime-evidence.md](productization/handoffs/openclaw-runtime-evidence.md)
+7. [productization/handoffs/phase-a-storage-audit-handoff.md](productization/handoffs/phase-a-storage-audit-handoff.md)
+8. [productization/handoffs/phase-d-live-embedding-handoff.md](productization/handoffs/phase-d-live-embedding-handoff.md)
+9. [productization/handoffs/phase-e-no-overclaim-handoff.md](productization/handoffs/phase-e-no-overclaim-handoff.md)
 
 ## 当前不要这样读
 

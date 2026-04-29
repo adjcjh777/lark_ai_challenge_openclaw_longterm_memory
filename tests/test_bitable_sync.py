@@ -12,6 +12,7 @@ from memory_engine.bitable_sync import (
     table_schema_spec,
 )
 from memory_engine.copilot.permissions import demo_permission_context
+from memory_engine.copilot.schemas import RejectRequest
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
@@ -138,6 +139,13 @@ class BitableSyncTest(unittest.TestCase):
         self.assertIn("ap-shanghai", row[review["fields"].index("new_value")])
         self.assertIn("cn-shanghai", row[review["fields"].index("old_value")])
         self.assertEqual("manual_review_conflict", row[review["fields"].index("recommended_action")])
+        self.assertEqual("pending", row[review["fields"].index("review_status")])
+        self.assertEqual("test", row[review["fields"].index("source_type")])
+        self.assertEqual("medium", row[review["fields"].index("risk_level")])
+        self.assertEqual("overrides_active", row[review["fields"].index("conflict_status")])
+        self.assertIn("待我审核", row[review["fields"].index("queue_view")])
+        self.assertIn("冲突需判断", row[review["fields"].index("queue_view")])
+        self.assertEqual("ou_test", row[review["fields"].index("reviewer")])
         self.assertEqual("req_memory_create_candidate", row[review["fields"].index("request_id")])
         self.assertEqual("trace_memory_create_candidate", row[review["fields"].index("trace_id")])
         self.assertEqual("allow", row[review["fields"].index("permission_decision")])
@@ -200,6 +208,56 @@ class BitableSyncTest(unittest.TestCase):
         self.assertEqual("trace_bitable_deny", row[review["fields"].index("trace_id")])
         self.assertNotIn("授权字段", rendered)
 
+    def test_candidate_review_rows_include_service_status_transition_fields(self) -> None:
+        service = CopilotService(repository=self.repo)
+        created = handle_tool_request(
+            "memory.create_candidate",
+            {
+                "text": "决定：候选审核缺证据时必须进入 needs_evidence。",
+                "scope": "project:feishu_ai_challenge",
+                "source": {
+                    "source_type": "test",
+                    "source_id": "msg_needs_evidence",
+                    "actor_id": "ou_test",
+                    "created_at": "2026-05-07T10:00:00+08:00",
+                    "quote": "决定：候选审核缺证据时必须进入 needs_evidence。",
+                },
+                "current_context": demo_permission_context(
+                    "memory.create_candidate",
+                    "project:feishu_ai_challenge",
+                    actor_id="ou_test",
+                    entrypoint="unit_test",
+                ),
+            },
+            service=service,
+        )
+        transition_context = demo_permission_context(
+            "memory.needs_evidence",
+            "project:feishu_ai_challenge",
+            actor_id="ou_test",
+            entrypoint="unit_test",
+        )
+        transition = service.needs_evidence(
+            RejectRequest(
+                candidate_id=created["candidate_id"],
+                scope="project:feishu_ai_challenge",
+                actor_id="ou_test",
+                reason="证据不足",
+                current_context=transition_context,
+            )
+        )
+
+        payload = collect_sync_payload(self.conn, candidate_review_outputs=[transition])
+        review = payload["tables"]["candidate_review"]
+        row = review["rows"][0]
+
+        self.assertEqual("needs_evidence", row[review["fields"].index("status")])
+        self.assertEqual("needs_evidence", row[review["fields"].index("review_status")])
+        self.assertIn("候选审核缺证据", row[review["fields"].index("new_value")])
+        self.assertIn("候选审核缺证据", row[review["fields"].index("evidence")])
+        self.assertEqual("ou_test", row[review["fields"].index("last_handler")])
+        self.assertTrue(row[review["fields"].index("last_handled_at")])
+
     def test_schema_spec_includes_review_and_reminder_tables(self) -> None:
         tables = {table["name"]: table for table in table_schema_spec()["tables"]}
 
@@ -214,6 +272,9 @@ class BitableSyncTest(unittest.TestCase):
                 "agent_task_context_use_rate",
                 "l1_hot_recall_p95_ms",
                 "sensitive_reminder_leakage_rate",
+                "false_reminder_rate",
+                "duplicate_reminder_rate",
+                "user_confirmation_burden",
                 "failure_type_counts",
                 "recommended_fix_summary",
             }
@@ -229,13 +290,23 @@ class BitableSyncTest(unittest.TestCase):
                 "old_value",
                 "evidence",
                 "risk_flags",
+                "risk_level",
+                "conflict_status",
+                "queue_view",
                 "recommended_action",
+                "reviewer",
+                "last_handler",
+                "last_handled_at",
                 "request_id",
                 "trace_id",
                 "permission_decision",
                 "permission_reason",
             }
             <= candidate_fields
+        )
+        self.assertEqual(
+            ["待我审核", "冲突需判断", "高风险暂不建议确认"],
+            tables["Candidate Review"]["suggested_views"],
         )
         reminder_fields = {field["name"] for field in tables["Reminder Candidates"]["fields"]}
         self.assertTrue(
@@ -246,6 +317,9 @@ class BitableSyncTest(unittest.TestCase):
                 "reason",
                 "due_at",
                 "recommended_action",
+                "available_actions",
+                "next_review_at",
+                "mute_key",
                 "target_actor",
                 "cooldown",
                 "request_id",
@@ -269,6 +343,14 @@ class BitableSyncTest(unittest.TestCase):
                 "due_at": "2026-05-07",
                 "evidence": {"quote": "提交材料截止时间是 2026-05-07。"},
                 "recommended_action": "review_reminder_candidate",
+                "actions": [
+                    {"action": "confirm_useful", "label": "确认提醒有用"},
+                    {"action": "ignore", "label": "忽略本次"},
+                    {"action": "snooze", "label": "延后"},
+                    {"action": "mute_same_type", "label": "关闭同类提醒"},
+                ],
+                "next_review_at": "2026-05-08T10:00:00+08:00",
+                "mute_key": "project:feishu_ai_challenge:提交材料:deadline",
                 "target_actor": {"user_id": "ou_test", "roles": ["member", "reviewer"]},
                 "cooldown": {"cooldown_ms": 86400000, "passed": True},
                 "permission_trace": {
@@ -287,6 +369,9 @@ class BitableSyncTest(unittest.TestCase):
         row = table["rows"][0]
         self.assertEqual("rem_mem_1_deadline", row[table["fields"].index("reminder_id")])
         self.assertEqual("review_reminder_candidate", row[table["fields"].index("recommended_action")])
+        self.assertIn("confirm_useful", row[table["fields"].index("available_actions")])
+        self.assertEqual("2026-05-08T10:00:00+08:00", row[table["fields"].index("next_review_at")])
+        self.assertIn("deadline", row[table["fields"].index("mute_key")])
         self.assertIn("ou_test", row[table["fields"].index("target_actor")])
         self.assertIn("86400000", row[table["fields"].index("cooldown")])
         self.assertEqual("req_heartbeat_review_due", row[table["fields"].index("request_id")])

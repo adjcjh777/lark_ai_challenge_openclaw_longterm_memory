@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：待执行
+状态：已完成本地闭环
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 4 个
 
@@ -101,6 +101,16 @@ lark-cli base +record-list
 - confirm / reject / needs_evidence / expired 都有审计。
 - Bitable 写回失败不会被包装成成功。
 - 队列视图不显示未授权敏感内容。
+
+## 本轮完成记录
+
+2026-04-29 UX-04 已补本地闭环：
+
+- Candidate Review 行新增 `review_status`、`source_type`、`risk_level`、`conflict_status`、`queue_view`、`reviewer`、`last_handler`、`last_handled_at`。
+- 三类队列视图用字段筛选复现：`待我审核` 看 `review_status=pending`；`冲突需判断` 看 `conflict_status=possible_conflict/overrides_active`；`高风险暂不建议确认` 看 `risk_level=high` 或 `queue_view` 包含该视图。
+- `needs_evidence` / `expired` 已补为 `CopilotService` / governance 状态动作，并写入 `memory_audit_events`；它们不会进入默认 recall。
+- Feishu 候选审核卡片补 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期` 四个动作入口；真实点击仍必须带有效 reviewer permission，缺失或畸形权限继续 fail closed。
+- Bitable 仍只是 review surface：Candidate Review 继续按 `sync_key` 幂等 upsert，写后读回确认，失败返回 `ok=false` 和 `error_summary`。
 
 ## 失败处理
 

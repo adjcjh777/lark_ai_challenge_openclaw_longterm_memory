@@ -8,6 +8,7 @@ from pathlib import Path
 from memory_engine.benchmark import run_benchmark
 from memory_engine.copilot.heartbeat import HeartbeatReminderEngine, agent_run_summary_candidate
 from memory_engine.copilot.permissions import demo_permission_context
+from memory_engine.copilot.schemas import ReminderActionRequest
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
 from memory_engine.db import connect, init_db
@@ -102,14 +103,15 @@ class CopilotHeartbeatTest(unittest.TestCase):
         self.assertEqual("trace_heartbeat_review_due", result["bridge"]["trace_id"])
         self.assertEqual("req_heartbeat_review_due", result["candidates"][0]["permission_trace"]["request_id"])
 
-    def test_heartbeat_missing_permission_context_auto_generates_default(self) -> None:
+    def test_heartbeat_missing_permission_context_fails_closed(self) -> None:
         result = HeartbeatReminderEngine(self.repo).generate(
             scope=SCOPE,
             current_context={"scope": SCOPE, "intent": "准备初赛提交材料"},
         )
 
-        self.assertTrue(result["ok"], result)
-        self.assertIn("candidates", result)
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("missing_permission_context", result["error"]["details"]["reason_code"])
 
     def test_heartbeat_malformed_permission_context_fails_closed(self) -> None:
         result = HeartbeatReminderEngine(self.repo).generate(
@@ -122,6 +124,96 @@ class CopilotHeartbeatTest(unittest.TestCase):
         self.assertEqual("malformed_permission_context", result["error"]["details"]["reason_code"])
         self.assertEqual("req_bad", result["error"]["details"]["request_id"])
         self.assertEqual("trace_bad", result["error"]["details"]["trace_id"])
+
+    def test_reminder_candidates_expose_controlled_action_contract(self) -> None:
+        self.repo.remember(
+            "project:feishu_ai_challenge",
+            "提交材料截止时间是 2026-05-07，必须提前准备录屏。",
+            source_type="unit_test",
+        )
+
+        result = HeartbeatReminderEngine(self.repo).generate(
+            scope=SCOPE,
+            current_context=current_context(intent="准备初赛提交材料"),
+        )
+
+        actions = result["candidates"][0]["actions"]
+        self.assertEqual(["confirm_useful", "ignore", "snooze", "mute_same_type"], [item["action"] for item in actions])
+        self.assertEqual("none", result["candidates"][0]["state_mutation"])
+        self.assertEqual("review_reminder_candidate", result["candidates"][0]["recommended_action"])
+
+    def test_reminder_action_contract_is_backward_compatible(self) -> None:
+        request = ReminderActionRequest.from_payload(
+            {
+                "reminder_id": "rem_mem_1_deadline",
+                "scope": SCOPE,
+                "action": "confirm/useful",
+                "current_context": current_context(),
+            }
+        )
+
+        self.assertEqual("confirm_useful", request.action)
+        self.assertEqual("rem_mem_1_deadline", request.reminder_id)
+
+    def test_snooze_and_mute_same_type_suppress_future_reminders(self) -> None:
+        self.repo.remember(
+            "project:feishu_ai_challenge",
+            "提交材料截止时间是 2026-05-07，必须提前准备录屏。",
+            source_type="unit_test",
+        )
+        service = CopilotService(repository=self.repo)
+        first = service.heartbeat_review_due(
+            request=type(
+                "Request",
+                (),
+                {"scope": SCOPE, "current_context": current_context(intent="准备初赛提交材料"), "limit": 5},
+            )()
+        )
+        self.assertEqual(1, len(first["candidates"]))
+        reminder = first["candidates"][0]
+
+        snoozed = service.review_reminder(
+            ReminderActionRequest.from_payload(
+                {
+                    "reminder_id": reminder["reminder_id"],
+                    "scope": SCOPE,
+                    "action": "snooze",
+                    "subject": reminder["subject"],
+                    "trigger": reminder["trigger"],
+                    "next_review_at": "2026-05-08T10:00:00+08:00",
+                    "current_context": current_context(),
+                }
+            )
+        )
+        second = service.heartbeat_review_due(
+            request=type(
+                "Request",
+                (),
+                {"scope": SCOPE, "current_context": current_context(intent="准备初赛提交材料"), "limit": 5},
+            )()
+        )
+
+        self.assertTrue(snoozed["ok"])
+        self.assertEqual("snoozed", snoozed["status"])
+        self.assertEqual("2026-05-08T10:00:00+08:00", snoozed["next_review_at"])
+        self.assertEqual([], second["candidates"])
+
+        muted = service.review_reminder(
+            ReminderActionRequest.from_payload(
+                {
+                    "reminder_id": reminder["reminder_id"],
+                    "scope": SCOPE,
+                    "action": "mute_same_type",
+                    "subject": reminder["subject"],
+                    "trigger": reminder["trigger"],
+                    "current_context": current_context(),
+                }
+            )
+        )
+
+        self.assertTrue(muted["ok"])
+        self.assertEqual("muted", muted["status"])
+        self.assertTrue(muted["reminder_state"]["muted"])
 
     def test_heartbeat_covers_thread_similarity_without_mutation(self) -> None:
         self.repo.remember(
@@ -205,6 +297,9 @@ class CopilotHeartbeatTest(unittest.TestCase):
         self.assertGreaterEqual(result["summary"]["case_count"], 5)
         self.assertLessEqual(result["summary"]["sensitive_reminder_leakage_rate"], 0.2)
         self.assertGreaterEqual(result["summary"]["reminder_candidate_rate"], 0.4)
+        self.assertIn("false_reminder_rate", result["summary"])
+        self.assertIn("duplicate_reminder_rate", result["summary"])
+        self.assertIn("user_confirmation_burden", result["summary"])
         self.assertIn("failure_type_counts", result["summary"])
         self.assertIn("actual_output_summary", result["results"][0])
 

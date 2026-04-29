@@ -98,6 +98,59 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertIn("--canary", self.reply_text(search))
         self.assertIn("request_id", search["tool_result"]["bridge"])
 
+    def test_natural_confirm_resolves_recent_candidate_without_internal_id(self) -> None:
+        created = self.handle("om_live_create_natural_confirm", "记住：生产部署必须加 --canary，region 用 ap-shanghai。")
+        self.assertEqual("memory.create_candidate", created["tool"])
+        self.assertIn("你可以直接回复：确认这条", self.reply_text(created))
+
+        confirmed = self.handle("om_live_confirm_natural", "确认这条")
+
+        self.assertTrue(confirmed["ok"])
+        self.assertEqual("memory.confirm", confirmed["tool"])
+        self.assertEqual("natural_confirm_recent_candidate", confirmed["routing_reason"])
+        self.assertEqual(created["tool_result"]["candidate_id"], confirmed["tool_result"]["candidate_id"])
+        self.assertIn("下一步：这条记忆已经成为当前有效结论", self.reply_text(confirmed))
+
+    def test_natural_reject_resolves_recent_candidate_without_internal_id(self) -> None:
+        created = self.handle("om_live_create_natural_reject", "记住：生产部署 rollback 负责人是程俊豪，截止周五，必须提前录屏。")
+
+        rejected = self.handle("om_live_reject_natural", "不要记这个")
+
+        self.assertTrue(rejected["ok"])
+        self.assertEqual("memory.reject", rejected["tool"])
+        self.assertEqual("natural_reject_recent_candidate", rejected["routing_reason"])
+        self.assertEqual(created["tool_result"]["candidate_id"], rejected["tool_result"]["candidate_id"])
+        self.assertIn("不会成为当前有效记忆", self.reply_text(rejected))
+
+    def test_natural_version_question_resolves_recent_memory_without_internal_id(self) -> None:
+        self.handle("om_live_seed_old_region", "/remember 决定：生产部署 region 固定 cn-shanghai。")
+        self.handle("om_live_confirm_old_region", "确认这条")
+        updated = self.handle("om_live_update_region", "不对，生产部署 region 以后统一改成 ap-shanghai。")
+        self.assertEqual("memory.create_candidate", updated["tool"])
+        self.handle("om_live_confirm_updated_region", "确认这条")
+
+        explained = self.handle("om_live_explain_natural", "为什么旧值不用了？")
+
+        self.assertTrue(explained["ok"])
+        self.assertEqual("memory.explain_versions", explained["tool"])
+        self.assertEqual("natural_versions_recent_memory", explained["routing_reason"])
+        self.assertEqual(updated["tool_result"]["memory_id"], explained["tool_result"]["memory_id"])
+        reply = self.reply_text(explained)
+        self.assertIn("当前结论", reply)
+        self.assertIn("ap-shanghai", reply)
+        self.assertIn("旧版本", reply)
+
+    def test_search_reply_puts_audit_metadata_after_user_answer(self) -> None:
+        self.handle("om_live_create_audit_order", "/remember 决定：生产部署必须加 --canary --region cn-shanghai")
+        self.handle("om_live_confirm_audit_order", "确认这条")
+
+        search = self.handle("om_live_search_audit_order", "生产部署 region 是什么？")
+        reply = self.reply_text(search)
+
+        self.assertLess(reply.index("结论："), reply.index("审计详情"))
+        self.assertLess(reply.index("下一步："), reply.index("审计详情"))
+        self.assertGreater(reply.index("request_id"), reply.index("审计详情"))
+
     def test_natural_task_request_routes_to_prefetch(self) -> None:
         event = message_event_from_payload(payload("om_live_prefetch", "请准备今天上线前 checklist"))
         self.assertIsNotNone(event)

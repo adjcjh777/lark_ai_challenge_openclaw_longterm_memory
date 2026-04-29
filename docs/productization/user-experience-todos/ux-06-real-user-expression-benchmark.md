@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：待执行
+状态：已完成
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 6 个
 
@@ -18,6 +18,28 @@
 - 误提醒和确认负担。
 
 真实用户表达样本必须脱敏。不能提交真实 chat_id、open_id、token 或敏感业务内容。
+
+## 本轮完成情况
+
+- 已使用现有 `benchmarks/copilot_real_feishu_cases.json` 定义 UX-06 样本 schema。
+- 每条样本包含用户输入、上下文、期望 intent、期望是否记忆、权限预期、当前 baseline 观察值和失败 debug hint。
+- 已补 5 类脱敏样本，每类 5 条：口语、含糊、多轮改口、闲聊误判、权限场景。
+- 已新增 `copilot_real_feishu` benchmark runner，指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
+- 已补 `tests/test_copilot_benchmark.py` 回归测试，覆盖样本格式、指标输出和失败输出。
+- 已对齐 `docs/benchmark-report.md` 和上游 `docs/productization/user-experience-todo.md`。
+
+本地重跑结果：
+
+| 指标 | 结果 | 当前判断 |
+|---|---:|---|
+| 样本数 | 25 | 口语、含糊、多轮改口、闲聊误判、权限场景各 5 条 |
+| Case pass rate | 0.7600 | 保留失败样例，不作为生产结论 |
+| Recall@3 | 0.8750 | 当前样本通过 |
+| 误记率 | 0.0400 | 当前样本通过，但保留 1 条误记失败样例 |
+| 误提醒率 | 0.0000 | 当前样本通过 |
+| 确认负担 | 2.4000 | 每 10 条输入约 2.4 条需要人工候选处理 |
+| 解释覆盖率 | 0.8500 | 当前样本通过，但保留解释缺口 |
+| 旧值泄漏率 | 0.1429 | 未达标，作为残余风险继续修 |
 
 ## 为什么现在做
 
@@ -79,6 +101,37 @@ ollama ps
 ```
 
 如果新增了独立真实表达样本 runner，应追加对应命令，并把命令写入 `docs/benchmark-report.md`。
+
+本轮已新增独立 runner，追加：
+
+```bash
+python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json
+```
+
+## 本轮验证记录
+
+已运行：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_benchmark tests.test_copilot_retrieval
+python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json
+git diff --check
+ollama ps
+```
+
+验证边界：
+
+- `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
+- 当前失败样例保留，用于暴露解释缺口、闲聊误记和旧值泄漏。
+- 真实飞书来源仍 candidate-only，不自动 active。
+- 不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。
 
 ## 完成标准
 

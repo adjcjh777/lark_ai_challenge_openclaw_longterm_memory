@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：待执行
+状态：已完成
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 3 个
 
@@ -20,6 +20,14 @@
 
 trace 是工程链路追踪 ID；permission decision 是权限判断结果。它们应该保留，但不应该抢占主答案。
 
+## 完成结果
+
+- `memory.explain_versions` 的 `user_explanation` 已进入 `version_chain_payload()` 和 `build_version_chain_card()` 的主内容。
+- 旧字段 `active_version`、`versions`、`supersedes`、`explanation` 仍保留，避免破坏已有调用方。
+- 搜索结果卡的 `rank_reason` 已转成用户语言，覆盖 active 命中、evidence 命中和 superseded 旧值过滤。
+- 权限拒绝卡片只展示拒绝原因、request_id、trace_id 和权限决策，不展示未授权 `current_value`、`summary` 或 `evidence` 明文。
+- `docs/benchmark-report.md` 已补 User Explanation Coverage、Unauthorized Value Leakage Rate 和 Stale / Superseded Leakage Rate 的 UX 指标口径。
+
 ## 为什么现在做
 
 当前系统已经有 active / superseded 版本链、evidence quote、`why_ranked`、`request_id`、`trace_id` 和 `permission_decision`。这些字段对审计有用，但普通用户需要的是一句能信任的解释，而不是内部字段列表。
@@ -35,11 +43,11 @@ trace 是工程链路追踪 ID；permission decision 是权限判断结果。它
 
 | 顺序 | 任务 | 文件位置 | 完成标准 |
 |---|---|---|---|
-| 1 | 定义用户解释字段契约 | `memory_engine/copilot/service.py`、`memory_engine/copilot/schemas.py` | search、explain_versions、prefetch、permission denied 输出都有可选的用户解释字段；字段不破坏现有 schema。 |
-| 2 | 把检索原因翻译成用户语言 | `memory_engine/copilot/retrieval.py`、`tests/test_copilot_retrieval.py` | `matched_via` / `why_ranked` 能生成“命中当前 active 记忆、证据完整、旧值已过滤”等可读原因。 |
-| 3 | 把版本链翻译成用户语言 | `memory_engine/copilot/governance.py`、`memory_engine/copilot/service.py` | `memory.explain_versions` 输出当前版本、旧版本、覆盖原因和证据摘要；默认 search 不展示 superseded 明文。 |
-| 4 | 把权限拒绝翻译成安全说明 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` | deny response 说明不能查看的原因，但不包含未授权 `current_value`、`summary` 或 `evidence`。 |
-| 5 | 接入飞书卡片和 benchmark | `memory_engine/feishu_cards.py`、`benchmarks/copilot_conflict_cases.json`、`docs/benchmark-report.md` | 卡片主答案使用用户解释；benchmark 或报告能检查旧值泄漏率和解释覆盖。 |
+| 1 | 定义用户解释字段契约 | `memory_engine/copilot/governance.py`、`memory_engine/feishu_cards.py` | 已完成：`memory.explain_versions` 输出 `user_explanation`；卡片 payload 消费该字段并保留旧字段向后兼容。 |
+| 2 | 把检索原因翻译成用户语言 | `memory_engine/feishu_cards.py`、`tests/test_feishu_interactive_cards.py` | 已完成：`matched_via` 能生成“命中当前 active 记忆、证据内容与问题相关、旧版本已过滤”等可读原因。 |
+| 3 | 把版本链翻译成用户语言 | `memory_engine/copilot/governance.py`、`memory_engine/feishu_cards.py` | 已完成：`memory.explain_versions` 输出当前版本、旧版本、覆盖原因和证据摘要；默认 search 不展示 superseded 明文。 |
+| 4 | 把权限拒绝翻译成安全说明 | `memory_engine/feishu_cards.py`、`tests/test_feishu_interactive_cards.py` | 已完成：deny card 说明不能查看的原因，但不包含未授权 `current_value`、`summary` 或 `evidence`。 |
+| 5 | 接入飞书卡片和 benchmark | `memory_engine/feishu_cards.py`、`docs/benchmark-report.md` | 已完成：卡片主答案使用用户解释；报告记录旧值泄漏率、未授权值泄漏率和解释覆盖率口径。 |
 
 ## 解释模板
 
@@ -79,7 +87,7 @@ trace 是工程链路追踪 ID；permission decision 是权限判断结果。它
 
 ## 验收命令
 
-代码实现后运行：
+已运行：
 
 ```bash
 python3 scripts/check_openclaw_version.py
@@ -94,11 +102,18 @@ ollama ps
 
 ## 完成标准
 
-- 搜索结果有用户可读解释。
-- 版本解释能讲清 active / superseded 关系。
-- 权限拒绝不会泄露未授权内容。
-- 审计字段仍可查，但不占主答案。
-- benchmark 保持 stale leakage 和 sensitive leakage 为可检查指标。
+- 已完成：搜索结果有用户可读解释。
+- 已完成：版本解释能讲清 active / superseded 关系。
+- 已完成：权限拒绝不会泄露未授权内容。
+- 已完成：审计字段仍可查，但不占主答案。
+- 已完成：benchmark report 保持 stale leakage、sensitive leakage，并补充解释覆盖率和未授权值泄漏率口径。
+
+## 剩余风险
+
+- User Explanation Coverage 目前由单测和报告口径约束，尚未进入所有 benchmark runner 的自动汇总。
+- 2026-04-29 重跑 recall / conflict benchmark 时 runner exit 0，但指标未全部达标：conflict case pass rate = 0.4000、stale leakage rate = 0.4286；recall case pass rate = 0.5750、Recall@3 = 0.9250、stale leakage rate = 0.4444。该风险属于后续召回/冲突样本修复，不把 UX-03 写成全部指标达标。
+- UX-03 只覆盖 search、explain_versions 和 permission denied 的关键出口；UX-06 还需要扩真实用户表达样本。
+- 本阶段不宣称 production live、全量飞书 workspace ingestion、productized live 长期运行，或真实 Feishu DM 已稳定进入本项目 first-class `fmc_*` / `memory.*` live E2E。
 
 ## 失败处理
 

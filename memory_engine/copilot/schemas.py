@@ -11,7 +11,16 @@ DEFAULT_SEARCH_TOP_K = 3
 DEFAULT_PREFETCH_TOP_K = 5
 
 MEMORY_TYPES = {"decision", "deadline", "owner", "workflow", "risk", "document", "preference"}
-MEMORY_STATUSES = {"candidate", "active", "superseded", "rejected", "stale", "archived"}
+MEMORY_STATUSES = {
+    "candidate",
+    "active",
+    "superseded",
+    "rejected",
+    "needs_evidence",
+    "expired",
+    "stale",
+    "archived",
+}
 MEMORY_LAYERS = {"L1", "L2", "L3"}
 WORKING_CONTEXT_FIELDS = {
     "session_id",
@@ -63,6 +72,18 @@ REJECT_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context
 EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived", "current_context"}
 PREFETCH_FIELDS = {"task", "scope", "current_context", "top_k"}
 HEARTBEAT_REVIEW_DUE_FIELDS = {"scope", "current_context", "limit"}
+REMINDER_ACTION_FIELDS = {
+    "reminder_id",
+    "scope",
+    "action",
+    "subject",
+    "trigger",
+    "next_review_at",
+    "snooze_ms",
+    "reason",
+    "current_context",
+}
+REMINDER_ACTIONS = {"confirm_useful", "confirm/useful", "useful", "confirm", "ignore", "snooze", "mute_same_type"}
 
 
 class ValidationError(ValueError):
@@ -760,6 +781,53 @@ class HeartbeatReviewDueRequest:
         }
 
 
+@dataclass(frozen=True)
+class ReminderActionRequest:
+    reminder_id: str
+    scope: str
+    action: str
+    subject: str | None = None
+    trigger: str | None = None
+    next_review_at: str | None = None
+    snooze_ms: int | None = None
+    reason: str | None = None
+    current_context: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "ReminderActionRequest":
+        data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, REMINDER_ACTION_FIELDS, "reminder.action")
+        action = _normalize_reminder_action(_require_string(data, "action"))
+        snooze_ms = data.get("snooze_ms")
+        if snooze_ms is not None:
+            if isinstance(snooze_ms, bool) or not isinstance(snooze_ms, int) or snooze_ms < 1:
+                raise ValidationError("snooze_ms must be a positive integer")
+        return cls(
+            reminder_id=_require_string(data, "reminder_id"),
+            scope=_require_scope(data),
+            action=action,
+            subject=_optional_string(data, "subject"),
+            trigger=_optional_string(data, "trigger"),
+            next_review_at=_optional_string(data, "next_review_at"),
+            snooze_ms=snooze_ms,
+            reason=_optional_string(data, "reason"),
+            current_context=_optional_object(data, "current_context"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "reminder_id": self.reminder_id,
+            "scope": self.scope,
+            "action": self.action,
+            "current_context": dict(self.current_context),
+        }
+        for key in ("subject", "trigger", "next_review_at", "snooze_ms", "reason"):
+            value = getattr(self, key)
+            if value is not None:
+                result[key] = value
+        return result
+
+
 def _require_object(payload: Any, field_name: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValidationError(f"{field_name} must be an object")
@@ -884,3 +952,14 @@ def _limit(value: Any, *, default: int) -> int:
     if value > MAX_TOP_K:
         raise ValidationError(f"limit cannot exceed {MAX_TOP_K}")
     return value
+
+
+def _normalize_reminder_action(action: str) -> str:
+    normalized = action.strip().lower()
+    if normalized not in REMINDER_ACTIONS:
+        raise ValidationError(
+            "reminder action must be one of: confirm_useful, confirm/useful, ignore, snooze, mute_same_type"
+        )
+    if normalized in {"confirm/useful", "useful", "confirm"}:
+        return "confirm_useful"
+    return normalized

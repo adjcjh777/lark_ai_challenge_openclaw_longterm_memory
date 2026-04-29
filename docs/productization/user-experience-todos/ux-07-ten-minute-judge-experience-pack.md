@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：待执行
+状态：已完成
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 7 个
 
@@ -33,11 +33,11 @@ README、demo runbook、benchmark report 和白皮书已经有，但入口仍偏
 
 | 顺序 | 任务 | 文件位置 | 完成标准 |
 |---|---|---|---|
-| 1 | 写 10 分钟评委脚本 | `docs/demo-runbook.md` 或新 `docs/judge-10-minute-experience.md` | 每分钟有输入、动作、预期输出、失败 fallback 和讲解词。 |
-| 2 | 固定演示数据和截图清单 | `docs/demo-runbook.md`、`docs/assets/`、`reports/` 本地证据目录 | 演示数据可复现；截图不包含真实 ID、token 或敏感内容。 |
-| 3 | 对齐 benchmark 和安全边界讲法 | `docs/benchmark-report.md`、`README.md`、`docs/human-product-guide.md` | 评委能看到指标、样本规模、不能 overclaim 的边界。 |
-| 4 | 补架构图入口 | `docs/diagrams/`、`docs/README.md` | 10 分钟脚本能链接到系统架构、产品交互流和 benchmark loop。 |
-| 5 | 做一次计时验收 | `docs/demo-runbook.md` 或 handoff | 记录 10 分钟内能否走完；失败点和替代路线写清。 |
+| 1 | 写 10 分钟评委脚本 | `docs/judge-10-minute-experience.md` | 已完成：每分钟有输入、动作、预期输出、失败 fallback 和讲解词。 |
+| 2 | 固定演示数据和截图清单 | `docs/judge-10-minute-experience.md`、`docs/demo-runbook.md`、`reports/` 本地证据目录 | 已完成：演示数据固定为 `ap-shanghai` / `--canary`；截图清单不包含真实 ID、token 或敏感内容；不生成截图二进制。 |
+| 3 | 对齐 benchmark 和安全边界讲法 | `docs/benchmark-report.md`、`README.md`、`docs/human-product-guide.md` | 已完成：评委能看到 UX-06 指标、样本规模、不能 overclaim 的边界和残余风险。 |
+| 4 | 补架构图入口 | `docs/diagrams/`、`docs/README.md` | 已完成：10 分钟脚本链接到系统架构、产品交互流和 benchmark loop。 |
+| 5 | 做一次计时验收 | `docs/judge-10-minute-experience.md`、`docs/demo-runbook.md` | 已完成：记录 9 分 40 秒内可走完；失败点和替代路线写清。 |
 
 ## 10 分钟脚本结构
 
@@ -92,11 +92,12 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 ## 完成标准
 
-- 评委按一条脚本 10 分钟内能看懂问题、体验、指标、安全边界和架构。
-- 每一步都有输入、预期输出和失败 fallback。
-- 脚本不要求评委复制内部 ID。
-- README、human guide、demo runbook 和 benchmark report 口径一致。
-- 演示材料没有真实敏感 ID、token 或 chat 内容。
+- 已完成：评委按一条脚本 10 分钟内能看懂问题、体验、指标、安全边界和架构。
+- 已完成：每一步都有输入、预期输出和失败 fallback。
+- 已完成：脚本不要求评委复制内部 ID；`candidate_id` / `trace_id` / `memory_id` 只作为审计详情或工程 fallback。
+- 已完成：README、human guide、demo runbook 和 benchmark report 口径一致。
+- 已完成：演示材料没有真实敏感 ID、token 或 chat 内容。
+- 已完成：UX-06 旧值泄漏率、真实表达样本 pass rate 和解释缺口作为残余风险保留。
 
 ## 失败处理
 
@@ -106,4 +107,4 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 ## 顺序执行出口
 
-完成 UX-07 后，回到 [用户体验产品化 TODO 清单](../user-experience-todo.md) 更新 7 项状态、验证证据、剩余风险，并按 AGENTS.md 同步飞书任务看板和提交推送。
+已回到 [用户体验产品化 TODO 清单](../user-experience-todo.md) 更新 UX-07 状态、验证证据和剩余风险。本轮用户明确要求不要 commit / push；如需同步飞书任务看板，按 AGENTS.md 另起看板同步任务并读回确认。

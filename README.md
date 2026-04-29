@@ -12,7 +12,7 @@
 
 当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-状态快照：2026-04-28，以当前代码、`docs/productization/full-copilot-next-execution-doc.md` 和 `docs/productization/prd-completion-audit-and-gap-tasks.md` 为准。
+状态快照：2026-04-29，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md` 和 `docs/productization/user-experience-todo.md` 为准。
 
 ### 已完成
 
@@ -32,7 +32,7 @@
 | OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
 | Benchmark | 已完成多类评测样例 | `benchmarks/copilot_*.json`、`docs/benchmark-report.md` |
-| 白皮书 / 答辩材料 | 已完成初稿，放在后半部分查看 | `docs/memory-definition-and-architecture-whitepaper.md`、`docs/demo-runbook.md` |
+| 白皮书 / 答辩材料 | 已完成初稿和 10 分钟评委体验包，放在后半部分查看 | `docs/memory-definition-and-architecture-whitepaper.md`、`docs/demo-runbook.md`、`docs/judge-10-minute-experience.md` |
 
 ### 不能 overclaim
 
@@ -51,7 +51,7 @@
 |---|---|---|
 | P1 | 补真实 Feishu DM 到本项目 first-class 工具的 live E2E 证据 | 真实飞书 DM 进入 OpenClaw Agent 后，自然选择本项目 `fmc_memory_search` / `fmc_memory_prefetch` / `fmc_memory_create_candidate`，再翻译进入 `memory.search` / `memory.prefetch` / `memory.create_candidate` 和 `handle_tool_request()` / `CopilotService` |
 | P1 | 接真实 Feishu API 拉取与扩充人工复核样本 | 在 limited ingestion 底座之上，接任务、会议、Bitable 等真实 API 拉取，并保留失败 fallback 和 candidate-only 边界 |
-| P0 | 跟踪 7 个用户体验产品化缺口 | [用户体验产品化 TODO](docs/productization/user-experience-todo.md) 逐项记录飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包是否完成 |
+| P0 | 维护用户体验产品化闭环和评委 10 分钟入口 | [用户体验产品化 TODO](docs/productization/user-experience-todo.md) 记录 UX-01 到 UX-07 状态；评委入口为 [10 分钟评委体验包](docs/judge-10-minute-experience.md)，仍不宣称 production live |
 | P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 

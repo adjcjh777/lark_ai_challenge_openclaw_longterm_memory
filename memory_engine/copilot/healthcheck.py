@@ -533,7 +533,17 @@ def _check_audit_smoke() -> dict[str, Any]:
                 service=service,
             )
         # 5. memory.search -> permission_allowed
-        handle_tool_request("memory.search", {"query": "审计", "scope": SCOPE}, service=service)
+        handle_tool_request(
+            "memory.search",
+            {
+                "query": "审计",
+                "scope": SCOPE,
+                "current_context": demo_permission_context(
+                    "memory.search", SCOPE, actor_id="u_health", entrypoint="healthcheck"
+                ),
+            },
+            service=service,
+        )
         # 6. memory.search deny -> permission_denied (malformed context triggers deny)
         handle_tool_request(
             "memory.search",
@@ -685,11 +695,9 @@ def _permission_deny_check() -> dict[str, Any]:
     malformed = handle_tool_request("memory.search", _malformed_permission_search_payload())
     missing_details = _error_details(missing)
     malformed_details = _error_details(malformed)
-    # Note: missing context now auto-generates a default permission (allowed),
-    # so we only check that malformed context produces a proper deny.
-    missing_allowed = _error_code(missing) is None and missing.get("ok") is True
     passed = (
-        missing_allowed
+        _error_code(missing) == "permission_denied"
+        and missing_details.get("reason_code") == "missing_permission_context"
         and _error_code(malformed) == "permission_denied"
         and malformed_details.get("reason_code") == "malformed_permission_context"
         and malformed_details.get("request_id") == "req_health_bad"
@@ -698,7 +706,7 @@ def _permission_deny_check() -> dict[str, Any]:
     return {
         "passed": passed,
         "error_code": _error_code(malformed),
-        "missing_reason_code": missing_details.get("reason_code") or "auto_allowed",
+        "missing_reason_code": missing_details.get("reason_code"),
         "malformed_reason_code": malformed_details.get("reason_code"),
         "request_id": malformed_details.get("request_id"),
         "trace_id": malformed_details.get("trace_id"),

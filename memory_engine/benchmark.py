@@ -34,6 +34,9 @@ FAILURE_RECOMMENDED_FIXES = {
     "reminder_too_noisy": "检查 heartbeat 触发条件、cooldown 和 relevance gate，避免漏发或乱发 reminder candidate。",
     "permission_scope_error": "检查 scope permission、敏感内容脱敏和 reminder 输出权限门控。",
     "false_positive_candidate": "检查低价值闲聊和临时确认的过滤规则，避免乱记。",
+    "user_expression_context_miss": "检查真实表达样本中的 thread_topic、上一轮消息和口语意图是否进入判别上下文。",
+    "user_expression_explanation_missing": "检查真实表达输出是否给出用户可读解释，而不是只返回工程 trace。",
+    "user_expression_old_value_leaked": "检查真实表达样本的 active-only 过滤，旧值只能出现在版本解释中。",
 }
 
 
@@ -54,6 +57,8 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
         return run_copilot_prefetch_benchmark(cases, source_path=cases_path, scope=scope)
     if "copilot_heartbeat" in case_types:
         return run_copilot_heartbeat_benchmark(cases, source_path=cases_path, scope=scope)
+    if "copilot_real_feishu" in case_types:
+        return run_copilot_real_feishu_benchmark(cases, source_path=cases_path, scope=scope)
 
     results = []
 
@@ -688,9 +693,16 @@ def run_copilot_heartbeat_benchmark(
             init_db(conn)
             repo = MemoryRepository(conn)
             for event in case.get("events", []):
-                repo.remember(
+                created = repo.remember(
                     scope, event["content"] if isinstance(event, dict) else event, source_type="benchmark_heartbeat"
                 )
+                if case.get("days_since_recall"):
+                    recalled_at = int(time.time() * 1000) - int(case["days_since_recall"]) * 24 * 60 * 60 * 1000
+                    with conn:
+                        conn.execute(
+                            "UPDATE memories SET last_recalled_at = ?, recall_count = ? WHERE id = ?",
+                            (recalled_at, 1, created["memory_id"]),
+                        )
             if case.get("mark_recalled_query"):
                 repo.recall(scope, case["mark_recalled_query"])
 
@@ -714,16 +726,29 @@ def run_copilot_heartbeat_benchmark(
         expected_subject = case.get("expected_subject", "")
         expected_status = case.get("expected_status")
         forbidden = case.get("forbidden_value", "")
-        expected_found = any(
-            (not expected_trigger or item.get("trigger") == expected_trigger)
-            and (not expected_subject or expected_subject in str(item.get("subject") or ""))
-            and (not expected_status or item.get("status") == expected_status)
-            for item in candidates
-            if isinstance(item, dict)
-        )
+        if expected_trigger is None:
+            expected_found = len(candidates) == 0
+        else:
+            expected_found = any(
+                item.get("trigger") == expected_trigger
+                and (not expected_subject or _heartbeat_subject_matches(item, expected_subject))
+                and (not expected_status or item.get("status") == expected_status)
+                for item in candidates
+                if isinstance(item, dict)
+            )
         sensitive_leak = bool(forbidden and forbidden in text)
+        duplicate_count = max(0, len(candidates) - len({item.get("mute_key") or item.get("reminder_id") for item in candidates if isinstance(item, dict)}))
+        expected_no_reminder = expected_trigger is None
+        false_reminder = bool(expected_no_reminder and candidates)
+        action_count = sum(
+            len(item.get("actions") or [])
+            for item in candidates
+            if isinstance(item, dict) and isinstance(item.get("actions"), list)
+        )
         passed = bool(response.get("ok") and expected_found and not sensitive_leak)
-        failure_type = _heartbeat_failure_type(expected_found=expected_found, sensitive_leak=sensitive_leak)
+        failure_type = _heartbeat_failure_type(
+            expected_found=expected_found, sensitive_leak=sensitive_leak, false_reminder=false_reminder
+        )
         results.append(
             {
                 "case_id": case["case_id"],
@@ -741,10 +766,16 @@ def run_copilot_heartbeat_benchmark(
                     "expected_found": expected_found,
                     "sensitive_leak": sensitive_leak,
                     "expected_status": expected_status,
+                    "duplicate_count": duplicate_count,
+                    "false_reminder": false_reminder,
+                    "action_count": action_count,
                 },
                 "candidate_count": len(candidates),
                 "expected_found": expected_found,
                 "sensitive_leak": sensitive_leak,
+                "duplicate_count": duplicate_count,
+                "false_reminder": false_reminder,
+                "action_count": action_count,
                 "passed": passed,
                 "latency_ms": latency_ms,
                 "response": response,
@@ -759,6 +790,110 @@ def run_copilot_heartbeat_benchmark(
         "name": Path(source_path).stem,
         "source": str(source_path),
         "summary": _copilot_heartbeat_metrics(results),
+        "results": results,
+    }
+
+
+def run_copilot_real_feishu_benchmark(
+    cases: list[dict[str, Any]],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    results = []
+
+    for case in cases:
+        observed = case.get("observed_baseline") or {}
+        expected_permission = case.get("expected_permission") or {}
+        expected_permission_decision = expected_permission.get("decision")
+        observed_permission_decision = observed.get("permission_decision")
+        expected_recall_rank = case.get("expected_recall_rank")
+        observed_rank = observed.get("recall_rank")
+        recall_expected = expected_recall_rank is not None and expected_permission_decision != "deny"
+        recall_at_3 = bool(recall_expected and isinstance(observed_rank, int) and observed_rank <= 3)
+        expected_should_remember = bool(case.get("expected_should_remember"))
+        candidate_created = bool(observed.get("candidate_created"))
+        false_memory = bool(not expected_should_remember and candidate_created)
+        reminder_created = bool(observed.get("reminder_created"))
+        false_reminder = bool(not case.get("expected_reminder", False) and reminder_created)
+        explanation_required = bool(case.get("expected_explanation_required", True))
+        explanation_present = bool(observed.get("has_user_explanation"))
+        explanation_ok = bool(not explanation_required or explanation_present)
+        old_value_applicable = bool(case.get("expected_old_value_filtered"))
+        old_value_leaked = bool(observed.get("old_value_leaked"))
+        old_value_ok = bool(not old_value_applicable or not old_value_leaked)
+        permission_ok = observed_permission_decision == expected_permission_decision
+        candidate_ok = candidate_created == expected_should_remember
+        reminder_ok = not false_reminder
+        passed = bool(
+            permission_ok
+            and candidate_ok
+            and reminder_ok
+            and explanation_ok
+            and old_value_ok
+            and (not recall_expected or recall_at_3)
+        )
+        failure_type = _real_feishu_failure_type(
+            permission_ok=permission_ok,
+            recall_expected=recall_expected,
+            recall_at_3=recall_at_3,
+            false_memory=false_memory,
+            false_reminder=false_reminder,
+            explanation_ok=explanation_ok,
+            old_value_ok=old_value_ok,
+        )
+
+        results.append(
+            {
+                "case_id": case["case_id"],
+                "case_type": _case_type(case),
+                "expression_category": case.get("expression_category"),
+                "input": case.get("input"),
+                "expected_output": {
+                    "expected_intent": case.get("expected_intent"),
+                    "expected_should_remember": expected_should_remember,
+                    "expected_permission": expected_permission,
+                    "expected_recall_rank": expected_recall_rank,
+                    "expected_reminder": bool(case.get("expected_reminder", False)),
+                    "expected_explanation_required": explanation_required,
+                    "expected_old_value_filtered": old_value_applicable,
+                },
+                "actual_output_summary": {
+                    "observed_recall_rank": observed_rank,
+                    "recall_at_3": recall_at_3,
+                    "candidate_created": candidate_created,
+                    "false_memory": false_memory,
+                    "reminder_created": reminder_created,
+                    "false_reminder": false_reminder,
+                    "review_action_count": int(observed.get("review_action_count") or 0),
+                    "has_user_explanation": explanation_present,
+                    "old_value_leaked": old_value_leaked,
+                    "permission_decision": observed_permission_decision,
+                },
+                "recall_expected": recall_expected,
+                "recall_at_3": recall_at_3,
+                "candidate_created": candidate_created,
+                "false_memory": false_memory,
+                "false_reminder": false_reminder,
+                "review_action_count": int(observed.get("review_action_count") or 0),
+                "explanation_required": explanation_required,
+                "explanation_present": explanation_present,
+                "old_value_applicable": old_value_applicable,
+                "old_value_leaked": old_value_leaked,
+                "permission_ok": permission_ok,
+                "passed": passed,
+                "latency_ms": 0.0,
+                "failure_type": failure_type,
+                "recommended_fix": _recommended_fix(case, failure_type),
+                "failure_debug_hint": case.get("failure_debug_hint"),
+            }
+        )
+
+    return {
+        "benchmark_type": "copilot_real_feishu",
+        "name": Path(source_path).stem,
+        "source": str(source_path),
+        "summary": _copilot_real_feishu_metrics(results),
         "results": results,
     }
 
@@ -789,6 +924,19 @@ def _benchmark_heartbeat_context(case: dict[str, Any], scope: str) -> dict[str, 
         )
     )
     return context
+
+
+def _heartbeat_subject_matches(candidate: dict[str, Any], expected_subject: str) -> bool:
+    expected = str(expected_subject or "")
+    if not expected:
+        return True
+    subject = str(candidate.get("subject") or "")
+    current_value = str(candidate.get("current_value") or "")
+    if expected in subject or expected in current_value:
+        return True
+    normalized_expected = "".join(ch for ch in expected.lower() if ch.isalnum())
+    normalized_text = "".join(ch for ch in f"{subject} {current_value}".lower() if ch.isalnum())
+    return bool(normalized_expected and normalized_expected in normalized_text)
 
 
 def _candidate_failure_category(
@@ -896,11 +1044,38 @@ def _prefetch_failure_type(
     return None
 
 
-def _heartbeat_failure_type(*, expected_found: bool, sensitive_leak: bool) -> str | None:
+def _heartbeat_failure_type(*, expected_found: bool, sensitive_leak: bool, false_reminder: bool = False) -> str | None:
     if sensitive_leak:
         return "permission_scope_error"
+    if false_reminder:
+        return "reminder_too_noisy"
     if not expected_found:
         return "reminder_too_noisy"
+    return None
+
+
+def _real_feishu_failure_type(
+    *,
+    permission_ok: bool,
+    recall_expected: bool,
+    recall_at_3: bool,
+    false_memory: bool,
+    false_reminder: bool,
+    explanation_ok: bool,
+    old_value_ok: bool,
+) -> str | None:
+    if not permission_ok:
+        return "permission_scope_error"
+    if false_memory:
+        return "false_positive_candidate"
+    if false_reminder:
+        return "reminder_too_noisy"
+    if not old_value_ok:
+        return "user_expression_old_value_leaked"
+    if not explanation_ok:
+        return "user_expression_explanation_missing"
+    if recall_expected and not recall_at_3:
+        return "user_expression_context_miss"
     return None
 
 
@@ -1462,15 +1637,50 @@ def _copilot_heartbeat_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     passed = sum(1 for result in results if result["passed"])
     expected_found = sum(1 for result in results if result["expected_found"])
     sensitive_leaks = sum(1 for result in results if result["sensitive_leak"])
+    false_reminders = sum(1 for result in results if result.get("false_reminder"))
+    duplicate_cases = sum(1 for result in results if result.get("duplicate_count", 0) > 0)
+    total_actions = sum(int(result.get("action_count") or 0) for result in results)
+    total_candidates = sum(int(result.get("candidate_count") or 0) for result in results)
     latencies = sorted(result["latency_ms"] for result in results)
     return {
         "case_count": total,
         "case_pass_rate": _ratio(passed, total),
         "reminder_candidate_rate": _ratio(expected_found, total),
         "sensitive_reminder_leakage_rate": _ratio(sensitive_leaks, total),
+        "false_reminder_rate": _ratio(false_reminders, total),
+        "duplicate_reminder_rate": _ratio(duplicate_cases, total),
+        "user_confirmation_burden": round(total_actions / total_candidates, 3) if total_candidates else 0.0,
         "avg_candidate_count": round(sum(result["candidate_count"] for result in results) / total, 3) if total else 0.0,
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
+    }
+
+
+def _copilot_real_feishu_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    recall_cases = [result for result in results if result["recall_expected"]]
+    recall_hits = sum(1 for result in recall_cases if result["recall_at_3"])
+    false_memories = sum(1 for result in results if result["false_memory"])
+    false_reminders = sum(1 for result in results if result["false_reminder"])
+    explanation_cases = [result for result in results if result["explanation_required"]]
+    explanation_hits = sum(1 for result in explanation_cases if result["explanation_present"])
+    old_value_cases = [result for result in results if result["old_value_applicable"]]
+    old_value_leaks = sum(1 for result in old_value_cases if result["old_value_leaked"])
+    review_candidates = sum(1 for result in results if result["candidate_created"])
+    categories = sorted({str(result.get("expression_category") or "unknown") for result in results})
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "category_count": len(categories),
+        "recall_case_count": len(recall_cases),
+        "recall_at_3": _ratio(recall_hits, len(recall_cases)),
+        "false_memory_rate": _ratio(false_memories, total),
+        "false_reminder_rate": _ratio(false_reminders, total),
+        "user_confirmation_burden": round(review_candidates / total * 10, 3) if total else 0.0,
+        "explanation_coverage": _ratio(explanation_hits, len(explanation_cases)),
+        "old_value_leakage_rate": _ratio(old_value_leaks, len(old_value_cases)),
         "failure_type_counts": _failure_type_counts(results),
     }
 
@@ -1635,6 +1845,7 @@ def _write_csv(path: str | Path, results: list[dict[str, Any]]) -> None:
                         "input_summary": result.get("query")
                         or result.get("text")
                         or result.get("task")
+                        or result.get("input")
                         or result.get("expected_subject"),
                         "expected_output": json.dumps(
                             result.get("expected_output", {}), ensure_ascii=False, sort_keys=True

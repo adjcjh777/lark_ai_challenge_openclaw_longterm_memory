@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：待执行
+状态：已完成
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 1 个
 
@@ -162,3 +162,39 @@ python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
 ## 顺序执行出口
 
 完成 UX-01 后再进入 [UX-02 记忆卡片信息架构](ux-02-memory-card-information-architecture.md)。UX-02 会把本轮主路径里的返回内容沉淀成稳定卡片模板。
+
+## 完成记录
+
+完成时间：2026-04-29
+
+已完成能力：
+
+- `docs/demo-runbook.md` 和 `docs/human-product-guide.md` 已固化 4 条飞书主路径普通话脚本：搜索、候选确认、版本解释、任务前 prefetch。
+- `memory_engine/copilot/feishu_live.py` 已支持“确认这条”“不要记这个”“为什么旧值不用了”在当前 chat / thread / reviewer context 下解析最近 candidate 或 memory。
+- 内部状态变更仍调用 `memory.confirm`、`memory.reject`、`memory.explain_versions`，并继续通过 `handle_tool_request()` / `CopilotService`。
+- 飞书主答案已调整为先给结论、证据和下一步动作；`request_id`、`trace_id`、`permission_decision` 放入审计详情。
+
+验证命令：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_copilot_feishu_live tests.test_copilot_tools
+python3 -m unittest tests.test_feishu_interactive_cards
+python3 scripts/check_demo_readiness.py --json
+git diff --check
+ollama ps
+```
+
+失败 fallback：
+
+- 如果当前上下文无法可靠定位最近 candidate，回复里保留 `/confirm <candidate_id>` 或 `/reject <candidate_id>` fallback。
+- 如果当前上下文无法定位最近 memory，版本解释保留 `/versions <memory_id>` fallback，并建议先搜索具体主题。
+- 如果 permission 缺失、畸形或 reviewer 权限不足，继续 fail closed，不展示未授权内容。
+
+仍未完成边界：
+
+- 这不是生产部署。
+- 这不是全量 Feishu workspace ingestion。
+- 这不代表真实 Feishu DM 已稳定路由到本项目 first-class `fmc_*` / `memory.*` live E2E。
+- 这不代表 productized live 长期运行已完成。

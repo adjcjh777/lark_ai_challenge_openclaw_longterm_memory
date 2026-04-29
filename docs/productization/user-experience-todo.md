@@ -24,13 +24,13 @@
 
 | ID | 用户体验缺口 | 当前状态 | 是否完成 | 优先级 | 完成标准 |
 |---|---|---|---|---|---|
-| UX-01 | 飞书主路径从命令集合升级为完整体验 | 进行中 | 否 | P0 | 用户不理解 `candidate_id`、`trace_id`、`memory_id` 也能完成搜索、候选确认、版本解释和任务前预取 |
-| UX-02 | 重做记忆卡片信息架构 | 进行中 | 否 | P0 | 搜索结果、候选审核、版本解释、任务前上下文 4 类卡片模板稳定；半成品按钮不暴露给评委 |
-| UX-03 | 用户可理解的“为什么这样回答”解释层 | 进行中 | 否 | P1 | 主答案讲清当前结论、证据、版本覆盖和权限原因；工程字段进入审计详情 |
-| UX-04 | 记忆收件箱 / 审核队列 | 进行中 | 否 | P1 | 有“待我审核、冲突需判断、高风险暂不建议确认”三类视图和候选状态流转 |
-| UX-05 | 主动提醒变成可控提醒体验 | 进行中 | 否 | P1 | reminder candidate 可确认、忽略、延后、关闭同类提醒；不直接真实群推送 |
-| UX-06 | 真实用户表达样本评测 | 进行中 | 否 | P1 | 覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景；指标包含误记率、误提醒率和确认负担 |
-| UX-07 | 10 分钟评委体验包 | 待启动 | 否 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、benchmark、安全边界和架构 |
+| UX-01 | 飞书主路径从命令集合升级为完整体验 | 已完成 | 是 | P0 | 用户不理解 `candidate_id`、`trace_id`、`memory_id` 也能完成搜索、候选确认、版本解释和任务前预取；边界仍是 sandbox/demo path，不是 production live |
+| UX-02 | 重做记忆卡片信息架构 | 已完成 | 是 | P0 | 搜索结果、候选审核、版本解释、任务前上下文 4 类卡片模板稳定；半成品按钮不暴露给评委 |
+| UX-03 | 用户可理解的“为什么这样回答”解释层 | 已完成 | 是 | P1 | 主答案讲清当前结论、证据、版本覆盖和权限原因；工程字段进入审计详情；permission denied 不泄露未授权 current_value / summary / evidence |
+| UX-04 | 记忆收件箱 / 审核队列 | 已完成 | 是 | P1 | 有“待我审核、冲突需判断、高风险暂不建议确认”三类视图和候选状态流转 |
+| UX-05 | 主动提醒变成可控提醒体验 | 已完成 | 是 | P1 | reminder candidate 可确认、忽略、延后、关闭同类提醒；不直接真实群推送 |
+| UX-06 | 真实用户表达样本评测 | 已完成 | 是 | P1 | 已覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景各 5 条；指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率 |
+| UX-07 | 10 分钟评委体验包 | 已完成 | 是 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、benchmark、安全边界和架构；入口为 `docs/judge-10-minute-experience.md` |
 
 ## 详细执行文档
 
@@ -45,6 +45,28 @@
 | 5 | UX-05 | [主动提醒变成可控提醒体验](user-experience-todos/ux-05-controlled-reminder-experience.md) | reminder candidate 可确认、忽略、延后和关闭同类提醒，不直接真实群推送。 |
 | 6 | UX-06 | [真实用户表达样本评测](user-experience-todos/ux-06-real-user-expression-benchmark.md) | 覆盖真实表达样本和误记率、误提醒率、确认负担等 UX 指标。 |
 | 7 | UX-07 | [10 分钟评委体验包](user-experience-todos/ux-07-ten-minute-judge-experience-pack.md) | 评委按一条脚本在 10 分钟内看懂体验、benchmark、安全边界和架构。 |
+
+## UX-07：10 分钟评委体验包
+
+当前情况：
+
+- 已新增 [docs/judge-10-minute-experience.md](../judge-10-minute-experience.md)，包含每分钟输入、动作、预期输出、失败 fallback 和讲解词。
+- 已在 [docs/demo-runbook.md](../demo-runbook.md) 固定演示数据、截图清单入口和计时验收记录。
+- 已在 [docs/benchmark-report.md](../benchmark-report.md)、[docs/human-product-guide.md](../human-product-guide.md)、[README.md](../../README.md) 对齐 benchmark 与 no-overclaim 口径。
+- 已在 [docs/diagrams/README.md](../diagrams/README.md) 和 [docs/README.md](../README.md) 补系统架构、产品交互流和 benchmark loop 入口。
+
+验收标准：
+
+- 已完成：10 分钟脚本按分钟覆盖问题定义、当前结论召回、候选确认、版本解释、prefetch、reminder candidate、benchmark、架构和安全边界。
+- 已完成：演示数据固定为 `ap-shanghai` / `--canary` 部署规则；截图清单不包含真实 ID、token 或敏感内容。
+- 已完成：UX-06 指标和残余风险进入评委讲法，不把 benchmark 写成全部达标。
+- 已完成：计时走查记录为 9 分 40 秒内可走完；飞书 sandbox 或 Mermaid 渲染失败时有 replay / `.mmd` fallback。
+
+剩余边界：
+
+- 本阶段不生成截图二进制。
+- 本阶段不跑重 benchmark；只保留已有 UX-06 runner 命令。
+- 本阶段不宣称 production live、全量 Feishu workspace 接入或真实 Feishu DM 到 `fmc_*` / `memory.*` live E2E 完成。
 
 ## UX-01：飞书主路径从命令集合升级为完整体验
 
@@ -79,8 +101,9 @@
 当前情况：
 
 - 候选卡片已有 confirm / reject / source / version 等按钮基础。
-- `candidate_review_payload()` 仍有 source、versions、needs_review 等 dry-run 痕迹。
-- 现有卡片更像调试输出，还没有按用户决策任务拆模板。
+- 已完成 4 类稳定 payload builder：`search_result_payload()`、`candidate_review_payload()`、`version_chain_payload()`、`prefetch_context_payload()`。
+- 卡片主内容和审计详情已分层：用户先看当前结论、证据、风险和下一步；`request_id`、`trace_id`、`permission_decision` 放入审计详情。
+- 评委版不暴露不可用按钮；候选卡只给 reviewer / owner / admin 显示确认和拒绝，搜索卡只保留已有版本解释动作。
 
 要做什么：
 
@@ -93,9 +116,9 @@
 
 验收标准：
 
-- 4 类卡片都有稳定 payload builder 和测试。
-- 卡片第一屏回答“这是什么、为什么重要、我该点什么”。
-- 不可用按钮在评委版隐藏；可见按钮必须真实可用并写审计。
+- 已完成：4 类卡片都有稳定 payload builder 和测试。
+- 已完成：卡片第一屏回答“这是什么、为什么重要、我该点什么”。
+- 已完成：不可用按钮在评委版隐藏；可见按钮只保留可路由到现有 confirm / reject / versions 动作的按钮。
 
 主要文件：
 
@@ -108,21 +131,38 @@
 
 当前情况：
 
-- 项目已有 evidence、trace、version chain、permission decision。
-- `request_id`、`trace_id`、`permission_decision` 仍偏工程审计字段。
-- 普通用户需要的是可读解释，而不是内部链路字段。
+- 已完成 search、version chain 和 permission denied 的用户解释出口。
+- `memory.explain_versions` 的 `user_explanation` 已被 `version_chain_payload()` / `build_version_chain_card()` 消费为主解释字段，同时保留旧的 `active_version`、`versions`、`explanation` 字段向后兼容。
+- 搜索卡的 `rank_reason` 已转成用户语言，能覆盖“命中当前 active 记忆、证据相关、旧值已过滤”。
+- `request_id`、`trace_id`、`permission_decision` 保留在审计详情，不抢占主答案。
 
 要做什么：
 
-1. 把工程解释翻译成用户语言：当前 active 版本、旧值被谁覆盖、证据来自哪里、权限为何允许或隐藏。
-2. 主答案只放结论和理由；审计字段放到卡片底部或“审计详情”。
-3. 权限拒绝时说清“为什么不能看”，但不泄露敏感字段。
+1. 已完成：把工程解释翻译成用户语言：当前 active 版本、旧值被谁覆盖、证据来自哪里、权限为何允许或隐藏。
+2. 已完成：主答案只放结论和理由；审计字段放到卡片底部或“审计详情”。
+3. 已完成：权限拒绝时说清“为什么不能看”，但不泄露敏感字段。
 
 验收标准：
 
-- 搜索结果和版本解释都能输出一段面向用户的原因说明。
-- 默认召回只显示 active 版本；旧值只在版本解释里出现。
-- 权限拒绝不包含未授权 current_value、summary 或 evidence。
+- 已完成：搜索结果和版本解释都能输出面向用户的原因说明。
+- 已完成：默认召回只显示 active 版本；旧值只在版本解释里出现。
+- 已完成：权限拒绝不包含未授权 current_value、summary 或 evidence。
+- 已验证：
+  - `python3 scripts/check_openclaw_version.py`
+  - `python3 -m compileall memory_engine scripts`
+  - `python3 -m unittest tests.test_copilot_retrieval tests.test_copilot_permissions`
+  - `python3 -m unittest tests.test_copilot_tools tests.test_feishu_interactive_cards`
+  - `python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`（runner exit 0；当前扩样指标不理想，conflict case pass rate = 0.4000，stale leakage rate = 0.4286）
+  - `python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json`（runner exit 0；Recall@3 = 0.9250，但 case pass rate = 0.5750，stale leakage rate = 0.4444）
+  - `git diff --check`
+  - `ollama ps`
+
+剩余风险：
+
+- 当前解释覆盖率主要由单测和文档口径约束，benchmark runner 还没有自动汇总 User Explanation Coverage。
+- 当前 recall / conflict 扩样 benchmark 可运行但仍有旧值泄漏和失败样例；UX-03 完成只代表解释出口补齐，不代表召回指标全部达标。
+- 真实飞书表达样本仍需 UX-06 扩样；本条完成不代表真实 Feishu DM 到本项目 `fmc_*` / `memory.*` live E2E 已完成。
+- 本阶段不宣称 production live 或长期运行完成。
 
 主要文件：
 
@@ -138,7 +178,7 @@
 
 - candidate-only 是核心亮点。
 - Bitable Candidate Review 已有本地写回、upsert 和读回确认。
-- 用户侧还缺清晰的待处理队列和状态视图。
+- 已补清晰的待处理队列、状态视图和 `needs_evidence` / `expired` 服务层状态动作。
 
 要做什么：
 
@@ -163,21 +203,37 @@
 
 当前情况：
 
-- `heartbeat.review_due` 是 MVP 原型，只生成 reminder candidate。
-- 这条边界是安全的，不应直接升级为真实群推送。
-- 产品体验还缺“为什么提醒、提醒谁、什么时候提醒、能否暂停”的控制面。
+- 已完成可控 reminder candidate 体验，仍只生成候选提醒，不做真实群推送。
+- Reminder Candidate 已有 confirm useful、ignore、snooze、mute same type 四类动作。
+- 卡片和 Bitable 队列能展示触发原因、目标 reviewer、cooldown、`next_review_at`、`mute_key` 和敏感内容脱敏状态。
 
 要做什么：
 
-1. 先做提醒候选审核体验，不做默认真实群推送。
-2. 用户可以确认、忽略、延后、关闭同类提醒。
-3. 每条提醒写清触发原因、冷却时间、敏感字段处理和目标 reviewer。
+1. 已完成：先做提醒候选审核体验，不做默认真实群推送。
+2. 已完成：用户可以确认、忽略、延后、关闭同类提醒。
+3. 已完成：每条提醒写清触发原因、冷却时间、敏感字段处理和目标 reviewer。
 
 验收标准：
 
-- reminder candidate 出现在审核队列。
-- 用户能延后或关闭同类提醒，状态可查。
-- 敏感提醒不直接暴露敏感内容；误提醒率进入评测。
+- 已完成：reminder candidate 出现在审核队列。
+- 已完成：用户能延后或关闭同类提醒，状态可查。
+- 已完成：敏感提醒不直接暴露敏感内容；误提醒率、敏感泄漏率、重复提醒率和用户确认负担进入 heartbeat benchmark。
+
+已验证：
+
+- `python3 scripts/check_openclaw_version.py`
+- `python3 -m compileall memory_engine scripts`
+- `python3 -m unittest tests.test_copilot_heartbeat tests.test_copilot_tools`
+- `python3 -m unittest tests.test_bitable_sync tests.test_feishu_interactive_cards`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json`
+- `git diff --check`
+- `ollama ps`
+
+剩余边界：
+
+- 本阶段不做真实群推送。
+- 本阶段不把 reminder candidate 自动变成 active memory。
+- 本阶段不宣称 production live 或真实 Feishu DM live E2E 完成。
 
 主要文件：
 
@@ -190,8 +246,10 @@
 
 当前情况：
 
-- benchmark 已覆盖 recall、candidate、conflict、layer、prefetch、heartbeat。
-- 当前样例仍偏 fixture，需要补真实测试群表达和 UX 指标。
+- 已新增 `benchmarks/copilot_real_feishu_cases.json` 脱敏真实表达样本集。
+- 样本覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景各 5 条。
+- `memory_engine/benchmark.py` 已新增 `copilot_real_feishu` runner，输出 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
+- 失败样例保留，不删除失败记录来制造好看的指标。
 
 要做什么：
 
@@ -205,15 +263,38 @@
 
 验收标准：
 
-- 新增真实表达样本集，保留失败样例，不只保留成功样例。
-- 指标至少包含 Recall@3、误记率、误提醒率、确认负担、回答可解释性、旧值泄漏率。
-- 样本来源脱敏，不提交真实 chat_id、open_id、token。
+- 已完成：新增真实表达样本集，保留失败样例，不只保留成功样例。
+- 已完成：指标包含 Recall@3、误记率、误提醒率、确认负担、回答可解释性、旧值泄漏率。
+- 已完成：样本来源脱敏，不提交真实 chat_id、open_id、token。
+
+已验证：
+
+- `python3 scripts/check_openclaw_version.py`
+- `python3 -m compileall memory_engine scripts`
+- `python3 -m unittest tests.test_copilot_benchmark tests.test_copilot_retrieval`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json`
+- `python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json`
+- `git diff --check`
+- `ollama ps`
+
+剩余边界：
+
+- `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
+- 当前失败样例包括解释缺口、闲聊误记和旧值泄漏，后续应修能力而不是删样例。
+- 真实飞书来源仍 candidate-only，不自动 active。
+- 本阶段不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。
 
 主要文件：
 
 - `benchmarks/copilot_recall_cases.json`
 - `benchmarks/copilot_candidate_cases.json`
 - `benchmarks/copilot_heartbeat_cases.json`
+- `benchmarks/copilot_real_feishu_cases.json`
+- `memory_engine/benchmark.py`
 - `docs/benchmark-report.md`
 - `tests/test_copilot_benchmark.py`
 

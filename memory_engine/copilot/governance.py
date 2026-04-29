@@ -129,6 +129,36 @@ class CopilotGovernance:
             details={"candidate_id": request.candidate_id},
         ).to_response()
 
+    def needs_evidence(self, request: RejectRequest) -> dict[str, Any]:
+        memory = self._memory_by_id(request.candidate_id)
+        if memory is not None:
+            return self._mark_candidate_memory(request, memory, status="needs_evidence", action="needs_evidence")
+
+        version = self._version_by_id(request.candidate_id)
+        if version is not None:
+            return self._mark_candidate_version(request, version, status="needs_evidence", action="needs_evidence")
+
+        return CopilotError(
+            "memory_not_found",
+            "candidate was not found",
+            details={"candidate_id": request.candidate_id},
+        ).to_response()
+
+    def expire(self, request: RejectRequest) -> dict[str, Any]:
+        memory = self._memory_by_id(request.candidate_id)
+        if memory is not None:
+            return self._mark_candidate_memory(request, memory, status="expired", action="expired")
+
+        version = self._version_by_id(request.candidate_id)
+        if version is not None:
+            return self._mark_candidate_version(request, version, status="expired", action="expired")
+
+        return CopilotError(
+            "memory_not_found",
+            "candidate was not found",
+            details={"candidate_id": request.candidate_id},
+        ).to_response()
+
     def explain_versions(self, request: ExplainVersionsRequest) -> dict[str, Any]:
         memory = self._memory_by_id(request.memory_id)
         if memory is None:
@@ -196,6 +226,7 @@ class CopilotGovernance:
                 if item.get("supersedes_version_id")
             ],
             "explanation": self._version_explanation(active_version, versions),
+            "user_explanation": self._user_version_explanation(active_version, versions),
         }
 
     def _insert_raw_event(self, request: CreateCandidateRequest, content: str, ts: int) -> str:
@@ -386,7 +417,9 @@ class CopilotGovernance:
                 "UPDATE memory_versions SET status = 'active' WHERE id = ?",
                 (memory["active_version_id"],),
             )
-        return self._status_response("confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(memory["id"]))
+        return self._status_response(
+            "confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(memory["id"]), actor_id=request.actor_id
+        )
 
     def _confirm_candidate_version(self, request: ConfirmRequest, version: Any) -> dict[str, Any]:
         memory = self._memory_by_id(str(version["memory_id"]))
@@ -426,7 +459,7 @@ class CopilotGovernance:
                 (version["value"], version["reason"], version["source_event_id"], version["id"], ts, memory["id"]),
             )
         response = self._status_response(
-            "confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"])
+            "confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]), actor_id=request.actor_id
         )
         response["superseded"] = {
             "version_id": old_version_id,
@@ -450,7 +483,9 @@ class CopilotGovernance:
                 "UPDATE memory_versions SET status = 'rejected' WHERE id = ?",
                 (memory["active_version_id"],),
             )
-        return self._status_response("rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(memory["id"]))
+        return self._status_response(
+            "rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(memory["id"]), actor_id=request.actor_id
+        )
 
     def _reject_candidate_version(self, request: RejectRequest, version: Any) -> dict[str, Any]:
         memory = self._memory_by_id(str(version["memory_id"]))
@@ -471,9 +506,61 @@ class CopilotGovernance:
                 (ts, memory["id"]),
             )
         response = self._status_response(
-            "rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"])
+            "rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]), actor_id=request.actor_id
         )
         response["memory"]["status"] = "rejected"
+        response["review_status"] = "rejected"
+        return response
+
+    def _mark_candidate_memory(self, request: RejectRequest, memory: Any, *, status: str, action: str) -> dict[str, Any]:
+        if not self._memory_scope_matches(memory, request.scope):
+            return self._scope_error(request.scope)
+        if memory["status"] != "candidate":
+            return self._not_confirmable(request.candidate_id, str(memory["status"]))
+        ts = now_ms()
+        with self.repository.conn:
+            self.repository.conn.execute(
+                "UPDATE memories SET status = ?, updated_by = ?, updated_at = ? WHERE id = ?",
+                (status, request.actor_id, ts, memory["id"]),
+            )
+            self.repository.conn.execute(
+                "UPDATE memory_versions SET status = ? WHERE id = ?",
+                (status, memory["active_version_id"]),
+            )
+        return self._status_response(
+            action,
+            self._memory_by_id(str(memory["id"])),
+            candidate_id=str(memory["id"]),
+            actor_id=request.actor_id,
+        )
+
+    def _mark_candidate_version(self, request: RejectRequest, version: Any, *, status: str, action: str) -> dict[str, Any]:
+        memory = self._memory_by_id(str(version["memory_id"]))
+        if memory is None:
+            return CopilotError("memory_not_found", "candidate parent memory was not found").to_response()
+        if not self._memory_scope_matches(memory, request.scope):
+            return self._scope_error(request.scope)
+        if version["status"] != "candidate":
+            return self._not_confirmable(request.candidate_id, str(version["status"]))
+        ts = now_ms()
+        with self.repository.conn:
+            self.repository.conn.execute(
+                "UPDATE memory_versions SET status = ? WHERE id = ?",
+                (status, version["id"]),
+            )
+            self.repository.conn.execute(
+                "UPDATE memories SET updated_by = ?, updated_at = ? WHERE id = ?",
+                (request.actor_id, ts, memory["id"]),
+            )
+        response = self._status_response(
+            action,
+            self._memory_by_id(str(memory["id"])),
+            candidate_id=str(version["id"]),
+            actor_id=request.actor_id,
+        )
+        response["status"] = status
+        response["memory"]["status"] = status
+        response["review_status"] = _review_status(status)
         return response
 
     def _candidate_response(self, action: str, scope: str, candidate: dict[str, Any]) -> dict[str, Any]:
@@ -486,29 +573,45 @@ class CopilotGovernance:
             "memory_id": candidate["memory_id"],
             "version_id": candidate["version_id"],
             "status": candidate["status"],
+            "review_status": candidate["review_status"],
+            "source_type": candidate["source_type"],
+            "risk_level": candidate["risk_level"],
+            "conflict_status": candidate["conflict_status"],
             "risk_flags": candidate["risk_flags"],
             "conflict": candidate["conflict"],
             "recommended_action": candidate["recommended_action"],
+            "review_queue": candidate["review_queue"],
             "evidence": candidate["evidence"],
             "memory": candidate["memory"],
             "quote": candidate["evidence"]["quote"],
         }
 
-    def _status_response(self, action: str, memory: Any, *, candidate_id: str) -> dict[str, Any]:
+    def _status_response(self, action: str, memory: Any, *, candidate_id: str, actor_id: str | None = None) -> dict[str, Any]:
         evidence = self._latest_evidence(str(memory["id"]), memory["active_version_id"])
         version = self._version_no(str(memory["id"]))
+        status = str(memory["status"])
+        ts = int(memory["updated_at"] or 0)
         return {
             "ok": True,
             "action": action,
             "candidate_id": candidate_id,
             "memory_id": str(memory["id"]),
-            "status": str(memory["status"]),
+            "status": status,
+            "review_status": _review_status(status),
+            "last_handler": actor_id or memory["updated_by"],
+            "last_handled_at": ts,
+            "review_queue": {
+                "review_status": _review_status(status),
+                "last_handler": actor_id or memory["updated_by"],
+                "last_handled_at": ts,
+                "state_mutation": action,
+            },
             "memory": {
                 "memory_id": str(memory["id"]),
                 "type": str(memory["type"]),
                 "subject": str(memory["subject"]),
                 "current_value": str(memory["current_value"]),
-                "status": str(memory["status"]),
+                "status": status,
                 "version_id": memory["active_version_id"],
                 "version": version,
                 "summary": memory["reason"],
@@ -560,11 +663,26 @@ class CopilotGovernance:
             "confidence": extracted.confidence,
             "importance": extracted.importance,
             "status": status,
+            "review_status": _review_status(status),
+            "source_type": evidence.get("source_type"),
+            "risk_level": _risk_level(risk_flags),
+            "conflict_status": _conflict_status(conflict),
             "version": version,
             "evidence": evidence,
             "risk_flags": risk_flags,
             "conflict": conflict,
             "recommended_action": _recommended_action(risk_flags, conflict),
+            "review_queue": {
+                "review_status": _review_status(status),
+                "source_type": evidence.get("source_type"),
+                "risk_level": _risk_level(risk_flags),
+                "conflict_status": _conflict_status(conflict),
+                "queue_views": _queue_views(risk_flags, conflict),
+                "reviewer": None,
+                "last_handler": None,
+                "last_handled_at": None,
+                "state_mutation": "none",
+            },
             "memory": asdict(extracted),
         }
 
@@ -737,6 +855,29 @@ class CopilotGovernance:
             )
         return f"当前有效值是 v{active_version['version']}：{active_version['value']}。目前没有被覆盖的旧版本。"
 
+    def _user_version_explanation(
+        self, active_version: dict[str, Any] | None, versions: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        old_versions = [item for item in versions if item.get("status") == "superseded"]
+        if active_version is None:
+            return {
+                "kind": "memory_version_chain",
+                "current_version": None,
+                "old_versions": [_old_version_summary(item, active_version=None) for item in old_versions],
+                "override_reason": "当前没有 active 版本，这条记忆不会进入默认搜索结果。",
+                "evidence_summary": "没有可采用的当前版本证据。",
+                "search_boundary": "默认搜索只返回当前 active 版本；非 active 版本只用于版本解释和审计追溯。",
+            }
+
+        return {
+            "kind": "memory_version_chain",
+            "current_version": _current_version_summary(active_version),
+            "old_versions": [_old_version_summary(item, active_version=active_version) for item in old_versions],
+            "override_reason": _override_reason(active_version, old_versions),
+            "evidence_summary": _version_evidence_summary(active_version, old_versions),
+            "search_boundary": "默认搜索只返回当前 active 版本；旧版本不会作为当前答案返回。",
+        }
+
     def _evidence_error(self, memory_id: str, version_id: str | None) -> dict[str, Any] | None:
         row = self.repository.conn.execute(
             """
@@ -787,6 +928,74 @@ def _has_candidate_signal(text: str) -> bool:
     if contains_any(stripped, DECISION_WORDS + WORKFLOW_WORDS + PREFERENCE_WORDS + OVERRIDE_WORDS):
         return True
     return any(stripped.startswith(f"{prefix}:") or stripped.startswith(f"{prefix}：") for prefix in _PREFIX_SIGNALS)
+
+
+def _current_version_summary(version: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "version_id": version.get("version_id"),
+        "version": version.get("version"),
+        "status": version.get("status"),
+        "value": version.get("value"),
+        "reason": version.get("reason"),
+        "evidence": _compact_evidence(version),
+        "explanation": f"当前采用 v{version.get('version')}，因为它是已经确认的 active 版本。",
+    }
+
+
+def _old_version_summary(version: dict[str, Any], *, active_version: dict[str, Any] | None) -> dict[str, Any]:
+    active_version_no = active_version.get("version") if active_version else None
+    if active_version_no is None:
+        covered_by = None
+    else:
+        covered_by = f"v{active_version_no}"
+    return {
+        "version_id": version.get("version_id"),
+        "version": version.get("version"),
+        "status": version.get("status"),
+        "value": version.get("value"),
+        "reason": version.get("reason"),
+        "evidence": _compact_evidence(version),
+        "covered_by": covered_by,
+        "inactive_reason": version.get("inactive_reason")
+        or "旧版本只保留在版本链里，用于追溯，不会进入默认搜索结果。",
+    }
+
+
+def _override_reason(active_version: dict[str, Any], old_versions: list[dict[str, Any]]) -> str:
+    if not old_versions:
+        return f"当前采用 v{active_version.get('version')}，因为它是已确认的 active 版本，目前没有旧值被覆盖。"
+    old_values = "、".join(str(item.get("value")) for item in old_versions[:3] if item.get("value"))
+    if old_values:
+        return (
+            f"当前采用 v{active_version.get('version')}：{active_version.get('value')}，"
+            f"因为新证据已经覆盖旧结论：{old_values}。"
+        )
+    return f"当前采用 v{active_version.get('version')}，因为新证据已经覆盖旧版本。"
+
+
+def _version_evidence_summary(active_version: dict[str, Any], old_versions: list[dict[str, Any]]) -> str:
+    active_quote = _evidence_quote(active_version)
+    if old_versions:
+        old_quote = _evidence_quote(old_versions[0])
+        if old_quote:
+            return f"当前版本证据：{active_quote or active_version.get('value')}；旧版本证据：{old_quote}"
+    return f"当前版本证据：{active_quote or active_version.get('value')}"
+
+
+def _compact_evidence(version: dict[str, Any]) -> dict[str, Any]:
+    evidence = version.get("evidence") if isinstance(version.get("evidence"), dict) else {}
+    return {
+        "source_type": evidence.get("source_type") or "unknown",
+        "source_id": evidence.get("source_id"),
+        "quote": evidence.get("quote"),
+        "summary": _evidence_quote(version) or "没有可展示的证据摘要。",
+    }
+
+
+def _evidence_quote(version: dict[str, Any]) -> str:
+    evidence = version.get("evidence") if isinstance(version.get("evidence"), dict) else {}
+    quote = evidence.get("quote")
+    return str(quote).strip() if quote else ""
 
 
 def _context_for_auto_confirm(current_context: dict[str, Any]) -> dict[str, Any]:
@@ -869,3 +1078,39 @@ def _recommended_action(risk_flags: list[str], conflict: dict[str, Any]) -> str:
     if conflict.get("has_conflict"):
         return "manual_review_conflict"
     return "review_candidate"
+
+
+def _review_status(status: str) -> str:
+    if status == "candidate":
+        return "pending"
+    if status == "active":
+        return "confirmed"
+    if status in {"rejected", "needs_evidence", "expired"}:
+        return status
+    return status
+
+
+def _risk_level(risk_flags: list[Any]) -> str:
+    flags = {str(flag) for flag in risk_flags}
+    if "sensitive_content" in flags:
+        return "high"
+    if flags & {"conflict_candidate", "low_confidence", "duplicate", "override_intent"}:
+        return "medium"
+    return "low"
+
+
+def _conflict_status(conflict: dict[str, Any]) -> str:
+    if not conflict.get("has_conflict"):
+        return "no_conflict"
+    if conflict.get("old_status") == "active":
+        return "overrides_active"
+    return "possible_conflict"
+
+
+def _queue_views(risk_flags: list[str], conflict: dict[str, Any]) -> list[str]:
+    views = ["待我审核"]
+    if conflict.get("has_conflict"):
+        views.append("冲突需判断")
+    if _risk_level(risk_flags) == "high" or "low_confidence" in {str(flag) for flag in risk_flags}:
+        views.append("高风险暂不建议确认")
+    return views

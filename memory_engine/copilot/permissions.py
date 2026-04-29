@@ -9,6 +9,9 @@ _SENSITIVE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("api_key", re.compile(r"(?i)\b(api[_-]?key|apikey)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{8,}")),
     ("app_secret", re.compile(r"(?i)\b(app[_-]?secret|secret)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{8,}")),
     ("password", re.compile(r"(?i)\b(password|passwd|pwd)\s*[:=]\s*['\"]?\S{6,}")),
+    ("password", re.compile(r"(?i)(密码|口令)\s*(是|为|:|=)\s*['\"]?\S{6,}")),
+    ("refresh_token", re.compile(r"(?i)\brefresh[_-]?token\s*[:=]\s*['\"]?[A-Za-z0-9._-]{8,}")),
+    ("private_key", re.compile(r"(?i)(私钥|private[_ -]?key)[^，。\s]*\s+\S*\.ssh/\S+")),
     ("bearer_token", re.compile(r"(?i)\bauthorization\s*[:=]\s*bearer\s+[A-Za-z0-9._-]{8,}")),
     ("openai_style_key", re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b")),
     ("slack_style_token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{12,}\b")),
@@ -46,8 +49,7 @@ def check_scope_access(
 
     permission_payload = context.get("permission")
     if permission_payload is None:
-        # Auto-generate default permission context for OpenClaw Agent calls
-        permission_payload = _default_permission_context(action, scope, context)
+        return _permission_error("missing_permission_context", "current_context.permission is required", action=action)
 
     try:
         permission = PermissionContext.from_payload(permission_payload)
@@ -140,7 +142,9 @@ def check_scope_access(
         )
 
     roles = {role.strip().lower() for role in permission.actor.roles}
-    if action in {"memory.confirm", "memory.reject"} and not roles.intersection(REVIEW_ROLES):
+    if action in {"memory.confirm", "memory.reject", "memory.needs_evidence", "memory.expire"} and not roles.intersection(
+        REVIEW_ROLES
+    ):
         return _permission_error(
             "review_role_required", "reviewer, owner, or admin role is required", permission=permission, action=action
         )

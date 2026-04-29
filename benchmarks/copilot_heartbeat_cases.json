@@ -199,7 +199,7 @@
     ],
     "days_since_recall": 30,
     "expected_trigger": "unused_memory",
-    "expected_subject": "权限变更审批",
+    "expected_subject": "权限变更",
     "failure_debug_hint": "超过 14 天未被召回的权限类记忆应生成 unused_memory 提醒候选。"
   },
   {
@@ -210,7 +210,7 @@
       {"content": "数据库连接密码是 P@ssw0rd_2026! 只能在 .env 中配置。"}
     ],
     "expected_trigger": "important_not_recalled",
-    "expected_subject": "数据库运维安全",
+    "expected_subject": "数据存储",
     "forbidden_value": "P@ssw0rd_2026!",
     "failure_debug_hint": "密码类敏感信息在 reminder 中必须脱敏，不能出现明文密码。"
   },
@@ -222,7 +222,7 @@
       {"content": "SSH 私钥路径 ~/.ssh/id_rsa_produ，连接 prod-server 时使用。"}
     ],
     "expected_trigger": "important_not_recalled",
-    "expected_subject": "SSH 登录配置",
+    "expected_subject": "SSH",
     "forbidden_value": "~/.ssh/id_rsa_produ",
     "failure_debug_hint": "私钥路径类敏感信息在 reminder 中应脱敏，不能暴露具体路径。"
   },
@@ -234,7 +234,7 @@
       {"content": "飞书 OAuth refresh_token=rt_xk8NpQw2zLmVbC3dF5gH 只能存在服务端。"}
     ],
     "expected_trigger": "important_not_recalled",
-    "expected_subject": "飞书 OAuth 配置",
+    "expected_subject": "飞书 OAuth",
     "forbidden_value": "rt_xk8NpQw2zLmVbC3dF5gH",
     "failure_debug_hint": "OAuth refresh_token 在 reminder 中必须完全脱敏，不能泄漏任何片段。"
   }

@@ -100,8 +100,41 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
         return _denied_surface_payload("copilot_candidate_review", "候选审核不可用", candidate_response, bridge)
 
     candidate = candidate_response.get("candidate") or {}
+    memory = candidate_response.get("memory") if isinstance(candidate_response.get("memory"), dict) else {}
     conflict = candidate_response.get("conflict") or candidate.get("conflict") or {}
-    evidence = candidate_response.get("evidence") or candidate.get("evidence") or {}
+    evidence = candidate_response.get("evidence") or candidate.get("evidence") or memory.get("evidence") or {}
+    risk_flags = list(candidate_response.get("risk_flags") or candidate.get("risk_flags") or [])
+    permission_decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    actor = permission_decision.get("actor") if isinstance(permission_decision.get("actor"), dict) else {}
+    queue_views = _queue_views(risk_flags, conflict)
+    buttons = []
+    if _review_actions_allowed(bridge):
+        buttons = [
+            {
+                "action": "confirm",
+                "label": "确认保存",
+                "required_for_mvp": True,
+                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
+            },
+            {
+                "action": "reject",
+                "label": "拒绝候选",
+                "required_for_mvp": True,
+                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
+            },
+            {
+                "action": "needs_evidence",
+                "label": "要求补证据",
+                "required_for_mvp": True,
+                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
+            },
+            {
+                "action": "expire",
+                "label": "标记过期",
+                "required_for_mvp": True,
+                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
+            },
+        ]
     return {
         "surface": "copilot_candidate_review",
         "title": "待确认记忆",
@@ -109,12 +142,21 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
         "memory_id": candidate_response.get("memory_id") or candidate.get("memory_id"),
         "version_id": candidate_response.get("version_id") or candidate.get("version_id"),
         "status": candidate_response.get("status") or candidate.get("status"),
-        "type": candidate.get("type"),
-        "subject": candidate.get("subject"),
-        "new_value": candidate.get("current_value"),
-        "summary": candidate.get("summary"),
+        "review_status": candidate_response.get("review_status") or candidate.get("review_status") or "pending",
+        "source_type": candidate_response.get("source_type") or evidence.get("source_type"),
+        "risk_level": candidate_response.get("risk_level") or _risk_level(risk_flags),
+        "conflict_status": candidate_response.get("conflict_status") or _conflict_status(conflict),
+        "queue_views": queue_views,
+        "suggested_queue_view": queue_views[0] if queue_views else "待我审核",
+        "reviewer": _actor_id(actor),
+        "last_handler": candidate_response.get("last_handler"),
+        "last_handled_at": candidate_response.get("last_handled_at"),
+        "type": candidate.get("type") or memory.get("type"),
+        "subject": candidate.get("subject") or memory.get("subject"),
+        "new_value": candidate.get("current_value") or memory.get("current_value"),
+        "summary": candidate.get("summary") or memory.get("summary"),
         "evidence": evidence,
-        "risk_flags": list(candidate_response.get("risk_flags") or candidate.get("risk_flags") or []),
+        "risk_flags": risk_flags,
         "recommended_action": candidate_response.get("recommended_action") or candidate.get("recommended_action"),
         "conflict": {
             "has_conflict": bool(conflict.get("has_conflict")),
@@ -123,13 +165,75 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
             "old_status": conflict.get("old_status"),
             "reason": conflict.get("reason"),
         },
-        "buttons": [
-            {"action": "confirm", "label": "确认保存", "required_for_mvp": True},
-            {"action": "reject", "label": "拒绝候选", "required_for_mvp": True},
-            {"action": "versions", "label": "查看版本链", "required_for_mvp": False, "mode": "dry_run"},
-            {"action": "source", "label": "查看来源", "required_for_mvp": False, "mode": "dry_run"},
-            {"action": "needs_review", "label": "标记需要复核", "required_for_mvp": False, "mode": "dry_run"},
-        ],
+        "user_content": {
+            "decision": candidate.get("current_value") or memory.get("current_value"),
+            "source": _source_summary(evidence),
+            "evidence_quote": evidence.get("quote") if isinstance(evidence, dict) else None,
+            "risk_level": candidate_response.get("risk_level") or _risk_level(risk_flags),
+            "conflict_summary": _conflict_summary(conflict),
+            "recommended_action": candidate_response.get("recommended_action") or candidate.get("recommended_action"),
+        },
+        "audit_details": _audit_details(bridge),
+        "buttons": buttons,
+        "state_mutation": "none",
+        **bridge,
+    }
+
+
+def search_result_payload(search_response: dict[str, Any]) -> dict[str, Any]:
+    """Build the stable IA payload for a memory.search result card."""
+
+    bridge = _bridge_payload(search_response)
+    if _is_permission_denied(search_response, bridge):
+        denied = _denied_surface_payload("copilot_search_results", "搜索结果不可用", search_response, bridge)
+        denied["user_content"] = {"results": [], "empty_state": "permission_denied"}
+        denied["audit_details"] = _audit_details(bridge)
+        return denied
+
+    rows = search_response.get("results") if isinstance(search_response.get("results"), list) else []
+    user_results = []
+    buttons = []
+    for index, item in enumerate(rows[:3], start=1):
+        if not isinstance(item, dict):
+            continue
+        memory_id = item.get("memory_id")
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), list) else []
+        first_evidence = evidence[0] if evidence and isinstance(evidence[0], dict) else {}
+        user_results.append(
+            {
+                "rank": index,
+                "memory_id": memory_id,
+                "subject": item.get("subject"),
+                "current_conclusion": item.get("current_value"),
+                "evidence_quote": first_evidence.get("quote"),
+                "version_status": item.get("status") or "active",
+                "version": item.get("version"),
+                "superseded_filtered": True,
+                "rank_reason": _rank_reason(item),
+                "explanation": _search_result_explanation(item, first_evidence),
+            }
+        )
+        if memory_id:
+            buttons.append(
+                {
+                    "action": "versions",
+                    "label": "解释版本",
+                    "required_for_mvp": True,
+                    "memory_id": memory_id,
+                }
+            )
+
+    return {
+        "surface": "copilot_search_results",
+        "title": "当前有效记忆",
+        "query": search_response.get("query"),
+        "status": "found" if user_results else "not_found",
+        "user_content": {
+            "results": user_results,
+            "empty_state": None if user_results else "没有找到可直接采用的当前有效结论。",
+        },
+        "audit_details": _audit_details(bridge),
+        "buttons": buttons,
         "state_mutation": "none",
         **bridge,
     }
@@ -143,6 +247,11 @@ def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str
         return _denied_surface_payload("copilot_version_chain", "记忆版本链不可用", explain_versions_response, bridge)
 
     versions = explain_versions_response.get("versions") or []
+    active = explain_versions_response.get("active_version") if isinstance(explain_versions_response.get("active_version"), dict) else {}
+    old_versions = [item for item in versions if isinstance(item, dict) and not item.get("is_active")]
+    user_explanation = explain_versions_response.get("user_explanation")
+    if not isinstance(user_explanation, dict):
+        user_explanation = _version_user_explanation_fallback(active, old_versions, explain_versions_response)
     return {
         "surface": "copilot_version_chain",
         "title": "记忆版本链",
@@ -155,10 +264,61 @@ def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str
         "versions": versions,
         "supersedes": explain_versions_response.get("supersedes") or [],
         "explanation": explain_versions_response.get("explanation"),
-        "buttons": [
-            {"action": "source", "label": "查看来源", "required_for_mvp": False, "mode": "dry_run"},
-            {"action": "needs_review", "label": "标记需要复核", "required_for_mvp": False, "mode": "dry_run"},
-        ],
+        "user_explanation": user_explanation,
+        "user_content": {
+            "current_version": user_explanation.get("current_version") or active,
+            "old_versions": user_explanation.get("old_versions") or old_versions,
+            "override_reason": user_explanation.get("override_reason") or explain_versions_response.get("explanation"),
+            "evidence_summary": user_explanation.get("evidence_summary"),
+            "search_boundary": user_explanation.get("search_boundary"),
+            "timeline": [_version_timeline_item(item) for item in versions if isinstance(item, dict)],
+        },
+        "audit_details": _audit_details(bridge),
+        "buttons": [],
+        "state_mutation": "none",
+        **bridge,
+    }
+
+
+def prefetch_context_payload(prefetch_response: dict[str, Any]) -> dict[str, Any]:
+    """Build the stable IA payload for a memory.prefetch context card."""
+
+    bridge = _bridge_payload(prefetch_response)
+    if _is_permission_denied(prefetch_response, bridge):
+        denied = _denied_surface_payload("copilot_prefetch_context", "任务前上下文不可用", prefetch_response, bridge)
+        denied["user_content"] = {
+            "task": prefetch_response.get("task"),
+            "rules": [],
+            "risks": [],
+            "deadlines": [],
+            "missing_information": ["权限不足，无法生成任务前上下文。"],
+            "raw_events_included": False,
+            "superseded_filtered": True,
+        }
+        denied["audit_details"] = _audit_details(bridge)
+        return denied
+
+    pack = prefetch_response.get("context_pack") if isinstance(prefetch_response.get("context_pack"), dict) else {}
+    memories = pack.get("relevant_memories") if isinstance(pack.get("relevant_memories"), list) else []
+    risks = pack.get("risks") if isinstance(pack.get("risks"), list) else []
+    deadlines = pack.get("deadlines") if isinstance(pack.get("deadlines"), list) else []
+    return {
+        "surface": "copilot_prefetch_context",
+        "title": "任务前上下文",
+        "task": prefetch_response.get("task"),
+        "status": "ready" if memories else "empty",
+        "user_content": {
+            "task": prefetch_response.get("task"),
+            "summary": pack.get("summary"),
+            "rules": [_compact_context_item(item) for item in memories[:5] if isinstance(item, dict)],
+            "risks": [_compact_context_item(item) for item in risks[:5] if isinstance(item, dict)],
+            "deadlines": [_compact_context_item(item) for item in deadlines[:5] if isinstance(item, dict)],
+            "missing_information": [] if memories else ["没有找到可带入本次任务的 active 记忆。"],
+            "raw_events_included": bool(pack.get("raw_events_included")),
+            "superseded_filtered": bool(pack.get("stale_superseded_filtered", True)),
+        },
+        "audit_details": _audit_details(bridge),
+        "buttons": [],
         "state_mutation": "none",
         **bridge,
     }
@@ -184,6 +344,14 @@ def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
         "requested_action": permission_trace.get("requested_action") or "heartbeat.review_due",
     }
     is_withheld = reminder.get("status") == "withheld"
+    actions = reminder.get("actions") if isinstance(reminder.get("actions"), list) else []
+    if not actions:
+        actions = [
+            {"action": "confirm_useful", "label": "确认提醒有用", "mode": "dry_run"},
+            {"action": "ignore", "label": "忽略本次", "mode": "dry_run"},
+            {"action": "snooze", "label": "延后", "mode": "dry_run"},
+            {"action": "mute_same_type", "label": "关闭同类提醒", "mode": "dry_run"},
+        ]
     return {
         "surface": "copilot_reminder_candidate",
         "title": "提醒候选",
@@ -205,11 +373,9 @@ def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
         "permission_reason": permission_decision["reason_code"],
         "risk_flags": list(reminder.get("risk_flags") or []),
         "recommended_action": reminder.get("recommended_action") or "review_reminder_candidate",
-        "buttons": [
-            {"action": "confirm_reminder", "label": "确认提醒", "required_for_mvp": False, "mode": "dry_run"},
-            {"action": "dismiss_reminder", "label": "暂不提醒", "required_for_mvp": False, "mode": "dry_run"},
-            {"action": "source", "label": "查看来源", "required_for_mvp": False, "mode": "dry_run"},
-        ],
+        "buttons": [dict(action) for action in actions],
+        "next_review_at": reminder.get("next_review_at"),
+        "mute_key": reminder.get("mute_key"),
         "state_mutation": "none",
     }
 
@@ -222,16 +388,22 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
     conflict = payload["conflict"]
     fields = [
         ("状态", str(payload.get("status") or "")),
+        ("审核状态", str(payload.get("review_status") or "")),
+        ("队列视图", " / ".join(payload.get("queue_views") or [])),
         ("主题", str(payload.get("subject") or "")),
         ("新值", str(payload.get("new_value") or "")),
+        ("来源", str(payload.get("source_type") or "")),
         ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
-        ("风险", ", ".join(payload.get("risk_flags") or []) or "无"),
+        ("风险", f"{payload.get('risk_level') or 'low'}；{', '.join(payload.get('risk_flags') or []) or '无'}"),
+        ("冲突", str(payload.get("conflict_status") or "")),
         ("操作建议", str(payload.get("recommended_action") or "")),
     ]
+    if payload.get("reviewer"):
+        fields.append(("reviewer", str(payload["reviewer"])))
     if conflict["has_conflict"]:
         fields.append(("覆盖旧值", str(conflict.get("old_value") or "")))
 
-    return {
+    card = {
         "config": {"wide_screen_mode": True},
         "header": {
             "template": "orange" if conflict["has_conflict"] else "turquoise",
@@ -248,23 +420,93 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
                     for label, value in fields
                 ],
             },
-            {
-                "tag": "action",
-                "actions": [
-                    _button(
-                        "确认保存",
-                        "primary",
-                        {CARD_ACTION_KEY: "confirm", "candidate_id": str(payload.get("candidate_id") or "")},
-                    ),
-                    _button(
-                        "拒绝候选",
-                        "danger",
-                        {CARD_ACTION_KEY: "reject", "candidate_id": str(payload.get("candidate_id") or "")},
-                    ),
-                ],
-            },
+            _audit_block(payload.get("audit_details") or {}),
         ],
     }
+    actions = []
+    for button in payload.get("buttons") or []:
+        action = button.get("action")
+        if action == "confirm":
+            actions.append(
+                _button("确认保存", "primary", {CARD_ACTION_KEY: "confirm", "candidate_id": str(payload.get("candidate_id") or "")})
+            )
+        elif action == "reject":
+            actions.append(
+                _button("拒绝候选", "danger", {CARD_ACTION_KEY: "reject", "candidate_id": str(payload.get("candidate_id") or "")})
+            )
+        elif action == "needs_evidence":
+            actions.append(
+                _button(
+                    "要求补证据",
+                    "default",
+                    {CARD_ACTION_KEY: "needs_evidence", "candidate_id": str(payload.get("candidate_id") or "")},
+                )
+            )
+        elif action == "expire":
+            actions.append(
+                _button(
+                    "标记过期",
+                    "default",
+                    {CARD_ACTION_KEY: "expire", "candidate_id": str(payload.get("candidate_id") or "")},
+                )
+            )
+    if actions:
+        card["elements"].append({"tag": "action", "actions": actions})
+    return card
+
+
+def build_search_result_card(search_response: dict[str, Any]) -> dict[str, Any]:
+    payload = search_result_payload(search_response)
+    if payload.get("status") == "permission_denied":
+        return _permission_denied_card("当前有效记忆", payload)
+
+    results = payload["user_content"]["results"]
+    if not results:
+        fields = [("状态", payload["user_content"]["empty_state"])]
+    else:
+        fields = []
+        for item in results:
+            fields.extend(
+                [
+                    (f"当前结论 {item['rank']}", str(item.get("current_conclusion") or "")),
+                    ("为什么采用", str(item.get("explanation") or "")),
+                    ("证据", str(item.get("evidence_quote") or "")),
+                    ("版本状态", f"{item.get('version_status') or 'active'}；已过滤旧值"),
+                    ("排序理由", str(item.get("rank_reason") or "")),
+                ]
+            )
+    card = {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "blue",
+            "title": {"tag": "plain_text", "content": "当前有效记忆"},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label not in {"当前结论 1", "当前结论 2", "当前结论 3", "为什么采用", "证据", "排序理由"},
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields[:12]
+                ],
+            }
+        ],
+    }
+    actions = [
+        _button(
+            str(button["label"]),
+            "default",
+            {CARD_ACTION_KEY: "versions", "memory_id": str(button.get("memory_id") or "")},
+        )
+        for button in (payload.get("buttons") or [])[:3]
+        if button.get("action") == "versions" and button.get("memory_id")
+    ]
+    if actions:
+        card["elements"].append({"tag": "action", "actions": actions})
+    card["elements"].append(_audit_block(payload.get("audit_details") or {}))
+    return card
 
 
 def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
@@ -289,7 +531,7 @@ def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
     if payload.get("due_at"):
         fields.append(("截止时间", str(payload["due_at"])))
 
-    return {
+    card = {
         "config": {"wide_screen_mode": True},
         "header": {
             "template": "purple" if payload.get("risk_flags") else "wathet",
@@ -312,6 +554,29 @@ def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
             },
         ],
     }
+    actions = []
+    for button in payload.get("buttons") or []:
+        action = button.get("action")
+        label = str(button.get("label") or action or "")
+        if action in {"confirm_useful", "ignore", "snooze", "mute_same_type"}:
+            actions.append(
+                _button(
+                    label,
+                    "primary" if action == "confirm_useful" else "default",
+                    {
+                        CARD_ACTION_KEY: str(action),
+                        "reminder_id": str(payload.get("reminder_id") or ""),
+                        "memory_id": str(payload.get("memory_id") or ""),
+                        "scope": str(payload.get("scope") or ""),
+                        "subject": str(payload.get("subject") or ""),
+                        "trigger": str(payload.get("trigger") or ""),
+                        "review_surface": "reminder_candidate",
+                    },
+                )
+            )
+    if actions:
+        card["elements"].append({"tag": "action", "actions": actions})
+    return card
 
 
 def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[str, Any]:
@@ -319,11 +584,21 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
     if payload.get("status") == "permission_denied":
         return _permission_denied_card("记忆版本链", payload)
 
+    user_content = payload.get("user_content") if isinstance(payload.get("user_content"), dict) else {}
+    current_version = user_content.get("current_version") if isinstance(user_content.get("current_version"), dict) else {}
     version_lines = []
-    for item in payload["versions"]:
+    for item in user_content.get("timeline") or payload["versions"]:
         marker = "当前" if item.get("is_active") else "旧值"
         inactive = f"；{item['inactive_reason']}" if item.get("inactive_reason") else ""
-        version_lines.append(f"v{item['version']} [{item['status']}] {marker}：{item['value']}{inactive}")
+        version = item.get("version") or item.get("version_no")
+        version_lines.append(f"v{version} [{item.get('status')}] {marker}：{item.get('value')}{inactive}")
+
+    explanation_fields = [
+        ("当前结论", str(current_version.get("value") or (payload.get("active_version") or {}).get("value") or "")),
+        ("为什么采用", str(user_content.get("override_reason") or payload.get("explanation") or "")),
+        ("证据说明", str(user_content.get("evidence_summary") or "")),
+        ("搜索边界", str(user_content.get("search_boundary") or "默认搜索只返回当前 active 版本。")),
+    ]
 
     return {
         "config": {"wide_screen_mode": True},
@@ -332,6 +607,16 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
             "title": {"tag": "plain_text", "content": "记忆版本链"},
         },
         "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label == "搜索边界",
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in explanation_fields
+                ],
+            },
             {
                 "tag": "div",
                 "fields": [
@@ -349,10 +634,44 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
                 "tag": "div",
                 "text": {"tag": "lark_md", "content": "\n".join(version_lines)},
             },
+            _audit_block(payload.get("audit_details") or {}),
+        ],
+    }
+
+
+def build_prefetch_context_card(prefetch_response: dict[str, Any]) -> dict[str, Any]:
+    payload = prefetch_context_payload(prefetch_response)
+    if payload.get("status") == "permission_denied":
+        return _permission_denied_card("任务前上下文", payload)
+
+    content = payload["user_content"]
+    fields = [
+        ("任务", str(content.get("task") or "")),
+        ("上下文摘要", str(content.get("summary") or "")),
+        ("规则", _context_lines(content.get("rules") or [])),
+        ("关键风险", _context_lines(content.get("risks") or []) or "无"),
+        ("deadline / owner", _context_lines(content.get("deadlines") or []) or "无"),
+        ("缺失信息", "\n".join(content.get("missing_information") or []) or "无"),
+        ("过滤状态", "不包含原始事件；superseded 旧值已过滤"),
+    ]
+    return {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "wathet",
+            "title": {"tag": "plain_text", "content": "任务前上下文"},
+        },
+        "elements": [
             {
                 "tag": "div",
-                "text": {"tag": "lark_md", "content": str(payload.get("explanation") or "")},
+                "fields": [
+                    {
+                        "is_short": label in {"任务", "deadline / owner"},
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                ],
             },
+            _audit_block(payload.get("audit_details") or {}),
         ],
     }
 
@@ -428,6 +747,208 @@ def build_card_from_text(text: str) -> dict[str, Any]:
 
 def _headline(text: str) -> str:
     return next((line.strip() for line in text.splitlines() if line.strip()), "")
+
+
+def _audit_details(bridge: dict[str, Any]) -> dict[str, Any]:
+    decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    return {
+        "request_id": bridge.get("request_id"),
+        "trace_id": bridge.get("trace_id"),
+        "permission_decision": decision,
+        "permission_reason": bridge.get("permission_reason") or decision.get("reason_code"),
+    }
+
+
+def _review_actions_allowed(bridge: dict[str, Any]) -> bool:
+    decision = bridge.get("permission_decision")
+    if not isinstance(decision, dict) or not decision:
+        return True
+    if decision.get("decision") != "allow":
+        return False
+    actor = decision.get("actor") if isinstance(decision.get("actor"), dict) else {}
+    roles = actor.get("roles") if isinstance(actor.get("roles"), list) else []
+    return bool({"reviewer", "owner", "admin"} & {str(role) for role in roles})
+
+
+def _source_summary(evidence: dict[str, Any]) -> str:
+    if not isinstance(evidence, dict) or not evidence:
+        return ""
+    source_type = evidence.get("source_type") or "source"
+    source_id = evidence.get("source_id")
+    return f"{source_type}:{source_id}" if source_id else str(source_type)
+
+
+def _risk_level(flags: list[Any]) -> str:
+    flag_set = {str(flag) for flag in flags}
+    if "sensitive_content" in flag_set:
+        return "high"
+    if flag_set & {"conflict_candidate", "manual_review_conflict", "needs_review"}:
+        return "medium"
+    return "low"
+
+
+def _conflict_status(conflict: dict[str, Any]) -> str:
+    if not isinstance(conflict, dict) or not conflict.get("has_conflict"):
+        return "no_conflict"
+    if conflict.get("old_status") == "active":
+        return "overrides_active"
+    return "possible_conflict"
+
+
+def _queue_views(flags: list[Any], conflict: dict[str, Any]) -> list[str]:
+    views = ["待我审核"]
+    if isinstance(conflict, dict) and conflict.get("has_conflict"):
+        views.append("冲突需判断")
+    if _risk_level(flags) == "high" or "low_confidence" in {str(flag) for flag in flags}:
+        views.append("高风险暂不建议确认")
+    return views
+
+
+def _actor_id(actor: dict[str, Any]) -> str | None:
+    for key in ("user_id", "open_id"):
+        value = actor.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _conflict_summary(conflict: dict[str, Any]) -> str:
+    if not isinstance(conflict, dict) or not conflict.get("has_conflict"):
+        return "无冲突"
+    old_value = conflict.get("old_value")
+    if old_value:
+        return f"将覆盖现有 active 记忆：{old_value}"
+    return "存在 active 记忆冲突，需要 reviewer 判断"
+
+
+def _rank_reason(item: dict[str, Any]) -> str:
+    matched = item.get("matched_via") if isinstance(item.get("matched_via"), list) else []
+    why = item.get("why_ranked") if isinstance(item.get("why_ranked"), dict) else {}
+    if matched:
+        return "；".join(_matched_reason_label(value) for value in matched[:3])
+    if why.get("reason"):
+        return _why_ranked_label(str(why["reason"]))
+    if item.get("score") is not None:
+        return f"综合相关度 {item.get('score')}"
+    return "按当前 active 记忆相关度排序"
+
+
+def _matched_reason_label(value: Any) -> str:
+    labels = {
+        "active": "命中当前 active 记忆",
+        "evidence": "证据内容与问题相关",
+        "semantic": "语义相似",
+        "keyword": "关键词匹配",
+        "keyword_index": "关键词匹配",
+        "subject": "主题匹配",
+        "vector": "语义相似",
+        "superseded_filtered": "旧版本已过滤",
+    }
+    key = str(value)
+    return labels.get(key, f"匹配线索：{key}")
+
+
+def _why_ranked_label(reason: str) -> str:
+    labels = {
+        "active": "命中当前 active 记忆",
+        "evidence": "证据内容与问题相关",
+        "superseded_filtered": "旧版本已过滤",
+        "default_search_excludes_non_active_memory": "默认搜索只返回当前 active 版本，旧值已过滤",
+    }
+    return labels.get(reason, reason)
+
+
+def _search_result_explanation(item: dict[str, Any], evidence: dict[str, Any]) -> str:
+    status = item.get("status") or "active"
+    source = _source_summary(evidence)
+    parts = [f"这条记忆当前是 {status} 状态"]
+    if source:
+        parts.append(f"证据来自 {source}")
+    parts.append("默认结果已过滤 superseded 旧值")
+    return "；".join(parts) + "。"
+
+
+def _version_user_explanation_fallback(
+    active: dict[str, Any], old_versions: list[dict[str, Any]], response: dict[str, Any]
+) -> dict[str, Any]:
+    current = _version_summary_for_user(active) if active else None
+    old = [_version_summary_for_user(item) for item in old_versions]
+    return {
+        "kind": "memory_version_chain",
+        "current_version": current,
+        "old_versions": old,
+        "override_reason": response.get("explanation") or "当前采用已确认的 active 版本。",
+        "evidence_summary": _version_card_evidence_summary(active, old_versions),
+        "search_boundary": "默认搜索只返回当前 active 版本；旧版本不会作为当前答案返回。",
+    }
+
+
+def _version_summary_for_user(item: dict[str, Any]) -> dict[str, Any]:
+    evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+    return {
+        "version_id": item.get("version_id"),
+        "version": item.get("version") or item.get("version_no"),
+        "status": item.get("status"),
+        "value": item.get("value"),
+        "reason": item.get("reason"),
+        "evidence": evidence,
+        "inactive_reason": item.get("inactive_reason"),
+    }
+
+
+def _version_card_evidence_summary(active: dict[str, Any], old_versions: list[dict[str, Any]]) -> str:
+    evidence = active.get("evidence") if isinstance(active.get("evidence"), dict) else {}
+    quote = evidence.get("quote")
+    if quote:
+        return f"当前版本证据：{quote}"
+    if old_versions:
+        return "旧版本证据仍保留在版本链里，当前答案只采用 active 版本。"
+    return "当前版本没有可展示的证据摘要。"
+
+
+def _version_timeline_item(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "version": item.get("version") or item.get("version_no"),
+        "status": item.get("status"),
+        "value": item.get("value"),
+        "inactive_reason": item.get("inactive_reason"),
+        "is_active": bool(item.get("is_active")),
+    }
+
+
+def _compact_context_item(item: dict[str, Any]) -> dict[str, Any]:
+    evidence = item.get("evidence") if isinstance(item.get("evidence"), list) else []
+    first_evidence = evidence[0] if evidence and isinstance(evidence[0], dict) else {}
+    return {
+        "memory_id": item.get("memory_id"),
+        "subject": item.get("subject"),
+        "current_value": item.get("current_value"),
+        "status": item.get("status"),
+        "version": item.get("version"),
+        "evidence_quote": first_evidence.get("quote"),
+    }
+
+
+def _context_lines(items: list[dict[str, Any]]) -> str:
+    lines = []
+    for item in items:
+        subject = item.get("subject") or "记忆"
+        value = item.get("current_value") or ""
+        lines.append(f"- {subject}: {value}")
+    return "\n".join(lines)
+
+
+def _audit_block(details: dict[str, Any]) -> dict[str, Any]:
+    decision = details.get("permission_decision") if isinstance(details.get("permission_decision"), dict) else {}
+    lines = [
+        f"request_id: {details.get('request_id') or '-'}",
+        f"trace_id: {details.get('trace_id') or '-'}",
+        f"permission: {decision.get('decision') or '-'} / {details.get('permission_reason') or decision.get('reason_code') or '-'}",
+    ]
+    return {
+        "tag": "div",
+        "text": {"tag": "lark_md", "content": "**审计详情**\n" + "\n".join(lines)},
+    }
 
 
 def _fields_from_text(text: str) -> dict[str, str]:

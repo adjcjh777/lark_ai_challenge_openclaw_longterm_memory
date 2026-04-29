@@ -60,6 +60,9 @@ BENCHMARK_FIELDS = [
     "stale_leakage_rate",
     "evidence_coverage",
     "sensitive_reminder_leakage_rate",
+    "false_reminder_rate",
+    "duplicate_reminder_rate",
+    "user_confirmation_burden",
     "avg_latency_ms",
     "failure_type_counts",
     "recommended_fix_summary",
@@ -75,11 +78,19 @@ CANDIDATE_REVIEW_FIELDS = [
     "type",
     "subject",
     "status",
+    "review_status",
+    "source_type",
+    "risk_level",
+    "conflict_status",
+    "queue_view",
     "new_value",
     "old_value",
     "evidence",
     "risk_flags",
     "recommended_action",
+    "reviewer",
+    "last_handler",
+    "last_handled_at",
     "request_id",
     "trace_id",
     "permission_decision",
@@ -100,6 +111,9 @@ REMINDER_CANDIDATE_FIELDS = [
     "evidence",
     "target_actor",
     "cooldown",
+    "available_actions",
+    "next_review_at",
+    "mute_key",
     "recommended_action",
     "request_id",
     "trace_id",
@@ -301,6 +315,7 @@ def candidate_review_output_rows(outputs: list[dict[str, Any]], *, scope: str | 
         )
         evidence = payload.get("evidence") if isinstance(payload.get("evidence"), dict) else {}
         conflict = payload.get("conflict") if isinstance(payload.get("conflict"), dict) else {}
+        queue_views = payload.get("queue_views") if isinstance(payload.get("queue_views"), list) else []
         rows.append(
             [
                 _candidate_review_sync_key(payload),
@@ -310,11 +325,19 @@ def candidate_review_output_rows(outputs: list[dict[str, Any]], *, scope: str | 
                 payload.get("type"),
                 payload.get("subject"),
                 payload.get("status"),
+                payload.get("review_status") or "",
+                payload.get("source_type") or evidence.get("source_type") or "",
+                payload.get("risk_level") or "",
+                payload.get("conflict_status") or "",
+                " / ".join(str(view) for view in queue_views),
                 payload.get("new_value") or "",
                 conflict.get("old_value") or "",
                 evidence.get("quote") or "",
                 ", ".join(payload.get("risk_flags") or []),
                 payload.get("recommended_action"),
+                payload.get("reviewer") or "",
+                payload.get("last_handler") or "",
+                _format_ms(payload.get("last_handled_at")) if isinstance(payload.get("last_handled_at"), int) else "",
                 payload.get("request_id") or "",
                 payload.get("trace_id") or "",
                 permission_decision.get("decision") or "",
@@ -347,6 +370,13 @@ def reminder_candidate_rows(reminders: list[dict[str, Any]]) -> list[list[Any]]:
                 evidence.get("quote") or "",
                 _json_cell(payload.get("target_actor") if isinstance(payload.get("target_actor"), dict) else {}),
                 _json_cell(payload.get("cooldown") if isinstance(payload.get("cooldown"), dict) else {}),
+                ", ".join(
+                    str(action.get("action"))
+                    for action in (payload.get("buttons") if isinstance(payload.get("buttons"), list) else [])
+                    if isinstance(action, dict) and action.get("action")
+                ),
+                payload.get("next_review_at") or "",
+                payload.get("mute_key") or "",
                 payload.get("recommended_action"),
                 payload.get("request_id") or "",
                 payload.get("trace_id") or "",
@@ -397,6 +427,9 @@ def benchmark_rows(
             summary.get("stale_leakage_rate", 0.0),
             summary.get("evidence_coverage", 0.0),
             summary.get("sensitive_reminder_leakage_rate", 0.0),
+            summary.get("false_reminder_rate", 0.0),
+            summary.get("duplicate_reminder_rate", 0.0),
+            summary.get("user_confirmation_burden", 0.0),
             summary.get("avg_latency_ms", 0.0),
             json.dumps(failure_type_counts, ensure_ascii=False, sort_keys=True),
             _recommended_fix_summary(failure_type_counts),
@@ -542,7 +575,7 @@ def table_schema_spec() -> dict[str, Any]:
                 "name": DEFAULT_TABLES["candidate_review"],
                 "purpose": "候选记忆审核队列，只展示 Copilot service 输出，不直接改变记忆状态。",
                 "fields": _schema_fields(CANDIDATE_REVIEW_FIELDS),
-                "suggested_views": ["Pending review", "Conflict candidates", "By subject"],
+                "suggested_views": ["待我审核", "冲突需判断", "高风险暂不建议确认"],
             },
             {
                 "name": DEFAULT_TABLES["benchmark"],
@@ -600,9 +633,12 @@ def _schema_fields(fields: list[str]) -> list[dict[str, str]]:
         "stale_leakage_rate",
         "evidence_coverage",
         "sensitive_reminder_leakage_rate",
+        "false_reminder_rate",
+        "duplicate_reminder_rate",
+        "user_confirmation_burden",
         "avg_latency_ms",
     }
-    datetime_fields = {"updated_at"}
+    datetime_fields = {"updated_at", "last_handled_at"}
     return [
         {
             "name": field,

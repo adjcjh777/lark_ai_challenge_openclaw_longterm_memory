@@ -11,6 +11,7 @@ LAYER_CASES = Path("benchmarks/copilot_layer_cases.json")
 RECALL_CASES = Path("benchmarks/copilot_recall_cases.json")
 CANDIDATE_CASES = Path("benchmarks/copilot_candidate_cases.json")
 CONFLICT_CASES = Path("benchmarks/copilot_conflict_cases.json")
+REAL_FEISHU_CASES = Path("benchmarks/copilot_real_feishu_cases.json")
 
 
 class CopilotBenchmarkTest(unittest.TestCase):
@@ -126,6 +127,57 @@ class CopilotBenchmarkTest(unittest.TestCase):
         self.assertIn("stale_leakage_rate", summary)
         self.assertIn("superseded_leakage_rate", summary)
         self.assertGreaterEqual(summary["evidence_coverage"], 0.8)
+
+    def test_real_feishu_expression_fixture_schema_and_coverage(self) -> None:
+        cases = json.loads(REAL_FEISHU_CASES.read_text(encoding="utf-8"))
+        case_ids = [case["case_id"] for case in cases]
+        categories = Counter(case["expression_category"] for case in cases)
+
+        self.assertEqual(25, len(cases))
+        self.assertEqual(len(case_ids), len(set(case_ids)))
+        self.assertEqual(
+            {
+                "ambiguous": 5,
+                "chitchat_false_positive": 5,
+                "colloquial": 5,
+                "multi_turn_correction": 5,
+                "permission": 5,
+            },
+            dict(sorted(categories.items())),
+        )
+        for case in cases:
+            self.assertEqual("copilot_real_feishu", case["type"], msg=case["case_id"])
+            self.assertTrue(case["input"].strip(), msg=case["case_id"])
+            self.assertIsInstance(case["context"], dict, msg=case["case_id"])
+            self.assertTrue(case["expected_intent"].strip(), msg=case["case_id"])
+            self.assertIsInstance(case["expected_should_remember"], bool, msg=case["case_id"])
+            self.assertIn(case["expected_permission"]["decision"], {"allow", "deny"}, msg=case["case_id"])
+            self.assertIn("observed_baseline", case, msg=case["case_id"])
+            self.assertTrue(case["failure_debug_hint"].strip(), msg=case["case_id"])
+            serialized = json.dumps(case, ensure_ascii=False).lower()
+            for forbidden in ("chat_id", "open_id", "app_secret", "tenant_access_token", "root@123456"):
+                self.assertNotIn(forbidden, serialized, msg=case["case_id"])
+
+    def test_real_feishu_expression_benchmark_reports_ux_metrics_and_failures(self) -> None:
+        result = run_benchmark(REAL_FEISHU_CASES)
+        summary = result["summary"]
+
+        self.assertEqual("copilot_real_feishu", result["benchmark_type"])
+        self.assertEqual(25, summary["case_count"])
+        self.assertEqual(5, summary["category_count"])
+        self.assertIn("recall_at_3", summary)
+        self.assertIn("false_memory_rate", summary)
+        self.assertIn("false_reminder_rate", summary)
+        self.assertIn("user_confirmation_burden", summary)
+        self.assertIn("explanation_coverage", summary)
+        self.assertIn("old_value_leakage_rate", summary)
+        self.assertGreater(summary["failure_type_counts"].get("user_expression_explanation_missing", 0), 0)
+        self.assertGreater(summary["failure_type_counts"].get("false_positive_candidate", 0), 0)
+        self.assertGreater(summary["failure_type_counts"].get("user_expression_old_value_leaked", 0), 0)
+        for item in result["results"]:
+            self.assertIn("expected_output", item)
+            self.assertIn("actual_output_summary", item)
+            self.assertIn("failure_debug_hint", item)
 
 
 if __name__ == "__main__":

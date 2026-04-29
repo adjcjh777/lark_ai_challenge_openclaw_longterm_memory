@@ -555,10 +555,9 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertEqual({"organization_id": "org:demo"}, result["bridge"]["permission_decision"]["actor"])
         self.assert_error_output_matches_schema(result)
 
-    def test_handle_tool_request_auto_generates_default_permission_when_missing(self) -> None:
-        """When permission context is missing, auto-generated default (member role) is used.
-        Confirm/reject still require reviewer role."""
-        ok_payloads = {
+    def test_handle_tool_request_missing_permission_fails_closed(self) -> None:
+        """Every memory tool requires current_context.permission."""
+        payloads = {
             "memory.search": {"query": "部署参数", "scope": SCOPE},
             "memory.create_candidate": {
                 "text": "决定：生产部署必须加 --canary。",
@@ -576,23 +575,15 @@ class CopilotToolContractTest(unittest.TestCase):
                 "scope": SCOPE,
                 "current_context": {"scope": SCOPE},
             },
-        }
-        for tool_name, payload in ok_payloads.items():
-            with self.subTest(tool_name=tool_name):
-                result = handle_tool_request(tool_name, payload)
-                self.assertTrue(result["ok"], f"{tool_name}: {result}")
-
-        # Confirm/reject require reviewer role; auto-generated context only has member
-        review_payloads = {
             "memory.confirm": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
             "memory.reject": {"candidate_id": "cand_missing_permission", "scope": SCOPE},
         }
-        for tool_name, payload in review_payloads.items():
+        for tool_name, payload in payloads.items():
             with self.subTest(tool_name=tool_name):
                 result = handle_tool_request(tool_name, payload)
                 self.assertFalse(result["ok"])
                 self.assertEqual("permission_denied", result["error"]["code"])
-                self.assertEqual("review_role_required", result["error"]["details"]["reason_code"])
+                self.assertEqual("missing_permission_context", result["error"]["details"]["reason_code"])
 
     def test_handle_prefetch_keeps_tools_layer_thin_with_injected_service(self) -> None:
         class StubService:
@@ -740,6 +731,12 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertIn("ap-shanghai", explained["active_version"]["value"])
         self.assertEqual(["active", "superseded"], sorted({item["status"] for item in explained["versions"]}))
         self.assertTrue(explained["supersedes"])
+        self.assertEqual("memory_version_chain", explained["user_explanation"]["kind"])
+        self.assertIn("ap-shanghai", explained["user_explanation"]["current_version"]["value"])
+        self.assertIn("cn-shanghai", explained["user_explanation"]["old_versions"][0]["value"])
+        self.assertIn("覆盖", explained["user_explanation"]["override_reason"])
+        self.assertIn("ap-shanghai", explained["user_explanation"]["evidence_summary"])
+        self.assertIn("默认搜索只返回当前 active 版本", explained["user_explanation"]["search_boundary"])
 
     def assert_search_output_matches_schema(self, response: dict[str, Any]) -> None:
         schema = self.schema()

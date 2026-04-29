@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from memory_engine.models import normalize_subject, parse_scope
@@ -13,6 +14,14 @@ from .schemas import PermissionContext, ValidationError
 
 DEFAULT_COOLDOWN_MS = 24 * 60 * 60 * 1000
 DEFAULT_REVIEW_DUE_MS = 7 * 24 * 60 * 60 * 1000
+UNUSED_MEMORY_MS = 14 * 24 * 60 * 60 * 1000
+
+REMINDER_ACTIONS = (
+    {"action": "confirm_useful", "label": "确认提醒有用", "state_mutation": "review_record_only"},
+    {"action": "ignore", "label": "忽略本次", "state_mutation": "cooldown_only"},
+    {"action": "snooze", "label": "延后", "state_mutation": "next_review_at_only"},
+    {"action": "mute_same_type", "label": "关闭同类提醒", "state_mutation": "mute_rule_only"},
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +42,9 @@ class ReminderCandidate:
     recommended_action: str = "review_reminder_candidate"
     risk_flags: list[str] = field(default_factory=list)
     gates: dict[str, bool] = field(default_factory=dict)
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    next_review_at: str | None = None
+    mute_key: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +64,9 @@ class ReminderCandidate:
             "recommended_action": self.recommended_action,
             "risk_flags": list(self.risk_flags),
             "gates": dict(self.gates),
+            "actions": [dict(action) for action in self.actions],
+            "next_review_at": self.next_review_at,
+            "mute_key": self.mute_key,
             "state_mutation": "none",
         }
 
@@ -93,11 +108,13 @@ class HeartbeatReminderEngine:
         now_ms: int | None = None,
         cooldown_ms: int = DEFAULT_COOLDOWN_MS,
         review_due_ms: int = DEFAULT_REVIEW_DUE_MS,
+        reminder_state: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self.repository = repository
         self.now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
         self.cooldown_ms = cooldown_ms
         self.review_due_ms = review_due_ms
+        self.reminder_state = reminder_state if reminder_state is not None else {}
 
     def generate(
         self,
@@ -152,6 +169,8 @@ class HeartbeatReminderEngine:
         trigger = self._trigger(row, context)
         if trigger is None:
             return None
+        mute_key = _reminder_key(scope, str(row["subject"] or ""), trigger, f"rem_{row['memory_id']}_{trigger}")
+        review_state = self.reminder_state.get(mute_key) or {}
 
         evidence_quote = row["evidence_quote"] or row["current_value"]
         raw_value = str(row["current_value"] or "")
@@ -167,9 +186,10 @@ class HeartbeatReminderEngine:
         due_at = _extract_due_at(raw_value)
         gates = {
             "importance": float(row["importance"] or 0) >= 0.65
-            or trigger in {"deadline", "review_due", "thread_similarity"},
+            or trigger in {"deadline", "review_due", "thread_similarity", "unused_memory"},
             "relevance": trigger != "thread_similarity" or self._thread_relevance(row, context) > 0,
             "cooldown": self._cooldown_passed(row),
+            "state_cooldown": self._state_cooldown_passed(review_state),
             "scope_permission": True,
             "sensitive_redaction": not risk_flags or "[REDACTED:" in value or "[REDACTED:" in evidence["quote"],
         }
@@ -177,7 +197,7 @@ class HeartbeatReminderEngine:
             return None
 
         target_actor = _target_actor(permission)
-        cooldown = self._cooldown_trace(row)
+        cooldown = self._cooldown_trace(row, review_state)
         permission_trace = _permission_trace(permission)
         status = "candidate"
         recommended_action = "review_reminder_candidate"
@@ -212,6 +232,9 @@ class HeartbeatReminderEngine:
             recommended_action=recommended_action,
             risk_flags=risk_flags,
             gates=gates,
+            actions=list(REMINDER_ACTIONS),
+            next_review_at=review_state.get("next_review_at") if isinstance(review_state.get("next_review_at"), str) else None,
+            mute_key=mute_key,
         )
 
     def _active_rows(self, scope: str) -> list[Any]:
@@ -252,13 +275,20 @@ class HeartbeatReminderEngine:
         ).fetchall()
 
     def _trigger(self, row: Any, context: dict[str, Any]) -> str | None:
+        value = str(row["current_value"] or "")
+        if _low_value_chatter(value):
+            return None
         if row["expires_at"] and int(row["expires_at"]) <= self.now_ms + DEFAULT_COOLDOWN_MS:
             return "deadline"
-        if row["type"] == "deadline" or _extract_due_at(str(row["current_value"] or "")):
+        if row["type"] == "deadline" or _extract_due_at(value) or _mentions_deadline(value):
             return "deadline"
+        if _mentions_review_update(value):
+            return "review_due"
         if int(row["updated_at"] or 0) <= self.now_ms - self.review_due_ms:
             return "review_due"
-        if float(row["importance"] or 0) >= 0.8 and not row["last_recalled_at"]:
+        if row["last_recalled_at"] and int(row["last_recalled_at"] or 0) <= self.now_ms - UNUSED_MEMORY_MS:
+            return "unused_memory"
+        if float(row["importance"] or 0) >= 0.8 and (not row["last_recalled_at"] or self._cooldown_passed(row)):
             return "important_not_recalled"
         if self._thread_relevance(row, context) > 0:
             return "thread_similarity"
@@ -284,16 +314,33 @@ class HeartbeatReminderEngine:
             return True
         return int(last_recalled_at) <= self.now_ms - self.cooldown_ms
 
-    def _cooldown_trace(self, row: Any) -> dict[str, Any]:
+    def _state_cooldown_passed(self, review_state: dict[str, Any]) -> bool:
+        if review_state.get("muted"):
+            return False
+        next_review_at_ms = review_state.get("next_review_at_ms")
+        if isinstance(next_review_at_ms, int) and next_review_at_ms > self.now_ms:
+            return False
+        cooldown_until_ms = review_state.get("cooldown_until_ms")
+        if isinstance(cooldown_until_ms, int) and cooldown_until_ms > self.now_ms:
+            return False
+        return True
+
+    def _cooldown_trace(self, row: Any, review_state: dict[str, Any]) -> dict[str, Any]:
         last_recalled_at = row["last_recalled_at"]
         result: dict[str, Any] = {
             "cooldown_ms": self.cooldown_ms,
-            "passed": self._cooldown_passed(row),
+            "passed": self._cooldown_passed(row) and self._state_cooldown_passed(review_state),
         }
         if last_recalled_at:
             last_recalled = int(last_recalled_at)
             result["last_recalled_at"] = last_recalled
             result["next_allowed_at"] = last_recalled + self.cooldown_ms
+        if isinstance(review_state.get("cooldown_until_ms"), int):
+            result["review_action_cooldown_until_ms"] = review_state["cooldown_until_ms"]
+        if isinstance(review_state.get("next_review_at"), str):
+            result["next_review_at"] = review_state["next_review_at"]
+        if review_state.get("muted"):
+            result["muted"] = True
         return result
 
     def _reason(self, trigger: str, row: Any) -> str:
@@ -303,12 +350,26 @@ class HeartbeatReminderEngine:
             return "这条记忆已经较久没有复核，先生成候选提醒而不直接推送。"
         if trigger == "important_not_recalled":
             return "这条高重要性记忆还没有被召回过，任务前应主动提醒。"
+        if trigger == "unused_memory":
+            return "这条重要记忆较久没有被使用，先作为候选提醒给 reviewer 判断。"
         return "当前线程主题和这条记忆相似，先作为 reminder candidate。"
 
 
 def _extract_due_at(text: str) -> str | None:
     match = re.search(r"\b20\d{2}-\d{2}-\d{2}\b", text)
     return match.group(0) if match else None
+
+
+def _mentions_deadline(text: str) -> bool:
+    return bool(re.search(r"(?i)(截止|deadline|due|周[一二三四五六日天]|下周|前完成)", text))
+
+
+def _mentions_review_update(text: str) -> bool:
+    return bool(re.search(r"(已从.+(改|更改|变更)|已更新|流程已更新|改为|更新为)", text))
+
+
+def _low_value_chatter(text: str) -> bool:
+    return bool(re.search(r"(天气不错|出去散步|午餐|吃什么|黄焖鸡|新开的味道)", text))
 
 
 def _permission_from_context(context: dict[str, Any]) -> PermissionContext | None:
@@ -362,3 +423,21 @@ def _can_review_sensitive(permission: PermissionContext | None) -> bool:
         return False
     roles = {role.strip().lower() for role in permission.actor.roles}
     return bool(roles.intersection(REVIEW_ROLES))
+
+
+def _reminder_key(scope: str, subject: str | None, trigger: str | None, reminder_id: str) -> str:
+    subject_key = normalize_subject(subject or "") or reminder_id
+    trigger_key = trigger or reminder_id.rsplit("_", 1)[-1]
+    return f"{scope}:{subject_key}:{trigger_key}"
+
+
+def parse_review_at_ms(value: str | None) -> int | None:
+    if not value:
+        return None
+    text = value.strip()
+    try:
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        return int(datetime.fromisoformat(text).timestamp() * 1000)
+    except ValueError:
+        return None

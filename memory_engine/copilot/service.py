@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from memory_engine.repository import MemoryRepository
 from .cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter
 from .embeddings import OllamaEmbeddingProvider, create_embedding_provider
 from .governance import CopilotGovernance
-from .heartbeat import HeartbeatReminderEngine
+from .heartbeat import DEFAULT_COOLDOWN_MS, HeartbeatReminderEngine, _reminder_key, parse_review_at_ms
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
 from .retrieval import LayerAwareRetriever
@@ -24,6 +25,7 @@ from .schemas import (
     PermissionContext,
     PrefetchRequest,
     RejectRequest,
+    ReminderActionRequest,
     SearchRequest,
     ValidationError,
     WorkingContext,
@@ -52,6 +54,7 @@ class CopilotService:
         # Initialize embedding provider
         self._embedding_provider = embedding_provider
         self._embedding_provider_initialized = False
+        self._reminder_state: dict[str, dict[str, Any]] = {}
 
         # Auto-initialize Cognee adapter if not provided
         if self.cognee_adapter is None and auto_init_cognee:
@@ -179,6 +182,52 @@ class CopilotService:
         )
         return response
 
+    def needs_evidence(self, request: RejectRequest) -> dict[str, object]:
+        permission_denied = self._permission_denied(
+            "memory.needs_evidence",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = CopilotGovernance(self._repository()).needs_evidence(request)
+        self._record_audit(
+            "memory.needs_evidence",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        return response
+
+    def expire_candidate(self, request: RejectRequest) -> dict[str, object]:
+        permission_denied = self._permission_denied(
+            "memory.expire",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = CopilotGovernance(self._repository()).expire(request)
+        self._record_audit(
+            "memory.expire",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        return response
+
     def explain_versions(self, request: ExplainVersionsRequest) -> dict[str, object]:
         permission_denied = self._permission_denied(
             "memory.explain_versions",
@@ -273,7 +322,7 @@ class CopilotService:
         )
         if permission_denied is not None:
             return permission_denied
-        response = HeartbeatReminderEngine(self._repository()).generate(
+        response = HeartbeatReminderEngine(self._repository(), reminder_state=self._reminder_state).generate(
             scope=request.scope,
             current_context=request.current_context,
             limit=request.limit,
@@ -285,6 +334,76 @@ class CopilotService:
             response,
             target_type="reminder",
             event_type="heartbeat_candidate_generated",
+        )
+        return response
+
+    def review_reminder(self, request: ReminderActionRequest) -> dict[str, object]:
+        permission_denied = self._permission_denied(
+            "heartbeat.review_due",
+            request.scope,
+            request.current_context,
+            target_type="reminder",
+            target_id=request.reminder_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+
+        now_ms = int(time.time() * 1000)
+        state_key = _reminder_key(request.scope, request.subject, request.trigger, request.reminder_id)
+        state = dict(self._reminder_state.get(state_key) or {})
+        state.update(
+            {
+                "reminder_id": request.reminder_id,
+                "scope": request.scope,
+                "subject": request.subject,
+                "trigger": request.trigger,
+                "last_action": request.action,
+                "last_action_at_ms": now_ms,
+            }
+        )
+        status = "reviewed"
+        if request.action == "confirm_useful":
+            status = "useful"
+            state["cooldown_until_ms"] = now_ms + DEFAULT_COOLDOWN_MS
+        elif request.action == "ignore":
+            status = "ignored"
+            state["cooldown_until_ms"] = now_ms + DEFAULT_COOLDOWN_MS
+        elif request.action == "snooze":
+            status = "snoozed"
+            next_review_at_ms = parse_review_at_ms(request.next_review_at)
+            if next_review_at_ms is None and request.snooze_ms:
+                next_review_at_ms = now_ms + request.snooze_ms
+            if next_review_at_ms is None:
+                next_review_at_ms = now_ms + DEFAULT_COOLDOWN_MS
+            state["next_review_at_ms"] = next_review_at_ms
+            state["next_review_at"] = request.next_review_at or str(next_review_at_ms)
+        elif request.action == "mute_same_type":
+            status = "muted"
+            state["muted"] = True
+
+        self._reminder_state[state_key] = state
+        response: dict[str, object] = {
+            "ok": True,
+            "surface": "reminder_action",
+            "reminder_id": request.reminder_id,
+            "scope": request.scope,
+            "action": request.action,
+            "status": status,
+            "next_review_at": state.get("next_review_at"),
+            "mute_key": state_key,
+            "reminder_state": dict(state),
+            "state_mutation": "reminder_review_state_only",
+            "active_memory_mutation": "none",
+            "real_push_sent": False,
+        }
+        self._record_audit(
+            "heartbeat.review_due",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="reminder",
+            target_id=request.reminder_id,
+            event_type="reminder_action_reviewed",
         )
         return response
 
@@ -602,6 +721,10 @@ def _event_type(action: str, denied: bool) -> str:
         return "candidate_confirmed"
     if action == "memory.reject":
         return "candidate_rejected"
+    if action == "memory.needs_evidence":
+        return "candidate_needs_evidence"
+    if action == "memory.expire":
+        return "candidate_expired"
     if action == "memory.create_candidate":
         return "candidate_created"
     if action == "heartbeat.review_due":
@@ -616,6 +739,8 @@ def _visible_fields(action: str, denied: bool) -> list[str]:
         return ["memory_id", "subject", "current_value", "evidence", "trace"]
     if action in {"memory.confirm", "memory.reject"}:
         return ["candidate_id", "memory_id", "status"]
+    if action in {"memory.needs_evidence", "memory.expire"}:
+        return ["candidate_id", "memory_id", "review_status", "last_handler", "last_handled_at"]
     if action == "memory.create_candidate":
         return ["candidate_id", "status", "evidence", "risk_flags"]
     if action == "heartbeat.review_due":

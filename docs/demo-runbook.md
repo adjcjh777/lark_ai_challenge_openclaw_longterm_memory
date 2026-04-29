@@ -4,6 +4,8 @@
 
 > **状态更新（2026-04-28）**：本 runbook 对应的 2026-05-04 Demo 固定任务已经完成，保留为可复现演示证据。后续不要从 2026-05-04 日期计划继续补任务；新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
 
+> **UX-07 更新（2026-04-29）**：评委现场优先走 [10 分钟评委体验包](judge-10-minute-experience.md)。本文继续保留 5 分钟 demo replay 和飞书主路径脚本，作为 UX-07 的固定演示数据来源和失败 fallback。
+
 ## 执行前先看这个
 
 1. 今天演示主入口是 OpenClaw tools，不是旧 CLI 或旧 Feishu Bot。
@@ -34,7 +36,47 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 - `scripts/demo_seed.py` 输出的 compact summary。
 - `reports/demo_replay.json` 中任意一个完整 tool response。
 
+## UX-07 评委版固定入口
+
+10 分钟评委体验包只引用脱敏、可复现材料：
+
+- 入口文档：[judge-10-minute-experience.md](judge-10-minute-experience.md)。
+- 固定数据：生产部署 region 从 `cn-shanghai` 覆盖为 `ap-shanghai`，并要求 `--canary`。
+- replay 证据：`scripts/demo_seed.py --json-output reports/demo_replay.json`。
+- benchmark 证据：[benchmark-report.md](benchmark-report.md) 中 UX-06 指标和残余风险。
+- 架构图入口：[diagrams/system-architecture.mmd](diagrams/system-architecture.mmd)、[diagrams/product-interaction-flow.mmd](diagrams/product-interaction-flow.mmd)、[diagrams/benchmark-loop.mmd](diagrams/benchmark-loop.mmd)。
+
+截图清单不包含真实 `chat_id`、`open_id`、token、app secret、`.env` 或真实私聊内容；不需要提交截图二进制。
+
+计时验收记录：
+
+| 日期 | 方式 | 结果 | 失败点 | 替代路线 |
+|---|---|---|---|---|
+| 2026-04-29 | 按 10 分钟评委体验包做本地文档计时走查 | 9 分 40 秒内可走完问题定义、搜索、候选确认、版本解释、prefetch、benchmark、架构和边界 | Mermaid 渲染或飞书 sandbox 不稳定会拖慢现场节奏 | 直接展示 `.mmd` 源码、`reports/demo_replay.json` 和 benchmark report；明确这些是 replay / sandbox / 本机 staging 证据，不是 production live |
+
 ## 5 分钟流程
+
+## 飞书主路径普通话脚本
+
+这组脚本用于 UX-01 验收：评委或真实用户不需要输入 `candidate_id`、`memory_id`、`trace_id`，也能走完搜索、候选确认、版本解释和任务前 prefetch。当前边界仍是 Feishu live sandbox / demo path；不要把它说成 production live，也不要说真实 Feishu DM 已稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路。
+
+| 路径 | 普通话输入 | 预期输出 | 失败 fallback | no-overclaim 边界 |
+|---|---|---|---|---|
+| 搜索当前结论 | `上次定的生产部署 region 是哪个？` | 主答案先给当前 active 结论、1 条 evidence quote 和下一步动作；`request_id`、`trace_id`、`permission_decision` 只在审计详情。 | 如果没有 active 记忆，提示“没有找到当前有效结论”，引导用户补充主题或先创建候选。 | 默认搜索不返回 superseded 旧值，也不返回 raw events。 |
+| 创建并确认候选 | `记住：生产部署必须加 --canary，region 用 ap-shanghai。` -> `确认这条` | 第一条回复说明“已生成待确认记忆，不会自动 active”；第二条回复确认最近 candidate，不要求用户复制内部 ID。 | 如果无法解析最近 candidate，保留 `/confirm <candidate_id>` fallback，并说明没有绕过 `CopilotService`。 | 真实飞书来源只能 candidate-only，确认必须由 reviewer / owner / admin 触发。 |
+| 版本解释 | `为什么之前的 cn-shanghai 不用了？` | 调用 `memory.explain_versions`，解释当前版本、旧版本、覆盖原因和证据。 | 如果无法解析最近 memory，保留 `/versions <memory_id>` fallback，并提示先搜索具体主题。 | 默认 search 不把旧值当当前答案；旧值只在版本解释里出现。 |
+| 任务前 prefetch | `帮我准备今天上线前 checklist。` | 调用 `memory.prefetch`，返回 compact context pack、相关 active 记忆、缺失信息和风险。 | 如果上下文不足，返回空 pack 或缺失信息，不编造规则。 | prefetch 不返回全部 raw events，不代表长期 embedding 服务或生产工作流已完成。 |
+
+## UX-02 记忆卡片信息架构
+
+评委版卡片只展示稳定可用动作，不暴露半成品按钮。四类卡片都消费 `handle_tool_request()` / `CopilotService` 的输出；权限拒绝时只展示拒绝原因和审计 ID，不展示未授权结论或证据。
+
+| 卡片 | 输入 | 预期输出 | 可见按钮 | fallback | no-overclaim 边界 |
+|---|---|---|---|---|---|
+| 搜索结果卡 | `memory.search` 输出 | 当前 active 结论、evidence quote、版本状态、旧值已过滤、用户可读排序理由；审计详情放底部。 | `解释版本`，进入现有 versions / `memory.explain_versions` 路径。 | 没找到时显示空状态，引导补主题或创建候选。 | 不展示 superseded 旧值或 raw events；不代表真实 DM live E2E 已完成。 |
+| 候选审核卡 | `memory.create_candidate` 输出 | 待确认新记忆、来源、证据、风险等级、冲突摘要、建议动作。 | reviewer / owner / admin 可见 `确认保存`、`拒绝候选`；非 reviewer 隐藏。 | 权限不足或 permission 畸形时 fail closed，只显示安全拒绝摘要。 | 真实飞书来源仍 candidate-only；按钮不绕过 `CopilotService`。 |
+| 版本解释卡 | `memory.explain_versions` 输出 | 当前版本、被覆盖旧版本、覆盖原因、时间线摘要。 | 无新增半成品按钮。 | 无法定位 memory 时先搜索主题，或用 `/versions <memory_id>`。 | 旧值只用于解释，不作为默认 search 当前答案。 |
+| 任务前上下文卡 | `memory.prefetch` 输出 | 本次任务、要带入的 active 规则、关键风险、deadline/owner、缺失信息。 | 无新增半成品按钮。 | 上下文不足时展示缺失信息，不编造规则。 | 不塞全部 raw events，不代表 production live 或长期 embedding 服务。 |
 
 ### 1. 先讲用户痛点，30 秒
 

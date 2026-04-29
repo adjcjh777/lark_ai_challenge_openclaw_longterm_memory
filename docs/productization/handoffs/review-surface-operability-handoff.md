@@ -65,3 +65,77 @@ ollama ps
 ## 下一步
 
 按 `launch-polish-todo.md` 顺序，下一项是 P1 审计、监控和运维面：把 `memory_audit_events` 从 smoke test 表升级为可查询、可告警、可复盘的运维入口。
+
+---
+
+## UX-04 追加：记忆收件箱 / 审核队列
+
+日期：2026-04-29
+
+本轮只推进 UX-04，不进入 UX-05 可控提醒体验。
+
+### 队列字段
+
+Candidate Review 行现在可表达审核队列所需字段：
+
+| 字段 | 用途 |
+|---|---|
+| `review_status` | `pending` / `confirmed` / `rejected` / `needs_evidence` / `expired`。 |
+| `source_type` | 候选来源，如 `feishu_message`、`lark_doc`、`feishu_task`、`feishu_meeting`、`lark_bitable` 或测试来源。 |
+| `risk_level` | `low` / `medium` / `high`，用于区分高风险暂不建议确认。 |
+| `conflict_status` | `no_conflict` / `possible_conflict` / `overrides_active`。 |
+| `queue_view` | 可直接筛选的中文视图标签。 |
+| `reviewer` | 当前建议处理人，来自 permission actor。 |
+| `last_handler` / `last_handled_at` | 最近一次服务层状态处理人和处理时间。 |
+
+### 三类队列视图
+
+在 Bitable 的 `Candidate Review` 表中按字段筛选即可复现：
+
+| 视图 | 筛选方式 | 处理建议 |
+|---|---|---|
+| 待我审核 | `review_status=pending`，必要时再筛 `reviewer=当前 reviewer` | 可以确认、拒绝、要求补证据或标记过期。 |
+| 冲突需判断 | `conflict_status=possible_conflict` 或 `conflict_status=overrides_active` | 先看 `old_value` 和证据，再决定是否确认覆盖。 |
+| 高风险暂不建议确认 | `risk_level=high` 或 `queue_view` 包含“高风险暂不建议确认” | 默认不要确认；优先要求补证据或拒绝。 |
+
+这些视图只是 review surface。Copilot Core / SQLite ledger 仍是事实源，Bitable 不能直接决定 active / rejected / expired。
+
+### 状态动作
+
+当前服务层状态流转：
+
+```text
+new candidate
+  -> pending
+  -> confirmed
+  -> rejected
+  -> needs_evidence
+  -> expired
+```
+
+操作入口：
+
+| 动作 | 服务层入口 | 结果 |
+|---|---|---|
+| 确认 | `CopilotService.confirm()` / `memory.confirm` | 候选变 active，可进入默认 recall。 |
+| 拒绝 | `CopilotService.reject()` / `memory.reject` | 候选变 rejected，不进入默认 recall。 |
+| 要求补证据 | `CopilotService.needs_evidence()` | 候选变 needs_evidence，不作为可信结论展示。 |
+| 标记过期 | `CopilotService.expire_candidate()` | 候选变 expired，保留审计但默认不进主待办队列。 |
+
+所有动作都需要有效 `current_context.permission`。缺失、畸形、非 reviewer 权限必须 fail closed。
+
+### 卡片和 Bitable
+
+- Feishu 候选审核卡片展示状态、队列视图、来源、风险、冲突、建议动作和审计 trace。
+- reviewer 可见四个动作入口：确认保存、拒绝候选、要求补证据、标记过期。
+- 非 reviewer 或 permission denied 时不展示操作按钮，也不展示未授权 evidence / current_value。
+- Candidate Review 写回继续使用稳定 `sync_key` 幂等 upsert。
+- 非 dry-run 写入会先 `record-list` 查已有记录，写后再次读回确认。
+- 任一步失败时 `sync_payload()` 返回 `ok=false`、`errors` 和 `error_summary`；不能声称同步成功。
+
+### 失败处理
+
+- 写 Bitable 失败：保留 dry-run payload 和 `error_summary`，不要把行状态写成已完成。
+- 权限失败：只展示安全说明、`request_id`、`trace_id`、`permission_reason`，不展示候选明文。
+- 证据不足：用“要求补证据”进入 `needs_evidence`，不要确认成 active。
+- 候选已过期：用“标记过期”进入 `expired`，保留审计，不进入默认 recall。

@@ -38,6 +38,16 @@ def current_context(action: str) -> dict[str, object]:
     }
 
 
+def review_request(candidate_id: str, action: str) -> RejectRequest:
+    return RejectRequest(
+        candidate_id=candidate_id,
+        scope=SCOPE,
+        actor_id="ou_test",
+        reason=action,
+        current_context=current_context(action),
+    )
+
+
 def candidate_request(text: str, *, auto_confirm: bool = False) -> CreateCandidateRequest:
     payload = {
         "text": text,
@@ -182,6 +192,36 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertEqual("rejected", rejected["action"])
         self.assertEqual("skipped", rejected["cognee_sync"]["status"])
         self.assertIsNone(self.repo.recall(SCOPE, "OpenClaw 版本"))
+
+    def test_needs_evidence_and_expired_are_service_owned_audited_review_states(self) -> None:
+        needs_evidence = self.service.create_candidate(candidate_request("决定：上线风险口径需要补来源证据。"))
+        marked = self.service.needs_evidence(review_request(needs_evidence["candidate_id"], "memory.needs_evidence"))
+
+        expired_candidate = self.service.create_candidate(candidate_request("规则：临时灰度窗口只在今天有效。"))
+        expired = self.service.expire_candidate(review_request(expired_candidate["candidate_id"], "memory.expire"))
+
+        self.assertTrue(marked["ok"])
+        self.assertEqual("needs_evidence", marked["status"])
+        self.assertEqual("needs_evidence", marked["review_status"])
+        self.assertEqual("ou_test", marked["last_handler"])
+        self.assertTrue(expired["ok"])
+        self.assertEqual("expired", expired["status"])
+        self.assertEqual("expired", expired["review_status"])
+        self.assertIsNone(self.repo.recall(SCOPE, "上线风险口径"))
+        self.assertIsNone(self.repo.recall(SCOPE, "临时灰度窗口"))
+
+        audit_events = self.conn.execute(
+            """
+            SELECT event_type, action, candidate_id, actor_id, permission_decision
+            FROM memory_audit_events
+            WHERE action IN ('memory.needs_evidence', 'memory.expire')
+            ORDER BY created_at, action
+            """
+        ).fetchall()
+        self.assertEqual(2, len(audit_events))
+        self.assertEqual({"candidate_needs_evidence", "candidate_expired"}, {row["event_type"] for row in audit_events})
+        self.assertEqual({"allow"}, {row["permission_decision"] for row in audit_events})
+        self.assertEqual({"ou_test"}, {row["actor_id"] for row in audit_events})
 
     def test_reject_with_configured_cognee_withdraws_candidate_from_dataset(self) -> None:
         class FakeCogneeAdapter:
