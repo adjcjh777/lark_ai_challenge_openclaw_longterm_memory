@@ -138,7 +138,13 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     if args.command == "copilot-feishu" and args.copilot_feishu_command == "listen":
-        copilot_feishu_listen(db_path=args.db_path, dry_run=args.dry_run)
+        copilot_feishu_listen(
+            db_path=args.db_path,
+            dry_run=args.dry_run,
+            admin_enabled=args.admin,
+            admin_host=args.admin_host,
+            admin_port=args.admin_port,
+        )
         return
 
     parser.print_help()
@@ -236,6 +242,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     copilot_listen_parser.add_argument(
         "--dry-run", action="store_true", help="Print replies without sending them to Feishu"
+    )
+    admin_group = copilot_listen_parser.add_mutually_exclusive_group()
+    admin_group.add_argument(
+        "--admin",
+        dest="admin",
+        action="store_true",
+        default=True,
+        help="Start the local read-only dashboard as part of the Memory Copilot runtime.",
+    )
+    admin_group.add_argument(
+        "--no-admin",
+        dest="admin",
+        action="store_false",
+        help="Do not start the local read-only dashboard with this runtime.",
+    )
+    copilot_listen_parser.add_argument(
+        "--admin-host",
+        default=os.environ.get("COPILOT_ADMIN_HOST", "127.0.0.1"),
+        help="Dashboard bind host. Defaults to COPILOT_ADMIN_HOST or 127.0.0.1.",
+    )
+    copilot_listen_parser.add_argument(
+        "--admin-port",
+        type=int,
+        default=int(os.environ.get("COPILOT_ADMIN_PORT", "8765")),
+        help="Dashboard bind port. Defaults to COPILOT_ADMIN_PORT or 8765.",
     )
 
     return parser

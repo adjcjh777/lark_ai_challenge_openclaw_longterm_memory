@@ -222,13 +222,12 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 | endpoint | http://localhost:11434 | Ollama 服务地址 |
 | dimensions | 1024 | 向量维度 |
 
-### 2.5 启动本地只读后台
+### 2.5 本地只读后台
 
-如果要直接查看本地 memory、candidate、evidence、version、audit 和 SQLite 表结构，可以启动只读后台：
+Dashboard 不是单独的产品服务。它会随 Memory Copilot runtime 启动：
 
-```bash
-python3 scripts/start_copilot_admin.py
-```
+- OpenClaw 加载 `feishu-memory-copilot` 插件时，会尝试启动本地 dashboard。
+- 仓库内 `python3 -m memory_engine copilot-feishu listen` / `scripts/start_copilot_feishu_live.sh` 启动时，也会带起 dashboard。
 
 默认访问地址：
 
@@ -236,7 +235,21 @@ python3 scripts/start_copilot_admin.py
 http://127.0.0.1:8765
 ```
 
-后台默认读取 `data/memory.sqlite`，也可以指定数据库：
+可用环境变量：
+
+```bash
+export FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1
+export FEISHU_MEMORY_COPILOT_ADMIN_HOST=127.0.0.1
+export FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765
+```
+
+如果只是本机调试，不启动 OpenClaw / Feishu listener，也可以手动运行 fallback 脚本：
+
+```bash
+python3 scripts/start_copilot_admin.py
+```
+
+后台默认读取 `data/memory.sqlite`，也可以指定数据库和端口：
 
 ```bash
 python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8766
@@ -438,6 +451,12 @@ npm install -g openclaw@latest
 
 ```bash
 python3 -m memory_engine copilot-feishu listen
+```
+
+该命令会同时启动本地只读 dashboard，默认地址是 `http://127.0.0.1:8765`。如需关闭：
+
+```bash
+python3 -m memory_engine copilot-feishu listen --no-admin
 ```
 
 或：

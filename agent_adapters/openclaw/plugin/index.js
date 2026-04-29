@@ -9,6 +9,7 @@ const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(PLUGIN_DIR, "../../..");
 const SCHEMA_PATH = resolve(REPO_ROOT, "agent_adapters/openclaw/memory_tools.schema.json");
 const PYTHON = process.env.FEISHU_MEMORY_COPILOT_PYTHON || "python3";
+let adminDashboardStarted = false;
 
 // Translation map: OpenClaw-facing tool names (fmc_xxx) → Python-side tool names (memory.xxx)
 const OPENCLAW_TO_PYTHON = {
@@ -118,12 +119,47 @@ async function runPythonTool(toolName, payload) {
   }
 }
 
+function startAdminDashboard() {
+  if (adminDashboardStarted || adminDashboardDisabled()) {
+    return;
+  }
+  adminDashboardStarted = true;
+  const host = process.env.FEISHU_MEMORY_COPILOT_ADMIN_HOST || process.env.COPILOT_ADMIN_HOST || "127.0.0.1";
+  const port = process.env.FEISHU_MEMORY_COPILOT_ADMIN_PORT || process.env.COPILOT_ADMIN_PORT || "8765";
+  const dbPath = process.env.FEISHU_MEMORY_COPILOT_DB || process.env.MEMORY_DB_PATH || "data/memory.sqlite";
+  const child = spawn(PYTHON, [
+    "scripts/start_copilot_admin.py",
+    "--host",
+    host,
+    "--port",
+    String(port),
+    "--db-path",
+    dbPath,
+    "--init-db-if-missing",
+  ], {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
+    },
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+}
+
+function adminDashboardDisabled() {
+  const raw = process.env.FEISHU_MEMORY_COPILOT_ADMIN_ENABLED || process.env.COPILOT_ADMIN_ENABLED;
+  return raw && ["0", "false", "no", "off"].includes(raw.trim().toLowerCase());
+}
+
 export default definePluginEntry({
   id: "feishu-memory-copilot",
   name: "Feishu Memory Copilot",
   description: "First-class OpenClaw memory tools backed by CopilotService.",
   kind: "tool",
   register(api) {
+    startAdminDashboard();
     api.registerTool(() => {
       const specs = loadToolSpecs();
       return specs.map(createTool);

@@ -26,6 +26,7 @@ from memory_engine.feishu_runtime import FeishuRunLogger
 from memory_engine.models import parse_scope
 from memory_engine.repository import MemoryRepository
 
+from .admin import DEFAULT_ADMIN_HOST, DEFAULT_ADMIN_PORT, start_embedded_admin
 from .graph_context import register_feishu_chat_node, register_feishu_message_context
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
 from .service import CopilotService
@@ -62,18 +63,33 @@ class CopilotFeishuInvocation:
     reason: str
 
 
-def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
+def listen(
+    *,
+    db_path: str | Path | None = None,
+    dry_run: bool = False,
+    admin_enabled: bool | None = None,
+    admin_host: str | None = None,
+    admin_port: int | None = None,
+) -> None:
     active_listeners = assert_single_feishu_listener("copilot-lark-cli")
     config = load_feishu_config()
+    resolved_db_path = str(db_path or db_path_from_env())
     conn = connect(db_path)
     init_db(conn)
+    admin_runtime = start_embedded_admin(
+        host=admin_host or os.environ.get("COPILOT_ADMIN_HOST", DEFAULT_ADMIN_HOST),
+        port=admin_port if admin_port is not None else int(os.environ.get("COPILOT_ADMIN_PORT", DEFAULT_ADMIN_PORT)),
+        db_path=resolved_db_path,
+        enabled=_admin_enabled(admin_enabled),
+    )
     publisher = DryRunPublisher() if dry_run else LarkCliPublisher(config)
     command = _event_subscribe_command(config)
     run_logger = FeishuRunLogger(config.log_dir)
     run_logger.write(
         "copilot_live_listen_start",
         dry_run=dry_run,
-        db_path=str(db_path or db_path_from_env()),
+        db_path=resolved_db_path,
+        dashboard=admin_runtime.to_log_payload(),
         command=_redact_command(command),
         profile=config.lark_profile,
         bot_mode=config.bot_mode,
@@ -83,6 +99,10 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
         listener_preflight=[process.__dict__ for process in active_listeners],
     )
     print(f"Memory Copilot live listener log: {run_logger.path}", file=sys.stderr, flush=True)
+    if admin_runtime.url:
+        print(f"Memory Copilot dashboard: {admin_runtime.url}", file=sys.stderr, flush=True)
+    elif admin_runtime.reason != "disabled":
+        print(f"Memory Copilot dashboard not started: {admin_runtime.reason}", file=sys.stderr, flush=True)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=sys.stderr, text=True)
     try:
         assert process.stdout is not None
@@ -115,6 +135,7 @@ def listen(*, db_path: str | Path | None = None, dry_run: bool = False) -> None:
         run_logger.write("copilot_live_listen_stop", reason="keyboard_interrupt")
         process.terminate()
     finally:
+        admin_runtime.stop()
         conn.close()
         if process.poll() is None:
             process.terminate()
@@ -261,6 +282,15 @@ def handle_copilot_message_event(
         tool_result=tool_result,
     )
     return _event_result(event, scope, invocation, tool_result, publish_result, graph_node, message_graph)
+
+
+def _admin_enabled(explicit: bool | None) -> bool:
+    if explicit is not None:
+        return explicit
+    value = os.environ.get("COPILOT_ADMIN_ENABLED") or os.environ.get("FEISHU_MEMORY_COPILOT_ADMIN_ENABLED")
+    if value is None:
+        return True
+    return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFeishuInvocation:

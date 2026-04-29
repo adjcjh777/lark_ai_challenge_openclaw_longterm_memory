@@ -48,6 +48,9 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("definePluginEntry", plugin_index)
         self.assertIn("api.registerTool", plugin_index)
         self.assertIn("memory_engine.copilot.openclaw_tool_runner", plugin_index)
+        self.assertIn("startAdminDashboard", plugin_index)
+        self.assertIn("FEISHU_MEMORY_COPILOT_ADMIN_ENABLED", plugin_index)
+        self.assertIn("scripts/start_copilot_admin.py", plugin_index)
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="openclaw_tool_registry_", suffix=".sqlite") as tmp:

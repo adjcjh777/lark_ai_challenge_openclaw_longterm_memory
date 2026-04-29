@@ -3,6 +3,8 @@ from __future__ import annotations
 import html
 import json
 import sqlite3
+import threading
+from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -15,6 +17,49 @@ from memory_engine.db import db_path_from_env
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
 MAX_LIMIT = 200
+
+
+@dataclass
+class EmbeddedAdminRuntime:
+    enabled: bool
+    url: str | None = None
+    reason: str | None = None
+    server: CopilotAdminServer | None = None
+    thread: threading.Thread | None = None
+
+    def stop(self) -> None:
+        if self.server is not None:
+            self.server.shutdown()
+            self.server.server_close()
+        if self.thread is not None:
+            self.thread.join(timeout=5)
+
+    def to_log_payload(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "url": self.url,
+            "reason": self.reason,
+        }
+
+
+def start_embedded_admin(
+    *,
+    host: str = DEFAULT_ADMIN_HOST,
+    port: int = DEFAULT_ADMIN_PORT,
+    db_path: str | Path | None = None,
+    enabled: bool = True,
+) -> EmbeddedAdminRuntime:
+    if not enabled:
+        return EmbeddedAdminRuntime(enabled=False, reason="disabled")
+    try:
+        server = create_admin_server(host, port, db_path)
+    except OSError as exc:
+        return EmbeddedAdminRuntime(enabled=False, reason=f"bind_failed: {exc}")
+
+    thread = threading.Thread(target=server.serve_forever, name="copilot-admin-dashboard", daemon=True)
+    thread.start()
+    url = f"http://{host}:{server.server_port}"
+    return EmbeddedAdminRuntime(enabled=True, url=url, server=server, thread=thread)
 
 
 class AdminQueryService:

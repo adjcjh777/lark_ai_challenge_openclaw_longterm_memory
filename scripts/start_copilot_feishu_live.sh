@@ -17,6 +17,9 @@ export FEISHU_CARD_MODE="${FEISHU_CARD_MODE:-text}"
 export FEISHU_CARD_RETRY_COUNT="${FEISHU_CARD_RETRY_COUNT:-3}"
 export FEISHU_CARD_TIMEOUT_SECONDS="${FEISHU_CARD_TIMEOUT_SECONDS:-2}"
 export FEISHU_LOG_DIR="${FEISHU_LOG_DIR:-logs/feishu-copilot-live}"
+export COPILOT_ADMIN_ENABLED="${COPILOT_ADMIN_ENABLED:-1}"
+export COPILOT_ADMIN_HOST="${COPILOT_ADMIN_HOST:-127.0.0.1}"
+export COPILOT_ADMIN_PORT="${COPILOT_ADMIN_PORT:-8765}"
 
 if ! command -v lark-cli >/dev/null 2>&1; then
   echo "lark-cli not found in PATH" >&2
@@ -74,6 +77,11 @@ echo "  reviewers: configured"
 echo "  mode: $FEISHU_BOT_MODE"
 echo "  card mode: $FEISHU_CARD_MODE"
 echo "  log dir: $FEISHU_LOG_DIR"
+if [[ "$COPILOT_ADMIN_ENABLED" != "0" && "$COPILOT_ADMIN_ENABLED" != "false" ]]; then
+  echo "  dashboard: http://$COPILOT_ADMIN_HOST:$COPILOT_ADMIN_PORT"
+else
+  echo "  dashboard: disabled"
+fi
 echo
 
 python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli

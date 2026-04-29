@@ -8,7 +8,8 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from memory_engine.copilot.admin import AdminQueryService, create_admin_server
+from memory_engine.cli import build_parser
+from memory_engine.copilot.admin import AdminQueryService, create_admin_server, start_embedded_admin
 from memory_engine.db import init_db
 from memory_engine.repository import MemoryRepository, now_ms
 
@@ -93,6 +94,33 @@ class CopilotAdminTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+    def test_embedded_admin_starts_with_runtime_and_can_shutdown(self) -> None:
+        self._seed_rows()
+
+        runtime = start_embedded_admin(host="127.0.0.1", port=0, db_path=self.tmp.name, enabled=True)
+        try:
+            self.assertTrue(runtime.enabled)
+            self.assertIsNotNone(runtime.url)
+            assert runtime.url is not None
+            with urlopen(f"{runtime.url}/api/summary", timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(payload["ok"])
+            self.assertEqual(2, payload["data"]["memory_total"])
+        finally:
+            runtime.stop()
+
+    def test_copilot_feishu_listen_defaults_to_embedded_admin(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(["copilot-feishu", "listen"])
+
+        self.assertTrue(args.admin)
+        self.assertEqual("127.0.0.1", args.admin_host)
+        self.assertEqual(8765, args.admin_port)
+
+        disabled = parser.parse_args(["copilot-feishu", "listen", "--no-admin"])
+        self.assertFalse(disabled.admin)
 
 
 if __name__ == "__main__":

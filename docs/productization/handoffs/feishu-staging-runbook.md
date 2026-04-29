@@ -20,6 +20,23 @@
 | Copilot lark-cli sandbox | 仓库内受控测试群回归 | `scripts/start_copilot_feishu_live.sh` | OpenClaw Feishu websocket、legacy `feishu listen` |
 | Legacy fallback | 只复查旧 Bot handler | `scripts/start_feishu_bot.sh` | OpenClaw Feishu websocket、`copilot-feishu listen` |
 
+## 本地 Dashboard
+
+只读 dashboard 是 Memory Copilot runtime 的一部分，不作为另一个需要单独维护的服务：
+
+- OpenClaw 加载 `feishu-memory-copilot` 插件时，会尝试启动 dashboard。
+- `scripts/start_copilot_feishu_live.sh` 或 `python3 -m memory_engine copilot-feishu listen` 启动时，会同时启动 dashboard。
+- 默认地址：`http://127.0.0.1:8765`。
+- 只开放 `GET` / `HEAD` 查询；写请求返回 `405`。
+
+如需关闭 dashboard：
+
+```bash
+export FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=0
+# 或仓库内 listener 使用：
+python3 -m memory_engine copilot-feishu listen --no-admin
+```
+
 ## 开始前检查
 
 先确认 OpenClaw 版本锁：
@@ -92,6 +109,12 @@ python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45
 python3 scripts/check_openclaw_version.py
 python3 scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
 scripts/start_copilot_feishu_live.sh
+```
+
+启动成功后，本地只读 dashboard 默认可访问：
+
+```text
+http://127.0.0.1:8765
 ```
 
 测试群里按顺序发送：
