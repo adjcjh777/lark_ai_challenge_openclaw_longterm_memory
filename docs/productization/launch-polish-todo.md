@@ -316,7 +316,7 @@ git diff --check
 ollama ps
 ```
 
-### 8. P1：审计、监控和运维面
+### 8. P1：审计、监控和运维面（已完成本地审计/告警/healthcheck 运维面）
 
 要做什么：把 `memory_audit_events` 从 smoke test 表升级为可查询、可告警、可复盘的运维面。
 
@@ -328,15 +328,26 @@ ollama ps
 - `memory_engine/copilot/healthcheck.py`
 - `memory_engine/db.py`
 - `docs/productization/contracts/audit-observability-contract.md`
-- 新增后续 observability handoff
+- [audit ops observability handoff](handoffs/audit-ops-observability-handoff.md)
 
 完成标准：
 
-- audit query 或导出入口可用。
-- healthcheck 能看到 audit event 数、最近失败、权限 deny、redaction 计数。
-- 日志不泄露 token、secret、raw private memory。
-- 有告警边界：连续 permission deny、ingestion 失败、websocket down、embedding unavailable。
-- 有回滚和停机流程。
+- 已完成：audit query 或导出入口可用，支持 JSON / CSV / summary。
+- 已完成：告警脚本覆盖连续 permission deny、deny rate、显式 `ingestion_failed` 和 audit gap。
+- 已完成：healthcheck 能看到 audit event 数、最近失败、权限 deny、redaction 计数，并新增默认 skipped 的 OpenClaw websocket 运维入口。
+- 已完成：ingestion permission/source mismatch、Feishu fetch 失败、候选为空会写 `ingestion_failed` 审计，不写 raw text / quote / secret。
+- 已完成：embedding provider 输出 fallback 可用性、不可用原因和 monitoring 状态；runtime fallback 会写 `embedding_unavailable` ops audit。
+- 已完成：日志不泄露 token、secret、raw private memory。
+- 边界：这是本地审计查询、告警和 health/ops 口径补齐，不是生产级 Prometheus/Grafana，不是 productized live。
+
+已完成证据：
+
+- `memory_engine/document_ingestion.py`：补 `ingestion_failed` 审计。
+- `memory_engine/copilot/healthcheck.py`：补 `openclaw_websocket` 运维项和 embedding fallback 可观测字段。
+- `memory_engine/copilot/service.py`：embedding provider unavailable fallback 进入 ops audit。
+- `scripts/check_audit_alerts.py`：ingestion failure rate 优先使用显式 `ingestion_failed`。
+- `tests/test_audit_ops_scripts.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_healthcheck.py`：覆盖查询、告警、失败审计和 healthcheck 输出。
+- 新增 [audit ops observability handoff](handoffs/audit-ops-observability-handoff.md)。
 
 建议验证：
 
@@ -344,7 +355,9 @@ ollama ps
 python3 scripts/check_openclaw_version.py
 python3 scripts/check_copilot_health.py --json
 python3 -m compileall memory_engine scripts
-python3 -m unittest tests.test_copilot_healthcheck tests.test_copilot_permissions
+python3 -m unittest tests.test_copilot_healthcheck tests.test_audit_ops_scripts tests.test_document_ingestion tests.test_audit_log_sanitization
+python3 scripts/query_audit_events.py --summary --json
+python3 scripts/check_audit_alerts.py --json
 git diff --check
 ollama ps
 ```

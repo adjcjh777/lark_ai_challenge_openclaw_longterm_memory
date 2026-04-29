@@ -23,9 +23,24 @@ def main() -> int:
         action="store_true",
         help="Perform live embedding API calls to verify Ollama provider availability.",
     )
+    parser.add_argument(
+        "--openclaw-websocket-check",
+        action="store_true",
+        help="Run the staging OpenClaw Feishu websocket checker and include its structured result.",
+    )
+    parser.add_argument("--openclaw-websocket-timeout", type=int, default=30, help="OpenClaw websocket check timeout.")
     args = parser.parse_args()
 
-    report = run_copilot_healthcheck(live_embedding_check=args.live_embedding_check)
+    websocket_checker = None
+    if args.openclaw_websocket_check:
+        from scripts.check_openclaw_feishu_websocket import run_openclaw_feishu_websocket_check
+
+        websocket_checker = lambda: run_openclaw_feishu_websocket_check(timeout=args.openclaw_websocket_timeout)
+
+    report = run_copilot_healthcheck(
+        live_embedding_check=args.live_embedding_check,
+        openclaw_websocket_checker=websocket_checker,
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:

@@ -30,6 +30,7 @@
 | Feishu live sandbox | 已完成受控测试群联调 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh` |
 | Limited Feishu ingestion | 已完成本地 candidate-only 底座，支持群聊、文档、任务、会议、Bitable 来源文本 | `memory_engine/document_ingestion.py`、`tests/test_document_ingestion.py`、`docs/productization/handoffs/limited-feishu-ingestion-handoff.md` |
 | 真实 Feishu API 拉取入口 | 已完成任务、会议、Bitable 读取 fetcher、Feishu live `/task` / `/meeting` / `/bitable` 路由和 fetch 前 fail-closed 权限门控；结果只进入 candidate | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、`tests/test_feishu_fetchers.py`、`docs/productization/handoffs/feishu-api-pull-handoff.md` |
+| 审计查询、告警和运维面 | 已完成本地审计查询/导出、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口和 embedding fallback 可观测字段 | `scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
 | OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
 | Benchmark | 已完成多类评测样例 | `benchmarks/copilot_*.json`、`docs/benchmark-report.md` |
@@ -50,7 +51,6 @@
 
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
-| P0 | 补审计查询、监控和运维面 | 权限拒绝、ingestion 失败、websocket down、embedding unavailable、candidate/review 事件都能被查询和纳入 health / ops 口径 |
 | P1 | 扩大真实飞书样本实测 | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 做 smoke，继续保留 candidate-only、失败 fallback 和 no-overclaim |
 | P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
@@ -457,6 +457,7 @@ scripts/start_copilot_feishu_live.sh
 | Feishu websocket handoff | `docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
 | Storage migration handoff | `docs/productization/storage-migration-productization-handoff.md` | 存储迁移和生产存储试点方案 |
 | Review surface handoff | `docs/productization/handoffs/review-surface-operability-handoff.md` | Bitable review 写回幂等和读回确认 |
+| Audit ops handoff | `docs/productization/handoffs/audit-ops-observability-handoff.md` | 审计查询、告警和运维 healthcheck 补齐 |
 
 答辩时可以用这句话概括：
 
@@ -470,7 +471,6 @@ scripts/start_copilot_feishu_live.sh
 
 | 任务 | 位置 | 完成标准 |
 |---|---|---|
-| 补审计、监控和运维面 | `memory_engine/copilot/healthcheck.py`、`memory_engine/db.py`、`docs/productization/contracts/audit-observability-contract.md` | audit 可查询、healthcheck 能看到 deny / failure / redaction 等运维指标 |
 | 设计 productized live 长期运行方案 | `docs/productization/full-copilot-next-execution-doc.md` | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | 保持 no-overclaim 文档口径 | README、白皮书、Demo runbook、Benchmark report | 不把 demo、dry-run、sandbox、staging 写成 production live |
 
@@ -559,5 +559,5 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 多租户企业后台。
 - 真实权限后台。
 - 生产级长期在线 embedding 服务（本地 Ollama 已集成，非生产级）。
-- 长期监控、告警、回滚。
+- 生产级 Prometheus/Grafana 长期监控和自动回滚。
 - 真实 Feishu DM 稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路；当前只有一次受控 DM allow-path live E2E 证据。

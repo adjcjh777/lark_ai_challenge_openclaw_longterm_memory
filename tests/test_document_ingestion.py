@@ -138,6 +138,14 @@ class DocumentIngestionTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["code"], "permission_denied")
         self.assertEqual(result["error"]["details"]["reason_code"], "missing_permission_context")
+        audit = self.conn.execute(
+            "SELECT event_type, action, permission_decision, reason_code FROM memory_audit_events"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("ingestion_failed", audit["event_type"])
+        self.assertEqual("memory.create_candidate", audit["action"])
+        self.assertEqual("deny", audit["permission_decision"])
+        self.assertEqual("missing_permission_context", audit["reason_code"])
 
     def test_feishu_ingestion_malformed_permission_fails_closed_before_fetch(self) -> None:
         with patch("memory_engine.document_ingestion.fetch_feishu_document_text") as fetch:
@@ -209,6 +217,68 @@ class DocumentIngestionTest(unittest.TestCase):
         self.assertNotIn("--canary", rendered)
         self.assertNotIn("candidates", result)
         self.assertNotIn("document", result)
+        audit = self.conn.execute(
+            """
+            SELECT event_type, target_type, target_id, permission_decision, reason_code, request_id, trace_id
+            FROM memory_audit_events
+            """
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("ingestion_failed", audit["event_type"])
+        self.assertEqual("source", audit["target_type"])
+        self.assertEqual("document_feishu:doc_token", audit["target_id"])
+        self.assertEqual("deny", audit["permission_decision"])
+        self.assertEqual("source_context_mismatch", audit["reason_code"])
+        self.assertEqual("req_limited_feishu_ingestion", audit["request_id"])
+        self.assertEqual("trace_limited_feishu_ingestion", audit["trace_id"])
+
+    def test_feishu_ingestion_fetch_failure_records_sanitized_audit(self) -> None:
+        with patch(
+            "memory_engine.document_ingestion.fetch_feishu_document_text",
+            side_effect=RuntimeError("app_secret=sk-test should not leak"),
+        ):
+            result = ingest_document_source(
+                self.repo,
+                "doc_token",
+                current_context=permission_context(document_id="doc_token"),
+                limit=1,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("internal_error", result["error"]["code"])
+        self.assertEqual("feishu_fetch_failed", result["error"]["details"]["reason_code"])
+        audit = self.conn.execute(
+            "SELECT event_type, permission_decision, reason_code, redacted_fields FROM memory_audit_events"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("ingestion_failed", audit["event_type"])
+        self.assertEqual("withhold", audit["permission_decision"])
+        self.assertEqual("feishu_fetch_failed", audit["reason_code"])
+        rendered_audit = str(dict(audit))
+        self.assertNotIn("app_secret", rendered_audit)
+        self.assertNotIn("sk-test", rendered_audit)
+
+    def test_feishu_ingestion_empty_candidates_records_audit(self) -> None:
+        with patch(
+            "memory_engine.document_ingestion.fetch_feishu_document_text",
+            return_value="# 闲聊\n\n今天午饭吃什么？",
+        ):
+            result = ingest_document_source(
+                self.repo,
+                "doc_token",
+                current_context=permission_context(document_id="doc_token"),
+                limit=1,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(0, result["candidate_count"])
+        audit = self.conn.execute(
+            "SELECT event_type, permission_decision, reason_code FROM memory_audit_events"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("ingestion_failed", audit["event_type"])
+        self.assertEqual("withhold", audit["permission_decision"])
+        self.assertEqual("no_candidate_extracted", audit["reason_code"])
 
     def test_feishu_ingestion_missing_document_id_fails_closed_before_fetch(self) -> None:
         with patch("memory_engine.document_ingestion.fetch_feishu_document_text") as fetch:
@@ -306,6 +376,14 @@ class DocumentIngestionTest(unittest.TestCase):
         self.assertEqual("permission_denied", result["error"]["code"])
         self.assertEqual("source_context_mismatch", result["error"]["details"]["reason_code"])
         self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"])
+        audit = self.conn.execute(
+            "SELECT event_type, target_id, permission_decision, reason_code FROM memory_audit_events"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("ingestion_failed", audit["event_type"])
+        self.assertEqual("feishu_task:task_1", audit["target_id"])
+        self.assertEqual("deny", audit["permission_decision"])
+        self.assertEqual("source_context_mismatch", audit["reason_code"])
 
     def test_source_revocation_marks_confirmed_memory_stale_and_hides_recall(self) -> None:
         created = ingest_feishu_source(

@@ -34,11 +34,13 @@ PHASE_NAME = "Phase 6 Deployability + Healthcheck"
 SCOPE = "project:feishu_ai_challenge"
 
 OpenClawVersionReader = Callable[[], tuple[str, str]]
+OpenClawWebsocketChecker = Callable[[], dict[str, Any]]
 
 
 def run_copilot_healthcheck(
     *,
     openclaw_version_reader: OpenClawVersionReader | None = None,
+    openclaw_websocket_checker: OpenClawWebsocketChecker | None = None,
     root: Path | None = None,
     live_embedding_check: bool = False,
 ) -> dict[str, Any]:
@@ -57,6 +59,7 @@ def run_copilot_healthcheck(
         "copilot_service": _check_copilot_service(),
         "openclaw_schema": _check_openclaw_schema(repo_root / OPENCLAW_SCHEMA_FILE.relative_to(ROOT)),
         "openclaw_native_registry": _check_openclaw_native_registry(),
+        "openclaw_websocket": _check_openclaw_websocket(openclaw_websocket_checker),
         "storage_schema": _check_storage_schema(),
         "permission_contract": _check_permission_contract(),
         "cognee_adapter": _check_cognee_adapter(),
@@ -211,6 +214,60 @@ def _check_openclaw_native_registry() -> dict[str, Any]:
             "error": str(exc),
             "next_step": "修复 OpenClaw native tool registry artifact 后再运行 healthcheck。",
         }
+
+
+def _check_openclaw_websocket(checker: OpenClawWebsocketChecker | None) -> dict[str, Any]:
+    if checker is None:
+        return {
+            "status": "skipped",
+            "live_check_run": False,
+            "scope": "staging_websocket_evidence_only",
+            "command": "python3 scripts/check_openclaw_feishu_websocket.py --json",
+            "boundary": "默认 healthcheck 不主动消费真实 OpenClaw / Feishu websocket；该项是运维入口提示，不宣称 productized live。",
+            "next_step": "需要验证 websocket running/down 时，先确认单监听，再运行 scripts/check_openclaw_feishu_websocket.py --json。",
+        }
+    try:
+        result = checker()
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "live_check_run": True,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "next_step": "检查 OpenClaw websocket checker 依赖和单监听状态。",
+        }
+    checks = result.get("checks") if isinstance(result.get("checks"), dict) else {}
+    status_counts = result.get("status_counts") if isinstance(result.get("status_counts"), dict) else {}
+    fail_count = int(status_counts.get("fail") or 0)
+    warning_count = int(status_counts.get("warning") or 0)
+    channels = checks.get("channels_status") if isinstance(checks.get("channels_status"), dict) else {}
+    logs = checks.get("feishu_logs") if isinstance(checks.get("feishu_logs"), dict) else {}
+    consistency = checks.get("health_consistency") if isinstance(checks.get("health_consistency"), dict) else {}
+    if fail_count:
+        status = "fail"
+    elif warning_count:
+        status = "warning"
+    else:
+        status = "pass" if result.get("ok") else "warning"
+    return {
+        "status": status,
+        "live_check_run": True,
+        "running": bool(channels.get("channel_running") or channels.get("account_running")),
+        "probe_ok": bool(channels.get("probe_ok")),
+        "log_evidence": {
+            "inbound_message_seen": bool(logs.get("inbound_message_seen")),
+            "dispatching_to_agent": bool(logs.get("dispatching_to_agent")),
+            "dispatch_complete": bool(logs.get("dispatch_complete")),
+        },
+        "health_consistency": {
+            "status": consistency.get("status"),
+            "running_consistent": consistency.get("running_consistent"),
+        },
+        "status_counts": status_counts,
+        "boundary": result.get("boundary")
+        or "OpenClaw Feishu websocket staging evidence only; not production deployment or productized live.",
+        "next_step": "" if status == "pass" else "查看 channels_status、health_consistency 和 Feishu gateway 日志后再判断是否重启 websocket。",
+    }
 
 
 def _check_storage_schema() -> dict[str, Any]:
@@ -439,7 +496,14 @@ def _check_embedding_provider(path: Path, live_check: bool = False) -> dict[str,
         "live_available": live_available,
         "error": error_info,
         "fallback_available": True,
+        "runtime_fallback_available": True,
         "fallback": "DeterministicEmbeddingProvider",
+        "unavailable_reason": error_info
+        or (None if ollama_available else "ollama_provider_unavailable" if litellm_available else "litellm_not_available"),
+        "monitoring_status": "live_embedding_verified"
+        if live_available is True
+        else "configuration_only" if not live_check else "fallback_or_not_configured",
+        "boundary": "Deterministic fallback keeps local recall usable, but it is not a long-running embedding service.",
         "next_step": (
             "运行 python3 scripts/check_embedding_provider.py 进行完整验证。"
             if ollama_available

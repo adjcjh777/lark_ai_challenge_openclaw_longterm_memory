@@ -28,6 +28,11 @@ class CopilotHealthcheckTest(unittest.TestCase):
             report["checks"]["embedding_provider"]["status"], {"pass", "warning", "not_configured", "fallback_used"}
         )
         self.assertEqual("configuration_only", report["checks"]["embedding_provider"]["check_mode"])
+        self.assertTrue(report["checks"]["embedding_provider"]["runtime_fallback_available"])
+        self.assertIn("monitoring_status", report["checks"]["embedding_provider"])
+        self.assertEqual("skipped", report["checks"]["openclaw_websocket"]["status"])
+        self.assertFalse(report["checks"]["openclaw_websocket"]["live_check_run"])
+        self.assertIn("check_openclaw_feishu_websocket.py", report["checks"]["openclaw_websocket"]["next_step"])
         self.assertIn("status_counts", report)
 
     def test_healthcheck_storage_schema_is_checkable_without_claiming_migration(self) -> None:
@@ -78,6 +83,35 @@ class CopilotHealthcheckTest(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertEqual("fail", report["checks"]["openclaw_version"]["status"])
+        self.assertEqual(1, report["status_counts"]["fail"])
+
+    def test_healthcheck_can_include_injected_openclaw_websocket_result(self) -> None:
+        report = run_copilot_healthcheck(
+            openclaw_version_reader=lambda: ("2026.4.24", "2026.4.24"),
+            openclaw_websocket_checker=lambda: {
+                "ok": False,
+                "checks": {
+                    "channels_status": {
+                        "status": "fail",
+                        "channel_running": False,
+                        "probe_ok": False,
+                    },
+                    "health_consistency": {
+                        "status": "warning",
+                        "running_consistent": False,
+                    },
+                },
+                "status_counts": {"fail": 1, "warning": 1, "pass": 0},
+                "boundary": "staging only",
+            },
+        )
+
+        websocket = report["checks"]["openclaw_websocket"]
+        self.assertFalse(report["ok"])
+        self.assertEqual("fail", websocket["status"])
+        self.assertTrue(websocket["live_check_run"])
+        self.assertFalse(websocket["running"])
+        self.assertFalse(websocket["probe_ok"])
         self.assertEqual(1, report["status_counts"]["fail"])
 
 

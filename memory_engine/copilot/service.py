@@ -54,6 +54,7 @@ class CopilotService:
         # Initialize embedding provider
         self._embedding_provider = embedding_provider
         self._embedding_provider_initialized = False
+        self._embedding_provider_unavailable_reason: str | None = None
         self._reminder_state: dict[str, dict[str, Any]] = {}
 
         # Auto-initialize Cognee adapter if not provided
@@ -72,6 +73,14 @@ class CopilotService:
 
         # Initialize embedding provider if needed
         embedding_provider = self._get_or_init_embedding_provider()
+        if embedding_provider is None and self._embedding_provider_unavailable_reason:
+            self._record_ops_audit(
+                "embedding.provider",
+                request.scope,
+                request.current_context.to_dict(),
+                event_type="embedding_unavailable",
+                reason_code="embedding_provider_unavailable_fallback_used",
+            )
 
         retriever = LayerAwareRetriever(
             self._repository(),
@@ -420,6 +429,7 @@ class CopilotService:
 
         # Use provided provider if available
         if self._embedding_provider is not None:
+            self._embedding_provider_unavailable_reason = None
             return self._embedding_provider
 
         # Try to create OllamaEmbeddingProvider
@@ -427,15 +437,19 @@ class CopilotService:
             provider = create_embedding_provider(provider="ollama", fallback=False)
             if isinstance(provider, OllamaEmbeddingProvider):
                 self._embedding_provider = provider
+                self._embedding_provider_unavailable_reason = None
                 logger.info("OllamaEmbeddingProvider initialized successfully")
                 return self._embedding_provider
         except Exception as exc:
+            self._embedding_provider_unavailable_reason = f"provider_init_failed:{exc.__class__.__name__}"
             logger.debug(
                 "Failed to initialize OllamaEmbeddingProvider: %s. "
                 "Will use DeterministicEmbeddingProvider as fallback.",
                 exc,
             )
 
+        if self._embedding_provider_unavailable_reason is None:
+            self._embedding_provider_unavailable_reason = "ollama_provider_unavailable"
         return None
 
     def _repository(self) -> MemoryRepository:
@@ -530,6 +544,39 @@ class CopilotService:
         )
         with repo.conn:
             repo.record_audit_event(**audit)
+
+    def _record_ops_audit(
+        self,
+        action: str,
+        scope: str,
+        current_context: dict[str, Any],
+        *,
+        event_type: str,
+        reason_code: str,
+    ) -> None:
+        repo = self._repository()
+        permission_payload = current_context.get("permission") if isinstance(current_context, dict) else None
+        permission = _parse_permission(permission_payload)
+        actor = _audit_actor(permission_payload, permission)
+        with repo.conn:
+            repo.record_audit_event(
+                event_type=event_type,
+                action=action,
+                tool_name=action,
+                target_type="ops",
+                actor_id=actor["actor_id"],
+                actor_roles=actor["roles"],
+                tenant_id=actor["tenant_id"],
+                organization_id=actor["organization_id"],
+                scope=scope,
+                permission_decision="withhold",
+                reason_code=reason_code,
+                request_id=_permission_field(permission_payload, permission, "request_id"),
+                trace_id=_permission_field(permission_payload, permission, "trace_id"),
+                visible_fields=["provider", "fallback", "reason_code"],
+                redacted_fields=["query", "content", "evidence", "raw_text"],
+                source_context=_source_context(permission_payload, permission),
+            )
 
     def _sync_confirmed_memory_to_cognee(self, scope: str, response: dict[str, object]) -> dict[str, object]:
         if self.cognee_adapter is None or not self.cognee_adapter.is_configured:

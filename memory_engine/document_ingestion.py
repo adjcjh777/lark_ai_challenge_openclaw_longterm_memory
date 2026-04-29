@@ -50,18 +50,69 @@ def ingest_document_source(
     if not is_local_fixture:
         permission_error = check_scope_access(scope, current_context, action="memory.create_candidate")
         if permission_error is not None:
+            _record_ingestion_audit_failure(
+                repo,
+                source_type="document_feishu",
+                source_id=feishu_token or url_or_token,
+                scope=scope,
+                current_context=current_context,
+                reason_code=_error_reason_code(permission_error),
+                permission_decision="deny",
+            )
             return permission_error.to_response()
         source_error = _check_feishu_source_context(feishu_token or "", current_context)
         if source_error is not None:
+            _record_ingestion_audit_failure(
+                repo,
+                source_type="document_feishu",
+                source_id=feishu_token or url_or_token,
+                scope=scope,
+                current_context=current_context,
+                reason_code=_error_reason_code(source_error),
+                permission_decision="deny",
+            )
             return source_error.to_response()
 
-    document = load_document_source(
-        url_or_token,
-        lark_cli=lark_cli,
-        profile=profile,
-        as_identity=as_identity,
-    )
+    try:
+        document = load_document_source(
+            url_or_token,
+            lark_cli=lark_cli,
+            profile=profile,
+            as_identity=as_identity,
+        )
+    except Exception:
+        if not is_local_fixture:
+            _record_ingestion_audit_failure(
+                repo,
+                source_type="document_feishu",
+                source_id=feishu_token or url_or_token,
+                scope=scope,
+                current_context=current_context,
+                reason_code="feishu_fetch_failed",
+                permission_decision="withhold",
+            )
+            return CopilotError(
+                "internal_error",
+                "failed to fetch Feishu document source",
+                retryable=True,
+                details={
+                    "reason_code": "feishu_fetch_failed",
+                    "requested_document_id": feishu_token or url_or_token,
+                    "redacted_fields": ["content", "quote", "evidence", "raw_text"],
+                },
+            ).to_response()
+        raise
     candidates = extract_candidate_quotes(document.text, limit=limit)
+    if not candidates:
+        _record_ingestion_audit_failure(
+            repo,
+            source_type=document.source_type,
+            source_id=document.token,
+            scope=scope,
+            current_context=current_context,
+            reason_code="no_candidate_extracted",
+            permission_decision="withhold",
+        )
     results = []
     service = CopilotService(repository=repo)
     for index, quote in enumerate(candidates, start=1):
@@ -111,12 +162,40 @@ def ingest_feishu_source(
 ) -> dict[str, Any]:
     permission_error = check_scope_access(scope, current_context, action=_permission_action(current_context))
     if permission_error is not None:
+        _record_ingestion_audit_failure(
+            repo,
+            source_type=source.source_type,
+            source_id=source.source_id,
+            scope=scope,
+            current_context=current_context,
+            reason_code=_error_reason_code(permission_error),
+            permission_decision="deny",
+        )
         return permission_error.to_response()
     source_error = _check_limited_source_context(source, current_context)
     if source_error is not None:
+        _record_ingestion_audit_failure(
+            repo,
+            source_type=source.source_type,
+            source_id=source.source_id,
+            scope=scope,
+            current_context=current_context,
+            reason_code=_error_reason_code(source_error),
+            permission_decision="deny",
+        )
         return source_error.to_response()
 
     candidates = extract_candidate_quotes(source.text, limit=limit)
+    if not candidates:
+        _record_ingestion_audit_failure(
+            repo,
+            source_type=source.source_type,
+            source_id=source.source_id,
+            scope=scope,
+            current_context=current_context,
+            reason_code="no_candidate_extracted",
+            permission_decision="withhold",
+        )
     results = []
     service = CopilotService(repository=repo)
     for index, quote in enumerate(candidates, start=1):
@@ -471,6 +550,44 @@ def _permission_action(current_context: dict[str, Any] | None) -> str:
     return value if isinstance(value, str) and value else "memory.create_candidate"
 
 
+def _error_reason_code(error: CopilotError) -> str:
+    reason_code = error.details.get("reason_code")
+    return reason_code if isinstance(reason_code, str) and reason_code else "ingestion_error"
+
+
+def _record_ingestion_audit_failure(
+    repo: MemoryRepository,
+    *,
+    source_type: str,
+    source_id: str,
+    scope: str,
+    current_context: dict[str, Any] | None,
+    reason_code: str,
+    permission_decision: str,
+) -> None:
+    permission, source_context = _permission_parts(current_context)
+    with repo.conn:
+        repo.record_audit_event(
+            event_type="ingestion_failed",
+            action=_permission_action(current_context),
+            tool_name="limited_feishu_ingestion",
+            target_type="source",
+            target_id=f"{source_type}:{source_id}",
+            actor_id=_actor_id(permission),
+            actor_roles=_actor_roles(permission),
+            tenant_id=_actor_tenant(permission),
+            organization_id=_actor_organization(permission),
+            scope=scope,
+            permission_decision=permission_decision,
+            reason_code=reason_code,
+            request_id=_request_id(permission, source_id),
+            trace_id=_trace_id(permission, source_id),
+            visible_fields=["source_type", "source_id", "status", "reason_code"],
+            redacted_fields=["content", "quote", "evidence", "raw_text"],
+            source_context=source_context,
+        )
+
+
 def _candidate_source_payload(source: FeishuIngestionSource, quote: str, index: int) -> dict[str, Any]:
     metadata = source.metadata or {}
     payload: dict[str, Any] = {
@@ -619,6 +736,16 @@ def _actor_roles(permission: dict[str, Any]) -> list[str]:
     actor = actor if isinstance(actor, dict) else {}
     roles = actor.get("roles")
     return [str(role) for role in roles] if isinstance(roles, list) else []
+
+
+def _request_id(permission: dict[str, Any], source_id: str) -> str:
+    value = permission.get("request_id") if isinstance(permission, dict) else None
+    return value if isinstance(value, str) and value else f"req_ingestion_failed_{source_id}"
+
+
+def _trace_id(permission: dict[str, Any], source_id: str) -> str:
+    value = permission.get("trace_id") if isinstance(permission, dict) else None
+    return value if isinstance(value, str) and value else f"trace_ingestion_failed_{source_id}"
 
 
 def _actor_tenant(permission: dict[str, Any]) -> str | None:

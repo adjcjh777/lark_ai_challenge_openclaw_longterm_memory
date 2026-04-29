@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-29（更新：UX-07 评委体验包）
+日期：2026-04-29（更新：审计查询、告警和运维 healthcheck 面）
 
 ## 先看这个
 
@@ -62,7 +62,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| [productization/handoffs/](productization/handoffs/) | 14 个已完成的 handoff / evidence / runbook |
+| [productization/handoffs/](productization/handoffs/) | 17 个已完成的 handoff / evidence / runbook |
 | [archive/plans/](archive/plans/) | 22 个已完成的日期计划和 handoff |
 | [archive/legacy-day-docs/](archive/legacy-day-docs/) | Day 1-7 旧文档 |
 | [archive/legacy-master/](archive/legacy-master/) | 旧主控计划 |

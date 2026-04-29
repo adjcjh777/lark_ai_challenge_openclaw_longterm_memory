@@ -1,7 +1,7 @@
 # Audit & Observability Contract：Feishu Memory Copilot Phase 1
 
 日期：2026-04-28
-状态：Phase A + Phase 6 审计可观测性补充完成。本地 SQLite audit table + healthcheck audit smoke + 审计查询/导出/告警 + 日志脱敏验证。仍不是生产级 Prometheus/Grafana 监控。
+状态：Phase A + Phase 6 审计可观测性补充完成。本地 SQLite audit table + healthcheck audit smoke + 审计查询/导出/告警 + ingestion failure 显式审计 + websocket 运维入口 + embedding fallback 可观测字段 + 日志脱敏验证。仍不是生产级 Prometheus/Grafana 监控。
 适用范围：Copilot service、permission decisions、Feishu review surface、OpenClaw tool trace、healthcheck、审计查询脚本、告警检查脚本。
 
 ## 1. 目标
@@ -17,6 +17,9 @@
 
 - 审计查询脚本 `scripts/query_audit_events.py`：支持按时间范围、event_type、actor_id、tenant_id 查询，支持 CSV/JSON 导出，支持 summary 聚合
 - 审计告警检查 `scripts/check_audit_alerts.py`：连续 deny、ingestion 失败率、deny 比率、审计间隔告警
+- `ingestion_failed` 显式审计事件：permission/source mismatch、Feishu fetch 失败、候选提取为空都会写入脱敏审计，便于查询和告警
+- Healthcheck `openclaw_websocket`：默认不主动跑 live 检查，只给 staging checker 命令；显式开启时纳入 running/probe/log/health consistency
+- Healthcheck `embedding_provider`：输出 `runtime_fallback_available`、`unavailable_reason`、`monitoring_status`，避免把 deterministic fallback 写成长期 embedding 服务
 - 日志脱敏测试 `tests/test_audit_log_sanitization.py`：验证审计日志不含 token/secret、deny 日志不含 raw private memory、redacted_fields 只记录字段名
 - Healthcheck audit_smoke 增强：验证所有 5 种工具和 search allow/deny 都写入审计
 - 停机和回滚流程文档 `docs/productization/feishu-staging-runbook.md`
@@ -57,7 +60,9 @@
 | heartbeat reminder generated/suppressed | 是 |
 | Feishu review card approve/reject click | 是 |
 | limited ingestion source -> candidate | 是 |
+| limited ingestion failure / fetch failure / no candidate extracted | 是 |
 | source revoked/deleted handling | 是 |
+| embedding provider unavailable fallback | 是 |
 
 ## 4. Healthcheck Fields
 
@@ -86,7 +91,14 @@ Phase 6 healthcheck 必须能输出：
   "embedding_provider": {
     "provider": "ollama",
     "model": "qwen3-embedding:0.6b-fp16",
-    "available": true
+    "available": true,
+    "runtime_fallback_available": true,
+    "monitoring_status": "configuration_only"
+  },
+  "openclaw_websocket": {
+    "status": "skipped",
+    "live_check_run": false,
+    "command": "python3 scripts/check_openclaw_feishu_websocket.py --json"
   }
 }
 ```
@@ -106,6 +118,8 @@ Phase 6 healthcheck 必须能输出：
 - `reminder_generated_total`
 - `reminder_suppressed_total`
 - `ingestion_candidate_only_total`
+- `ingestion_failed_total`
+- `embedding_unavailable_total`
 - `sensitive_redaction_total`
 
 ## 6. Safe Logging Rules
@@ -162,7 +176,9 @@ Phase 6 healthcheck 必须能输出：
 - `python3 scripts/query_audit_events.py --json --limit 10` 可正常输出。
 - `python3 scripts/query_audit_events.py --summary --json` 可正常输出聚合统计。
 - `python3 scripts/check_audit_alerts.py --json` 可正常输出告警检查结果。
+- `python3 scripts/check_copilot_health.py --json` 默认包含 skipped 的 `openclaw_websocket` 运维入口；需要 live staging 时使用 `--openclaw-websocket-check`。
 - `python3 -m unittest tests.test_audit_log_sanitization` 测试全部通过。
+- `python3 -m unittest tests.test_audit_ops_scripts tests.test_document_ingestion tests.test_copilot_healthcheck` 覆盖审计查询、显式 ingestion failure、websocket health 注入和 embedding fallback 字段。
 
 ## 9. Audit Data Rollback
 

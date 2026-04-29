@@ -134,7 +134,11 @@ def check_ingestion_failure_rate(
         conn.execute(
             """
         SELECT COUNT(*) FROM memory_audit_events
-        WHERE created_at >= ? AND action IN ('memory.create_candidate', 'source.revoked')
+        WHERE created_at >= ?
+          AND (
+            event_type IN ('limited_ingestion_candidate', 'ingestion_failed')
+            OR action IN ('memory.create_candidate', 'source.revoked')
+          )
         """,
             (since_ms,),
         ).fetchone()[0]
@@ -148,8 +152,13 @@ def check_ingestion_failure_rate(
             """
         SELECT COUNT(*) FROM memory_audit_events
         WHERE created_at >= ?
-          AND action IN ('memory.create_candidate', 'source.revoked')
-          AND (reason_code LIKE '%failed%' OR reason_code LIKE '%error%' OR permission_decision = 'deny')
+          AND (
+            event_type = 'ingestion_failed'
+            OR (
+              action IN ('memory.create_candidate', 'source.revoked')
+              AND (reason_code LIKE '%failed%' OR reason_code LIKE '%error%' OR permission_decision = 'deny')
+            )
+          )
         """,
             (since_ms,),
         ).fetchone()[0]
