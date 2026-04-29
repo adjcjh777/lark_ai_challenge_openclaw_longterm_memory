@@ -39,6 +39,40 @@ class CopilotAdminTest(unittest.TestCase):
             created_by="test",
         )
         with self.conn:
+            event_time = now_ms()
+            self.repo.record_raw_event(
+                "project:admin_demo",
+                "机器人收到一条新的飞书测试消息。",
+                source_type="feishu_message",
+                source_id="msg_admin",
+                sender_id="ou_admin",
+                raw_json={"chat_id": "chat_admin"},
+                event_time=event_time,
+            )
+            self.conn.execute(
+                """
+                INSERT INTO knowledge_graph_nodes (
+                  id, tenant_id, organization_id, node_type, node_key, label,
+                  visibility_policy, status, metadata_json, first_seen_at,
+                  last_seen_at, observation_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "kgn_admin_chat",
+                    "tenant:demo",
+                    "org:demo",
+                    "feishu_chat",
+                    "chat_admin",
+                    "Feishu chat chat_admin",
+                    "team",
+                    "active",
+                    "{}",
+                    event_time,
+                    event_time,
+                    1,
+                ),
+            )
             self.repo.record_audit_event(
                 event_type="candidate_created",
                 action="memory.create_candidate",
@@ -64,6 +98,11 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual({"active": 1, "candidate": 1}, summary["memory_by_status"])
         self.assertEqual(1, summary["audit_total"])
 
+        live = service.live_overview()
+        self.assertIn("msg_admin", {item["source_id"] for item in live["recent_raw_events"]})
+        self.assertEqual(1, live["knowledge_graph"]["node_total"])
+        self.assertEqual("feishu_chat", live["knowledge_graph"]["recent_nodes"][0]["node_type"])
+
         candidates = service.list_memories(status="candidate", query="review", limit=10)
         self.assertEqual(1, candidates["total"])
         self.assertEqual(self.candidate_id, candidates["items"][0]["id"])
@@ -86,9 +125,15 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(2, payload["data"]["memory_total"])
 
+            with urlopen(f"{base_url}/api/live", timeout=5) as response:
+                live_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(live_payload["ok"])
+            self.assertIn("msg_admin", {item["source_id"] for item in live_payload["data"]["recent_raw_events"]})
+
             with urlopen(base_url, timeout=5) as response:
                 html = response.read().decode("utf-8")
             self.assertLess(html.index("<th>Updated</th>"), html.index("<th>Status</th>"))
+            self.assertIn('data-view="home"', html)
 
             request = Request(f"{base_url}/api/memories", method="POST")
             with self.assertRaises(HTTPError) as raised:

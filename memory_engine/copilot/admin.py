@@ -80,6 +80,23 @@ class AdminQueryService:
             "audit_by_permission_decision": self._count_by("memory_audit_events", "permission_decision"),
         }
 
+    def live_overview(self) -> dict[str, Any]:
+        recent_raw_events = self._recent_raw_events(limit=20)
+        recent_audit = self.list_audit(limit=15)["items"]
+        graph = self._knowledge_graph_overview(limit=12)
+        knowledge_cards = self.list_memories(status="active", limit=8)["items"]
+        return {
+            "bot_activity": {
+                "latest_raw_event_at": recent_raw_events[0]["event_time_iso"] if recent_raw_events else None,
+                "latest_audit_at": recent_audit[0]["created_at_iso"] if recent_audit else None,
+                "latest_graph_seen_at": graph["recent_nodes"][0]["last_seen_at_iso"] if graph["recent_nodes"] else None,
+            },
+            "recent_raw_events": recent_raw_events,
+            "recent_audit": recent_audit,
+            "knowledge_graph": graph,
+            "knowledge_cards": knowledge_cards,
+        }
+
     def list_memories(
         self,
         *,
@@ -319,6 +336,55 @@ class AdminQueryService:
         ).fetchall()
         return {str(row["group_key"]): int(row["count"]) for row in rows}
 
+    def _recent_raw_events(self, *, limit: int) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT id, tenant_id, organization_id, visibility_policy, source_type,
+                   source_id, source_url, ingestion_status, scope_type, scope_id,
+                   sender_id, event_time, content, raw_json, created_at
+            FROM raw_events
+            ORDER BY event_time DESC, created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (_clamp_limit(limit),),
+        ).fetchall()
+        return [_raw_event_row_to_dict(row) for row in rows]
+
+    def _knowledge_graph_overview(self, *, limit: int) -> dict[str, Any]:
+        recent_nodes = self.conn.execute(
+            """
+            SELECT id, tenant_id, organization_id, node_type, node_key, label,
+                   visibility_policy, status, metadata_json, first_seen_at,
+                   last_seen_at, observation_count
+            FROM knowledge_graph_nodes
+            ORDER BY last_seen_at DESC, observation_count DESC, id DESC
+            LIMIT ?
+            """,
+            (_clamp_limit(limit),),
+        ).fetchall()
+        recent_edges = self.conn.execute(
+            """
+            SELECT e.id, e.tenant_id, e.organization_id, e.edge_type,
+                   e.metadata_json, e.first_seen_at, e.last_seen_at,
+                   e.observation_count, source.label AS source_label,
+                   target.label AS target_label
+            FROM knowledge_graph_edges e
+            LEFT JOIN knowledge_graph_nodes source ON source.id = e.source_node_id
+            LEFT JOIN knowledge_graph_nodes target ON target.id = e.target_node_id
+            ORDER BY e.last_seen_at DESC, e.observation_count DESC, e.id DESC
+            LIMIT ?
+            """,
+            (_clamp_limit(limit),),
+        ).fetchall()
+        return {
+            "node_total": self._count("knowledge_graph_nodes"),
+            "edge_total": self._count("knowledge_graph_edges"),
+            "nodes_by_type": self._count_by("knowledge_graph_nodes", "node_type"),
+            "edges_by_type": self._count_by("knowledge_graph_edges", "edge_type"),
+            "recent_nodes": [_graph_node_row_to_dict(row) for row in recent_nodes],
+            "recent_edges": [_graph_edge_row_to_dict(row) for row in recent_edges],
+        }
+
 
 class CopilotAdminServer(ThreadingHTTPServer):
     db_path: str
@@ -370,6 +436,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/summary":
                 self._send_json(self._api_summary(), send_body=send_body)
                 return
+            if parsed.path == "/api/live":
+                self._send_json(self._api_live(), send_body=send_body)
+                return
             if parsed.path == "/api/memories":
                 self._send_json(self._api_memories(parsed.query), send_body=send_body)
                 return
@@ -406,6 +475,10 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     def _api_summary(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).summary()}
+
+    def _api_live(self) -> dict[str, Any]:
+        with _open_readonly_connection(self.db_path) as conn:
+            return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).live_overview()}
 
     def _api_memories(self, query_string: str) -> dict[str, Any]:
         params = parse_qs(query_string)
@@ -510,12 +583,37 @@ def _evidence_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return payload
 
 
+def _raw_event_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    payload = dict(row)
+    payload["scope"] = f"{row['scope_type']}:{row['scope_id']}"
+    payload["raw_json"] = _loads_json(payload.get("raw_json"), {})
+    payload["event_time_iso"] = _ms_to_iso(payload.get("event_time"))
+    payload["created_at_iso"] = _ms_to_iso(payload.get("created_at"))
+    return payload
+
+
 def _audit_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
     for key in ("actor_roles", "visible_fields", "redacted_fields"):
         payload[key] = _loads_json(payload.get(key), [])
     payload["source_context"] = _loads_json(payload.get("source_context"), {})
     payload["created_at_iso"] = _ms_to_iso(payload.get("created_at"))
+    return payload
+
+
+def _graph_node_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    payload = dict(row)
+    payload["metadata"] = _loads_json(payload.pop("metadata_json", None), {})
+    payload["first_seen_at_iso"] = _ms_to_iso(payload.get("first_seen_at"))
+    payload["last_seen_at_iso"] = _ms_to_iso(payload.get("last_seen_at"))
+    return payload
+
+
+def _graph_edge_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    payload = dict(row)
+    payload["metadata"] = _loads_json(payload.pop("metadata_json", None), {})
+    payload["first_seen_at_iso"] = _ms_to_iso(payload.get("first_seen_at"))
+    payload["last_seen_at_iso"] = _ms_to_iso(payload.get("last_seen_at"))
     return payload
 
 
@@ -749,6 +847,61 @@ def _index_html() -> str:
       max-width: 460px;
       line-height: 1.45;
     }}
+    .home-grid {{
+      display: grid;
+      grid-template-columns: minmax(320px, 1.2fr) minmax(280px, 1fr);
+      gap: 1px;
+      background: var(--line);
+      min-width: 980px;
+    }}
+    .home-section {{
+      background: var(--surface);
+      padding: 14px;
+      min-height: 220px;
+    }}
+    .home-section h2 {{
+      margin: 0 0 12px;
+      font-size: 15px;
+      line-height: 1.2;
+    }}
+    .feed-item {{
+      border-top: 1px solid var(--line);
+      padding: 10px 0;
+      line-height: 1.45;
+    }}
+    .feed-item:first-of-type {{
+      border-top: 0;
+      padding-top: 0;
+    }}
+    .feed-title {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 4px;
+    }}
+    .feed-meta {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .live-dot {{
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 6px;
+    }}
+    .kv {{
+      display: grid;
+      grid-template-columns: minmax(120px, auto) 1fr;
+      gap: 6px 10px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .kv span:nth-child(odd) {{
+      color: var(--muted);
+    }}
     .detail {{
       border-left: 3px solid var(--accent);
       background: #fffcf4;
@@ -767,6 +920,7 @@ def _index_html() -> str:
       main {{ padding: 12px; }}
       .toolbar {{ grid-template-columns: 1fr 1fr; }}
       .summary {{ grid-template-columns: repeat(2, minmax(110px, 1fr)); }}
+      .home-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -801,14 +955,15 @@ def _index_html() -> str:
     </form>
     <section class="summary" id="summary"></section>
     <nav class="tabs">
-      <button class="tab active" data-view="memories">Memory</button>
+      <button class="tab active" data-view="home">Home</button>
+      <button class="tab" data-view="memories">Memory</button>
       <button class="tab" data-view="audit">Audit</button>
       <button class="tab" data-view="tables">Tables</button>
     </nav>
     <section class="panel" id="panel"><div class="empty">加载中</div></section>
   </main>
   <script>
-    const state = {{ view: "memories" }};
+    const state = {{ view: "home" }};
     const $ = (id) => document.getElementById(id);
     const text = (value) => value === null || value === undefined || value === "" ? "-" : String(value);
     const esc = (value) => text(value).replace(/[&<>"']/g, c => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[c]);
@@ -855,15 +1010,86 @@ def _index_html() -> str:
       return params;
     }}
 
-    async function loadView() {{
-      $("panel").innerHTML = `<div class="empty">加载中</div>`;
+    async function loadView(options = {{}}) {{
+      if (!options.quiet) $("panel").innerHTML = `<div class="empty">加载中</div>`;
       try {{
+        if (state.view === "home") return renderHome(await getJson("/api/live"));
         if (state.view === "memories") return renderMemories(await getJson(`/api/memories?${{paramsFor("memories")}}`));
         if (state.view === "audit") return renderAudit(await getJson(`/api/audit?${{paramsFor("audit")}}`));
         return renderTables(await getJson("/api/tables"));
       }} catch (error) {{
         $("panel").innerHTML = `<div class="error">${{esc(error.message)}}</div>`;
       }}
+    }}
+
+    function renderHome(data) {{
+      const activity = data.bot_activity || {{}};
+      const rawRows = data.recent_raw_events.map(item => `
+        <div class="feed-item">
+          <div class="feed-title">
+            <strong>${{esc(item.source_type)}}</strong>
+            <span class="feed-meta mono">${{esc(item.event_time_iso)}}</span>
+          </div>
+          <div class="content-cell">${{esc(item.content)}}</div>
+          <div class="feed-meta mono">${{esc(item.scope)}} · sender=${{esc(item.sender_id)}} · source=${{esc(item.source_id)}} · ${{esc(item.ingestion_status)}}</div>
+        </div>`).join("");
+      const auditRows = data.recent_audit.map(item => `
+        <div class="feed-item">
+          <div class="feed-title">
+            <strong>${{esc(item.event_type)}}</strong>
+            <span class="feed-meta mono">${{esc(item.created_at_iso)}}</span>
+          </div>
+          <div><span class="status ${{esc(item.permission_decision)}}">${{esc(item.permission_decision)}}</span> ${{esc(item.action)}} / ${{esc(item.reason_code)}}</div>
+          <div class="feed-meta mono">${{esc(item.request_id)}} · ${{esc(item.trace_id)}}</div>
+        </div>`).join("");
+      const graph = data.knowledge_graph;
+      const nodeRows = graph.recent_nodes.map(item => `
+        <div class="feed-item">
+          <div class="feed-title">
+            <strong>${{esc(item.label)}}</strong>
+            <span class="feed-meta mono">${{esc(item.last_seen_at_iso)}}</span>
+          </div>
+          <div class="feed-meta mono">${{esc(item.node_type)}} · observations=${{esc(item.observation_count)}} · ${{esc(item.status)}}</div>
+        </div>`).join("");
+      const memoryRows = data.knowledge_cards.map(item => `
+        <div class="feed-item">
+          <div class="feed-title">
+            <strong>${{esc(item.subject)}}</strong>
+            <span class="feed-meta mono">${{esc(item.updated_at_iso)}}</span>
+          </div>
+          <div class="content-cell">${{esc(item.current_value)}}</div>
+          <div class="feed-meta mono">${{esc(item.scope)}} · ${{esc(item.type)}}</div>
+        </div>`).join("");
+      $("panel").innerHTML = `
+        <div class="home-grid">
+          <section class="home-section">
+            <h2><span class="live-dot"></span>Bot 实时输入</h2>
+            <div class="kv">
+              <span>最新消息</span><strong class="mono">${{esc(activity.latest_raw_event_at)}}</strong>
+              <span>最新审计</span><strong class="mono">${{esc(activity.latest_audit_at)}}</strong>
+              <span>最新图谱观察</span><strong class="mono">${{esc(activity.latest_graph_seen_at)}}</strong>
+            </div>
+            ${{rawRows || `<div class="empty">暂无 raw event</div>`}}
+          </section>
+          <section class="home-section">
+            <h2>工具调用 / 权限审计</h2>
+            ${{auditRows || `<div class="empty">暂无 audit event</div>`}}
+          </section>
+          <section class="home-section">
+            <h2>知识图谱</h2>
+            <div class="kv">
+              <span>节点</span><strong>${{esc(graph.node_total)}}</strong>
+              <span>边</span><strong>${{esc(graph.edge_total)}}</strong>
+              <span>节点类型</span><span class="mono">${{esc(JSON.stringify(graph.nodes_by_type))}}</span>
+              <span>边类型</span><span class="mono">${{esc(JSON.stringify(graph.edges_by_type))}}</span>
+            </div>
+            ${{nodeRows || `<div class="empty">暂无 graph node</div>`}}
+          </section>
+          <section class="home-section">
+            <h2>Wiki 记忆卡片</h2>
+            ${{memoryRows || `<div class="empty">暂无 active memory</div>`}}
+          </section>
+        </div>`;
     }}
 
     function renderMemories(data) {{
@@ -918,6 +1144,10 @@ def _index_html() -> str:
       state.view = tab.dataset.view;
       loadView();
     }}));
+    setInterval(() => {{
+      loadSummary();
+      if (state.view === "home") loadView({{ quiet: true }});
+    }}, 3000);
     loadSummary().then(loadView).catch(error => $("panel").innerHTML = `<div class="error">${{esc(error.message)}}</div>`);
   </script>
 </body>
