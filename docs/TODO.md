@@ -142,6 +142,7 @@
 > 详细子任务文档：[todos/TODO-8-productized-live.md](todos/TODO-8-productized-live.md)（157 行，28 个子任务）
 
 - [ ] 写清部署方案（SQLite → PostgreSQL 迁移路径）
+- [ ] 复赛后补生产级图谱存储方案：SQLite 图谱账本仅保留 L0/local staging；L1/L2 先做 PostgreSQL graph ledger pilot；多跳图查询成为主路径后再评估 Neo4j / ArangoDB / Cognee graph projection
 - [ ] 写清监控方案（日志、指标、告警）
 - [ ] 写清回滚方案
 - [ ] 写清权限后台设计

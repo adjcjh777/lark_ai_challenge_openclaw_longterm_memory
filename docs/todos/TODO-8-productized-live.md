@@ -30,6 +30,7 @@
 ### 未完成
 
 - 生产 DB 部署（当前是本地 SQLite）。
+- 生产级图谱存储（当前 graph ledger 仍是 SQLite；复赛后需先做 PostgreSQL graph ledger pilot，再评估原生图数据库或 Cognee graph projection）。
 - 长期运行监控（当前只有 healthcheck）。
 - 完整多租户后台。
 - 生产级 card action 长期运行。
@@ -46,6 +47,7 @@
 | 子任务 | 说明 | 输出文件 | 验收标准 |
 |---|---|---|---|
 | [x] 8.1.1 生产 DB 选型 | SQLite -> PostgreSQL 迁移方案；托管 vs 自建 | `docs/productization/contracts/storage-contract.md` 更新 | 选型理由和边界写清 |
+| [ ] 8.1.1a 生产级图谱存储 | 复赛后把 `knowledge_graph_nodes` / `knowledge_graph_edges` 从 SQLite 本地账本推进到 PostgreSQL graph ledger pilot；只有真实多跳图查询成为主路径后，再评估 Neo4j / ArangoDB / Cognee graph projection | `docs/productization/productized-live-long-run-plan.md`、后续 Graph storage RFC | SQLite 只保留 L0/local staging；PostgreSQL 是上线试点权威 ledger；任何图数据库/projection 都可重建且必须回查 ledger permission/evidence |
 | [x] 8.1.2 部署架构图 | OpenClaw Agent + CopilotService + PostgreSQL + Cognee + Ollama | `docs/productization/productized-live-architecture.md` | 架构图可给新成员理解 |
 | [x] 8.1.3 部署步骤文档 | 从零到可运行的完整步骤 | `docs/productization/deployment-runbook.md` | 新机器可按文档部署 |
 | [x] 8.1.4 环境变量和配置管理 | 生产环境变量、密钥管理、配置模板 | `docs/productization/deployment-runbook.md` | 配置项清单完整 |
