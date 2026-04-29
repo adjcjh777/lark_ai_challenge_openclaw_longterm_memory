@@ -27,7 +27,18 @@ function loadToolSpecs() {
   if (!Array.isArray(schema.tools)) {
     throw new Error("memory_tools.schema.json must contain a tools array");
   }
-  return schema.tools;
+  return schema.tools.map((toolSpec) => ({
+    ...toolSpec,
+    input_schema: attachSchemaDefinitions(toolSpec.input_schema, schema.$defs),
+  }));
+}
+
+function attachSchemaDefinitions(inputSchema, definitions) {
+  const schema = JSON.parse(JSON.stringify(inputSchema));
+  if (definitions && typeof definitions === "object" && !schema.$defs) {
+    schema.$defs = definitions;
+  }
+  return schema;
 }
 
 function createTool(toolSpec) {
@@ -38,10 +49,35 @@ function createTool(toolSpec) {
     parameters: toolSpec.input_schema,
     execute: async (_toolCallId, rawParams) => {
       const pythonToolName = OPENCLAW_TO_PYTHON[toolSpec.name] || toolSpec.name;
-      const output = await runPythonTool(pythonToolName, rawParams || {});
+      const output = await runPythonTool(pythonToolName, normalizeToolPayload(rawParams || {}));
       return jsonResult(output);
     },
   };
+}
+
+function normalizeToolPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+  const normalized = { ...payload };
+  normalized.current_context = parseJsonObjectString(normalized.current_context);
+  return normalized;
+}
+
+function parseJsonObjectString(value) {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : value;
+  } catch {
+    return value;
+  }
 }
 
 async function runPythonTool(toolName, payload) {

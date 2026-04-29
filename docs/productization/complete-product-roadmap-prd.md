@@ -22,7 +22,7 @@ Metadata:
 3. Phase C：Feishu Staging Runbook（已完成单监听守卫和 runbook）。
 4. Phase D：Live Cognee / Ollama Embedding Gate（已完成，见 [Phase D handoff](phase-d-live-embedding-handoff.md)）。
 5. Phase E：Product QA + No-overclaim 审查（已完成，见 [Phase E handoff](phase-e-no-overclaim-handoff.md)）。
-6. 后续若继续推进，`memory.*` / `fmc_*` first-class OpenClaw 原生工具注册、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、真实权限映射和 limited Feishu ingestion 本地底座已补；优先补真实 Feishu DM live E2E、真实 API 拉取扩样和 productized live，但当前不宣称真实 Feishu DM 已稳定进入本项目 first-class `fmc_*` / `memory.*` 工具链路或 production live 已完成。
+6. 后续若继续推进，`memory.*` / `fmc_*` first-class OpenClaw 原生工具注册、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E、真实权限映射和 limited Feishu ingestion 本地底座已补；优先补评委/用户主路径脚本、真实 API 拉取扩样和 productized live，但当前不宣称真实 Feishu DM 已稳定进入本项目 first-class `fmc_*` / `memory.*` 工具链路或 production live 已完成。
 
 ---
 
@@ -43,7 +43,7 @@ RALPLAN intake 时的仓库事实（历史快照，已被 2026-05-07 Phase 1/Pha
 - 2026-05-07 最新状态：`current_context.permission` 已进入 OpenClaw schema；`memory.search/create_candidate/confirm/reject/explain_versions/prefetch` 已在 `CopilotService` 统一权限门控；missing/malformed permission 已 fail closed；真实 Feishu document ingestion 已在 fetch 前 fail closed。对应提交：`b6b17b4`。
 - Phase 2 OpenClaw live bridge 已完成，commit `cb21bc7`：`handle_tool_request()` 统一桥接六个 MVP `memory.*` 工具到 permission-aware `CopilotService`，并返回 bridge request/trace/permission decision。
 - Phase 3 Feishu UI / Review Surface 已完成本地闭环：card、Bitable dry-run 和 card action 消费 service/tool output，permission denied 不展示未授权 evidence/current_value。
-- 2026-04-28 补充：真实 OpenClaw Agent runtime 受控证据已完成，run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用仓库证据脚本并跑通三条 Copilot flow；Feishu staging runbook 已完成单监听守卫；Phase D live embedding gate 已完成，真实返回 1024 维并清理本项目 Ollama 模型；后续 first-class OpenClaw 原生工具注册、Agent 本地 `fmc_*` 工具调用验证、Feishu websocket staging running 证据、真实权限映射和 limited Feishu ingestion 本地底座已补。仍未完成：productized live、真实 Feishu DM 到本项目 first-class `fmc_*` / `memory.*` 工具链路的 live E2E、真实任务/会议/Bitable API 拉取扩样。
+- 2026-04-28 补充：真实 OpenClaw Agent runtime 受控证据已完成，run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用仓库证据脚本并跑通三条 Copilot flow；Feishu staging runbook 已完成单监听守卫；Phase D live embedding gate 已完成，真实返回 1024 维并清理本项目 Ollama 模型；后续 first-class OpenClaw 原生工具注册、Agent 本地 `fmc_*` 工具调用验证、Feishu websocket staging running 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E、真实权限映射和 limited Feishu ingestion 本地底座已补。仍未完成：productized live、真实 Feishu DM 稳定长期路由、真实任务/会议/Bitable API 拉取扩样。
 
 ---
 

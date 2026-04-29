@@ -32,7 +32,7 @@
               }
             }
           },
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
+          "current_context": {"$ref": "#/$defs/current_context_payload"}
         }
       },
       "output_schema": {"$ref": "#/$defs/search_output"}
@@ -48,7 +48,7 @@
           "text": {"type": "string", "minLength": 1},
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "source": {"type": "object", "additionalProperties": true, "minProperties": 1},
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1},
+          "current_context": {"$ref": "#/$defs/current_context_payload"},
           "auto_confirm": {"type": "boolean", "default": false}
         }
       },
@@ -66,7 +66,7 @@
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "actor_id": {"type": "string", "minLength": 1},
           "reason": {"type": "string"},
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
+          "current_context": {"$ref": "#/$defs/current_context_payload"}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
@@ -83,7 +83,7 @@
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "actor_id": {"type": "string", "minLength": 1},
           "reason": {"type": "string"},
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
+          "current_context": {"$ref": "#/$defs/current_context_payload"}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
@@ -99,7 +99,7 @@
           "memory_id": {"type": "string", "minLength": 1},
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
           "include_archived": {"type": "boolean", "default": false},
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1}
+          "current_context": {"$ref": "#/$defs/current_context_payload"}
         }
       },
       "output_schema": {"$ref": "#/$defs/tool_output"}
@@ -114,7 +114,7 @@
         "properties": {
           "task": {"type": "string", "minLength": 1},
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1},
+          "current_context": {"$ref": "#/$defs/current_context_payload"},
           "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
         }
       },
@@ -129,7 +129,7 @@
         "additionalProperties": false,
         "properties": {
           "scope": {"type": "string", "pattern": "^[^:]+:.+$"},
-          "current_context": {"type": "object", "additionalProperties": true, "minProperties": 1},
+          "current_context": {"$ref": "#/$defs/current_context_payload"},
           "limit": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5}
         }
       },
@@ -168,6 +168,16 @@
     }
   },
   "$defs": {
+    "current_context_payload": {
+      "anyOf": [
+        {"$ref": "#/$defs/current_context"},
+        {
+          "type": "string",
+          "minLength": 2,
+          "description": "Compatibility shim for OpenClaw 2026.4.24 openai-completions tool calls that may serialize nested objects as JSON strings. The plugin/runner must parse this back to an object and still fail closed if permission is missing or malformed."
+        }
+      ]
+    },
     "current_context": {
       "type": "object",
       "required": ["permission"],

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -55,11 +56,12 @@ def native_tool_registrations(path: Path = SCHEMA_PATH) -> list[OpenClawToolRegi
         if not isinstance(tool, dict):
             raise ValueError("OpenClaw tool entries must be objects")
         name = _require_string(tool, "name")
+        input_schema = _require_object(tool, "input_schema")
         registrations.append(
             OpenClawToolRegistration(
                 name=name,
                 description=_require_string(tool, "description"),
-                input_schema=_require_object(tool, "input_schema"),
+                input_schema=_with_schema_definitions(input_schema, schema.get("$defs")),
                 output_schema=_require_object(tool, "output_schema"),
             )
         )
@@ -108,3 +110,10 @@ def _require_object(payload: dict[str, Any], key: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{key} must be an object")
     return value
+
+
+def _with_schema_definitions(input_schema: dict[str, Any], definitions: Any) -> dict[str, Any]:
+    schema = copy.deepcopy(input_schema)
+    if isinstance(definitions, dict) and "$defs" not in schema:
+        schema["$defs"] = copy.deepcopy(definitions)
+    return schema

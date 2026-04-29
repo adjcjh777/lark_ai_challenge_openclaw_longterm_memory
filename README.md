@@ -18,7 +18,7 @@
 
 | 能力 | 当前状态 | 主要证据 |
 |---|---|---|
-| OpenClaw memory 工具 | 已完成本机 first-class tool registry 和 Agent 本地 `fmc_*` 工具调用验证 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py` |
+| OpenClaw memory 工具 | 已完成本机 first-class tool registry、Agent 本地 `fmc_*` 工具调用验证，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` |
 | Copilot Core | 已完成核心服务层 | `memory_engine/copilot/service.py`、`tools.py`、`governance.py`、`retrieval.py` |
 | 权限门控 | 已完成 fail-closed 本地闭环 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` |
 | 真实飞书权限映射 | 已完成本地权限映射闭环 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/permissions.py`、`docs/productization/real-feishu-permission-mapping-handoff.md` |
@@ -49,7 +49,7 @@
 
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
-| P1 | 补真实 Feishu DM 到本项目 first-class 工具的 live E2E 证据 | 真实飞书 DM 进入 OpenClaw Agent 后，自然选择本项目 `fmc_memory_search` / `fmc_memory_prefetch` / `fmc_memory_create_candidate`，再翻译进入 `memory.search` / `memory.prefetch` / `memory.create_candidate` 和 `handle_tool_request()` / `CopilotService` |
+| P0 | 固定评委/用户主路径脚本和体验验收 | 在已有受控真实 DM `fmc_memory_search` allow-path 证据基础上，固化评委 10 分钟入口、主路径脚本、失败提示和可复测命令；仍不宣称稳定长期路由 |
 | P1 | 接真实 Feishu API 拉取与扩充人工复核样本 | 在 limited ingestion 底座之上，接任务、会议、Bitable 等真实 API 拉取，并保留失败 fallback 和 candidate-only 边界 |
 | P0 | 维护用户体验产品化闭环和评委 10 分钟入口 | [用户体验产品化 TODO](docs/productization/user-experience-todo.md) 记录 UX-01 到 UX-07 状态；评委入口为 [10 分钟评委体验包](docs/judge-10-minute-experience.md)，仍不宣称 production live |
 | P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
@@ -470,7 +470,7 @@ scripts/start_copilot_feishu_live.sh
 
 | 任务 | 位置 | 完成标准 |
 |---|---|---|
-| 补真实 Feishu DM 到 first-class 工具的 live E2E 证据 | `agent_adapters/openclaw/plugin/`、`memory_engine/copilot/openclaw_tool_runner.py`、`scripts/check_feishu_dm_routing.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` | 在已完成本地 Agent `fmc_*` 工具调用验证的基础上，补真实 Feishu DM 进入 OpenClaw Agent 后自然选择本项目工具的证据 |
+| 固定评委/用户主路径脚本和体验验收 | `docs/judge-10-minute-experience.md`、`docs/demo-runbook.md`、`scripts/check_demo_readiness.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` | 在已完成一次受控真实 DM `fmc_memory_search` allow-path 证据基础上，固化评委可复测入口、主路径脚本和失败提示；不写成稳定长期路由 |
 | 扩大真实 Feishu ingestion 范围 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/feishu_live.py`、`docs/productization/full-copilot-next-execution-doc.md` | 真实飞书来源继续 candidate-only，权限和审计可检查 |
 | 补审计、监控和运维面 | `memory_engine/copilot/healthcheck.py`、`memory_engine/db.py`、`docs/productization/contracts/audit-observability-contract.md` | audit 可查询、healthcheck 能看到 deny / failure / redaction 等运维指标 |
 | 设计 productized live 长期运行方案 | `docs/productization/full-copilot-next-execution-doc.md` | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
@@ -562,4 +562,4 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 真实权限后台。
 - 生产级长期在线 embedding 服务（本地 Ollama 已集成，非生产级）。
 - 长期监控、告警、回滚。
-- 真实 Feishu DM 稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路。
+- 真实 Feishu DM 稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路；当前只有一次受控 DM allow-path live E2E 证据。

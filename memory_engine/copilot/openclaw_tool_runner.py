@@ -33,9 +33,29 @@ def run_envelope(envelope: dict[str, Any]) -> dict[str, Any]:
             },
         }
 
+    payload = _normalize_openclaw_payload(payload)
     db_path = envelope.get("db_path") or os.getenv("FEISHU_MEMORY_COPILOT_DB")
     service = CopilotService(db_path=db_path if isinstance(db_path, str) and db_path else None)
     return handle_tool_request(tool_name, payload, service=service)
+
+
+def _normalize_openclaw_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(payload)
+    normalized["current_context"] = _json_object_string_to_dict(normalized.get("current_context"))
+    return normalized
+
+
+def _json_object_string_to_dict(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    stripped = value.strip()
+    if not stripped.startswith("{") or not stripped.endswith("}"):
+        return value
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return value
+    return parsed if isinstance(parsed, dict) else value
 
 
 def main() -> int:

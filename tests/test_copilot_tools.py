@@ -65,7 +65,7 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertFalse(search_filters["additionalProperties"])
 
         prefetch_context = tools["fmc_memory_prefetch"]["properties"]["current_context"]
-        self.assertEqual(1, prefetch_context["minProperties"])
+        self.assertEqual("#/$defs/current_context_payload", prefetch_context["$ref"])
 
         # Map Python-side names to OpenClaw-facing names for schema lookups
         python_to_openclaw = {
@@ -85,6 +85,11 @@ class CopilotToolContractTest(unittest.TestCase):
 
         current_context = schema["$defs"]["current_context"]
         self.assertEqual(["permission"], current_context["required"])
+        context_payload = schema["$defs"]["current_context_payload"]
+        self.assertEqual("#/$defs/current_context", context_payload["anyOf"][0]["$ref"])
+        self.assertEqual("string", context_payload["anyOf"][1]["type"])
+        for tool_schema in tools.values():
+            self.assertEqual("#/$defs/current_context_payload", tool_schema["properties"]["current_context"]["$ref"])
 
         bridge = schema["$defs"]["bridge_metadata"]
         self.assertEqual("openclaw_tool", bridge["properties"]["entrypoint"]["const"])

@@ -4,11 +4,12 @@ Validates that:
 1. Plugin tools are registered with correct fmc_xxx names
 2. Plugin translates fmc_xxx → memory.xxx for Python runner
 3. Python runner handles tool requests and returns bridge metadata
-4. Permission context is auto-generated when not provided
+4. OpenClaw JSON-string current_context compatibility does not bypass fail-closed permission
 """
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -169,14 +170,13 @@ class FeishuDMRoutingTest(unittest.TestCase):
         bridge = response["bridge"]
         self.assertEqual("fmc_memory_prefetch", bridge["tool"])
 
-    def test_runner_auto_generates_permission_context(self) -> None:
-        """Verify runner auto-generates permission when not provided."""
+    def test_runner_missing_permission_context_fails_closed(self) -> None:
+        """Verify runner does not bypass fail-closed permission checks."""
         with tempfile.NamedTemporaryFile(prefix="dm_routing_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)
             init_db(conn)
             conn.close()
 
-            # Call without explicit permission context
             response = run_envelope(
                 {
                     "tool": "memory.search",
@@ -189,8 +189,60 @@ class FeishuDMRoutingTest(unittest.TestCase):
                 }
             )
 
+        self.assertFalse(response["ok"])
+        self.assertEqual("permission_denied", response["error"]["code"])
+        self.assertEqual("missing_permission_context", response["error"]["details"]["reason_code"])
+
+    def test_runner_accepts_json_string_current_context(self) -> None:
+        """Verify MiMo/OpenAI-completions JSON-string context is parsed before validation."""
+        with tempfile.NamedTemporaryFile(prefix="dm_routing_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(SCOPE, "Copilot live sandbox 验收口径：真实 DM 必须调用 fmc_memory_search", source_type="test")
+            conn.close()
+
+            response = run_envelope(
+                {
+                    "tool": "memory.search",
+                    "db_path": tmp.name,
+                    "payload": {
+                        "query": "Copilot live sandbox 验收口径",
+                        "scope": SCOPE,
+                        "current_context": json.dumps(
+                            demo_permission_context("memory.search", SCOPE),
+                            ensure_ascii=False,
+                        ),
+                    },
+                }
+            )
+
         self.assertTrue(response["ok"])
         self.assertEqual("allow", response["bridge"]["permission_decision"]["decision"])
+        self.assertEqual("fmc_memory_search", response["bridge"]["tool"])
+
+    def test_runner_malformed_json_string_current_context_fails_closed(self) -> None:
+        """Verify malformed context strings are not converted to permissive defaults."""
+        with tempfile.NamedTemporaryFile(prefix="dm_routing_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            conn.close()
+
+            response = run_envelope(
+                {
+                    "tool": "memory.search",
+                    "db_path": tmp.name,
+                    "payload": {
+                        "query": "test",
+                        "scope": SCOPE,
+                        "current_context": "{\"scope\":",
+                    },
+                }
+            )
+
+        self.assertFalse(response["ok"])
+        self.assertEqual("validation_error", response["error"]["code"])
+        self.assertIn("current_context must be an object", response["error"]["message"])
 
     def test_openclaw_to_python_mapping_completeness(self) -> None:
         """Verify OPENCLAW_TO_PYTHON covers all registered tools."""
@@ -212,6 +264,16 @@ class FeishuDMRoutingTest(unittest.TestCase):
             "fmc_heartbeat_review_due",
         ]
         self.assertEqual(sorted(expected), sorted(tool_names))
+
+    def test_plugin_manifest_embeds_current_context_definitions(self) -> None:
+        """Verify manifest consumers receive a resolvable permission context schema."""
+        manifest = openclaw_plugin_manifest()
+        for tool in manifest["tools"]:
+            input_schema = tool["input_schema"]
+            self.assertEqual("#/$defs/current_context_payload", input_schema["properties"]["current_context"]["$ref"])
+            self.assertIn("$defs", input_schema)
+            self.assertIn("current_context_payload", input_schema["$defs"])
+            self.assertIn("permission_context", input_schema["$defs"])
 
 
 if __name__ == "__main__":
