@@ -29,6 +29,26 @@ class GraphNodeRegistration:
         }
 
 
+@dataclass(frozen=True)
+class FeishuMessageGraphRegistration:
+    chat_node_id: str
+    user_node_id: str
+    message_node_id: str
+    membership_edge_id: str
+    sent_edge_id: str
+    contains_edge_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "chat_node_id": self.chat_node_id,
+            "user_node_id": self.user_node_id,
+            "message_node_id": self.message_node_id,
+            "membership_edge_id": self.membership_edge_id,
+            "sent_edge_id": self.sent_edge_id,
+            "contains_edge_id": self.contains_edge_id,
+        }
+
+
 def register_feishu_chat_node(
     conn: sqlite3.Connection,
     event: FeishuMessageEvent,
@@ -98,6 +118,135 @@ def register_feishu_chat_node(
         label=chat_node["label"],
         status=chat_node["status"],
         edge_id=edge_id,
+    )
+
+
+def register_feishu_message_context(
+    conn: sqlite3.Connection,
+    event: FeishuMessageEvent,
+    *,
+    scope: str,
+    tenant_id: str,
+    organization_id: str,
+    visibility_policy: str,
+    entrypoint: str,
+    chat_node_id: str | None = None,
+) -> FeishuMessageGraphRegistration:
+    """Register allowed Feishu actor/message topology without storing raw message text."""
+
+    ts = _event_time_ms(event)
+    chat_node = None
+    if chat_node_id:
+        chat_node = conn.execute(
+            "SELECT * FROM knowledge_graph_nodes WHERE id = ?",
+            (chat_node_id,),
+        ).fetchone()
+    if chat_node is None:
+        chat_registration = register_feishu_chat_node(
+            conn,
+            event,
+            scope=scope,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            visibility_policy=visibility_policy,
+            entrypoint=entrypoint,
+            allowed=True,
+        )
+        chat_node = conn.execute(
+            "SELECT * FROM knowledge_graph_nodes WHERE id = ?",
+            (chat_registration.node_id,),
+        ).fetchone()
+    sender_key = event.sender_id or "unknown_feishu_actor"
+    user_node = _upsert_node(
+        conn,
+        tenant_id=tenant_id,
+        organization_id=organization_id,
+        node_type="feishu_user",
+        node_key=sender_key,
+        label=f"Feishu user {sender_key}",
+        visibility_policy=visibility_policy,
+        status="active",
+        metadata={
+            "scope": scope,
+            "entrypoint": entrypoint,
+            "sender_type": event.sender_type,
+            "identity_policy": "one_user_node_per_tenant_org_actor_id",
+        },
+        seen_at=ts,
+    )
+    message_node = _upsert_node(
+        conn,
+        tenant_id=tenant_id,
+        organization_id=organization_id,
+        node_type="feishu_message",
+        node_key=event.message_id,
+        label=f"Feishu message {event.message_id}",
+        visibility_policy=visibility_policy,
+        status="observed",
+        metadata={
+            "scope": scope,
+            "entrypoint": entrypoint,
+            "chat_id": event.chat_id,
+            "chat_type": event.chat_type,
+            "sender_type": event.sender_type,
+            "message_type": event.message_type,
+            "content_policy": "raw_text_not_stored_in_graph_node",
+            "raw_event_policy": "content_lives_in_raw_events_after_allowlist_and_candidate_gate",
+        },
+        seen_at=ts,
+    )
+    if chat_node is None:
+        raise RuntimeError("Feishu chat graph node was not registered")
+    membership_edge = _upsert_edge(
+        conn,
+        tenant_id=tenant_id,
+        organization_id=organization_id,
+        source_node_id=user_node["id"],
+        target_node_id=chat_node["id"],
+        edge_type="member_of_feishu_chat",
+        metadata={
+            "scope": scope,
+            "entrypoint": entrypoint,
+            "chat_type": event.chat_type,
+        },
+        seen_at=ts,
+    )
+    sent_edge = _upsert_edge(
+        conn,
+        tenant_id=tenant_id,
+        organization_id=organization_id,
+        source_node_id=user_node["id"],
+        target_node_id=message_node["id"],
+        edge_type="sent_feishu_message",
+        metadata={
+            "scope": scope,
+            "entrypoint": entrypoint,
+            "chat_id": event.chat_id,
+        },
+        seen_at=ts,
+    )
+    contains_edge = _upsert_edge(
+        conn,
+        tenant_id=tenant_id,
+        organization_id=organization_id,
+        source_node_id=chat_node["id"],
+        target_node_id=message_node["id"],
+        edge_type="contains_feishu_message",
+        metadata={
+            "scope": scope,
+            "entrypoint": entrypoint,
+            "message_type": event.message_type,
+            "content_policy": "raw_text_not_stored_in_graph_node",
+        },
+        seen_at=ts,
+    )
+    return FeishuMessageGraphRegistration(
+        chat_node_id=chat_node["id"],
+        user_node_id=user_node["id"],
+        message_node_id=message_node["id"],
+        membership_edge_id=membership_edge,
+        sent_edge_id=sent_edge,
+        contains_edge_id=contains_edge,
     )
 
 

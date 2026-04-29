@@ -26,7 +26,7 @@ from memory_engine.feishu_runtime import FeishuRunLogger
 from memory_engine.models import parse_scope
 from memory_engine.repository import MemoryRepository
 
-from .graph_context import register_feishu_chat_node
+from .graph_context import register_feishu_chat_node, register_feishu_message_context
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
 from .service import CopilotService
 from .tools import handle_tool_request
@@ -187,16 +187,44 @@ def handle_copilot_message_event(
             "publish": publish_result,
         }
 
+    with conn:
+        message_graph = register_feishu_message_context(
+            conn,
+            event,
+            scope=scope,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            visibility_policy=visibility,
+            entrypoint=ENTRYPOINT,
+            chat_node_id=graph_node.get("node_id"),
+        ).to_dict()
+
     invocation = invocation_from_event(event, scope=scope)
     if invocation.tool_name == "copilot.help":
         reply = _format_help()
         publish_result = _publish(publisher, event, reply, config)
-        return _event_result(event, scope, invocation, {"ok": True, "tool": "copilot.help"}, publish_result, graph_node)
+        return _event_result(
+            event,
+            scope,
+            invocation,
+            {"ok": True, "tool": "copilot.help"},
+            publish_result,
+            graph_node,
+            message_graph,
+        )
 
     if invocation.tool_name == "copilot.health":
         reply = _format_health(scope=scope, db_path=str(db_path_from_env()), dry_run=dry_run, config=config)
         publish_result = _publish(publisher, event, reply, config)
-        return _event_result(event, scope, invocation, {"ok": True, "tool": "copilot.health"}, publish_result, graph_node)
+        return _event_result(
+            event,
+            scope,
+            invocation,
+            {"ok": True, "tool": "copilot.health"},
+            publish_result,
+            graph_node,
+            message_graph,
+        )
 
     repo = MemoryRepository(conn)
     if invocation.tool_name == "memory.create_candidate" and repo.has_source_event(SOURCE_TYPE, event.message_id):
@@ -210,7 +238,15 @@ def handle_copilot_message_event(
             ],
         )
         publish_result = _publish(publisher, event, reply, config)
-        return _event_result(event, scope, invocation, {"ok": True, "duplicate": True}, publish_result, graph_node)
+        return _event_result(
+            event,
+            scope,
+            invocation,
+            {"ok": True, "duplicate": True},
+            publish_result,
+            graph_node,
+            message_graph,
+        )
 
     service = CopilotService(repository=repo)
     invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
@@ -224,7 +260,7 @@ def handle_copilot_message_event(
         invocation=invocation,
         tool_result=tool_result,
     )
-    return _event_result(event, scope, invocation, tool_result, publish_result, graph_node)
+    return _event_result(event, scope, invocation, tool_result, publish_result, graph_node, message_graph)
 
 
 def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFeishuInvocation:
@@ -1085,6 +1121,7 @@ def _event_result(
     tool_result: dict[str, Any],
     publish_result: dict[str, Any],
     graph_node: dict[str, Any] | None = None,
+    message_graph: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result = {
         "ok": bool(publish_result.get("ok", False)) and bool(tool_result.get("ok", True)),
@@ -1098,6 +1135,8 @@ def _event_result(
     }
     if graph_node is not None:
         result["graph_node"] = graph_node
+    if message_graph is not None:
+        result["message_graph"] = message_graph
     if tool_result.get("duplicate"):
         result["duplicate"] = True
     return result

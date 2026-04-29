@@ -336,6 +336,148 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertIsNotNone(raw)
         self.assertIn(new_chat_id, raw["raw_json"])
 
+    def test_disallowed_group_does_not_create_user_or_message_graph_nodes(self) -> None:
+        new_chat_id = "oc_disallowed_private_group"
+        event = message_event_from_payload(
+            payload(
+                "om_live_disallowed_user_message",
+                "/remember 决定：未授权群不应记录用户和消息事件。",
+                chat_id=new_chat_id,
+            )
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ignored"])
+        self.assertEqual(
+            2,
+            self.conn.execute("SELECT COUNT(*) AS count FROM knowledge_graph_nodes").fetchone()["count"],
+        )
+        self.assertEqual(
+            0,
+            self.conn.execute(
+                "SELECT COUNT(*) AS count FROM knowledge_graph_nodes WHERE node_type IN ('feishu_user', 'feishu_message')"
+            ).fetchone()["count"],
+        )
+
+    def test_allowed_group_records_user_message_and_relationship_edges(self) -> None:
+        chat_id = "oc_graph_context_group"
+        event = message_event_from_payload(
+            payload(
+                "om_live_graph_message",
+                "/remember 决定：图谱只存消息事件节点，正文仍走 candidate/evidence。",
+                chat_id=chat_id,
+            )
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(
+            os.environ,
+            {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": chat_id, "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"},
+            clear=False,
+        ):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        user = self.conn.execute(
+            "SELECT id, node_key FROM knowledge_graph_nodes WHERE node_type = 'feishu_user' AND node_key = ?",
+            ("ou_live_user",),
+        ).fetchone()
+        message = self.conn.execute(
+            "SELECT id, node_key, metadata_json FROM knowledge_graph_nodes WHERE node_type = 'feishu_message'",
+        ).fetchone()
+        chat = self.conn.execute(
+            "SELECT id FROM knowledge_graph_nodes WHERE node_type = 'feishu_chat' AND node_key = ?",
+            (chat_id,),
+        ).fetchone()
+        self.assertIsNotNone(user)
+        self.assertIsNotNone(message)
+        self.assertIsNotNone(chat)
+        self.assertEqual("om_live_graph_message", message["node_key"])
+        self.assertIn("raw_text_not_stored_in_graph_node", message["metadata_json"])
+        self.assertEqual(
+            1,
+            self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM knowledge_graph_edges
+                WHERE edge_type = 'member_of_feishu_chat'
+                  AND source_node_id = ?
+                  AND target_node_id = ?
+                """,
+                (user["id"], chat["id"]),
+            ).fetchone()["count"],
+        )
+        self.assertEqual(
+            1,
+            self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM knowledge_graph_edges
+                WHERE edge_type = 'sent_feishu_message'
+                  AND source_node_id = ?
+                  AND target_node_id = ?
+                """,
+                (user["id"], message["id"]),
+            ).fetchone()["count"],
+        )
+        self.assertEqual(
+            1,
+            self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM knowledge_graph_edges
+                WHERE edge_type = 'contains_feishu_message'
+                  AND source_node_id = ?
+                  AND target_node_id = ?
+                """,
+                (chat["id"], message["id"]),
+            ).fetchone()["count"],
+        )
+
+    def test_same_user_across_groups_is_one_node_with_group_specific_membership_edges(self) -> None:
+        first_chat = "oc_graph_group_one"
+        second_chat = "oc_graph_group_two"
+        for message_id, chat_id in (
+            ("om_live_graph_group_one", first_chat),
+            ("om_live_graph_group_two", second_chat),
+        ):
+            event = message_event_from_payload(
+                payload(message_id, "/remember 决定：同一个用户跨群只应有一个用户节点。", chat_id=chat_id)
+            )
+            self.assertIsNotNone(event)
+            with patch.dict(
+                os.environ,
+                {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": f"{first_chat},{second_chat}", "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"},
+                clear=False,
+            ):
+                handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        user = self.conn.execute(
+            "SELECT id FROM knowledge_graph_nodes WHERE node_type = 'feishu_user' AND node_key = 'ou_live_user'"
+        ).fetchone()
+        self.assertIsNotNone(user)
+        self.assertEqual(
+            1,
+            self.conn.execute(
+                "SELECT COUNT(*) AS count FROM knowledge_graph_nodes WHERE node_type = 'feishu_user' AND node_key = 'ou_live_user'"
+            ).fetchone()["count"],
+        )
+        self.assertEqual(
+            2,
+            self.conn.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM knowledge_graph_edges
+                WHERE edge_type = 'member_of_feishu_chat'
+                  AND source_node_id = ?
+                """,
+                (user["id"],),
+            ).fetchone()["count"],
+        )
+
     def test_health_redacts_live_ids(self) -> None:
         with patch.dict(
             os.environ,
