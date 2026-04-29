@@ -397,7 +397,41 @@ git diff --check
 ollama ps
 ```
 
-### 10. P2：体验和旧入口收敛
+### 10. P2：Productized live 长期运行方案（已完成方案，未上线）
+
+要做什么：把 productized live 从一句“以后做生产化”收敛成可执行的 gate、拓扑、监控、回滚、权限后台和审计 UI 方案。
+
+为什么要做：后续进入长期运行前，必须先明确哪些条件允许 L1/L2 pilot，哪些状态必须停写或回滚，哪些草案文档不能当成已验证命令。
+
+主要位置：
+
+- [productized-live-long-run-plan.md](productized-live-long-run-plan.md)
+- [handoffs/productized-live-long-run-plan-handoff.md](handoffs/productized-live-long-run-plan-handoff.md)
+- `deployment-runbook.md`
+- `productized-live-architecture.md`
+- `monitoring-design.md`
+- `permission-admin-design.md`
+- `audit-ui-design.md`
+- `ops-runbook.md`
+
+完成标准：
+
+- 已完成：L0/L1/L2/L3 gate 写清。
+- 已完成：部署拓扑、单监听、PostgreSQL ledger、Cognee curated recall、review/audit surface 写清。
+- 已完成：监控告警、权限后台、审计 UI、停写、回滚和数据恢复边界写清。
+- 已完成：已有 productized live 草案文档已加校准提示，避免把未实现命令当成上线验收入口。
+- 边界：这只是长期运行方案，不是生产部署、不是生产级监控、不是多租户后台、不是 productized live 已完成。
+
+建议验证：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
+git diff --check
+ollama ps
+```
+
+### 11. P2：体验和旧入口收敛
 
 要做什么：减少命令感，让 Agent 自然判断何时 search、prefetch、create candidate；同时把旧 CLI / Bot handler 收敛为 fallback，不让双轨逻辑长期分叉。
 

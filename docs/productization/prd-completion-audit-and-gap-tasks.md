@@ -9,7 +9,7 @@
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
 4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API candidate-only 拉取入口、审计查询/告警/运维 healthcheck 面。
+5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API candidate-only 拉取入口、审计查询/告警/运维 healthcheck 面、productized live 长期运行方案。
 6. 所有未完成任务仍由程俊豪负责，后续不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
 
 ## 结论总览
@@ -76,6 +76,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 | 固定评委/用户主路径脚本和体验验收 | P0 | 程俊豪 | 2026-04-29 | `docs/judge-10-minute-experience.md`、`docs/demo-runbook.md`、`docs/productization/user-experience-todo.md`、`docs/human-product-guide.md` | 已固化 10 分钟评委入口、主路径脚本、可选受控真实 DM allow-path、失败 fallback 和 no-overclaim 边界；commit `b77f367` 已推送。 |
 | 接真实 Feishu API 拉取和扩充 candidate-only 路径 | P1 | 程俊豪 | 2026-04-29 | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、[Feishu API pull handoff](handoffs/feishu-api-pull-handoff.md) | 任务、会议、Bitable fetcher 已接入 candidate-only pipeline；`feishu.fetch_*` 在真实 API fetch 前做 permission/source_context fail-closed；Feishu live `/task`、`/meeting`、`/bitable` payload 写入 `permission.source_context`；API 失败不创建 candidate，不冒称 live 成功。 |
 | 补审计查询、告警和运维 healthcheck 面 | P1 | 程俊豪 | 2026-04-29 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`memory_engine/copilot/service.py`、`scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、[audit ops observability handoff](handoffs/audit-ops-observability-handoff.md) | 权限拒绝、candidate/review、limited ingestion、source revoke、显式 `ingestion_failed`、embedding unavailable fallback 可查询；healthcheck 默认给出 websocket 运维入口，显式开启时纳入 staging 结果；仍不宣称生产级监控或 productized live。 |
+| 设计 productized live 长期运行方案 | P2 | 程俊豪 | 2026-04-29 | [productized-live-long-run-plan.md](productized-live-long-run-plan.md)、[productized-live handoff](handoffs/productized-live-long-run-plan-handoff.md)、`deployment-runbook.md`、`monitoring-design.md`、`permission-admin-design.md`、`audit-ui-design.md`、`ops-runbook.md` | 已写清 L0/L1/L2/L3 gate、部署拓扑、单监听、PostgreSQL ledger、监控告警、权限后台、审计 UI、回滚停写和草案文档边界；仍不宣称 productized live 已完成。 |
 | 补 Cognee 主路径本地闭环 | P1 | 程俊豪 | 2026-04-28 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/service.py`、`memory_engine/copilot/retrieval.py`、[Cognee 主路径 handoff](cognee-main-path-handoff.md) | confirm 后只同步 curated memory fields 和 ledger metadata 到 Cognee add -> cognify；reject 会 withdrawal；未匹配 ledger 的 Cognee result 不进入正式 answer；同步失败时 repository fallback 清楚可见。 |
 | 补 review surface 可操作写回闭环 | P1 | 程俊豪 | 2026-04-28 | `memory_engine/bitable_sync.py`、`tests/test_bitable_sync.py`、[review surface operability handoff](review-surface-operability-handoff.md) | Candidate Review / Reminder Candidate 行有稳定 `sync_key`；Bitable 非 dry-run 写入前查已有记录，命中则 upsert 更新；写入后读回确认；失败不声称同步成功。 |
 | 补真实 Feishu DM 到本项目 first-class 工具的受控 live E2E 证据 | P1 | 程俊豪 | 2026-04-29 | `agent_adapters/openclaw/plugin/`、`memory_engine/copilot/openclaw_tool_runner.py`、[DM routing handoff](handoffs/feishu-dm-routing-handoff.md) | 真实 DM 进入 OpenClaw websocket 后直接调用 `fmc_memory_search`，插件/Python runner 解析 JSON-string `current_context`，进入 `handle_tool_request()` / `CopilotService`；飞书机器人回复读回 5 条命中、`request_id=req_feishu_dm_live_20260429_1104`、`trace_id=trace_feishu_dm_live_20260429_1104`、`permission_decision=allow/scope_access_granted`；仍不宣称稳定长期路由。 |
@@ -90,7 +91,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 |---|---|---|---|---|---|
 | 扩大真实飞书样本实测 | P1 | 程俊豪 | 待定 | `memory_engine/copilot/feishu_live.py`、`memory_engine/document_ingestion.py`、`docs/productization/feishu-staging-runbook.md` | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 继续扩样；失败时保留 fallback，不冒称全量 workspace ingestion。 |
 | 跟踪 7 个用户体验产品化缺口 | P0 | 程俊豪 | 待定 | [user-experience-todo.md](user-experience-todo.md) | 逐项跟踪飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包；只有普通用户不理解内部 ID 也能完成动作时才标记完成。 |
-| 设计 productized live 长期运行方案 | P2 | 程俊豪 | 待定 | `docs/productization/full-copilot-next-execution-doc.md` 或后续 handoff | 写清部署、生产级监控、回滚、权限后台、审计 UI 和运维边界；本阶段不把它写成已完成。 |
+| 选择 productized live 第一个实施 gate | P2 | 程俊豪 | 待定 | [productized-live-long-run-plan.md](productized-live-long-run-plan.md) | 在 L1 internal pilot、PostgreSQL pilot、权限后台最小化、审计 read-only view 中选一个小 gate 实施；本阶段仍不把 productized live 写成已完成。 |
 
 ## Phase E 已完成审查
 
@@ -115,4 +116,4 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 已完成真实 embedding 默认门禁。
 - 已完成长期 embedding 服务。
 - 已完成真实 Feishu DM 到本项目 first-class `fmc_*` / `memory.*` tool routing 的稳定长期路由。
-- 已完成 productized live 长期运行。
+- 已完成 productized live 长期运行。当前只能说长期运行方案已完成，尚未上线运行。

@@ -4,6 +4,8 @@
 状态：方案设计（未完成生产上线）
 适用范围：从零到可运行的完整部署步骤，新机器可按文档部署
 
+> 2026-04-29 校准：本文是 productized live 部署草案，不是当前已验证 runbook。文中 `scripts/validate_env.py`、`requirements.txt`、`scripts/backup_database.sh` 等命令或文件在当前仓库未实现或未作为验收入口；实施前以 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 的 gate 为准，逐条校准命令后再执行。
+
 ---
 
 ## 1. 前置条件

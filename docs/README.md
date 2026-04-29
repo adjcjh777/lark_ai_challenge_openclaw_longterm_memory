@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-29（更新：审计查询、告警和运维 healthcheck 面）
+日期：2026-04-29（更新：productized live 长期运行方案）
 
 ## 先看这个
 
@@ -28,6 +28,7 @@
 | [productization/complete-product-roadmap-test-spec.md](productization/complete-product-roadmap-test-spec.md) | 验收规格 |
 | [productization/launch-polish-todo.md](productization/launch-polish-todo.md) | 待办清单 |
 | [productization/user-experience-todo.md](productization/user-experience-todo.md) | 用户体验产品化 TODO，记录 7 个 UX 缺口是否完成 |
+| [productization/productized-live-long-run-plan.md](productization/productized-live-long-run-plan.md) | Productized live 长期运行方案；只定义 gate 和运行边界，不代表已上线 |
 
 ### 工作流和人类入口（2 个）
 
@@ -62,7 +63,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| [productization/handoffs/](productization/handoffs/) | 17 个已完成的 handoff / evidence / runbook |
+| [productization/handoffs/](productization/handoffs/) | 18 个已完成的 handoff / evidence / runbook |
 | [archive/plans/](archive/plans/) | 22 个已完成的日期计划和 handoff |
 | [archive/legacy-day-docs/](archive/legacy-day-docs/) | Day 1-7 旧文档 |
 | [archive/legacy-master/](archive/legacy-master/) | 旧主控计划 |

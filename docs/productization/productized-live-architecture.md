@@ -4,6 +4,8 @@
 状态：方案设计（未完成生产上线）
 适用范围：生产部署架构参考，新成员理解系统拓扑
 
+> 2026-04-29 校准：本文是架构参考，不代表生产部署已完成。当前事实是本地 demo / staging、受控真实 DM allow-path、candidate-only API 入口和本地审计/告警面已完成；PostgreSQL、生产级监控、权限后台、审计 UI 和长期 embedding 服务仍未实施。执行 gate 见 [productized-live-long-run-plan.md](productized-live-long-run-plan.md)。
+
 ---
 
 ## 1. 架构概览

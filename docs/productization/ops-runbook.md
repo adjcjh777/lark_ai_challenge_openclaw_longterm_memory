@@ -4,6 +4,8 @@
 状态：方案设计（未完成生产上线）
 适用范围：日常运维 checklist、故障排查、扩缩容、版本升级
 
+> 2026-04-29 校准：本文是生产运维草案，不是当前可直接执行的上线 runbook。部分命令依赖未部署的 PostgreSQL、systemd、Prometheus/Grafana 或未实现脚本；当前可执行运维入口以 [audit-ops-observability-handoff.md](handoffs/audit-ops-observability-handoff.md) 和 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 为准。
+
 ---
 
 ## 1. 日常运维 Checklist

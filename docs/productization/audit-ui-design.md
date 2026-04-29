@@ -4,6 +4,8 @@
 状态：方案设计（未完成生产上线）
 适用范围：审计查询界面、审计导出、审计 Dashboard
 
+> 2026-04-29 校准：本文是审计 UI 设计稿，不是已实现 UI。当前已实现的是 `scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、healthcheck audit/ops 字段和脱敏测试；生产审计 UI 只能在只读查询面稳定后再实施。
+
 ---
 
 ## 1. 设计目标
