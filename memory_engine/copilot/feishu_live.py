@@ -26,6 +26,7 @@ from memory_engine.feishu_runtime import FeishuRunLogger
 from memory_engine.models import parse_scope
 from memory_engine.repository import MemoryRepository
 
+from .graph_context import register_feishu_chat_node
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
 from .service import CopilotService
 from .tools import handle_tool_request
@@ -129,7 +130,21 @@ def handle_copilot_message_event(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     scope = _scope(config)
-    if not _chat_allowed(event.chat_id):
+    chat_allowed = _chat_allowed(event.chat_id)
+    tenant_id, organization_id, visibility = _feishu_identity()
+    with conn:
+        graph_node = register_feishu_chat_node(
+            conn,
+            event,
+            scope=scope,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            visibility_policy=visibility,
+            entrypoint=ENTRYPOINT,
+            allowed=chat_allowed,
+        ).to_dict()
+
+    if not chat_allowed:
         return {
             "ok": True,
             "ignored": True,
@@ -138,6 +153,7 @@ def handle_copilot_message_event(
             "chat_id": event.chat_id,
             "entrypoint": ENTRYPOINT,
             "scope": scope,
+            "graph_node": graph_node,
         }
 
     if event.ignore_reason == "bot self message":
@@ -175,12 +191,12 @@ def handle_copilot_message_event(
     if invocation.tool_name == "copilot.help":
         reply = _format_help()
         publish_result = _publish(publisher, event, reply, config)
-        return _event_result(event, scope, invocation, {"ok": True, "tool": "copilot.help"}, publish_result)
+        return _event_result(event, scope, invocation, {"ok": True, "tool": "copilot.help"}, publish_result, graph_node)
 
     if invocation.tool_name == "copilot.health":
         reply = _format_health(scope=scope, db_path=str(db_path_from_env()), dry_run=dry_run, config=config)
         publish_result = _publish(publisher, event, reply, config)
-        return _event_result(event, scope, invocation, {"ok": True, "tool": "copilot.health"}, publish_result)
+        return _event_result(event, scope, invocation, {"ok": True, "tool": "copilot.health"}, publish_result, graph_node)
 
     repo = MemoryRepository(conn)
     if invocation.tool_name == "memory.create_candidate" and repo.has_source_event(SOURCE_TYPE, event.message_id):
@@ -194,7 +210,7 @@ def handle_copilot_message_event(
             ],
         )
         publish_result = _publish(publisher, event, reply, config)
-        return _event_result(event, scope, invocation, {"ok": True, "duplicate": True}, publish_result)
+        return _event_result(event, scope, invocation, {"ok": True, "duplicate": True}, publish_result, graph_node)
 
     service = CopilotService(repository=repo)
     invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
@@ -208,7 +224,7 @@ def handle_copilot_message_event(
         invocation=invocation,
         tool_result=tool_result,
     )
-    return _event_result(event, scope, invocation, tool_result, publish_result)
+    return _event_result(event, scope, invocation, tool_result, publish_result, graph_node)
 
 
 def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFeishuInvocation:
@@ -682,9 +698,7 @@ def _current_context(
     thread_topic: str,
 ) -> dict[str, Any]:
     request_suffix = re.sub(r"[^A-Za-z0-9_]+", "_", action)
-    tenant_id = os.environ.get("COPILOT_FEISHU_TENANT_ID", DEFAULT_TENANT_ID)
-    organization_id = os.environ.get("COPILOT_FEISHU_ORGANIZATION_ID", DEFAULT_ORGANIZATION_ID)
-    visibility = os.environ.get("COPILOT_FEISHU_VISIBILITY", "team")
+    tenant_id, organization_id, visibility = _feishu_identity()
     return {
         "session_id": f"feishu:{event.chat_id}",
         "chat_id": event.chat_id,
@@ -1070,6 +1084,7 @@ def _event_result(
     invocation: CopilotFeishuInvocation,
     tool_result: dict[str, Any],
     publish_result: dict[str, Any],
+    graph_node: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result = {
         "ok": bool(publish_result.get("ok", False)) and bool(tool_result.get("ok", True)),
@@ -1081,6 +1096,8 @@ def _event_result(
         "tool_result": tool_result,
         "publish": publish_result,
     }
+    if graph_node is not None:
+        result["graph_node"] = graph_node
     if tool_result.get("duplicate"):
         result["duplicate"] = True
     return result
@@ -1098,6 +1115,14 @@ def _scope(config: FeishuConfig) -> str:
 def _chat_allowed(chat_id: str) -> bool:
     allowed = _csv_env("COPILOT_FEISHU_ALLOWED_CHAT_IDS")
     return not allowed or chat_id in allowed
+
+
+def _feishu_identity() -> tuple[str, str, str]:
+    return (
+        os.environ.get("COPILOT_FEISHU_TENANT_ID", DEFAULT_TENANT_ID),
+        os.environ.get("COPILOT_FEISHU_ORGANIZATION_ID", DEFAULT_ORGANIZATION_ID),
+        os.environ.get("COPILOT_FEISHU_VISIBILITY", "team"),
+    )
 
 
 def _event_subscribe_command(config: FeishuConfig) -> list[str]:

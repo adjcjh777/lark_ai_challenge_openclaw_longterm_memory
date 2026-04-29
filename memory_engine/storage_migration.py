@@ -7,12 +7,14 @@ from .db import MIGRATIONS, SCHEMA_VERSION, init_db
 
 TARGET_SCHEMA_VERSION = SCHEMA_VERSION
 CORE_TABLES = ("raw_events", "memories", "memory_versions", "memory_evidence")
-REQUIRED_TABLES = (*CORE_TABLES, "memory_audit_events")
+REQUIRED_TABLES = (*CORE_TABLES, "memory_audit_events", "knowledge_graph_nodes", "knowledge_graph_edges")
 REQUIRED_INDEXES = {
     "idx_memories_tenant_org_scope_status",
     "idx_memories_visibility_status",
     "idx_evidence_source",
     "idx_audit_request_trace",
+    "idx_kg_nodes_tenant_org_type_key",
+    "idx_kg_edges_tenant_org_type",
 }
 
 

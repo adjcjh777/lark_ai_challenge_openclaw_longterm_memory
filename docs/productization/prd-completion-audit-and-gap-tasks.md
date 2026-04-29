@@ -9,7 +9,7 @@
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
 4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API candidate-only 拉取入口、审计查询/告警/运维 healthcheck 面、productized live 长期运行方案，以及真实飞书可点击卡片的受控 sandbox/pre-production 路径。
+5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API candidate-only 拉取入口、审计查询/告警/运维 healthcheck 面、productized live 长期运行方案、真实飞书可点击卡片的受控 sandbox/pre-production 路径，以及 Feishu 群作为企业图谱节点的本地发现能力。
 6. 所有未完成任务仍由程俊豪负责，后续不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
 
 ## 结论总览
@@ -81,6 +81,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 | 补 review surface 可操作写回闭环 | P1 | 程俊豪 | 2026-04-28 | `memory_engine/bitable_sync.py`、`tests/test_bitable_sync.py`、[review surface operability handoff](review-surface-operability-handoff.md) | Candidate Review / Reminder Candidate 行有稳定 `sync_key`；Bitable 非 dry-run 写入前查已有记录，命中则 upsert 更新；写入后读回确认；失败不声称同步成功。 |
 | 补真实 Feishu DM 到本项目 first-class 工具的受控 live E2E 证据 | P1 | 程俊豪 | 2026-04-29 | `agent_adapters/openclaw/plugin/`、`memory_engine/copilot/openclaw_tool_runner.py`、[DM routing handoff](handoffs/feishu-dm-routing-handoff.md) | 真实 DM 进入 OpenClaw websocket 后直接调用 `fmc_memory_search`，插件/Python runner 解析 JSON-string `current_context`，进入 `handle_tool_request()` / `CopilotService`；飞书机器人回复读回 5 条命中、`request_id=req_feishu_dm_live_20260429_1104`、`trace_id=trace_feishu_dm_live_20260429_1104`、`permission_decision=allow/scope_access_granted`；仍不宣称稳定长期路由。 |
 | 补真实飞书可点击卡片受控路径 | P1 | 程俊豪 | 2026-04-29 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_events.py`、`tests/test_copilot_feishu_live.py`、[互动卡片 handoff](handoffs/real-feishu-interactive-cards-handoff.md) | Feishu live `card_mode=interactive` 使用 typed card builder；候选审核卡按钮 value 只携带 action 和 candidate id，不内嵌 `current_context`；点击确认、拒绝、要求补证据、标记过期会重新按当前 operator 构造 permission 并进入 `handle_tool_request()` / `CopilotService`；非 reviewer 点击 fail closed，候选不变；仍不宣称生产级 card action 长期运行。 |
+| 补 Feishu 群企业图谱节点发现 | P1 | 程俊豪 | 2026-04-29 | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`memory_engine/db.py`、[群图谱节点 handoff](handoffs/feishu-group-graph-node-handoff.md) | 新群进入 Feishu live 入口时先登记为同 tenant/org 下的 `feishu_chat` 图谱节点；未在 allowlist 的群只写最小元数据，不写 raw_events、不创建 candidate、不回复消息；allowlist 通过后仍按 candidate-only 和 CopilotService 权限门控处理。 |
 
 ## 仍未完成任务拆分
 

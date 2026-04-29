@@ -8,7 +8,7 @@ DEFAULT_DB_PATH = Path("data/memory.sqlite")
 DEFAULT_TENANT_ID = "tenant:demo"
 DEFAULT_ORGANIZATION_ID = "org:demo"
 DEFAULT_VISIBILITY_POLICY = "team"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 SCHEMA = """
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS memories (
   owner_id TEXT,
   created_by TEXT,
   updated_by TEXT,
-  schema_version INTEGER NOT NULL DEFAULT 2,
+  schema_version INTEGER NOT NULL DEFAULT 3,
   source_event_id TEXT,
   active_version_id TEXT,
   created_at INTEGER NOT NULL,
@@ -130,6 +130,38 @@ CREATE TABLE IF NOT EXISTS memory_audit_events (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS knowledge_graph_nodes (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'tenant:demo',
+  organization_id TEXT NOT NULL DEFAULT 'org:demo',
+  node_type TEXT NOT NULL,
+  node_key TEXT NOT NULL,
+  label TEXT NOT NULL,
+  visibility_policy TEXT NOT NULL DEFAULT 'team',
+  status TEXT NOT NULL DEFAULT 'active',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  observation_count INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(tenant_id, organization_id, node_type, node_key)
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_graph_edges (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'tenant:demo',
+  organization_id TEXT NOT NULL DEFAULT 'org:demo',
+  source_node_id TEXT NOT NULL,
+  target_node_id TEXT NOT NULL,
+  edge_type TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  observation_count INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(tenant_id, organization_id, source_node_id, target_node_id, edge_type),
+  FOREIGN KEY(source_node_id) REFERENCES knowledge_graph_nodes(id),
+  FOREIGN KEY(target_node_id) REFERENCES knowledge_graph_nodes(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_raw_events_scope_time
   ON raw_events(scope_type, scope_id, event_time);
 
@@ -144,6 +176,12 @@ CREATE INDEX IF NOT EXISTS idx_memories_subject
 
 CREATE INDEX IF NOT EXISTS idx_versions_memory_status
   ON memory_versions(memory_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_kg_nodes_tenant_org_type_key
+  ON knowledge_graph_nodes(tenant_id, organization_id, node_type, node_key);
+
+CREATE INDEX IF NOT EXISTS idx_kg_edges_tenant_org_type
+  ON knowledge_graph_edges(tenant_id, organization_id, edge_type);
 """
 
 
@@ -166,7 +204,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("owner_id", "TEXT"),
         ("created_by", "TEXT"),
         ("updated_by", "TEXT"),
-        ("schema_version", "INTEGER NOT NULL DEFAULT 2"),
+        ("schema_version", "INTEGER NOT NULL DEFAULT 3"),
         ("source_visibility_revoked_at", "INTEGER"),
     ],
     "memory_versions": [

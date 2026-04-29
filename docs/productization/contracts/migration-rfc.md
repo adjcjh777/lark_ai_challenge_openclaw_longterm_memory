@@ -26,7 +26,7 @@
 | `organization_id` | `org:demo` | 本地 demo/benchmark 默认组织。 |
 | `workspace_id` | old `scope_id` | 若 scope 是 project/chat/doc，优先映射旧 scope。 |
 | `visibility_policy` | `public_demo` 或 `team` | benchmark/replay 可用 `public_demo`；手动候选默认 `team`。 |
-| `schema_version` | `2` | Phase 1 后目标版本。 |
+| `schema_version` | `3` | Phase 1 + 群图谱节点本地底座后的目标版本。 |
 
 ## 4. Migration Steps
 
@@ -38,7 +38,8 @@
 4. 已实现：Add indexes。
 5. 已实现：新增 `scripts/migrate_copilot_storage.py --dry-run --json` 和 `--apply --json`。
 6. 已实现：healthcheck 报告 schema version、index status、audit status。
-7. 后续仍需：真实生产 DB 部署、长期监控、真实备份恢复演练。
+7. 已实现：新增 `knowledge_graph_nodes` / `knowledge_graph_edges`，把 Feishu 群作为同企业下的上下文节点登记。
+8. 后续仍需：真实生产 DB 部署、长期监控、真实备份恢复演练。
 
 ## 5. Rollback / Dry-run
 

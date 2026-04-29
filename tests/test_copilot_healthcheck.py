@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from memory_engine.copilot.healthcheck import run_copilot_healthcheck
+from memory_engine.db import SCHEMA_VERSION
 
 
 class CopilotHealthcheckTest(unittest.TestCase):
@@ -40,8 +41,10 @@ class CopilotHealthcheckTest(unittest.TestCase):
         storage = report["checks"]["storage_schema"]
 
         self.assertEqual("pass", storage["status"])
-        self.assertEqual(2, storage["schema_version"])
+        self.assertEqual(SCHEMA_VERSION, storage["schema_version"])
         self.assertTrue(storage["schema_checkable"])
+        self.assertIn("knowledge_graph_nodes", storage["tables"])
+        self.assertIn("knowledge_graph_edges", storage["tables"])
         self.assertTrue(all(storage["tenant_visibility_columns"].values()))
         self.assertTrue(storage["audit_table_available"])
         self.assertTrue(storage["audit_required_columns"])

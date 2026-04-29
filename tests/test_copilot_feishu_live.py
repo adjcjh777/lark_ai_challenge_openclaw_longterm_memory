@@ -17,7 +17,7 @@ CHAT_ID = "oc_copilot_live_test"
 SCOPE = "project:feishu_ai_challenge"
 
 
-def payload(message_id: str, text: str, *, sender_type: str = "user") -> dict:
+def payload(message_id: str, text: str, *, sender_type: str = "user", chat_id: str = CHAT_ID) -> dict:
     return {
         "schema": "2.0",
         "header": {"event_type": "im.message.receive_v1"},
@@ -28,7 +28,7 @@ def payload(message_id: str, text: str, *, sender_type: str = "user") -> dict:
             },
             "message": {
                 "message_id": message_id,
-                "chat_id": CHAT_ID,
+                "chat_id": chat_id,
                 "chat_type": "group",
                 "message_type": "text",
                 "content": f'{{"text":"{text}"}}',
@@ -246,6 +246,95 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertTrue(result["ignored"])
         self.assertEqual("chat not in COPILOT_FEISHU_ALLOWED_CHAT_IDS", result["reason"])
         self.assertNotIn("publish", result)
+
+    def test_new_disallowed_group_is_discovered_as_graph_node_without_ingesting_content(self) -> None:
+        new_chat_id = "oc_new_product_group"
+        event = message_event_from_payload(
+            payload(
+                "om_live_new_group_discovered",
+                "/remember 决定：新群里的真实消息不能在未授权时入库。",
+                chat_id=new_chat_id,
+            )
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(
+            os.environ,
+            {
+                "COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID,
+                "COPILOT_FEISHU_TENANT_ID": "tenant:feishu-prod",
+                "COPILOT_FEISHU_ORGANIZATION_ID": "org:feishu-ai",
+            },
+            clear=False,
+        ):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["ignored"])
+        self.assertEqual("chat not in COPILOT_FEISHU_ALLOWED_CHAT_IDS", result["reason"])
+        self.assertEqual("discovered", result["graph_node"]["status"])
+        node = self.conn.execute(
+            """
+            SELECT node_type, node_key, label, tenant_id, organization_id, status, observation_count
+            FROM knowledge_graph_nodes
+            WHERE node_type = 'feishu_chat' AND node_key = ?
+            """,
+            (new_chat_id,),
+        ).fetchone()
+        self.assertIsNotNone(node)
+        self.assertEqual("feishu_chat", node["node_type"])
+        self.assertEqual(new_chat_id, node["node_key"])
+        self.assertEqual("Feishu group oc_new_product_group", node["label"])
+        self.assertEqual("tenant:feishu-prod", node["tenant_id"])
+        self.assertEqual("org:feishu-ai", node["organization_id"])
+        self.assertEqual("discovered", node["status"])
+        self.assertEqual(1, node["observation_count"])
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM raw_events").fetchone()["count"]
+        )
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"]
+        )
+
+    def test_allowed_group_candidate_links_to_discovered_chat_graph_node(self) -> None:
+        new_chat_id = "oc_allowed_product_group"
+        event = message_event_from_payload(
+            payload(
+                "om_live_allowed_group_candidate",
+                "/remember 决定：新产品群的上线窗口固定为每周四下午。",
+                chat_id=new_chat_id,
+            )
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(
+            os.environ,
+            {
+                "COPILOT_FEISHU_ALLOWED_CHAT_IDS": new_chat_id,
+                "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*",
+            },
+            clear=False,
+        ):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("active", result["graph_node"]["status"])
+        self.assertEqual(new_chat_id, result["graph_node"]["node_key"])
+        node = self.conn.execute(
+            """
+            SELECT node_type, node_key, status, observation_count
+            FROM knowledge_graph_nodes
+            WHERE node_type = 'feishu_chat' AND node_key = ?
+            """,
+            (new_chat_id,),
+        ).fetchone()
+        self.assertIsNotNone(node)
+        self.assertEqual("active", node["status"])
+        self.assertEqual(1, node["observation_count"])
+        raw = self.conn.execute("SELECT raw_json FROM raw_events WHERE source_id = ?", (event.message_id,)).fetchone()
+        self.assertIsNotNone(raw)
+        self.assertIn(new_chat_id, raw["raw_json"])
 
     def test_health_redacts_live_ids(self) -> None:
         with patch.dict(

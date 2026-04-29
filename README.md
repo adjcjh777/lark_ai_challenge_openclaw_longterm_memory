@@ -27,6 +27,7 @@
 | 检索链路 | 已完成 L0/L1/L2/L3 分层混合检索 | `memory_engine/copilot/orchestrator.py`、`retrieval.py` |
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
 | 存储迁移方案 | 已完成本地 migration dry-run / apply 和索引检查 | `scripts/migrate_copilot_storage.py`、`tests/test_copilot_storage_migration.py` |
+| 企业图谱群节点 | 已完成本地 Feishu 群节点发现：新群会登记为同企业下的 `feishu_chat` 图谱节点；未在 allowlist 的群只记录最小元数据，不摄取消息正文、不创建 candidate | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/feishu-group-graph-node-handoff.md` |
 | Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
 | Feishu live sandbox | 已完成受控测试群联调 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh` |
 | Limited Feishu ingestion | 已完成本地 candidate-only 底座，支持群聊、文档、任务、会议、Bitable 来源文本 | `memory_engine/document_ingestion.py`、`tests/test_document_ingestion.py`、`docs/productization/handoffs/limited-feishu-ingestion-handoff.md` |
