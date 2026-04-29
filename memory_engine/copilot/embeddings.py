@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .local_env import env_overrides_for_embedding_config, read_key_value_file
+
 logger = logging.getLogger(__name__)
 
 CURATED_EMBEDDING_FIELDS = ("type", "subject", "current_value", "summary", "evidence_quote")
@@ -95,6 +97,7 @@ class OllamaEmbeddingProvider:
         config = _load_embedding_config()
         self.model = model or config.get("litellm_model") or "ollama/qwen3-embedding:0.6b-fp16"
         self.endpoint = endpoint or config.get("endpoint") or "http://localhost:11434"
+        self.api_key = config.get("api_key")
         self.dimension = int(config.get("dimensions", str(dimension)))
         self.timeout = timeout
         self.max_retries = max_retries
@@ -202,6 +205,7 @@ class OllamaEmbeddingProvider:
                             model=self.model,
                             input=[text],
                             api_base=self.endpoint,
+                            api_key=self.api_key,
                         )
                         response = future.result(timeout=self.timeout)
                 except RuntimeError:
@@ -210,6 +214,7 @@ class OllamaEmbeddingProvider:
                         model=self.model,
                         input=[text],
                         api_base=self.endpoint,
+                        api_key=self.api_key,
                     )
 
                 embedding = response.data[0]["embedding"]
@@ -247,6 +252,7 @@ class OllamaEmbeddingProvider:
                 model=self.model,
                 input=texts,
                 api_base=self.endpoint,
+                api_key=self.api_key,
             )
             embeddings = [list(item["embedding"]) for item in response.data]
 
@@ -275,25 +281,15 @@ def _load_embedding_config() -> dict[str, str]:
     # Load from lock file
     if _EMBEDDING_LOCK_FILE.exists():
         try:
-            for line in _EMBEDDING_LOCK_FILE.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                config[key.strip()] = value.strip().strip('"').strip("'")
+            config.update(read_key_value_file(_EMBEDDING_LOCK_FILE))
         except Exception as exc:
             logger.warning("Failed to read embedding lock file: %s", exc)
 
     # Environment variables override lock file
-    env_mapping = {
-        "EMBEDDING_MODEL": "litellm_model",
-        "EMBEDDING_ENDPOINT": "endpoint",
-        "EMBEDDING_DIMENSIONS": "dimensions",
-    }
-    for env_key, config_key in env_mapping.items():
-        value = os.environ.get(env_key)
-        if value:
-            config[config_key] = value
+    config.update(env_overrides_for_embedding_config())
+    api_key = os.environ.get("EMBEDDING_API_KEY")
+    if api_key:
+        config["api_key"] = api_key
 
     return config
 

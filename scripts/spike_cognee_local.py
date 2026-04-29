@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from memory_engine.copilot.cognee_adapter import CogneeMemoryAdapter, load_cognee_client
+from memory_engine.copilot.local_env import load_local_env_files, read_key_value_file
 
 DATA_ROOT = Path(".data/cognee/data")
 SYSTEM_ROOT = Path(".data/cognee/system")
@@ -139,24 +140,11 @@ def _missing_provider_configuration() -> str | None:
 
 
 def _load_local_env_files() -> None:
-    for path in (ROOT / ".env", ROOT / ".env.local"):
-        if not path.exists():
-            continue
-        for key, value in _read_key_value_file(path).items():
-            os.environ.setdefault(key, value)
+    load_local_env_files(root=ROOT, override=True)
 
 
 def _read_key_value_file(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
-    return values
+    return read_key_value_file(path)
 
 
 async def _run_real_spike(adapter: CogneeMemoryAdapter, scope: str, query: str) -> dict[str, Any]:

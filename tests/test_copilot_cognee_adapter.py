@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import unittest
+from unittest.mock import patch
 
 from memory_engine.copilot.cognee_adapter import (
     CogneeAdapterNotConfigured,
@@ -68,10 +70,11 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertEqual("test_prefix_chat_oc_123", adapter.dataset_for_scope("chat:oc-123"))
 
     def test_unconfigured_adapter_fails_without_changing_state(self) -> None:
-        adapter = CogneeMemoryAdapter()
+        with patch.dict(os.environ, {}, clear=True):
+            adapter = CogneeMemoryAdapter()
 
-        with self.assertRaises(CogneeAdapterNotConfigured):
-            adapter.add_raw_event("project:feishu_ai_challenge", "生产部署必须加 --canary")
+            with self.assertRaises(CogneeAdapterNotConfigured):
+                adapter.add_raw_event("project:feishu_ai_challenge", "生产部署必须加 --canary")
 
     def test_adapter_passes_dataset_and_evidence_metadata(self) -> None:
         client = FakeCogneeClient()

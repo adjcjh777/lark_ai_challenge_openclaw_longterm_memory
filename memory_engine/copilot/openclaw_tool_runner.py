@@ -5,11 +5,14 @@ import os
 import sys
 from typing import Any
 
+from .local_env import load_local_env_files
 from .service import CopilotService
 from .tools import handle_tool_request
 
 
 def run_envelope(envelope: dict[str, Any]) -> dict[str, Any]:
+    load_local_env_files(override=True)
+
     tool_name = envelope.get("tool")
     payload = envelope.get("payload")
     if not isinstance(tool_name, str) or not tool_name:

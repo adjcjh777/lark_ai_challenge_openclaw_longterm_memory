@@ -49,7 +49,7 @@ def load_cognee_client() -> CogneeClient:
         # Ollama doesn't need an API key, but Cognee's OpenAI client requires a non-empty value
         cognee_module.config.set_llm_api_key("ollama")
     elif provider == "custom":
-        cognee_module.config.set_llm_provider("openai")
+        cognee_module.config.set_llm_provider("custom")
         cognee_module.config.set_llm_endpoint(os.environ.get("LLM_ENDPOINT"))
         cognee_module.config.set_llm_model(os.environ.get("LLM_MODEL"))
         api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")

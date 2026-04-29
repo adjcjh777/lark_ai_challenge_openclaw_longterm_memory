@@ -9,25 +9,23 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from dotenv import load_dotenv
-
 from agent_adapters.openclaw.tool_registry import openclaw_plugin_manifest
 from memory_engine.db import SCHEMA_VERSION, init_db
 from memory_engine.repository import MemoryRepository
 from memory_engine.storage_migration import inspect_copilot_storage
 
+from .local_env import env_overrides_for_embedding_config, load_local_env_files, read_key_value_file
 from .permissions import demo_permission_context
 from .service import CopilotService
 from .tools import handle_tool_request
-
-# Load .env file
-load_dotenv()
 
 
 ROOT = Path(__file__).resolve().parents[2]
 OPENCLAW_LOCK_FILE = ROOT / "agent_adapters" / "openclaw" / "openclaw-version.lock"
 OPENCLAW_SCHEMA_FILE = ROOT / "agent_adapters" / "openclaw" / "memory_tools.schema.json"
 EMBEDDING_LOCK_FILE = ROOT / "memory_engine" / "copilot" / "embedding-provider.lock"
+
+load_local_env_files(root=ROOT, override=True)
 
 STATUS_ORDER = ("pass", "fail", "warning", "skipped", "not_configured", "fallback_used")
 PHASE_NAME = "Phase 6 Deployability + Healthcheck"
@@ -432,7 +430,7 @@ def _check_cognee_adapter() -> dict[str, Any]:
 
 def _check_embedding_provider(path: Path, live_check: bool = False) -> dict[str, Any]:
     try:
-        lock = _read_key_value_file(path)
+        lock = read_key_value_file(path)
     except Exception as exc:
         return {
             "status": "fail",
@@ -441,8 +439,9 @@ def _check_embedding_provider(path: Path, live_check: bool = False) -> dict[str,
             "error": str(exc),
             "next_step": "补齐 memory_engine/copilot/embedding-provider.lock。",
         }
+    lock.update(env_overrides_for_embedding_config())
     provider = lock.get("provider") or "unknown"
-    model = lock.get("model") or lock.get("litellm_model") or "unknown"
+    model = lock.get("litellm_model") or lock.get("model") or "unknown"
     litellm_available = importlib.util.find_spec("litellm") is not None
 
     # Try to create OllamaEmbeddingProvider
@@ -887,17 +886,6 @@ def _sqlite_columns(conn: sqlite3.Connection, table: str) -> set[str]:
         raise ValueError(f"Table '{table}' is not in the allowed whitelist")
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return {str(row["name"]) for row in rows}
-
-
-def _read_key_value_file(path: Path) -> dict[str, str]:
-    data: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        data[key.strip()] = value.strip().strip('"').strip("'")
-    return data
 
 
 def _status_counts(checks: dict[str, dict[str, Any]]) -> dict[str, int]:

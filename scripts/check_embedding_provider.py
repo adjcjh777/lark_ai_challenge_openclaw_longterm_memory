@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from memory_engine.copilot.local_env import load_local_env_files, read_key_value_file
+
 LOCK_FILE = ROOT / "memory_engine/copilot/embedding-provider.lock"
 DEFAULT_TEXT = "生产部署参数"
 
@@ -32,7 +37,7 @@ def main() -> None:
     try:
         result = asyncio.run(
             asyncio.wait_for(
-                _embed_once(model=model, endpoint=endpoint, text=args.text),
+                _embed_once(model=model, endpoint=endpoint, text=args.text, api_key=os.environ.get("EMBEDDING_API_KEY")),
                 timeout=args.timeout,
             )
         )
@@ -72,7 +77,7 @@ def main() -> None:
         sys.exit(1)
 
 
-async def _embed_once(*, model: str, endpoint: str, text: str) -> list[float]:
+async def _embed_once(*, model: str, endpoint: str, text: str, api_key: str | None = None) -> list[float]:
     try:
         import litellm
     except ModuleNotFoundError as exc:
@@ -82,34 +87,18 @@ async def _embed_once(*, model: str, endpoint: str, text: str) -> list[float]:
         model=model,
         input=[text],
         api_base=endpoint,
+        api_key=api_key,
     )
     embedding = response.data[0]["embedding"]
     return list(embedding)
 
 
 def _read_lock() -> dict[str, str]:
-    return _read_key_value_file(LOCK_FILE)
+    return read_key_value_file(LOCK_FILE)
 
 
 def _load_local_env_files() -> None:
-    for path in (ROOT / ".env", ROOT / ".env.local"):
-        if not path.exists():
-            continue
-        for key, value in _read_key_value_file(path).items():
-            os.environ.setdefault(key, value)
-
-
-def _read_key_value_file(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    data: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        data[key.strip()] = value.strip().strip('"').strip("'")
-    return data
+    load_local_env_files(root=ROOT, override=True)
 
 
 def _env_int(name: str) -> int | None:
