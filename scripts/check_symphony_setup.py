@@ -14,12 +14,13 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LINEAR_PROJECT_SLUG = "feishu-ai-challenge-785b3bb0a19d"
 
 WORKFLOW_REQUIRED_TERMS = (
     "tracker:",
     "kind: linear",
     "api_key: $LINEAR_API_KEY",
-    "project_slug: $SYMPHONY_LINEAR_PROJECT_SLUG",
+    f"project_slug: {LINEAR_PROJECT_SLUG}",
     "workspace:",
     "root: $SYMPHONY_WORKSPACE_ROOT",
     "git clone --depth 1 \"$SOURCE_REPO_URL\" .",
@@ -48,6 +49,7 @@ RUNBOOK_REQUIRED_TERMS = (
     "mise exec -- ./bin/symphony",
     "WORKFLOW.md",
     "LINEAR_API_KEY",
+    LINEAR_PROJECT_SLUG,
 )
 
 

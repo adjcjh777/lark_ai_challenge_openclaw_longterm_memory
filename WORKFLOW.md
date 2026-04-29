@@ -2,7 +2,7 @@
 tracker:
   kind: linear
   api_key: $LINEAR_API_KEY
-  project_slug: $SYMPHONY_LINEAR_PROJECT_SLUG
+  project_slug: feishu-ai-challenge-785b3bb0a19d
   active_states:
     - Todo
     - In Progress

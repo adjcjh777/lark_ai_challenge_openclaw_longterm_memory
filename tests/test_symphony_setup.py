@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LINEAR_PROJECT_SLUG = "feishu-ai-challenge-785b3bb0a19d"
 
 
 class SymphonySetupTest(unittest.TestCase):
@@ -24,7 +25,7 @@ class SymphonySetupTest(unittest.TestCase):
             "tracker:",
             "kind: linear",
             "api_key: $LINEAR_API_KEY",
-            "project_slug: $SYMPHONY_LINEAR_PROJECT_SLUG",
+            f"project_slug: {LINEAR_PROJECT_SLUG}",
             "workspace:",
             "root: $SYMPHONY_WORKSPACE_ROOT",
             "SOURCE_REPO_URL",

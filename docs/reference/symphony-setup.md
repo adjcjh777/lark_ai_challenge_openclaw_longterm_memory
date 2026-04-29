@@ -38,15 +38,25 @@ docs/reference/symphony-setup.md
 
 ```bash
 LINEAR_API_KEY=lin_api_xxx
-SYMPHONY_LINEAR_PROJECT_SLUG=your-linear-project-slug
+SYMPHONY_LINEAR_PROJECT_SLUG=feishu-ai-challenge-785b3bb0a19d
 SYMPHONY_WORKSPACE_ROOT=/Users/junhaocheng/.symphony/workspaces/feishu_ai_challenge
 SOURCE_REPO_URL=https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory.git
 CODEX_BIN=codex
 ```
 
-Linear project slug 获取方式：在 Linear 项目页右键复制项目 URL，URL 里项目部分就是 slug。官方 README 说明 Symphony 示例依赖 `Rework`、`Human Review`、`Merging` 这类非标准状态；如果你的 Linear workflow 没有这些状态，要先在 Team Settings -> Workflow 中创建，或同步修改 `WORKFLOW.md`。
+Linear project slug 获取方式：在 Linear 项目页右键复制项目 URL，URL 里项目部分就是 slug。本项目当前 slug 是 `feishu-ai-challenge-785b3bb0a19d`，来自：
 
-如果当前 Symphony build 不支持 `project_slug: $SYMPHONY_LINEAR_PROJECT_SLUG` 这种环境变量写法，请把 `WORKFLOW.md` 里的 `project_slug` 改成字面量 slug。
+```text
+https://linear.app/feishu-ai-challenge/project/feishu-ai-challenge-785b3bb0a19d/overview
+```
+
+当前 OpenAI Symphony Elixir build 启动时会把 `tracker.project_slug` 里的 `$SYMPHONY_LINEAR_PROJECT_SLUG` 当成字面量读取，所以 `WORKFLOW.md` 已固定使用：
+
+```yaml
+project_slug: feishu-ai-challenge-785b3bb0a19d
+```
+
+`.env` 里的 `SYMPHONY_LINEAR_PROJECT_SLUG` 仍保留为人工参考。官方 README 说明 Symphony 示例依赖 `Rework`、`Human Review`、`Merging` 这类非标准状态；如果你的 Linear workflow 没有这些状态，要先在 Team Settings -> Workflow 中创建，或同步修改 `WORKFLOW.md`。
 
 ## 3. 安装 Symphony runtime
 
@@ -80,7 +90,8 @@ set +a
 cd /Users/junhaocheng/.symphony/src/openai-symphony/elixir
 mise exec -- ./bin/symphony /Users/junhaocheng/feishu_ai_challenge/WORKFLOW.md \
   --logs-root /Users/junhaocheng/.symphony/logs/feishu_ai_challenge \
-  --port 4040
+  --port 4040 \
+  --i-understand-that-this-will-be-running-without-the-usual-guardrails
 ```
 
 打开 dashboard：
