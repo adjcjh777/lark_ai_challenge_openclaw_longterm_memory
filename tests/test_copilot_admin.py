@@ -86,6 +86,10 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(2, payload["data"]["memory_total"])
 
+            with urlopen(base_url, timeout=5) as response:
+                html = response.read().decode("utf-8")
+            self.assertLess(html.index("<th>Updated</th>"), html.index("<th>Status</th>"))
+
             request = Request(f"{base_url}/api/memories", method="POST")
             with self.assertRaises(HTTPError) as raised:
                 urlopen(request, timeout=5)

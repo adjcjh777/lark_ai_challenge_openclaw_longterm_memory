@@ -871,15 +871,15 @@ def _index_html() -> str:
       const rows = data.items.map(item => `
         <tr>
           <td class="mono">${{esc(item.id)}}</td>
+          <td class="mono">${{esc(item.updated_at_iso)}}</td>
           <td><span class="status ${{esc(item.status)}}">${{esc(item.status)}}</span></td>
           <td>${{esc(item.scope)}}<br><span class="mono">${{esc(item.tenant_id)}} / ${{esc(item.organization_id)}}</span></td>
           <td>${{esc(item.subject)}}<br><span class="mono">${{esc(item.type)}}</span></td>
           <td class="content-cell">${{esc(item.current_value)}}</td>
           <td class="content-cell">${{esc((item.evidence[0] || {{}}).quote)}}<br><span class="mono">${{esc((item.evidence[0] || {{}}).source_type)}} ${{esc((item.evidence[0] || {{}}).document_title)}}</span></td>
-          <td class="mono">${{esc(item.updated_at_iso)}}</td>
           <td><button class="secondary" data-detail="${{esc(item.id)}}">详情</button></td>
         </tr>`).join("");
-      $("panel").innerHTML = `<table><thead><tr><th>ID</th><th>Status</th><th>Scope</th><th>Subject</th><th>Value</th><th>Evidence</th><th>Updated</th><th></th></tr></thead><tbody>${{rows}}</tbody></table>`;
+      $("panel").innerHTML = `<table><thead><tr><th>ID</th><th>Updated</th><th>Status</th><th>Scope</th><th>Subject</th><th>Value</th><th>Evidence</th><th></th></tr></thead><tbody>${{rows}}</tbody></table>`;
       document.querySelectorAll("[data-detail]").forEach(btn => btn.addEventListener("click", async () => {{
         const data = await getJson(`/api/memories/${{encodeURIComponent(btn.dataset.detail)}}`);
         btn.closest("tr").insertAdjacentHTML("afterend", `<tr><td colspan="8"><pre class="detail">${{esc(JSON.stringify(data, null, 2))}}</pre></td></tr>`);
