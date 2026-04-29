@@ -7,8 +7,8 @@
 ## 先看这个
 
 1. 本清单记录 7 个用户体验缺口是否完成，来源是 2026-04-29 产品复盘。
-2. 当前技术基线已经完成 MVP / Demo / Pre-production、本地 OpenClaw `fmc_*` 工具调用验证、受控飞书测试群 sandbox、candidate-only 治理、权限门控、审计和 benchmark。
-3. 本清单不改变 no-overclaim 边界：真实 Feishu DM 到本项目 `fmc_*` / `memory.*` 工具链路的 live E2E 仍未完成；productized live 长期运行仍未完成。
+2. 当前技术基线已经完成 MVP / Demo / Pre-production、本地 OpenClaw `fmc_*` 工具调用验证、受控飞书测试群 sandbox、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E、candidate-only 治理、权限门控、审计和 benchmark。
+3. 本清单不改变 no-overclaim 边界：当前只能说已有一次受控真实 DM allow-path 证据，不能说真实 Feishu DM 已稳定长期路由到本项目 `fmc_*` / `memory.*` 工具链路；productized live 长期运行仍未完成。
 4. 完成标准优先看普通用户能否在飞书里完成动作，而不是只看 tool call、trace 或脚本通过。
 
 ## 状态字段
@@ -30,7 +30,7 @@
 | UX-04 | 记忆收件箱 / 审核队列 | 已完成 | 是 | P1 | 有“待我审核、冲突需判断、高风险暂不建议确认”三类视图和候选状态流转 |
 | UX-05 | 主动提醒变成可控提醒体验 | 已完成 | 是 | P1 | reminder candidate 可确认、忽略、延后、关闭同类提醒；不直接真实群推送 |
 | UX-06 | 真实用户表达样本评测 | 已完成 | 是 | P1 | 已覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景各 5 条；指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率 |
-| UX-07 | 10 分钟评委体验包 | 已完成 | 是 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、benchmark、安全边界和架构；入口为 `docs/judge-10-minute-experience.md` |
+| UX-07 | 10 分钟评委体验包 | 已完成 | 是 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、可选受控 DM allow-path、benchmark、安全边界和架构；入口为 `docs/judge-10-minute-experience.md` |
 
 ## 详细执行文档
 
@@ -52,12 +52,14 @@
 
 - 已新增 [docs/judge-10-minute-experience.md](../judge-10-minute-experience.md)，包含每分钟输入、动作、预期输出、失败 fallback 和讲解词。
 - 已在 [docs/demo-runbook.md](../demo-runbook.md) 固定演示数据、截图清单入口和计时验收记录。
+- 已把一次受控真实 DM `fmc_memory_search` allow-path 证据整理成可选现场验收入口；包含准备检查、固定脱敏 DM 文案、预期字段和失败 fallback。
 - 已在 [docs/benchmark-report.md](../benchmark-report.md)、[docs/human-product-guide.md](../human-product-guide.md)、[README.md](../../README.md) 对齐 benchmark 与 no-overclaim 口径。
 - 已在 [docs/diagrams/README.md](../diagrams/README.md) 和 [docs/README.md](../README.md) 补系统架构、产品交互流和 benchmark loop 入口。
 
 验收标准：
 
 - 已完成：10 分钟脚本按分钟覆盖问题定义、当前结论召回、候选确认、版本解释、prefetch、reminder candidate、benchmark、架构和安全边界。
+- 已完成：可选真实 DM 验收只使用脱敏请求，预期读回命中数、request_id、trace_id 和 permission_decision，不要求评委理解真实 chat_id / open_id。
 - 已完成：演示数据固定为 `ap-shanghai` / `--canary` 部署规则；截图清单不包含真实 ID、token 或敏感内容。
 - 已完成：UX-06 指标和残余风险进入评委讲法，不把 benchmark 写成全部达标。
 - 已完成：计时走查记录为 9 分 40 秒内可走完；飞书 sandbox 或 Mermaid 渲染失败时有 replay / `.mmd` fallback。
@@ -66,7 +68,7 @@
 
 - 本阶段不生成截图二进制。
 - 本阶段不跑重 benchmark；只保留已有 UX-06 runner 命令。
-- 本阶段不宣称 production live、全量 Feishu workspace 接入或真实 Feishu DM 到 `fmc_*` / `memory.*` live E2E 完成。
+- 本阶段不宣称 production live、全量 Feishu workspace 接入或真实 Feishu DM 稳定长期路由；一次受控 DM allow-path 只覆盖 `fmc_memory_search`。
 
 ## UX-01：飞书主路径从命令集合升级为完整体验
 
@@ -161,7 +163,7 @@
 
 - 当前解释覆盖率主要由单测和文档口径约束，benchmark runner 还没有自动汇总 User Explanation Coverage。
 - 当前 recall / conflict 扩样 benchmark 可运行但仍有旧值泄漏和失败样例；UX-03 完成只代表解释出口补齐，不代表召回指标全部达标。
-- 真实飞书表达样本仍需 UX-06 扩样；本条完成不代表真实 Feishu DM 到本项目 `fmc_*` / `memory.*` live E2E 已完成。
+- 真实飞书表达样本仍需 UX-06 扩样；本条完成不代表真实 Feishu DM 到本项目 `fmc_*` / `memory.*` 已稳定长期路由，当前只覆盖一次 `fmc_memory_search` allow-path。
 - 本阶段不宣称 production live 或长期运行完成。
 
 主要文件：
@@ -233,7 +235,7 @@
 
 - 本阶段不做真实群推送。
 - 本阶段不把 reminder candidate 自动变成 active memory。
-- 本阶段不宣称 production live 或真实 Feishu DM live E2E 完成。
+- 本阶段不宣称 production live 或真实 Feishu DM 稳定长期路由；一次受控 DM allow-path 只覆盖 `fmc_memory_search`。
 
 主要文件：
 
@@ -286,7 +288,7 @@
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
 - 当前失败样例包括解释缺口、闲聊误记和旧值泄漏，后续应修能力而不是删样例。
 - 真实飞书来源仍 candidate-only，不自动 active。
-- 本阶段不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。
+- 本阶段不宣称 production live、真实 Feishu DM 稳定长期路由或 productized live 长期运行完成；一次受控 DM allow-path 只覆盖 `fmc_memory_search`。
 
 主要文件：
 
@@ -333,7 +335,7 @@
 ## 当前不做
 
 - 不直接把 heartbeat 改成真实群推送。
-- 不把真实 Feishu DM live E2E 写成已完成。
+- 不把一次受控真实 Feishu DM allow-path 写成稳定长期路由。
 - 不做完整多租户企业后台。
 - 不绕过 `CopilotService` 直接改 active memory。
 - 不把 Bitable / card dry-run 当作生产级长期运行。

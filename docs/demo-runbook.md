@@ -6,6 +6,8 @@
 
 > **UX-07 更新（2026-04-29）**：评委现场优先走 [10 分钟评委体验包](judge-10-minute-experience.md)。本文继续保留 5 分钟 demo replay 和飞书主路径脚本，作为 UX-07 的固定演示数据来源和失败 fallback。
 
+> **真实 DM 证据更新（2026-04-29）**：已完成一次受控真实 Feishu DM -> OpenClaw websocket -> `fmc_memory_search` -> `CopilotService` allow-path 读回；该证据可作为评委现场可选验收，但仍不能写成生产部署、全量 workspace ingestion 或真实 DM 稳定长期路由。
+
 ## 执行前先看这个
 
 1. 今天演示主入口是 OpenClaw tools，不是旧 CLI 或旧 Feishu Bot。
@@ -45,6 +47,7 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 - replay 证据：`scripts/demo_seed.py --json-output reports/demo_replay.json`。
 - benchmark 证据：[benchmark-report.md](benchmark-report.md) 中 UX-06 指标和残余风险。
 - 架构图入口：[diagrams/system-architecture.mmd](diagrams/system-architecture.mmd)、[diagrams/product-interaction-flow.mmd](diagrams/product-interaction-flow.mmd)、[diagrams/benchmark-loop.mmd](diagrams/benchmark-loop.mmd)。
+- 可选真实 DM 入口：按 [judge-10-minute-experience.md](judge-10-minute-experience.md) 的“受控真实 DM 文案”执行，只读回命中数、request_id、trace_id、permission_decision，不截真实 ID。
 
 截图清单不包含真实 `chat_id`、`open_id`、token、app secret、`.env` 或真实私聊内容；不需要提交截图二进制。
 
@@ -53,12 +56,13 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 | 日期 | 方式 | 结果 | 失败点 | 替代路线 |
 |---|---|---|---|---|
 | 2026-04-29 | 按 10 分钟评委体验包做本地文档计时走查 | 9 分 40 秒内可走完问题定义、搜索、候选确认、版本解释、prefetch、benchmark、架构和边界 | Mermaid 渲染或飞书 sandbox 不稳定会拖慢现场节奏 | 直接展示 `.mmd` 源码、`reports/demo_replay.json` 和 benchmark report；明确这些是 replay / sandbox / 本机 staging 证据，不是 production live |
+| 2026-04-29 | 受控真实 DM allow-path 读回 | 真实 DM 进入 OpenClaw 后直接调用 `fmc_memory_search`，飞书机器人读回命中 5 条、request_id、trace_id、permission_decision=allow | 只覆盖单次 search 工具；主模型 timeout 后由 fallback model 完成 | 现场不稳时回到 replay / handoff；不启动第二个 listener |
 
 ## 5 分钟流程
 
 ## 飞书主路径普通话脚本
 
-这组脚本用于 UX-01 验收：评委或真实用户不需要输入 `candidate_id`、`memory_id`、`trace_id`，也能走完搜索、候选确认、版本解释和任务前 prefetch。当前边界仍是 Feishu live sandbox / demo path；不要把它说成 production live，也不要说真实 Feishu DM 已稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路。
+这组脚本用于 UX-01 验收：评委或真实用户不需要输入 `candidate_id`、`memory_id`、`trace_id`，也能走完搜索、候选确认、版本解释和任务前 prefetch。当前边界仍是 Feishu live sandbox / demo path，并补了一次受控真实 DM `fmc_memory_search` allow-path 读回；不要把它说成 production live，也不要说真实 Feishu DM 已稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路。
 
 | 路径 | 普通话输入 | 预期输出 | 失败 fallback | no-overclaim 边界 |
 |---|---|---|---|---|
@@ -73,7 +77,7 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 
 | 卡片 | 输入 | 预期输出 | 可见按钮 | fallback | no-overclaim 边界 |
 |---|---|---|---|---|---|
-| 搜索结果卡 | `memory.search` 输出 | 当前 active 结论、evidence quote、版本状态、旧值已过滤、用户可读排序理由；审计详情放底部。 | `解释版本`，进入现有 versions / `memory.explain_versions` 路径。 | 没找到时显示空状态，引导补主题或创建候选。 | 不展示 superseded 旧值或 raw events；不代表真实 DM live E2E 已完成。 |
+| 搜索结果卡 | `memory.search` 输出 | 当前 active 结论、evidence quote、版本状态、旧值已过滤、用户可读排序理由；审计详情放底部。 | `解释版本`，进入现有 versions / `memory.explain_versions` 路径。 | 没找到时显示空状态，引导补主题或创建候选。 | 不展示 superseded 旧值或 raw events；受控真实 DM 证据只覆盖一次 `fmc_memory_search` allow-path，不代表稳定长期路由。 |
 | 候选审核卡 | `memory.create_candidate` 输出 | 待确认新记忆、来源、证据、风险等级、冲突摘要、建议动作。 | reviewer / owner / admin 可见 `确认保存`、`拒绝候选`；非 reviewer 隐藏。 | 权限不足或 permission 畸形时 fail closed，只显示安全拒绝摘要。 | 真实飞书来源仍 candidate-only；按钮不绕过 `CopilotService`。 |
 | 版本解释卡 | `memory.explain_versions` 输出 | 当前版本、被覆盖旧版本、覆盖原因、时间线摘要。 | 无新增半成品按钮。 | 无法定位 memory 时先搜索主题，或用 `/versions <memory_id>`。 | 旧值只用于解释，不作为默认 search 当前答案。 |
 | 任务前上下文卡 | `memory.prefetch` 输出 | 本次任务、要带入的 active 规则、关键风险、deadline/owner、缺失信息。 | 无新增半成品按钮。 | 上下文不足时展示缺失信息，不编造规则。 | 不塞全部 raw events，不代表 production live 或长期 embedding 服务。 |
