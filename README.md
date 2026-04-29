@@ -221,7 +221,29 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 | endpoint | http://localhost:11434 | Ollama 服务地址 |
 | dimensions | 1024 | 向量维度 |
 
-### 2.4 运行 Demo readiness
+### 2.5 启动本地只读后台
+
+如果要直接查看本地 memory、candidate、evidence、version、audit 和 SQLite 表结构，可以启动只读后台：
+
+```bash
+python3 scripts/start_copilot_admin.py
+```
+
+默认访问地址：
+
+```text
+http://127.0.0.1:8765
+```
+
+后台默认读取 `data/memory.sqlite`，也可以指定数据库：
+
+```bash
+python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8766
+```
+
+这个后台只开放 `GET` / `HEAD` 查询接口，写请求会返回 `405`。它是本机运维/调试入口，不代表生产部署或完整多租户企业后台。
+
+### 2.6 运行 Demo readiness
 
 ```bash
 python3 scripts/check_demo_readiness.py
