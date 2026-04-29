@@ -68,6 +68,8 @@ python3 scripts/check_copilot_health.py --json
 python3 scripts/check_demo_readiness.py --json
 ```
 
+如果要人工确认自动测试背后的真实体验，按 [手动测试指南](docs/manual-testing-guide.md) 走：它覆盖本地 replay、OpenClaw `fmc_*` 工具、受控 Feishu DM、candidate-only、权限负例、审计读回和截图记录。
+
 ### 2.1 初始化环境
 
 ```bash

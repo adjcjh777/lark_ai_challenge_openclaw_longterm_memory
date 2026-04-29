@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-29（更新：productized live 长期运行方案）
+日期：2026-04-29（更新：手动测试指南）
 
 ## 先看这个
 
@@ -36,6 +36,7 @@
 |---|---|
 | [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md) | 工作流和测试流程规范 |
 | [human-product-guide.md](human-product-guide.md) | 人类快速理解产品 |
+| [manual-testing-guide.md](manual-testing-guide.md) | 手动测试指南：飞书 DM、本地 replay、权限负例、审计读回、截图记录 |
 | [judge-10-minute-experience.md](judge-10-minute-experience.md) | 10 分钟评委体验包：脚本、固定数据、截图清单、fallback、计时验收 |
 
 ### 契约（6 个，按需读取）
@@ -83,11 +84,12 @@
 ### 人类快速理解产品
 
 1. [human-product-guide.md](human-product-guide.md)
-2. [productization/launch-polish-todo.md](productization/launch-polish-todo.md)
-3. [productization/user-experience-todo.md](productization/user-experience-todo.md)
-4. [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md)
-5. [demo-runbook.md](demo-runbook.md)
-6. [benchmark-report.md](benchmark-report.md)
+2. [manual-testing-guide.md](manual-testing-guide.md)
+3. [productization/launch-polish-todo.md](productization/launch-polish-todo.md)
+4. [productization/user-experience-todo.md](productization/user-experience-todo.md)
+5. [productization/workflow-and-test-process.md](productization/workflow-and-test-process.md)
+6. [demo-runbook.md](demo-runbook.md)
+7. [benchmark-report.md](benchmark-report.md)
 
 ### Codex / Agent 后续执行
 
