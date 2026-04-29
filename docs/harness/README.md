@@ -19,6 +19,7 @@ Harness engineering 在本项目里的含义是：把仓库改造成代理可读
 | Keep the agent in the local loop | 所有改动都要有本地命令验证；不要只写计划 | `AGENTS.md` 和 execution contract 的验证矩阵 |
 | Garbage collect technical debt | 技术债有专门清单和停用规则，不让旧路径继续抢主线 | `docs/harness/TECH_DEBT_GARBAGE_COLLECTION.md` |
 | Quality score, not vibes | 用固定维度记录当前 harness 成熟度 | `docs/harness/QUALITY_SCORE.md` |
+| Long-running orchestration | Symphony 使用 repo-owned `WORKFLOW.md` 驱动 Linear issue -> isolated workspace -> Codex app-server | `scripts/check_symphony_setup.py` 和 `docs/reference/symphony-setup.md` |
 
 ## 3. 必读索引
 
@@ -79,6 +80,13 @@ python3 -m unittest tests.test_agent_harness
 ```bash
 python3 scripts/check_openclaw_version.py
 git diff --check
+```
+
+改 Symphony 接入时追加：
+
+```bash
+python3 scripts/check_symphony_setup.py
+python3 -m unittest tests.test_symphony_setup
 ```
 
 ## 6. 本阶段不做

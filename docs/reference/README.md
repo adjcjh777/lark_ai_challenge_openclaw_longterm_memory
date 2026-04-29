@@ -9,6 +9,7 @@
 - `project-overview.md`：旧项目总览和架构说明。
 - `local-lark-cli-setup.md`：本机 lark-cli 配置说明。
 - `local-windows-cognee-embedding-setup.md`：Windows 备用环境搭建本地 Ollama embedding 与 Cognee spike 环境的操作说明。
+- `symphony-setup.md`：按 OpenAI Symphony Elixir README 接入本仓库的本机 runtime、Linear 环境变量、`WORKFLOW.md` 和验证流程。
 
 使用规则：
 

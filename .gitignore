@@ -23,6 +23,9 @@ reports/*.json
 .claude-auto-logs/
 .bitable_sync_*.json
 AGENTS.md
+symphony-workspaces/
+symphony-logs/
+.symphony/
 
 # 真实飞书数据（含真实 ID、姓名、手机号等 PII）
 benchmarks/real_feishu_samples.json
