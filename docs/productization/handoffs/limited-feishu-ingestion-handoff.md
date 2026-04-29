@@ -48,5 +48,5 @@ python3 -m compileall memory_engine scripts
 ## 后续风险
 
 - 真实 Feishu DM 到本项目 first-class `fmc_*` / `memory.*` tool routing 的 live E2E 仍未完成。
-- 飞书任务、会议、Bitable 的真实 API 拉取和失败回退还需要后续单独接入。
+- 2026-04-29 已补飞书任务、会议、Bitable 的真实 API 读取入口、失败 fallback 和 fetch 前 fail-closed preflight，详见 [Feishu API pull handoff](feishu-api-pull-handoff.md)。
 - 真实样本人工复核集还需要继续扩充；本轮只补本地测试覆盖。

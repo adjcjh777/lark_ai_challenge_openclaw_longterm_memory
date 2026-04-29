@@ -398,13 +398,8 @@ def _heartbeat_invocation(event: FeishuMessageEvent, scope: str, *, reason: str)
 def _task_invocation(event: FeishuMessageEvent, scope: str, task_id: str, *, reason: str) -> CopilotFeishuInvocation:
     """处理 /task <task_id> 命令，拉取飞书任务进入 candidate pipeline。"""
     tool = "feishu.fetch_task"
-    context = _current_context(event, scope, tool, intent="fetch_task", thread_topic=task_id)
-    context["source_context"] = {
-        "entrypoint": ENTRYPOINT,
-        "workspace_id": scope,
-        "chat_id": event.chat_id,
-        "task_id": task_id,
-    }
+    context = _current_context(event, scope, "memory.create_candidate", intent="fetch_task", thread_topic=task_id)
+    _extend_permission_source_context(context, task_id=task_id)
     return CopilotFeishuInvocation(
         tool,
         {
@@ -422,13 +417,8 @@ def _meeting_invocation(
 ) -> CopilotFeishuInvocation:
     """处理 /meeting <minute_token> 命令，拉取飞书妙记进入 candidate pipeline。"""
     tool = "feishu.fetch_meeting"
-    context = _current_context(event, scope, tool, intent="fetch_meeting", thread_topic=minute_token)
-    context["source_context"] = {
-        "entrypoint": ENTRYPOINT,
-        "workspace_id": scope,
-        "chat_id": event.chat_id,
-        "meeting_id": minute_token,
-    }
+    context = _current_context(event, scope, "memory.create_candidate", intent="fetch_meeting", thread_topic=minute_token)
+    _extend_permission_source_context(context, meeting_id=minute_token)
     return CopilotFeishuInvocation(
         tool,
         {
@@ -462,15 +452,13 @@ def _bitable_invocation(
         )
 
     app_token, table_id, record_id = parts[0], parts[1], parts[2]
-    context = _current_context(event, scope, tool, intent="fetch_bitable", thread_topic=record_id)
-    context["source_context"] = {
-        "entrypoint": ENTRYPOINT,
-        "workspace_id": scope,
-        "chat_id": event.chat_id,
-        "bitable_app_token": app_token,
-        "bitable_table_id": table_id,
-        "bitable_record_id": record_id,
-    }
+    context = _current_context(event, scope, "memory.create_candidate", intent="fetch_bitable", thread_topic=record_id)
+    _extend_permission_source_context(
+        context,
+        bitable_app_token=app_token,
+        bitable_table_id=table_id,
+        bitable_record_id=record_id,
+    )
     return CopilotFeishuInvocation(
         tool,
         {
@@ -705,6 +693,14 @@ def _current_context(
             "timestamp": _event_time_iso(event),
         },
     }
+
+
+def _extend_permission_source_context(context: dict[str, Any], **values: str) -> None:
+    permission = context.get("permission") if isinstance(context.get("permission"), dict) else {}
+    source_context = permission.get("source_context") if isinstance(permission.get("source_context"), dict) else {}
+    source_context.update({key: value for key, value in values.items() if value})
+    permission["source_context"] = source_context
+    context["permission"] = permission
 
 
 def _roles_for_sender(sender_id: str) -> list[str]:

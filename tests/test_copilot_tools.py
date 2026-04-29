@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request, supported_tool_names, validate_tool_request
@@ -34,6 +35,18 @@ def current_context(action: str, *, roles: list[str] | None = None) -> dict[str,
             "timestamp": "2026-05-07T00:00:00+08:00",
         },
     }
+
+
+def feishu_source_context(action: str, **source_context: str) -> dict[str, object]:
+    context = current_context(action)
+    permission = context["permission"]
+    assert isinstance(permission, dict)
+    permission["source_context"] = {
+        "entrypoint": "openclaw",
+        "workspace_id": SCOPE,
+        **source_context,
+    }
+    return context
 
 
 class CopilotToolContractTest(unittest.TestCase):
@@ -128,6 +141,52 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("heartbeat.review_due", result["tool"])
         self.assertEqual(3, result["parsed_request"]["limit"])
+
+    def test_feishu_fetch_task_missing_permission_fails_before_fetch(self) -> None:
+        with patch("memory_engine.feishu_task_fetcher.fetch_feishu_task_text") as fetch:
+            result = handle_tool_request("feishu.fetch_task", {"task_id": "task_live", "scope": SCOPE})
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("missing_permission_context", result["error"]["details"]["reason_code"])
+
+    def test_feishu_fetch_meeting_malformed_permission_fails_before_fetch(self) -> None:
+        with patch("memory_engine.feishu_meeting_fetcher.fetch_feishu_meeting_text") as fetch:
+            result = handle_tool_request(
+                "feishu.fetch_meeting",
+                {
+                    "minute_token": "minute_live",
+                    "scope": SCOPE,
+                    "current_context": {"permission": {"request_id": "req_malformed"}},
+                },
+            )
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("malformed_permission_context", result["error"]["details"]["reason_code"])
+
+    def test_feishu_fetch_bitable_source_mismatch_fails_before_fetch(self) -> None:
+        with patch("memory_engine.feishu_bitable_fetcher.fetch_bitable_record_text") as fetch:
+            result = handle_tool_request(
+                "feishu.fetch_bitable",
+                {
+                    "app_token": "app_token",
+                    "table_id": "tbl_1",
+                    "record_id": "rec_live",
+                    "scope": SCOPE,
+                    "current_context": feishu_source_context(
+                        "memory.create_candidate",
+                        bitable_record_id="other_record",
+                    ),
+                },
+            )
+
+        fetch.assert_not_called()
+        self.assertFalse(result["ok"])
+        self.assertEqual("permission_denied", result["error"]["code"])
+        self.assertEqual("source_context_mismatch", result["error"]["details"]["reason_code"])
 
     def test_handle_heartbeat_review_due_returns_candidate_only_output(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_tools_heartbeat_", suffix=".sqlite") as tmp:

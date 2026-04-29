@@ -150,6 +150,30 @@ def ingest_feishu_source(
     }
 
 
+def preflight_feishu_source_access(
+    source_type: str,
+    source_id: str,
+    *,
+    scope: str = DEFAULT_SCOPE,
+    current_context: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> CopilotError | None:
+    """Fail closed before fetching a real Feishu source."""
+
+    permission_error = check_scope_access(scope, current_context, action=_permission_action(current_context))
+    if permission_error is not None:
+        return permission_error
+    synthetic_source = FeishuIngestionSource(
+        source_type=source_type,
+        source_id=source_id,
+        title=source_id,
+        text="",
+        actor_id="preflight",
+        metadata=metadata,
+    )
+    return _check_limited_source_context(synthetic_source, current_context)
+
+
 def mark_feishu_source_revoked(
     repo: MemoryRepository,
     *,

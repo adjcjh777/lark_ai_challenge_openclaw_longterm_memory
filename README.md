@@ -21,15 +21,16 @@
 | OpenClaw memory 工具 | 已完成本机 first-class tool registry、Agent 本地 `fmc_*` 工具调用验证，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` |
 | Copilot Core | 已完成核心服务层 | `memory_engine/copilot/service.py`、`tools.py`、`governance.py`、`retrieval.py` |
 | 权限门控 | 已完成 fail-closed 本地闭环 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` |
-| 真实飞书权限映射 | 已完成本地权限映射闭环 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/permissions.py`、`docs/productization/real-feishu-permission-mapping-handoff.md` |
+| 真实飞书权限映射 | 已完成本地权限映射闭环 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/permissions.py`、`docs/productization/handoffs/real-feishu-permission-mapping-handoff.md` |
 | 候选记忆治理 | 已完成 candidate / confirm / reject / conflict / version chain | `memory_engine/copilot/governance.py` |
 | 检索链路 | 已完成 L0/L1/L2/L3 分层混合检索 | `memory_engine/copilot/orchestrator.py`、`retrieval.py` |
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
 | 存储迁移方案 | 已完成本地 migration dry-run / apply 和索引检查 | `scripts/migrate_copilot_storage.py`、`tests/test_copilot_storage_migration.py` |
 | Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
 | Feishu live sandbox | 已完成受控测试群联调 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh` |
-| Limited Feishu ingestion | 已完成本地 candidate-only 底座，支持群聊、文档、任务、会议、Bitable 来源文本 | `memory_engine/document_ingestion.py`、`tests/test_document_ingestion.py`、`docs/productization/limited-feishu-ingestion-handoff.md` |
-| OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/openclaw-feishu-websocket-handoff.md` |
+| Limited Feishu ingestion | 已完成本地 candidate-only 底座，支持群聊、文档、任务、会议、Bitable 来源文本 | `memory_engine/document_ingestion.py`、`tests/test_document_ingestion.py`、`docs/productization/handoffs/limited-feishu-ingestion-handoff.md` |
+| 真实 Feishu API 拉取入口 | 已完成任务、会议、Bitable 读取 fetcher、Feishu live `/task` / `/meeting` / `/bitable` 路由和 fetch 前 fail-closed 权限门控；结果只进入 candidate | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、`tests/test_feishu_fetchers.py`、`docs/productization/handoffs/feishu-api-pull-handoff.md` |
+| OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
 | Benchmark | 已完成多类评测样例 | `benchmarks/copilot_*.json`、`docs/benchmark-report.md` |
 | 白皮书 / 答辩材料 | 已完成初稿和 10 分钟评委体验包，放在后半部分查看 | `docs/memory-definition-and-architecture-whitepaper.md`、`docs/demo-runbook.md`、`docs/judge-10-minute-experience.md` |
@@ -49,9 +50,8 @@
 
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
-| P0 | 固定评委/用户主路径脚本和体验验收 | 在已有受控真实 DM `fmc_memory_search` allow-path 证据基础上，固化评委 10 分钟入口、主路径脚本、失败提示和可复测命令；仍不宣称稳定长期路由 |
-| P1 | 接真实 Feishu API 拉取与扩充人工复核样本 | 在 limited ingestion 底座之上，接任务、会议、Bitable 等真实 API 拉取，并保留失败 fallback 和 candidate-only 边界 |
-| P0 | 维护用户体验产品化闭环和评委 10 分钟入口 | [用户体验产品化 TODO](docs/productization/user-experience-todo.md) 记录 UX-01 到 UX-07 状态；评委入口为 [10 分钟评委体验包](docs/judge-10-minute-experience.md)，仍不宣称 production live |
+| P0 | 补审计查询、监控和运维面 | 权限拒绝、ingestion 失败、websocket down、embedding unavailable、candidate/review 事件都能被查询和纳入 health / ops 口径 |
+| P1 | 扩大真实飞书样本实测 | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 做 smoke，继续保留 candidate-only、失败 fallback 和 no-overclaim |
 | P2 | 设计 productized live 长期运行方案 | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 
@@ -454,9 +454,9 @@ scripts/start_copilot_feishu_live.sh
 | PRD 完成度审计 | `docs/productization/prd-completion-audit-and-gap-tasks.md` | 当前完成度和未完成边界 |
 | 产品化执行文档 | `docs/productization/full-copilot-next-execution-doc.md` | 后续执行主线 |
 | OpenClaw runtime evidence | `docs/productization/openclaw-runtime-evidence.md` | OpenClaw Agent 受控验收证据 |
-| Feishu websocket handoff | `docs/productization/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
+| Feishu websocket handoff | `docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
 | Storage migration handoff | `docs/productization/storage-migration-productization-handoff.md` | 存储迁移和生产存储试点方案 |
-| Review surface handoff | `docs/productization/review-surface-operability-handoff.md` | Bitable review 写回幂等和读回确认 |
+| Review surface handoff | `docs/productization/handoffs/review-surface-operability-handoff.md` | Bitable review 写回幂等和读回确认 |
 
 答辩时可以用这句话概括：
 
@@ -470,8 +470,6 @@ scripts/start_copilot_feishu_live.sh
 
 | 任务 | 位置 | 完成标准 |
 |---|---|---|
-| 固定评委/用户主路径脚本和体验验收 | `docs/judge-10-minute-experience.md`、`docs/demo-runbook.md`、`scripts/check_demo_readiness.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` | 在已完成一次受控真实 DM `fmc_memory_search` allow-path 证据基础上，固化评委可复测入口、主路径脚本和失败提示；不写成稳定长期路由 |
-| 扩大真实 Feishu ingestion 范围 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/feishu_live.py`、`docs/productization/full-copilot-next-execution-doc.md` | 真实飞书来源继续 candidate-only，权限和审计可检查 |
 | 补审计、监控和运维面 | `memory_engine/copilot/healthcheck.py`、`memory_engine/db.py`、`docs/productization/contracts/audit-observability-contract.md` | audit 可查询、healthcheck 能看到 deny / failure / redaction 等运维指标 |
 | 设计 productized live 长期运行方案 | `docs/productization/full-copilot-next-execution-doc.md` | 写清部署、监控、回滚、权限后台、审计 UI 和运维边界 |
 | 保持 no-overclaim 文档口径 | README、白皮书、Demo runbook、Benchmark report | 不把 demo、dry-run、sandbox、staging 写成 production live |

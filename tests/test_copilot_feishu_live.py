@@ -160,6 +160,43 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("natural_prefetch", invocation.reason)
         self.assertEqual(SCOPE, invocation.payload["scope"])
 
+    def test_task_command_places_task_id_in_permission_source_context(self) -> None:
+        event = message_event_from_payload(payload("om_live_task_fetch", "/task task_123"))
+        self.assertIsNotNone(event)
+        invocation = invocation_from_event(event, scope=SCOPE)
+
+        permission = invocation.payload["current_context"]["permission"]
+        self.assertEqual("feishu.fetch_task", invocation.tool_name)
+        self.assertNotIn("source_context", invocation.payload["current_context"])
+        self.assertEqual("memory.create_candidate", permission["requested_action"])
+        self.assertEqual("task_123", permission["source_context"]["task_id"])
+        self.assertEqual(CHAT_ID, permission["source_context"]["chat_id"])
+
+    def test_meeting_command_places_meeting_id_in_permission_source_context(self) -> None:
+        event = message_event_from_payload(payload("om_live_meeting_fetch", "/meeting minute_123"))
+        self.assertIsNotNone(event)
+        invocation = invocation_from_event(event, scope=SCOPE)
+
+        permission = invocation.payload["current_context"]["permission"]
+        self.assertEqual("feishu.fetch_meeting", invocation.tool_name)
+        self.assertNotIn("source_context", invocation.payload["current_context"])
+        self.assertEqual("memory.create_candidate", permission["requested_action"])
+        self.assertEqual("minute_123", permission["source_context"]["meeting_id"])
+
+    def test_bitable_command_places_record_id_in_permission_source_context(self) -> None:
+        event = message_event_from_payload(payload("om_live_bitable_fetch", "/bitable app_1 tbl_1 rec_1"))
+        self.assertIsNotNone(event)
+        invocation = invocation_from_event(event, scope=SCOPE)
+
+        permission = invocation.payload["current_context"]["permission"]
+        source_context = permission["source_context"]
+        self.assertEqual("feishu.fetch_bitable", invocation.tool_name)
+        self.assertNotIn("source_context", invocation.payload["current_context"])
+        self.assertEqual("memory.create_candidate", permission["requested_action"])
+        self.assertEqual("app_1", source_context["bitable_app_token"])
+        self.assertEqual("tbl_1", source_context["bitable_table_id"])
+        self.assertEqual("rec_1", source_context["bitable_record_id"])
+
     def test_permission_context_maps_real_feishu_tenant_org_and_chat(self) -> None:
         event = message_event_from_payload(payload("om_live_real_perm", "生产部署 region 是什么？"))
         self.assertIsNotNone(event)

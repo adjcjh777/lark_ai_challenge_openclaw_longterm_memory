@@ -73,7 +73,7 @@ def validate_tool_request(tool_name: str, payload: Any) -> dict[str, Any]:
 
 
 def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService | None = None) -> dict[str, Any]:
-    # 处理飞书来源工具（不需要通过 CopilotService）
+    # Real Feishu source tools must fail closed before any external fetch.
     if tool_name in {"feishu.fetch_task", "feishu.fetch_meeting", "feishu.fetch_bitable"}:
         return _handle_feishu_source_tool(tool_name, payload)
 
@@ -149,14 +149,21 @@ def _handle_fetch_task(payload: dict[str, Any], scope: str, current_context: dic
 
     try:
         from memory_engine.db import connect, init_db
-        from memory_engine.document_ingestion import ingest_feishu_source
+        from memory_engine.document_ingestion import ingest_feishu_source, preflight_feishu_source_access
         from memory_engine.feishu_task_fetcher import fetch_feishu_task_text
         from memory_engine.repository import MemoryRepository
 
-        # 拉取任务
+        permission_error = preflight_feishu_source_access(
+            "feishu_task",
+            str(task_id),
+            scope=scope,
+            current_context=current_context,
+        )
+        if permission_error is not None:
+            return permission_error.to_response()
+
         source = fetch_feishu_task_text(task_id)
 
-        # 进入 candidate pipeline
         from memory_engine.db import db_path_from_env
 
         conn = connect(db_path_from_env())
@@ -181,14 +188,21 @@ def _handle_fetch_meeting(payload: dict[str, Any], scope: str, current_context: 
 
     try:
         from memory_engine.db import connect, init_db
-        from memory_engine.document_ingestion import ingest_feishu_source
+        from memory_engine.document_ingestion import ingest_feishu_source, preflight_feishu_source_access
         from memory_engine.feishu_meeting_fetcher import fetch_feishu_meeting_text
         from memory_engine.repository import MemoryRepository
 
-        # 拉取会议
+        permission_error = preflight_feishu_source_access(
+            "feishu_meeting",
+            str(minute_token),
+            scope=scope,
+            current_context=current_context,
+        )
+        if permission_error is not None:
+            return permission_error.to_response()
+
         source = fetch_feishu_meeting_text(minute_token)
 
-        # 进入 candidate pipeline
         from memory_engine.db import db_path_from_env
 
         conn = connect(db_path_from_env())
@@ -220,14 +234,22 @@ def _handle_fetch_bitable(payload: dict[str, Any], scope: str, current_context: 
 
     try:
         from memory_engine.db import connect, init_db
-        from memory_engine.document_ingestion import ingest_feishu_source
+        from memory_engine.document_ingestion import ingest_feishu_source, preflight_feishu_source_access
         from memory_engine.feishu_bitable_fetcher import fetch_bitable_record_text
         from memory_engine.repository import MemoryRepository
 
-        # 拉取记录
+        permission_error = preflight_feishu_source_access(
+            "lark_bitable",
+            str(record_id),
+            scope=scope,
+            current_context=current_context,
+            metadata={"app_token": app_token, "table_id": table_id, "record_id": record_id},
+        )
+        if permission_error is not None:
+            return permission_error.to_response()
+
         source = fetch_bitable_record_text(app_token, table_id, record_id)
 
-        # 进入 candidate pipeline
         from memory_engine.db import db_path_from_env
 
         conn = connect(db_path_from_env())
