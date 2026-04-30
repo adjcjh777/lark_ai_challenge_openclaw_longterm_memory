@@ -386,7 +386,7 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
         fields.append(("覆盖旧值", str(conflict.get("old_value") or "")))
 
     card = {
-        "config": {"wide_screen_mode": True},
+        "config": {"wide_screen_mode": True, "update_multi": False},
         "header": {
             "template": "orange" if conflict["has_conflict"] else "turquoise",
             "title": {"tag": "plain_text", "content": "待确认记忆"},

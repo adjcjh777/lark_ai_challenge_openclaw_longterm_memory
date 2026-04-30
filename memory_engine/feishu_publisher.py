@@ -280,10 +280,16 @@ def _with_card_open_ids(card: dict[str, Any], open_id: str) -> dict[str, Any]:
         return card
     existing = card.get("open_ids")
     if isinstance(existing, list) and open_id in existing:
-        return card
-    open_ids = [item for item in existing if isinstance(item, str)] if isinstance(existing, list) else []
-    update_card = dict(card)
-    update_card["open_ids"] = [*open_ids, open_id]
+        update_card = dict(card)
+    else:
+        open_ids = [item for item in existing if isinstance(item, str)] if isinstance(existing, list) else []
+        update_card = dict(card)
+        update_card["open_ids"] = [*open_ids, open_id]
+    config = update_card.get("config")
+    if isinstance(config, dict):
+        update_card["config"] = {**config, "update_multi": False}
+    else:
+        update_card["config"] = {"update_multi": False}
     return update_card
 
 
