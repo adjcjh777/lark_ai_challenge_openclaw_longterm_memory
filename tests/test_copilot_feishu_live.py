@@ -634,15 +634,7 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertTrue(clicked["message_id"].startswith("card_action_"))
         clicked_card = clicked["publish"]["card"]
         clicked_actions = [element for element in clicked_card["elements"] if element.get("tag") == "action"]
-        self.assertEqual(1, len(clicked_actions))
-        labels = [action["text"]["content"] for action in clicked_actions[0]["actions"]]
-        self.assertEqual(["确认保存", "拒绝候选", "要求补证据", "标记过期"], labels)
-        confirm_action = clicked_actions[0]["actions"][0]
-        reject_action = clicked_actions[0]["actions"][1]
-        self.assertTrue(confirm_action.get("disabled"))
-        self.assertEqual("primary", confirm_action.get("type"))
-        self.assertTrue(reject_action.get("disabled"))
-        self.assertEqual("default", reject_action.get("type"))
+        self.assertEqual([], clicked_actions)
 
     def test_interactive_candidate_card_shows_review_buttons_for_candidate_owner(self) -> None:
         config = FeishuConfig(

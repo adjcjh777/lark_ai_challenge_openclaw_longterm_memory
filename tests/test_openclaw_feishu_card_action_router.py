@@ -15,7 +15,7 @@ OTHER_OPEN_ID = "ou_other_member"
 
 
 class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
-    def test_owner_confirm_returns_locked_status_card(self) -> None:
+    def test_owner_confirm_returns_final_status_card_without_buttons(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
             conn = connect(db_path)
@@ -44,12 +44,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertEqual("fmc_memory_confirm", confirmed["tool_result"]["bridge"]["tool"])
         self.assertEqual("confirmed", confirmed["tool_result"]["review_status"])
         actions = [element for element in confirmed["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual(1, len(actions))
-        labels = [action["text"]["content"] for action in actions[0]["actions"]]
-        self.assertEqual(["确认保存", "拒绝候选", "要求补证据", "标记过期"], labels)
-        self.assertTrue(all(action.get("disabled") for action in actions[0]["actions"]))
-        self.assertEqual("primary", actions[0]["actions"][0]["type"])
-        self.assertEqual("default", actions[0]["actions"][1]["type"])
+        self.assertEqual([], actions)
 
     def test_non_owner_confirm_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -168,9 +163,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(second["tool_result"]["idempotent"])
         self.assertEqual("confirmed", second["tool_result"]["review_status"])
         actions = [element for element in second["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual(1, len(actions))
-        self.assertTrue(all(action.get("disabled") for action in actions[0]["actions"]))
-        self.assertEqual("primary", actions[0]["actions"][0]["type"])
+        self.assertEqual([], actions)
 
     def test_reject_after_confirm_returns_current_confirmed_card(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -208,8 +201,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(late_reject["tool_result"]["idempotent"])
         self.assertEqual("confirmed", late_reject["tool_result"]["review_status"])
         actions = [element for element in late_reject["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual("primary", actions[0]["actions"][0]["type"])
-        self.assertEqual("default", actions[0]["actions"][1]["type"])
+        self.assertEqual([], actions)
 
     def test_duplicate_confirm_on_conflict_version_returns_confirmed_card(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -263,8 +255,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(duplicate["tool_result"]["idempotent"])
         self.assertEqual("confirmed", duplicate["tool_result"]["review_status"])
         actions = [element for element in duplicate["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual("primary", actions[0]["actions"][0]["type"])
-        self.assertTrue(all(action.get("disabled") for action in actions[0]["actions"]))
+        self.assertEqual([], actions)
 
 
 if __name__ == "__main__":

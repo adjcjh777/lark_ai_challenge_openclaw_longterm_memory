@@ -407,6 +407,49 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("要求补证据", rendered)
         self.assertIn("标记过期", rendered)
 
+    def test_candidate_review_card_hides_internal_queue_and_risk_details(self) -> None:
+        response = {
+            "candidate_id": "ver_simple",
+            "memory_id": "mem_simple",
+            "status": "candidate",
+            "recommended_action": "manual_review_conflict",
+            "risk_flags": ["conflict_candidate", "override_intent"],
+            "candidate": {
+                "candidate_id": "ver_simple",
+                "memory_id": "mem_simple",
+                "status": "candidate",
+                "type": "decision",
+                "subject": "部署窗口",
+                "current_value": "决定：周五 18:00 前完成灰度发布。",
+                "summary": "灰度发布窗口",
+                "conflict": {
+                    "has_conflict": True,
+                    "old_value": "决定：周四 18:00 前完成灰度发布。",
+                },
+            },
+            "evidence": {"quote": "决定：周五 18:00 前完成灰度发布。", "source_type": "feishu_message"},
+            "bridge": {
+                "request_id": "req_simple_card",
+                "trace_id": "trace_simple_card",
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "actor": {"user_id": "ou_reviewer", "roles": ["member", "reviewer"]},
+                },
+            },
+        }
+
+        card = build_candidate_review_card(response)
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertIn("待确认", rendered)
+        self.assertIn("决定：周五 18:00 前完成灰度发布。", rendered)
+        self.assertIn("原结论", rendered)
+        self.assertIn("确认保存", rendered)
+        self.assertNotIn("队列视图", rendered)
+        self.assertNotIn("操作建议", rendered)
+        self.assertNotIn("conflict_candidate", rendered)
+
     def test_copilot_candidate_review_payload_hides_reviewer_buttons_for_member(self) -> None:
         response = {
             "candidate_id": "ver_member",
@@ -441,7 +484,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertNotIn("确认保存", rendered)
         self.assertNotIn("拒绝候选", rendered)
 
-    def test_copilot_candidate_review_payload_locks_buttons_after_confirm(self) -> None:
+    def test_copilot_candidate_review_payload_hides_buttons_after_confirm(self) -> None:
         response = {
             "ok": True,
             "action": "confirmed",
@@ -486,14 +529,8 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertEqual("confirmed", payload["review_status"])
         self.assertEqual("confirmed", payload["state_mutation"])
-        self.assertEqual(["confirm", "reject", "needs_evidence", "expire"], [button["action"] for button in payload["buttons"]])
-        self.assertTrue(all(button["disabled"] for button in payload["buttons"]))
-        self.assertEqual("confirm", payload["buttons"][0]["selected_action"])
-        self.assertEqual(1, len(actions))
-        rendered_actions = actions[0]["actions"]
-        self.assertTrue(all(action.get("disabled") for action in rendered_actions))
-        self.assertEqual("primary", rendered_actions[0]["type"])
-        self.assertEqual("default", rendered_actions[1]["type"])
+        self.assertEqual([], payload["buttons"])
+        self.assertEqual([], actions)
 
     def test_copilot_search_result_payload_separates_user_content_and_audit(self) -> None:
         response = {

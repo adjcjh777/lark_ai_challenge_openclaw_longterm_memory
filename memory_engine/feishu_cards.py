@@ -368,41 +368,36 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
         return _permission_denied_card("待确认记忆", payload)
 
     conflict = payload["conflict"]
+    title, template = _candidate_review_card_title_and_template(payload)
     fields = [
-        ("状态", str(payload.get("status") or "")),
-        ("审核状态", str(payload.get("review_status") or "")),
-        ("队列视图", " / ".join(payload.get("queue_views") or [])),
+        ("状态", _candidate_review_status_label(payload)),
         ("主题", str(payload.get("subject") or "")),
-        ("新值", str(payload.get("new_value") or "")),
-        ("来源", str(payload.get("source_type") or "")),
+        ("记忆内容", str(payload.get("new_value") or "")),
         ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
-        ("风险", f"{payload.get('risk_level') or 'low'}；{', '.join(payload.get('risk_flags') or []) or '无'}"),
-        ("冲突", str(payload.get("conflict_status") or "")),
-        ("操作建议", str(payload.get("recommended_action") or "")),
+        ("来源", _source_summary(payload.get("evidence") or {})),
     ]
-    if payload.get("reviewer"):
-        fields.append(("reviewer", str(payload["reviewer"])))
-    if conflict["has_conflict"]:
-        fields.append(("覆盖旧值", str(conflict.get("old_value") or "")))
+    if conflict["has_conflict"] and payload.get("review_status") == "pending":
+        fields.append(("原结论", str(conflict.get("old_value") or "")))
 
     card = {
         "config": {"wide_screen_mode": True, "update_multi": False},
         "header": {
-            "template": "orange" if conflict["has_conflict"] else "turquoise",
-            "title": {"tag": "plain_text", "content": "待确认记忆"},
+            "template": template,
+            "title": {"tag": "plain_text", "content": title},
         },
         "elements": [
             {
                 "tag": "div",
                 "fields": [
                     {
-                        "is_short": label not in {"新值", "证据", "覆盖旧值"},
+                        "is_short": label not in {"记忆内容", "证据", "原结论"},
                         "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
                     }
                     for label, value in fields
+                    if value
                 ],
             },
-            _audit_block(payload.get("audit_details") or {}),
+            _compact_audit_block(payload.get("audit_details") or {}),
         ],
     }
     actions = []
@@ -1024,16 +1019,54 @@ def _button(label: str, button_type: str, value: dict[str, str], *, disabled: bo
 
 
 def _candidate_review_buttons(*, candidate_id: str, review_status: str, action: str) -> list[dict[str, Any]]:
+    selected = _selected_review_action(review_status, action)
+    if selected is not None:
+        return []
     buttons = [
         {"action": "confirm", "label": "确认保存", "required_for_mvp": True, "candidate_id": candidate_id},
         {"action": "reject", "label": "拒绝候选", "required_for_mvp": True, "candidate_id": candidate_id},
         {"action": "needs_evidence", "label": "要求补证据", "required_for_mvp": True, "candidate_id": candidate_id},
         {"action": "expire", "label": "标记过期", "required_for_mvp": True, "candidate_id": candidate_id},
     ]
-    selected = _selected_review_action(review_status, action)
-    if selected is None:
-        return buttons
-    return [{**button, "disabled": True, "selected_action": selected} for button in buttons]
+    return buttons
+
+
+def _candidate_review_card_title_and_template(payload: dict[str, Any]) -> tuple[str, str]:
+    review_status = str(payload.get("review_status") or "")
+    if review_status == "confirmed":
+        return "已确认记忆", "green"
+    if review_status == "rejected":
+        return "已拒绝候选", "red"
+    if review_status == "needs_evidence":
+        return "待补充证据", "yellow"
+    if review_status == "expired":
+        return "已标记过期", "grey"
+    conflict = payload.get("conflict") if isinstance(payload.get("conflict"), dict) else {}
+    return "待确认记忆", "orange" if conflict.get("has_conflict") else "turquoise"
+
+
+def _candidate_review_status_label(payload: dict[str, Any]) -> str:
+    review_status = str(payload.get("review_status") or "")
+    status = str(payload.get("status") or "")
+    return {
+        "pending": "待确认",
+        "confirmed": "已确认",
+        "rejected": "已拒绝",
+        "needs_evidence": "待补充证据",
+        "expired": "已过期",
+    }.get(review_status, status or review_status)
+
+
+def _compact_audit_block(audit: dict[str, Any]) -> dict[str, Any]:
+    permission_decision = audit.get("permission_decision") if isinstance(audit.get("permission_decision"), dict) else {}
+    decision = str(permission_decision.get("decision") or audit.get("decision") or "")
+    reason = str(permission_decision.get("reason_code") or audit.get("permission_reason") or audit.get("reason_code") or "")
+    summary = "已记录"
+    if decision:
+        summary = f"已记录；权限：{decision}"
+        if reason:
+            summary += f" / {reason}"
+    return {"tag": "div", "text": {"tag": "lark_md", "content": f"**审计**\n{summary}"}}
 
 
 def _selected_review_action(review_status: str, action: str) -> str | None:
