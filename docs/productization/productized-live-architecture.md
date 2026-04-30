@@ -4,7 +4,7 @@
 状态：方案设计（未完成生产上线）
 适用范围：生产部署架构参考，新成员理解系统拓扑
 
-> 2026-04-29 校准：本文是架构参考，不代表生产部署已完成。当前事实是本地 demo / staging、受控真实 DM allow-path、candidate-only API 入口和本地审计/告警面已完成；PostgreSQL、生产级监控、权限后台、审计 UI 和长期 embedding 服务仍未实施。执行 gate 见 [productized-live-long-run-plan.md](productized-live-long-run-plan.md)。
+> 2026-04-30 校准：本文是架构参考，不代表生产部署已完成。当前事实是本地 demo / staging、受控真实 DM allow-path、review-policy API 入口和本地审计/告警面已完成；PostgreSQL、生产级监控、权限后台、审计 UI 和长期 embedding 服务仍未实施。执行 gate 见 [productized-live-long-run-plan.md](productized-live-long-run-plan.md)。
 
 ---
 
@@ -63,7 +63,7 @@
                           │                                                             │
                           │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐│
                           │  │ Retrieval   │  │ Embedding   │  │ Ingestion           ││
-                          │  │ (hybrid)    │  │ Provider    │  │ (candidate-only)    ││
+                          │  │ (hybrid)    │  │ Provider    │  │ (review-policy)    ││
                           │  └─────────────┘  └─────────────┘  └─────────────────────┘│
                           └──────────────────────────┬──────────────────────────────────┘
                                                      │
@@ -197,7 +197,7 @@ Reviewer Click (Card Action)
 Feishu Message/Doc/Task/Meeting/Bitable
   -> Limited Ingestion Pipeline
   -> Source Validation (permission, tenant, org)
-  -> Candidate Creation (candidate-only, no auto-active)
+  -> Review Policy Gate (low-risk auto-confirm; important/sensitive/conflict stays candidate)
   -> Audit Log
 ```
 
@@ -263,7 +263,7 @@ Permission Context (current_context.permission)
 
 ### 6.1 数据安全
 
-- 真实飞书数据只进 candidate，不自动 active
+- 真实飞书数据必须经过 review policy；低风险、低重要性、无冲突才可自动 active
 - Permission fail-closed，缺失/畸形一律拒绝
 - Audit append-only，不删除不修改
 - Token/Secret 不写入日志或 git

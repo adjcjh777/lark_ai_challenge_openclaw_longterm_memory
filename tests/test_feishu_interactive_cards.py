@@ -11,6 +11,7 @@ from memory_engine.db import connect, init_db
 from memory_engine.feishu_cards import (
     build_candidate_review_card,
     build_card_from_text,
+    build_group_settings_card,
     build_prefetch_context_card,
     build_reminder_candidate_card,
     build_review_inbox_card,
@@ -199,11 +200,15 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         result = publisher.publish(event, "这里包含不应回退到群聊的审核文本", card)
 
-        self.assertFalse(result["ok"])
-        self.assertFalse(result["fallback_used"])
-        self.assertTrue(result["fallback_suppressed"])
-        self.assertEqual("targeted_review_card_text_fallback_suppressed", result["fallback_reason"])
-        self.assertEqual(["reply_card", "reply_card", "reply_card"], publisher.modes)
+        self.assertTrue(result["ok"])
+        self.assertEqual("direct_interactive", result["mode"])
+        self.assertEqual("dm", result["delivery_mode"])
+        self.assertIsNone(result["chat_id"])
+        self.assertEqual(["ou_owner"], result["targets"])
+        self.assertTrue(result["fallback_used"])
+        self.assertFalse(result["fallback_suppressed"])
+        self.assertEqual("direct_interactive_card_failed_after_retries", result["target_results"][0]["fallback_reason"])
+        self.assertEqual(["send_direct_card", "send_direct_card", "send_direct_card", "send_direct_text"], publisher.modes)
 
     def test_timeout_suppresses_text_fallback_to_avoid_double_send(self) -> None:
         event = message_event_from_payload(text_payload("om_card_timeout", "/remember 生产部署必须加 --canary"))
@@ -647,6 +652,52 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         card = build_review_inbox_card({"counts": {"pending": 0}, "items": []})
 
         self.assertNotIn("open_ids", card)
+
+    def test_group_settings_card_is_read_only_and_shows_live_boundaries(self) -> None:
+        card = build_group_settings_card(
+            {
+                "scope": "project:feishu_ai_challenge",
+                "visibility_policy": "team",
+                "allowlist_summary": "configured (1)",
+                "silent_screening": "enabled_for_allowlist_groups",
+                "review_delivery": "DM/private",
+                "auto_confirm_policy": "低风险、低重要性、无冲突可自动确认；项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核。",
+                "production_boundary": "受控 live sandbox，不是生产长期运行。",
+            }
+        )
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertEqual("群级记忆设置", card["header"]["title"]["content"])
+        self.assertIn("allowlist 群静默筛选", rendered)
+        self.assertIn("configured (1)", rendered)
+        self.assertIn("DM/private", rendered)
+        self.assertIn("auto-confirm policy", rendered)
+        self.assertIn("低风险、低重要性、无冲突可自动确认", rendered)
+        self.assertIn("项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核", rendered)
+        self.assertIn("project:feishu_ai_challenge", rendered)
+        self.assertIn("team", rendered)
+        self.assertIn("不是生产长期运行", rendered)
+        self.assertNotIn("action", {element.get("tag") for element in card["elements"]})
+        self.assertNotIn("保存", rendered)
+        self.assertNotIn("更新设置", rendered)
+
+    def test_group_settings_card_warns_when_allowlist_is_not_configured(self) -> None:
+        card = build_group_settings_card(
+            {
+                "scope": "project:feishu_ai_challenge",
+                "visibility_policy": "team",
+                "allowlist_summary": "(none)",
+                "silent_screening": "unrestricted_without_allowlist",
+                "review_delivery": "DM/private",
+                "auto_confirm_policy": "低风险自动确认；重要内容人工审核。",
+                "production_boundary": "受控 live sandbox，不是生产长期运行。",
+            }
+        )
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertIn("allowlist 未配置", rendered)
+        self.assertIn("当前进程不会限制 chat", rendered)
+        self.assertIn("生产前必须配置 allowlist", rendered)
 
     def test_candidate_review_card_maps_visibility_policy_to_user_scope_hint(self) -> None:
         cases = [

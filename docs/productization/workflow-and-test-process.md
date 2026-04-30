@@ -7,7 +7,7 @@
 
 1. 每次只推进一个明确任务，不跨越还没有验收的上线 gate。
 2. 当前主线是 OpenClaw-native Feishu Memory Copilot；旧 CLI / Bot 只做 fallback。
-3. 真实飞书来源只进入 candidate；confirm / reject 必须走 `CopilotService` / `handle_tool_request()`。
+3. 真实飞书来源必须先进入 review policy：低风险、低重要性、无冲突可以自动确认成 active，项目进展重要、重要角色发言、敏感/高风险或冲突必须停在 candidate；confirm / reject 必须走 `CopilotService` / `handle_tool_request()`。
 4. 任何真实 embedding / Cognee / Ollama 验证后，都要检查并清理本项目模型驻留。
 
 ## 标准工作流
@@ -220,7 +220,7 @@ python3 -m memory_engine benchmark run benchmarks/day7_anti_interference.json
 - OpenClaw first-class tool registry 已有证据。
 - OpenClaw Feishu websocket `running=true`，且单监听规则通过。
 - 真实飞书权限映射接入，不再只靠 demo tenant/org 常量。
-- 真实飞书来源 candidate-only，不自动 active。
+- 真实飞书来源必须经过 review policy；低风险、低重要性、无冲突可自动 active，重要/敏感/冲突必须人工审核。
 - confirm / reject / permission deny / ingestion / heartbeat 都有 audit record。
 - storage / index / migration / backup / rollback 方案清楚。
 - Cognee 主路径或 fallback 边界清楚。

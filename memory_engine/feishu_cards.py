@@ -551,6 +551,40 @@ def build_review_inbox_card(inbox_response: dict[str, Any]) -> dict[str, Any]:
     return card
 
 
+def build_group_settings_card(settings_response: dict[str, Any]) -> dict[str, Any]:
+    """Build a read-only group settings card for the current Feishu sandbox."""
+
+    fields = [
+        ("allowlist 群静默筛选", _group_silent_screening_label(settings_response)),
+        ("审核投递方式", str(settings_response.get("review_delivery") or "DM/private")),
+        ("auto-confirm policy", str(settings_response.get("auto_confirm_policy") or "")),
+        ("scope", str(settings_response.get("scope") or "")),
+        ("visibility", _visibility_label(settings_response.get("visibility_policy"))),
+        ("运行边界", str(settings_response.get("production_boundary") or "受控 live sandbox，不是生产长期运行。")),
+    ]
+    fields.append(("写入动作", "只读展示；本卡不修改群设置、不写入任何配置。"))
+    return {
+        "config": {"wide_screen_mode": True, "update_multi": False},
+        "header": {
+            "template": "blue",
+            "title": {"tag": "plain_text", "content": "群级记忆设置"},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label in {"scope", "visibility"},
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                    if value
+                ],
+            }
+        ],
+    }
+
+
 def build_search_result_card(search_response: dict[str, Any]) -> dict[str, Any]:
     payload = search_result_payload(search_response)
     if payload.get("status") == "permission_denied":
@@ -1071,6 +1105,24 @@ def _scope_hint(
     if requested_visibility:
         return _scope_hint(visibility_policy=requested_visibility)
     return "当前团队范围"
+
+
+def _visibility_label(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "team"
+    hint = _scope_hint(visibility_policy=raw)
+    return f"{raw}（{hint}）"
+
+
+def _group_silent_screening_label(settings_response: dict[str, Any]) -> str:
+    allowlist = str(settings_response.get("allowlist_summary") or "not configured")
+    status = str(settings_response.get("silent_screening") or "")
+    if status == "enabled_for_allowlist_groups":
+        return f"开启，仅限 allowlist 群；allowlist={allowlist}"
+    if status == "enabled_for_wildcard_groups":
+        return f"开启，当前允许 wildcard 群；allowlist={allowlist}"
+    return f"allowlist 未配置，当前进程不会限制 chat；生产前必须配置 allowlist。allowlist={allowlist}"
 
 
 def _conflict_summary(conflict: dict[str, Any]) -> str:

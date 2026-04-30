@@ -8,7 +8,7 @@
 
 1. 当前项目已经完成 demo / pre-production 闭环：本地 healthcheck、demo replay、benchmark、受控飞书测试群 sandbox、OpenClaw Agent runtime 受控证据、live embedding gate 和 no-overclaim 审查都已有。
 2. 接下来不是继续补旧 MVP，而是把系统打磨到可上线试点：OpenClaw 原生工具、飞书 websocket、真实权限、生产存储、审计和运维。
-3. 每个任务必须保持 candidate-only、permission fail-closed、CopilotService 事实源和 no-overclaim 边界。
+3. 每个任务必须保持 review-policy gate、permission fail-closed、CopilotService 事实源和 no-overclaim 边界：低风险、低重要性、无冲突才可自动 active，重要/敏感/冲突必须人工审核。
 4. 完成一个任务后，要同步 README 顶部任务区、相关 handoff、飞书共享任务看板，并提交推送。
 
 ## 当前完成基线
@@ -127,7 +127,7 @@ ollama ps
 - 已完成：tenant mismatch、organization mismatch、private non-owner、source context mismatch 全部 deny。
 - 已完成：deny response 不返回 `current_value`、`summary`、`evidence` 明文。
 - 已完成：confirm / reject 仍要求 reviewer / owner / admin。
-- 已完成：真实 Feishu doc fetch 前必须先通过 permission gate；本阶段保留 candidate-only 边界，不声明全量 ingestion。
+- 已完成：真实 Feishu doc fetch 前必须先通过 permission gate；本阶段保留 review-policy gate，不声明全量 ingestion。
 
 已完成证据：
 
@@ -191,7 +191,7 @@ ollama ps
 
 ### 5. P1：扩大真实 Feishu ingestion 范围（已完成本地 limited ingestion 底座）
 
-要做什么：把受控测试群和指定文档的 candidate-only 能力，扩展到更多真实飞书来源：群聊、文档、任务、会议、Bitable。
+要做什么：把受控测试群和指定文档的 review-policy 能力，扩展到更多真实飞书来源：群聊、文档、任务、会议、Bitable。
 
 为什么要做：产品价值来自办公上下文，不只是一个测试群里的 `/remember`。
 
@@ -207,7 +207,7 @@ ollama ps
 完成标准：
 
 - 已完成：群聊、文档、任务、会议、Bitable 来源文本都有统一 `FeishuIngestionSource` 入口、source metadata、evidence quote 和权限 gate。
-- 已完成：所有来源通过 `memory.create_candidate` 进入 candidate，不自动 active。
+- 已完成：所有来源通过 `memory.create_candidate` 进入 review policy；低风险、低重要性、无冲突可自动 active，重要/敏感/冲突停在 candidate。
 - 已完成：source 删除或权限撤销后，active memory 会标记为 `stale`，默认 recall 不再返回。
 - 已完成：文档和测试明确本轮不是直接调用任务、会议、Bitable OpenAPI；真实 API 拉取失败时不能冒称 live 成功。
 - 后续继续：接真实飞书任务、会议、Bitable API 拉取，并扩充真实样本人工复核集。
@@ -216,7 +216,7 @@ ollama ps
 
 - 新增 `FeishuIngestionSource`、`ingest_feishu_source()`、`mark_feishu_source_revoked()`。
 - 扩展 candidate source / evidence metadata：task、meeting、Bitable 字段可进入 Copilot schema。
-- `tests.test_document_ingestion` 覆盖 task / meeting / Bitable candidate-only、source context mismatch fail-closed、source revoked -> stale。
+- `tests.test_document_ingestion` 覆盖 task / meeting / Bitable review-policy 入口、source context mismatch fail-closed、source revoked -> stale。
 - 新增 [limited Feishu ingestion handoff](limited-feishu-ingestion-handoff.md)。
 
 建议验证：

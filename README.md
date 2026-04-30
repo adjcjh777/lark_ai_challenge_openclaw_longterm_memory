@@ -12,7 +12,7 @@
 
 当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-状态快照：2026-04-29，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md` 和 `docs/productization/user-experience-todo.md` 为准。
+状态快照：2026-04-30，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md` 和 `docs/productization/user-experience-todo.md` 为准。
 
 ### 当前真实 Feishu 使用边界
 
@@ -24,8 +24,10 @@
   - **不 `@Bot`** 的消息会做静默 candidate probe；命中企业级记忆信号时进入 `memory.create_candidate`，再由 review policy 判断低风险自动确认或私聊人工审核，默认不回群消息。
   - **`@Bot`** 的消息仍走主动交互路径：搜索、候选确认、版本解释、prefetch 等。
   - 当用户主动 `@Bot` 创建 candidate 后，创建者自己会收到可点击的确认卡片；创建者按 owner 身份可以直接确认，不必额外进入 reviewer allowlist。
+- OpenClaw gateway 旁路脚本已补本地 `route_gateway_message()` 静默筛选入口：allowlist 群里未 `@Bot` 的低信号/问句会静默忽略，命中企业记忆信号才进入 `handle_tool_request("memory.create_candidate")` / `CopilotService`；这仍是本地受控入口，不等于真实 gateway 长期运行已完成。
 - 普通问句不会因为命中了“部署 / 负责人 / 截止”这类主题词就自动变成 candidate。
-- 真实飞书来源不再“一律 candidate-only”：低重要性、无冲突、无敏感风险的候选可以由 policy 自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容仍必须停在 candidate，优先私聊推给相关 reviewer / owner 确认。
+- 真实飞书来源不再“一律 candidate-only”：低重要性、无冲突、无敏感风险的候选可以由 policy 自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容仍必须停在 candidate，优先通过 DM/private 定向推给相关 reviewer / owner 确认。当前已完成 publisher 层定向 DM 发送和本地测试；真实飞书长期运行仍不宣称完成。
+- 群级设置已有只读卡片入口：`/settings` 或 `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和生产边界；当前不提供设置写入动作。
 - OpenClaw websocket 下的受控真实 DM 是另一条验收路径；它证明过一次 `fmc_memory_search` allow-path，不等于“所有真实飞书对话都已经稳定进入本项目工具链路”。
 - OpenClaw 对外工具名一律使用 `fmc_*`；`memory.*` 只保留为 Python 内部服务名，避免和 OpenClaw 内置 `memory_search` 语义混淆。
 
@@ -33,12 +35,12 @@
 
 | 能力 | 当前状态 | 主要证据 |
 |---|---|---|
-| OpenClaw memory 工具 | 已完成本机 first-class tool registry、Agent 本地 `fmc_*` 工具调用验证，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` |
+| OpenClaw memory 工具 | 已完成本机 first-class tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw gateway 本地静默候选筛选入口，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`scripts/openclaw_feishu_remember_router.py`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py`、`tests/test_openclaw_feishu_remember_router.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` |
 | Copilot Core | 已完成核心服务层 | `memory_engine/copilot/service.py`、`tools.py`、`governance.py`、`retrieval.py` |
 | 权限门控 | 已完成 fail-closed 本地闭环 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` |
 | 真实飞书权限映射 | 已完成本地权限映射闭环 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/permissions.py`、`docs/productization/handoffs/real-feishu-permission-mapping-handoff.md` |
 | 真实飞书可点击卡片 | 已完成受控 sandbox/pre-production 路径：Feishu live interactive 回复使用 typed card，候选审核卡可点击确认、拒绝、要求补证据和标记过期；点击动作重新生成当前 operator 权限上下文并进入 `handle_tool_request()` / `CopilotService` | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_events.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/real-feishu-interactive-cards-handoff.md` |
-| 定向审核收件箱与撤销/合并体验 | 已完成本地受控路径：`/review` 默认打开“待我审核”收件箱卡片，只对当前 reviewer/owner 定向可见；收件箱可按 mine/conflicts/high_risk 查看并直接点击确认、拒绝、补证据；冲突候选卡显示旧结论/新结论并提供“确认合并”；`/undo` 和 card action router 可把已确认/拒绝/补证据/过期的候选撤回待审核 | `memory_engine/copilot/review_inbox.py`、`memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`memory_engine/feishu_events.py`、`scripts/openclaw_feishu_card_action_router.py`、`tests/test_copilot_review_inbox.py`、`tests/test_copilot_feishu_live.py`、`tests/test_openclaw_feishu_card_action_router.py` |
+| 定向审核收件箱、DM 投递与撤销/合并体验 | 已完成本地受控路径：`/review` 默认打开“待我审核”收件箱卡片，只对当前 reviewer/owner 定向可见；定向 interactive card 由 publisher 逐个 `open_id/user_id` 发送 DM，不再回群；收件箱可按 mine/conflicts/high_risk 查看并直接点击确认、拒绝、补证据；冲突候选卡显示旧结论/新结论并提供“确认合并”；`/undo` 和 card action router 可把已确认/拒绝/补证据/过期的候选撤回待审核 | `memory_engine/copilot/review_inbox.py`、`memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`memory_engine/feishu_events.py`、`memory_engine/feishu_publisher.py`、`scripts/openclaw_feishu_card_action_router.py`、`tests/test_copilot_review_inbox.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_publisher.py`、`tests/test_openclaw_feishu_card_action_router.py` |
 | 候选记忆治理 | 已完成 candidate / confirm / reject / conflict / version chain | `memory_engine/copilot/governance.py` |
 | 检索链路 | 已完成 L0/L1/L2/L3 分层混合检索 | `memory_engine/copilot/orchestrator.py`、`retrieval.py` |
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
@@ -46,6 +48,7 @@
 | 企业图谱群/用户/消息拓扑 | 已完成本地 Feishu 群节点发现与授权消息拓扑：新群会登记为同企业下的 `feishu_chat` 图谱节点；未在 allowlist 的群只记录 org/chat 最小元数据；授权群会把同一用户建模为 tenant/org 内唯一 `feishu_user` 节点，并用 membership/message 边表达其在不同群里的上下文；消息正文仍只进入 `raw_events` / candidate evidence，不写入图谱节点 | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/feishu-group-graph-node-handoff.md` |
 | Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
 | Feishu live sandbox | 已完成受控测试群联调；当前稳定路径是 allowlist 测试群，群内非 `@Bot` 消息可静默探测 candidate，`@Bot` / 私聊走主动交互 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py` |
+| 群级设置卡片 | 已完成只读设置卡：`/settings` / `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和 no-overclaim 边界；不提供写入动作 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
 | Limited Feishu ingestion | 已完成本地受控 ingestion 底座，支持文档、任务、会议、Bitable，以及 allowlist 群里被动探测或显式路由到 `memory.create_candidate` 的飞书消息；当前新增 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选仍需人工确认；这不是被动全量群聊摄入 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/review_policy.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_review_policy.py` |
 | 真实 Feishu API 拉取入口 | 已完成任务、会议、Bitable 读取 fetcher、Feishu live `/task` / `/meeting` / `/bitable` 路由和 fetch 前 fail-closed 权限门控；结果进入 `memory.create_candidate` 后由 review policy 决定自动确认或人工审核 | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、`memory_engine/copilot/review_policy.py`、`tests/test_feishu_fetchers.py`、`tests/test_copilot_review_policy.py` |
 | 审计查询、告警和运维面 | 已完成本地审计查询/导出、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口和 embedding fallback 可观测字段 | `scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
@@ -73,6 +76,7 @@
 | P1 | 扩大真实飞书样本实测 | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 做 smoke，继续保留 review-policy gate、失败 fallback 和 no-overclaim |
 | P1 | 扩大真实飞书可点击卡片实测 | 在受控测试群里用真实卡片点击覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`，并读回审计；不把一次 sandbox 点击写成生产长期运行 |
 | P1 | 扩大真实飞书审核收件箱实测 | 在受控测试群里用 `/review`、`/review conflicts`、`确认合并` 和 `/undo` 覆盖真实卡片点击与审计读回；当前只完成本地受控路径，不宣称真实 DM/群长期稳定运行 |
+| P1 | 扩大真实 DM 定向投递实测 | 在 lark-cli 认证可用后，用受控 reviewer/owner open_id 读回 DM 卡片投递和失败 fallback；当前完成 publisher 本地测试，不宣称生产长期运行 |
 | P2 | 选择一个 productized live gate 进入实施 | 从 L1 internal pilot、PostgreSQL pilot、权限后台最小化或审计 read-only view 中选一个小 gate 实施；仍不宣称 productized live 完成 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 

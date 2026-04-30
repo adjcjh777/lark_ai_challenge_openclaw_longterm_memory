@@ -576,6 +576,58 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertNotIn(CHAT_ID, reply)
         self.assertNotIn("ou_sensitive_reviewer", reply)
 
+    def test_settings_command_returns_read_only_group_settings_card(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        event = message_event_from_payload(payload("om_live_group_settings", "/settings"))
+        self.assertIsNotNone(event)
+
+        with patch.dict(
+            os.environ,
+            {
+                "COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID,
+                "COPILOT_FEISHU_VISIBILITY": "team",
+            },
+            clear=False,
+        ):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        reply = self.reply_text(result)
+        rendered_card = str(result["publish"]["card"])
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_settings", result["tool"])
+        self.assertEqual("read_only", result["tool_result"]["mode"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertIn("群级记忆设置", reply)
+        self.assertIn("allowlist 群静默筛选", rendered_card)
+        self.assertIn("configured (1)", rendered_card)
+        self.assertIn("DM/private", rendered_card)
+        self.assertIn("低风险、低重要性、无冲突可自动确认", rendered_card)
+        self.assertIn("项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核", rendered_card)
+        self.assertIn(SCOPE, rendered_card)
+        self.assertIn("team", rendered_card)
+        self.assertIn("不是生产长期运行", rendered_card)
+        self.assertNotIn("action", {element.get("tag") for element in result["publish"]["card"]["elements"]})
+        self.assertNotIn(CHAT_ID, reply)
+
+    def test_group_settings_alias_routes_to_same_read_only_surface(self) -> None:
+        event = message_event_from_payload(payload("om_live_group_settings_alias", "/group_settings"))
+        self.assertIsNotNone(event)
+
+        result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_settings", result["tool"])
+        self.assertEqual("explicit_group_settings", result["routing_reason"])
+        self.assertEqual("read_only", result["message_disposition"]["candidate_path"])
+
     def test_non_owner_without_reviewer_role_denies_confirm(self) -> None:
         created = self.handle("om_live_create_member", "/remember 决定：OpenClaw 固定 2026.4.24")
         candidate_id = created["tool_result"]["candidate_id"]

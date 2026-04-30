@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-29（更新：真实飞书互动卡片）
+日期：2026-04-30（更新：OpenClaw gateway 静默候选、DM 定向审核、群级设置卡）
 
 ## 先看这个
 
@@ -8,7 +8,7 @@
 2. 已完成的日期计划和 handoff 文档已归档到 `archive/` 和 `productization/handoffs/`，不再作为执行入口。
 3. 当前代码和 `docs/productization/full-copilot-next-execution-doc.md` 是事实源。
 4. 本项目由 Codex 完成主要代码和文档修改，人类接手时优先读产品指南和待办清单。
-5. 读文档时要带着当前代码边界：受控测试群是 allowlist 模式；群内非 `@Bot` 消息可以静默探测 candidate，但默认不回群消息；`@Bot` / 私聊才是主动交互路径；仍然不是全量群聊被动记忆。
+5. 读文档时要带着当前代码边界：受控测试群是 allowlist 模式；群内非 `@Bot` 消息可以静默探测 candidate，OpenClaw gateway 本地路由也已补静默筛选入口；命中后默认不回群消息，审核卡片优先 DM/private 定向给相关 owner/reviewer；`@Bot` / 私聊才是主动交互路径；仍然不是全量群聊被动记忆或生产长期运行。
 
 ## 活跃文档入口（当前应读的）
 

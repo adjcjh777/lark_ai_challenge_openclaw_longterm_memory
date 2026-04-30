@@ -4,7 +4,7 @@
 状态：方案设计（未完成生产上线）
 适用范围：多租户数据隔离、角色权限管理、审批流程、数据删除和遗忘
 
-> 2026-04-29 校准：本文是权限后台设计稿，不代表多租户企业后台已完成。当前实现边界是 `current_context.permission` fail-closed、真实飞书权限映射本地闭环、candidate-only 和 source_context preflight；后台化配置应按 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 的 L1/L2 gate 分步实施。
+> 2026-04-30 校准：本文是权限后台设计稿，不代表多租户企业后台已完成。当前实现边界是 `current_context.permission` fail-closed、真实飞书权限映射本地闭环、review-policy gate 和 source_context preflight；后台化配置应按 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 的 L1/L2 gate 分步实施。
 
 ---
 

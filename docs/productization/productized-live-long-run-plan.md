@@ -11,8 +11,8 @@
 当前可以说：
 
 - 本地 MVP / Demo / Pre-production 闭环已完成。
-- OpenClaw first-class `fmc_*` 工具、本机 websocket staging、一次受控真实 DM allow-path、真实 Feishu API candidate-only 拉取入口、审计查询和告警面已完成。
-- 真实飞书来源仍只进入 candidate，不能自动 active。
+- OpenClaw first-class `fmc_*` 工具、本机 websocket staging、一次受控真实 DM allow-path、真实 Feishu API review-policy 拉取入口、审计查询和告警面已完成。
+- 真实飞书来源必须先进入 review policy：低风险、低重要性、无冲突可以自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突必须停在 candidate 并人工审核。
 
 当前不能说：
 
@@ -61,7 +61,7 @@ Feishu workspace
 | Gate | 目标 | 允许流量 | 通过标准 | 失败处理 |
 |---|---|---|---|---|
 | L0 local staging | 保持当前本机可复现能力 | 本机 fixture / 受控测试群 | healthcheck、demo readiness、单测、audit/query/alert 脚本通过 | 停止进入 L1，回到本机修复 |
-| L1 internal pilot | 小范围内部群试点 | allowlist 群、指定 reviewer、指定 source | 单监听、candidate-only、review flow、audit query、告警读数稳定 | 停止 Feishu websocket，保留审计，回滚到上一版本 |
+| L1 internal pilot | 小范围内部群试点 | allowlist 群、指定 reviewer、指定 source | 单监听、review-policy gate、review flow、audit query、告警读数稳定 | 停止 Feishu websocket，保留审计，回滚到上一版本 |
 | L2 limited workspace pilot | 指定 workspace / 项目群 | 指定群聊、文档、任务、会议、Bitable 记录 | source_context 不越权，source revoke 生效，PostgreSQL 备份恢复演练通过 | 冻结 ingestion，只保留 read/search 或完全停用 |
 | L3 production candidate | 可申请生产上线 | 仍需租户管理员批准和安全审查 | SLO、监控、权限后台、审计 UI、数据保留、应急值班都齐备 | 不进入生产，维持 pilot |
 
@@ -73,7 +73,7 @@ Feishu workspace
 
 | 阶段 | 目标 | 做法 | 通过标准 |
 |---|---|---|---|
-| Graph-L1 PostgreSQL ledger pilot | 把图谱事实源从 SQLite 文件迁到生产级关系账本 | 将 `knowledge_graph_nodes` / `knowledge_graph_edges` 与 `raw_events`、`memories`、`memory_versions`、`memory_evidence`、`memory_audit_events` 一起迁到托管 PostgreSQL；保留 tenant/org/visibility 索引和唯一约束 | 多群并发写入、备份恢复、审计查询、source revoke、candidate-only flow 都能通过试点验证 |
+| Graph-L1 PostgreSQL ledger pilot | 把图谱事实源从 SQLite 文件迁到生产级关系账本 | 将 `knowledge_graph_nodes` / `knowledge_graph_edges` 与 `raw_events`、`memories`、`memory_versions`、`memory_evidence`、`memory_audit_events` 一起迁到托管 PostgreSQL；保留 tenant/org/visibility 索引和唯一约束 | 多群并发写入、备份恢复、审计查询、source revoke、review-policy flow 都能通过试点验证 |
 | Graph-L2 graph projection evaluation | 判断是否需要原生图数据库或图查询层 | 基于真实群聊样本统计多跳查询需求，例如跨群找人、找项目决策传播路径、找某条记忆的来源链路；评估 Neo4j / ArangoDB / PostgreSQL graph extension / Cognee graph projection | 有明确查询集、延迟指标、权限过滤策略和回滚方案；不是因为“看起来更像图谱”而引入新数据库 |
 | Graph-L3 production graph service | 在图查询成为主路径后引入专门图层 | PostgreSQL 继续作为权威 ledger；图数据库或 Cognee graph projection 只作为可重建 projection / index，所有正式回答仍要回查 ledger ownership、permission 和 evidence | projection 可重建，未匹配 ledger 的图结果不得进入正式答案；权限拒绝、撤权、删除和审计链路不被绕过 |
 
@@ -233,7 +233,7 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-w
 
 - PostgreSQL 试点库 dry-run / apply / restore 演练完成。
 - allowlist、reviewer/admin、source_context 配置有变更记录。
-- 真实 Task / Meeting / Bitable source smoke 至少各 1 条，仍 candidate-only。
+- 真实 Task / Meeting / Bitable source smoke 至少各 1 条，仍经过 review-policy gate。
 - websocket down、embedding unavailable、ingestion_failed、permission_denied 都能在运维报告里定位。
 
 ## 当前剩余风险
