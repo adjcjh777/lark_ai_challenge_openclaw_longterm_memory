@@ -203,6 +203,51 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         actions = [element for element in late_reject["card"]["elements"] if element.get("tag") == "action"]
         self.assertEqual([], actions)
 
+    def test_reject_conflict_version_final_card_shows_rejected_candidate_value(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            first = route_remember_message(
+                text="/remember 决定：冲突拒绝测试旧值。",
+                message_id="om_reject_conflict_value_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            route_card_action(
+                action="confirm",
+                candidate_id=first["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_reject_conflict_initial",
+                db_path=str(db_path),
+            )
+            conflict = route_remember_message(
+                text="/remember 决定：冲突拒绝测试新候选值。",
+                message_id="om_reject_conflict_value_002",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+
+            rejected = route_card_action(
+                action="reject",
+                candidate_id=conflict["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_reject_conflict_value",
+                db_path=str(db_path),
+            )
+
+        rendered = str(rejected["card"])
+        self.assertTrue(rejected["ok"])
+        self.assertEqual("rejected", rejected["tool_result"]["review_status"])
+        self.assertIn("冲突拒绝测试新候选值", rendered)
+        self.assertNotIn("冲突拒绝测试旧值", rendered)
+
     def test_duplicate_confirm_on_conflict_version_returns_confirmed_card(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"

@@ -508,6 +508,24 @@ class CopilotGovernance:
         response = self._status_response(
             "rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]), actor_id=request.actor_id
         )
+        evidence = self._latest_evidence(str(memory["id"]), str(version["id"]))
+        response["candidate"] = {
+            "candidate_id": str(version["id"]),
+            "memory_id": str(version["memory_id"]),
+            "version_id": str(version["id"]),
+            "type": str(memory["type"]),
+            "subject": str(memory["subject"]),
+            "current_value": str(version["value"]),
+            "summary": version["reason"],
+            "status": "rejected",
+            "review_status": "rejected",
+            "version": int(version["version_no"]),
+            "evidence": evidence,
+            "owner_id": version["created_by"],
+        }
+        response["evidence"] = evidence
+        response["source_type"] = evidence.get("source_type")
+        response["owner_id"] = version["created_by"]
         response["memory"]["status"] = "rejected"
         response["review_status"] = "rejected"
         return response
@@ -558,6 +576,24 @@ class CopilotGovernance:
             candidate_id=str(version["id"]),
             actor_id=request.actor_id,
         )
+        evidence = self._latest_evidence(str(memory["id"]), str(version["id"]))
+        response["candidate"] = {
+            "candidate_id": str(version["id"]),
+            "memory_id": str(version["memory_id"]),
+            "version_id": str(version["id"]),
+            "type": str(memory["type"]),
+            "subject": str(memory["subject"]),
+            "current_value": str(version["value"]),
+            "summary": version["reason"],
+            "status": status,
+            "review_status": _review_status(status),
+            "version": int(version["version_no"]),
+            "evidence": evidence,
+            "owner_id": version["created_by"],
+        }
+        response["evidence"] = evidence
+        response["source_type"] = evidence.get("source_type")
+        response["owner_id"] = version["created_by"]
         response["status"] = status
         response["memory"]["status"] = status
         response["review_status"] = _review_status(status)
