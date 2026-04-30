@@ -72,7 +72,7 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.conn = connect(self.db_path)
         init_db(self.conn)
         self.repo = MemoryRepository(self.conn)
-        self.service = CopilotService(repository=self.repo)
+        self.service = CopilotService(repository=self.repo, auto_init_cognee=False)
 
     def tearDown(self) -> None:
         self.conn.close()
@@ -271,6 +271,23 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("ignored", result["action"])
         self.assertIsNone(result["candidate"])
+        self.assertIn("low_memory_signal", result["risk_flags"])
+
+    def test_owner_deadline_style_sentence_becomes_candidate_without_decision_prefix(self) -> None:
+        result = self.service.create_candidate(
+            candidate_request("上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。")
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("created", result["action"])
+        self.assertEqual("candidate", result["candidate"]["status"])
+        self.assertIn("负责人", result["candidate"]["current_value"])
+
+    def test_question_with_workflow_keywords_is_not_treated_as_candidate(self) -> None:
+        result = self.service.create_candidate(candidate_request("生产部署 region 是什么？"))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("ignored", result["action"])
         self.assertIn("low_memory_signal", result["risk_flags"])
 
     def test_sensitive_auto_confirm_is_blocked_but_manual_review_candidate_is_allowed(self) -> None:

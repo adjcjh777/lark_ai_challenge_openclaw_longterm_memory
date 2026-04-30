@@ -8,7 +8,19 @@ DEFAULT_SCOPE = "project:feishu_ai_challenge"
 OVERRIDE_WORDS = ("不对", "改成", "以后", "统一", "最终", "从现在起")
 
 DECISION_WORDS = ("决定", "最终", "统一", "以后", "采用", "改成")
-WORKFLOW_WORDS = ("必须", "不允许", "不要", "部署", "发布", "流程", "命令")
+WORKFLOW_WORDS = (
+    "必须",
+    "不允许",
+    "不要",
+    "部署",
+    "发布",
+    "流程",
+    "命令",
+    "负责人",
+    "截止",
+    "上线窗口",
+    "回滚负责人",
+)
 PREFERENCE_WORDS = ("偏好", "喜欢", "优先")
 
 SUBJECT_RULES = (

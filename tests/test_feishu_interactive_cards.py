@@ -266,7 +266,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         result = handle_message_event(self.conn, event, publisher, self.config, db_path=self.db_path)
 
         self.assertEqual("confirm", result["command"])
-        self.assertIn("send_card", publisher.modes)
+        self.assertIn("update_card", publisher.modes)
         self.assertFalse(result["tool_result"]["ok"])
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
         self.assertEqual("missing_permission_context", result["tool_result"]["error"]["details"]["reason_code"])
@@ -291,6 +291,24 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("reject", result["command"])
         field_texts = [field["text"]["content"] for field in result["publish"]["card"]["elements"][0]["fields"]]
         self.assertTrue(any("候选序号" in text and "候选 2" in text for text in field_texts))
+
+    def test_card_action_updates_original_interactive_card(self) -> None:
+        ingest = message_event_from_payload(
+            text_payload("om_ingest_for_card_update", "/ingest_doc tests/fixtures/day5_doc_ingestion_fixture.md")
+        )
+        self.assertIsNotNone(ingest)
+        handle_message_event(self.conn, ingest, FakePublisher(self.config, [True]), self.config, db_path=self.db_path)
+        row = self.conn.execute("SELECT id FROM memories WHERE status = 'candidate' LIMIT 1").fetchone()
+        self.assertIsNotNone(row)
+
+        event = message_event_from_payload(card_action_payload("reject", row["id"]))
+        self.assertIsNotNone(event)
+        publisher = FakePublisher(self.config, [True])
+        result = handle_message_event(self.conn, event, publisher, self.config, db_path=self.db_path)
+
+        self.assertEqual("reject", result["command"])
+        self.assertEqual(["update_card"], publisher.modes)
+        self.assertEqual("card_token_1", result["publish"]["card_update_token"])
 
     def test_copilot_candidate_review_payload_marks_conflict_without_mutation(self) -> None:
         response = {
@@ -418,6 +436,60 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("candidate", payload["status"])
         self.assertNotIn("确认保存", rendered)
         self.assertNotIn("拒绝候选", rendered)
+
+    def test_copilot_candidate_review_payload_locks_buttons_after_confirm(self) -> None:
+        response = {
+            "ok": True,
+            "action": "confirmed",
+            "candidate_id": "ver_confirmed",
+            "memory_id": "mem_confirmed",
+            "status": "active",
+            "review_status": "confirmed",
+            "owner_id": "ou_owner",
+            "candidate": {
+                "candidate_id": "ver_confirmed",
+                "memory_id": "mem_confirmed",
+                "status": "candidate",
+                "type": "workflow",
+                "subject": "生产部署",
+                "current_value": "生产部署必须加 --canary。",
+                "summary": "已确认部署规则",
+            },
+            "memory": {
+                "memory_id": "mem_confirmed",
+                "owner_id": "ou_owner",
+                "status": "active",
+                "type": "workflow",
+                "subject": "生产部署",
+                "current_value": "生产部署必须加 --canary。",
+                "summary": "已确认部署规则",
+            },
+            "evidence": {"quote": "生产部署必须加 --canary。", "source_type": "feishu_message"},
+            "bridge": {
+                "request_id": "req_confirmed_card",
+                "trace_id": "trace_confirmed_card",
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "actor": {"user_id": "ou_owner", "roles": ["member", "owner"]},
+                },
+            },
+        }
+
+        payload = candidate_review_payload(response)
+        card = build_candidate_review_card(response)
+        actions = [element for element in card["elements"] if element.get("tag") == "action"]
+
+        self.assertEqual("confirmed", payload["review_status"])
+        self.assertEqual("confirmed", payload["state_mutation"])
+        self.assertEqual(["confirm", "reject", "needs_evidence", "expire"], [button["action"] for button in payload["buttons"]])
+        self.assertTrue(all(button["disabled"] for button in payload["buttons"]))
+        self.assertEqual("confirm", payload["buttons"][0]["selected_action"])
+        self.assertEqual(1, len(actions))
+        rendered_actions = actions[0]["actions"]
+        self.assertTrue(all(action.get("disabled") for action in rendered_actions))
+        self.assertEqual("primary", rendered_actions[0]["type"])
+        self.assertEqual("default", rendered_actions[1]["type"])
 
     def test_copilot_search_result_payload_separates_user_content_and_audit(self) -> None:
         response = {

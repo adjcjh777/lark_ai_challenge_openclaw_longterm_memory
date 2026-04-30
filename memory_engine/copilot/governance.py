@@ -584,6 +584,7 @@ class CopilotGovernance:
             "evidence": candidate["evidence"],
             "memory": candidate["memory"],
             "quote": candidate["evidence"]["quote"],
+            "owner_id": candidate.get("owner_id"),
         }
 
     def _status_response(self, action: str, memory: Any, *, candidate_id: str, actor_id: str | None = None) -> dict[str, Any]:
@@ -611,6 +612,7 @@ class CopilotGovernance:
                 "type": str(memory["type"]),
                 "subject": str(memory["subject"]),
                 "current_value": str(memory["current_value"]),
+                "owner_id": memory["owner_id"],
                 "status": status,
                 "version_id": memory["active_version_id"],
                 "version": version,
@@ -672,6 +674,7 @@ class CopilotGovernance:
             "risk_flags": risk_flags,
             "conflict": conflict,
             "recommended_action": _recommended_action(risk_flags, conflict),
+            "owner_id": evidence.get("actor_id"),
             "review_queue": {
                 "review_status": _review_status(status),
                 "source_type": evidence.get("source_type"),
@@ -925,9 +928,17 @@ class CopilotGovernance:
 
 def _has_candidate_signal(text: str) -> bool:
     stripped = text.strip()
+    if _looks_like_question(stripped):
+        return False
     if contains_any(stripped, DECISION_WORDS + WORKFLOW_WORDS + PREFERENCE_WORDS + OVERRIDE_WORDS):
         return True
     return any(stripped.startswith(f"{prefix}:") or stripped.startswith(f"{prefix}：") for prefix in _PREFIX_SIGNALS)
+
+
+def _looks_like_question(text: str) -> bool:
+    lowered = text.lower()
+    question_markers = ("？", "?", "是什么", "怎么", "是否", "吗", "是不是")
+    return any(marker in text or marker in lowered for marker in question_markers)
 
 
 def _current_version_summary(version: dict[str, Any]) -> dict[str, Any]:

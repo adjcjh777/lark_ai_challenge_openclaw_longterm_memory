@@ -17,13 +17,34 @@ CHAT_ID = "oc_copilot_live_test"
 SCOPE = "project:feishu_ai_challenge"
 
 
-def payload(message_id: str, text: str, *, sender_type: str = "user", chat_id: str = CHAT_ID) -> dict:
+def payload(
+    message_id: str,
+    text: str,
+    *,
+    sender_type: str = "user",
+    chat_id: str = CHAT_ID,
+    mention_bot: bool = True,
+    sender_open_id: str = "ou_live_user",
+) -> dict:
+    content_text = f"@_user_1 {text}" if mention_bot else text
+    mentions = (
+        [
+            {
+                "id": {"open_id": "ou_bot_open_id"},
+                "key": "@_user_1",
+                "mentioned_type": "bot",
+                "name": "Feishu Memory Engine bot",
+            }
+        ]
+        if mention_bot
+        else []
+    )
     return {
         "schema": "2.0",
         "header": {"event_type": "im.message.receive_v1"},
         "event": {
             "sender": {
-                "sender_id": {"open_id": "ou_live_user"},
+                "sender_id": {"open_id": sender_open_id},
                 "sender_type": sender_type,
             },
             "message": {
@@ -31,20 +52,21 @@ def payload(message_id: str, text: str, *, sender_type: str = "user", chat_id: s
                 "chat_id": chat_id,
                 "chat_type": "group",
                 "message_type": "text",
-                "content": f'{{"text":"{text}"}}',
+                "content": f'{{"text":"{content_text}"}}',
+                "mentions": mentions,
                 "create_time": "1777351200000",
             },
         },
     }
 
 
-def card_action_payload(action_value: dict) -> dict:
+def card_action_payload(action_value: dict, *, operator_open_id: str = "ou_live_user") -> dict:
     return {
         "schema": "2.0",
         "header": {"event_type": "card.action.trigger"},
         "event": {
             "token": "card_token_live",
-            "operator": {"open_id": "ou_live_user"},
+            "operator": {"open_id": operator_open_id},
             "context": {"open_chat_id": CHAT_ID},
             "action": {"value": action_value},
         },
@@ -108,8 +130,21 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertTrue(search["ok"])
         self.assertEqual("memory.search", search["tool"])
         self.assertIn("只返回 active 当前结论", self.reply_text(search))
+        self.assertIn("本次消息按查询处理，未尝试创建待确认记忆", self.reply_text(search))
         self.assertIn("--canary", self.reply_text(search))
         self.assertIn("request_id", search["tool_result"]["bridge"])
+        self.assertEqual("search_only", search["message_disposition"]["memory_path"])
+        self.assertEqual("not_attempted", search["message_disposition"]["candidate_path"])
+
+    def test_low_signal_remember_reports_candidate_ignored_disposition(self) -> None:
+        result = self.handle("om_live_low_signal_candidate", "/remember 今天天气不错")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("ignored", result["tool_result"]["action"])
+        self.assertIn("没有把这条消息写入候选记忆", self.reply_text(result))
+        self.assertEqual("candidate_ignored", result["message_disposition"]["memory_path"])
+        self.assertEqual("ignored", result["message_disposition"]["candidate_path"])
 
     def test_natural_confirm_resolves_recent_candidate_without_internal_id(self) -> None:
         created = self.handle("om_live_create_natural_confirm", "记住：生产部署必须加 --canary，region 用 ap-shanghai。")
@@ -172,6 +207,46 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("memory.prefetch", invocation.tool_name)
         self.assertEqual("natural_prefetch", invocation.reason)
         self.assertEqual(SCOPE, invocation.payload["scope"])
+
+    def test_natural_owner_deadline_sentence_routes_to_candidate(self) -> None:
+        result = self.handle("om_live_owner_deadline", "上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("natural_candidate", result["routing_reason"])
+        self.assertEqual("candidate", result["tool_result"]["candidate"]["status"])
+
+    def test_group_message_without_mention_can_create_candidate_silently(self) -> None:
+        event = message_event_from_payload(
+            payload(
+                "om_live_passive_candidate",
+                "上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。",
+                mention_bot=False,
+            )
+        )
+        self.assertIsNotNone(event)
+
+        result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("passive_candidate_probe", result["routing_reason"])
+        self.assertEqual("candidate", result["tool_result"]["candidate"]["status"])
+        self.assertEqual("silent_candidate_probe", result["message_disposition"]["memory_path"])
+        self.assertEqual("silent_no_reply", result["publish"]["mode"])
+
+    def test_group_message_without_mention_does_not_reply_for_plain_question(self) -> None:
+        event = message_event_from_payload(payload("om_live_passive_question", "生产部署 region 是什么？", mention_bot=False))
+        self.assertIsNotNone(event)
+
+        result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("passive_candidate_probe", result["routing_reason"])
+        self.assertEqual("ignored", result["tool_result"]["action"])
+        self.assertEqual("silent_candidate_probe", result["message_disposition"]["memory_path"])
+        self.assertEqual("silent_no_reply", result["publish"]["mode"])
 
     def test_task_command_places_task_id_in_permission_source_context(self) -> None:
         event = message_event_from_payload(payload("om_live_task_fetch", "/task task_123"))
@@ -501,10 +576,12 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertNotIn(CHAT_ID, reply)
         self.assertNotIn("ou_sensitive_reviewer", reply)
 
-    def test_missing_reviewer_role_denies_confirm(self) -> None:
+    def test_non_owner_without_reviewer_role_denies_confirm(self) -> None:
         created = self.handle("om_live_create_member", "/remember 决定：OpenClaw 固定 2026.4.24")
         candidate_id = created["tool_result"]["candidate_id"]
-        event = message_event_from_payload(payload("om_live_denied", f"/confirm {candidate_id}"))
+        event = message_event_from_payload(
+            payload("om_live_denied", f"/confirm {candidate_id}", sender_open_id="ou_other_member")
+        )
         self.assertIsNotNone(event)
 
         with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
@@ -552,9 +629,22 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("memory.confirm", clicked["tool"])
         self.assertEqual(created["tool_result"]["candidate_id"], clicked["tool_result"]["candidate_id"])
         self.assertEqual("active", clicked["tool_result"]["memory"]["status"])
+        self.assertEqual("update_card", clicked["publish"]["mode"])
+        self.assertEqual("card_token_live", clicked["publish"]["card_update_token"])
         self.assertTrue(clicked["message_id"].startswith("card_action_"))
+        clicked_card = clicked["publish"]["card"]
+        clicked_actions = [element for element in clicked_card["elements"] if element.get("tag") == "action"]
+        self.assertEqual(1, len(clicked_actions))
+        labels = [action["text"]["content"] for action in clicked_actions[0]["actions"]]
+        self.assertEqual(["确认保存", "拒绝候选", "要求补证据", "标记过期"], labels)
+        confirm_action = clicked_actions[0]["actions"][0]
+        reject_action = clicked_actions[0]["actions"][1]
+        self.assertTrue(confirm_action.get("disabled"))
+        self.assertEqual("primary", confirm_action.get("type"))
+        self.assertTrue(reject_action.get("disabled"))
+        self.assertEqual("default", reject_action.get("type"))
 
-    def test_interactive_candidate_card_hides_review_buttons_for_non_reviewer(self) -> None:
+    def test_interactive_candidate_card_shows_review_buttons_for_candidate_owner(self) -> None:
         config = FeishuConfig(
             bot_mode="reply",
             default_scope=SCOPE,
@@ -565,7 +655,7 @@ class CopilotFeishuLiveTest(unittest.TestCase):
             card_mode="interactive",
         )
         event = message_event_from_payload(
-            payload("om_live_interactive_member_candidate", "/remember 决定：非 reviewer 不能点确认。")
+            payload("om_live_interactive_owner_candidate", "/remember 决定：candidate owner 可以自己确认。")
         )
         self.assertIsNotNone(event)
 
@@ -575,8 +665,38 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertTrue(created["ok"])
         card = created["publish"]["card"]
         rendered = str(card)
-        self.assertNotIn("确认保存", rendered)
-        self.assertNotIn("拒绝候选", rendered)
+        self.assertIn("确认保存", rendered)
+        self.assertIn("拒绝候选", rendered)
+
+    def test_candidate_owner_can_confirm_without_reviewer_env(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        event = message_event_from_payload(
+            payload("om_live_owner_can_confirm", "/remember 决定：owner 确认也必须走 CopilotService。")
+        )
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        action_blocks = [element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"]
+        confirm_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存")
+        click_event = message_event_from_payload(card_action_payload(confirm_button["value"]))
+        self.assertIsNotNone(click_event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            clicked = handle_copilot_message_event(self.conn, click_event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(clicked["ok"])
+        self.assertEqual("memory.confirm", clicked["tool"])
+        self.assertEqual("active", clicked["tool_result"]["memory"]["status"])
 
     def test_interactive_candidate_card_secondary_actions_route_to_service(self) -> None:
         config = FeishuConfig(
@@ -629,7 +749,10 @@ class CopilotFeishuLiveTest(unittest.TestCase):
 
         candidate_id = created["tool_result"]["candidate_id"]
         forged_click = message_event_from_payload(
-            card_action_payload({"memory_engine_action": "confirm", "candidate_id": candidate_id})
+            card_action_payload(
+                {"memory_engine_action": "confirm", "candidate_id": candidate_id},
+                operator_open_id="ou_other_member",
+            )
         )
         self.assertIsNotNone(forged_click)
 

@@ -106,35 +106,16 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
     risk_flags = list(candidate_response.get("risk_flags") or candidate.get("risk_flags") or [])
     permission_decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
     actor = permission_decision.get("actor") if isinstance(permission_decision.get("actor"), dict) else {}
+    owner_id = candidate_response.get("owner_id") or candidate.get("owner_id") or memory.get("owner_id")
     queue_views = _queue_views(risk_flags, conflict)
+    candidate_id = str(candidate_response.get("candidate_id") or candidate.get("candidate_id") or "")
     buttons = []
-    if _review_actions_allowed(bridge):
-        buttons = [
-            {
-                "action": "confirm",
-                "label": "确认保存",
-                "required_for_mvp": True,
-                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
-            },
-            {
-                "action": "reject",
-                "label": "拒绝候选",
-                "required_for_mvp": True,
-                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
-            },
-            {
-                "action": "needs_evidence",
-                "label": "要求补证据",
-                "required_for_mvp": True,
-                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
-            },
-            {
-                "action": "expire",
-                "label": "标记过期",
-                "required_for_mvp": True,
-                "candidate_id": candidate_response.get("candidate_id") or candidate.get("candidate_id"),
-            },
-        ]
+    if _review_actions_allowed(bridge, owner_id=owner_id):
+        buttons = _candidate_review_buttons(
+            candidate_id=candidate_id,
+            review_status=str(candidate_response.get("review_status") or candidate.get("review_status") or "pending"),
+            action=str(candidate_response.get("action") or ""),
+        )
     return {
         "surface": "copilot_candidate_review",
         "title": "待确认记忆",
@@ -149,6 +130,7 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
         "queue_views": queue_views,
         "suggested_queue_view": queue_views[0] if queue_views else "待我审核",
         "reviewer": _actor_id(actor),
+        "owner_id": owner_id,
         "last_handler": candidate_response.get("last_handler"),
         "last_handled_at": candidate_response.get("last_handled_at"),
         "type": candidate.get("type") or memory.get("type"),
@@ -175,7 +157,7 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
         },
         "audit_details": _audit_details(bridge),
         "buttons": buttons,
-        "state_mutation": "none",
+        "state_mutation": _review_state_mutation(candidate_response),
         **bridge,
     }
 
@@ -428,26 +410,38 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
         action = button.get("action")
         if action == "confirm":
             actions.append(
-                _button("确认保存", "primary", {CARD_ACTION_KEY: "confirm", "candidate_id": str(payload.get("candidate_id") or "")})
+                _button(
+                    "确认保存",
+                    _review_button_type("confirm", selected_action=button.get("selected_action")),
+                    {CARD_ACTION_KEY: "confirm", "candidate_id": str(payload.get("candidate_id") or "")},
+                    disabled=bool(button.get("disabled")),
+                )
             )
         elif action == "reject":
             actions.append(
-                _button("拒绝候选", "danger", {CARD_ACTION_KEY: "reject", "candidate_id": str(payload.get("candidate_id") or "")})
+                _button(
+                    "拒绝候选",
+                    _review_button_type("reject", selected_action=button.get("selected_action")),
+                    {CARD_ACTION_KEY: "reject", "candidate_id": str(payload.get("candidate_id") or "")},
+                    disabled=bool(button.get("disabled")),
+                )
             )
         elif action == "needs_evidence":
             actions.append(
                 _button(
                     "要求补证据",
-                    "default",
+                    _review_button_type("needs_evidence", selected_action=button.get("selected_action")),
                     {CARD_ACTION_KEY: "needs_evidence", "candidate_id": str(payload.get("candidate_id") or "")},
+                    disabled=bool(button.get("disabled")),
                 )
             )
         elif action == "expire":
             actions.append(
                 _button(
                     "标记过期",
-                    "default",
+                    _review_button_type("expire", selected_action=button.get("selected_action")),
                     {CARD_ACTION_KEY: "expire", "candidate_id": str(payload.get("candidate_id") or "")},
+                    disabled=bool(button.get("disabled")),
                 )
             )
     if actions:
@@ -759,13 +753,16 @@ def _audit_details(bridge: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _review_actions_allowed(bridge: dict[str, Any]) -> bool:
+def _review_actions_allowed(bridge: dict[str, Any], *, owner_id: str | None = None) -> bool:
     decision = bridge.get("permission_decision")
     if not isinstance(decision, dict) or not decision:
         return True
     if decision.get("decision") != "allow":
         return False
     actor = decision.get("actor") if isinstance(decision.get("actor"), dict) else {}
+    actor_id = _actor_id(actor)
+    if owner_id and actor_id and actor_id == owner_id:
+        return True
     roles = actor.get("roles") if isinstance(actor.get("roles"), list) else []
     return bool({"reviewer", "owner", "admin"} & {str(role) for role in roles})
 
@@ -1014,13 +1011,56 @@ def _actions_from_text(text: str) -> list[dict[str, Any]]:
     return actions
 
 
-def _button(label: str, button_type: str, value: dict[str, str]) -> dict[str, Any]:
-    return {
+def _button(label: str, button_type: str, value: dict[str, str], *, disabled: bool = False) -> dict[str, Any]:
+    button = {
         "tag": "button",
         "text": {"tag": "plain_text", "content": label},
         "type": button_type,
         "value": value,
     }
+    if disabled:
+        button["disabled"] = True
+    return button
+
+
+def _candidate_review_buttons(*, candidate_id: str, review_status: str, action: str) -> list[dict[str, Any]]:
+    buttons = [
+        {"action": "confirm", "label": "确认保存", "required_for_mvp": True, "candidate_id": candidate_id},
+        {"action": "reject", "label": "拒绝候选", "required_for_mvp": True, "candidate_id": candidate_id},
+        {"action": "needs_evidence", "label": "要求补证据", "required_for_mvp": True, "candidate_id": candidate_id},
+        {"action": "expire", "label": "标记过期", "required_for_mvp": True, "candidate_id": candidate_id},
+    ]
+    selected = _selected_review_action(review_status, action)
+    if selected is None:
+        return buttons
+    return [{**button, "disabled": True, "selected_action": selected} for button in buttons]
+
+
+def _selected_review_action(review_status: str, action: str) -> str | None:
+    if action in {"confirmed", "auto_confirmed"} or review_status == "confirmed":
+        return "confirm"
+    if action == "rejected" or review_status == "rejected":
+        return "reject"
+    if action == "needs_evidence" or review_status == "needs_evidence":
+        return "needs_evidence"
+    if action == "expired" or review_status == "expired":
+        return "expire"
+    return None
+
+
+def _review_state_mutation(candidate_response: dict[str, Any]) -> str:
+    action = candidate_response.get("action")
+    if isinstance(action, str) and action in {"confirmed", "rejected", "needs_evidence", "expired", "auto_confirmed"}:
+        return "confirmed" if action == "auto_confirmed" else action
+    return "none"
+
+
+def _review_button_type(action: str, *, selected_action: Any) -> str:
+    if action == "reject":
+        return "danger" if selected_action == action else "default"
+    if selected_action == action:
+        return "primary"
+    return "default"
 
 
 def _format_json(value: Any) -> str:

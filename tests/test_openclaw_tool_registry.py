@@ -27,6 +27,9 @@ class OpenClawToolRegistryTest(unittest.TestCase):
 
         # Schema uses fmc_xxx names; translate to Python-side memory.xxx for comparison
         schema_names = sorted(registration.name for registration in registrations)
+        self.assertTrue(all(name.startswith("fmc_") for name in schema_names))
+        self.assertNotIn("memory.search", schema_names)
+        self.assertNotIn("memory_search", schema_names)
         translated_names = sorted(OPENCLAW_TO_PYTHON.get(name, name) for name in schema_names)
         self.assertEqual(supported_tool_names(), translated_names)
         self.assertTrue(all(registration.input_schema["type"] == "object" for registration in registrations))

@@ -12,6 +12,7 @@ from .feishu_events import FeishuTextEvent
 
 class DryRunPublisher:
     def publish(self, event: FeishuTextEvent, text: str, card: dict[str, Any] | None = None) -> dict[str, Any]:
+        update_token = _card_update_token(event) if card else None
         return {
             "ok": True,
             "dry_run": True,
@@ -19,7 +20,8 @@ class DryRunPublisher:
             "chat_id": event.chat_id,
             "text": text,
             "card": card,
-            "mode": "interactive" if card else "text",
+            "mode": "update_card" if update_token else ("interactive" if card else "text"),
+            "card_update_token": update_token,
         }
 
 
@@ -49,7 +51,10 @@ class LarkCliPublisher:
         attempts: list[dict[str, Any]] = []
         for attempt_no in range(1, self.config.card_retry_count + 1):
             timeout = self.config.card_timeout_seconds
-            if self.config.bot_mode == "send" or event.message_type == "card_action":
+            update_token = _card_update_token(event)
+            if update_token:
+                result = self._update_card(event, card, token=update_token, timeout=timeout)
+            elif self.config.bot_mode == "send" or event.message_type == "card_action":
                 result = self._send_card(event, card, idempotency_key=idempotency_key, timeout=timeout)
             else:
                 result = self._reply_card(event, card, idempotency_key=idempotency_key, timeout=timeout)
@@ -173,6 +178,27 @@ class LarkCliPublisher:
         ]
         return self._run(command, "send_card", event, "", card=card, timeout=timeout)
 
+    def _update_card(
+        self,
+        event: FeishuTextEvent,
+        card: dict[str, Any],
+        *,
+        token: str,
+        timeout: float,
+    ) -> dict[str, Any]:
+        command = self._base_command() + [
+            "api",
+            "POST",
+            "/open-apis/interactive/v1/card/update",
+            "--as",
+            self.config.lark_as,
+            "--data",
+            json.dumps({"token": token, "card": card}, ensure_ascii=False, separators=(",", ":")),
+        ]
+        result = self._run(command, "update_card", event, "", card=card, timeout=timeout)
+        result["card_update_token"] = token
+        return result
+
     def _base_command(self) -> list[str]:
         command = [self.config.lark_cli]
         if self.config.lark_profile:
@@ -233,6 +259,19 @@ class LarkCliPublisher:
 def _reply_target_missing(result: dict[str, Any]) -> bool:
     text = f"{result.get('stdout') or ''}\n{result.get('stderr') or ''}"
     return "230011" in text or "231003" in text
+
+
+def _card_update_token(event: FeishuTextEvent) -> str | None:
+    if getattr(event, "message_type", None) != "card_action":
+        return None
+    raw = getattr(event, "raw", None)
+    if not isinstance(raw, dict):
+        return None
+    payload_event = raw.get("event") if isinstance(raw.get("event"), dict) else raw
+    token = payload_event.get("token") if isinstance(payload_event, dict) else None
+    if isinstance(token, str) and token.strip():
+        return token.strip()
+    return None
 
 
 def _attempt_summary(result: dict[str, Any], attempt_no: int) -> dict[str, Any]:

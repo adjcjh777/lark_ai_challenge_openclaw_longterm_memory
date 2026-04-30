@@ -413,5 +413,19 @@
     ],
     "expected_candidate": false,
     "expected_reason": "与已有记忆完全重复，不应重复创建 candidate。"
+  },
+  {
+    "case_id": "cand_should_030",
+    "type": "copilot_candidate",
+    "text": "上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。",
+    "expected_candidate": true,
+    "expected_reason": "这是典型企业协作记忆：上线窗口、负责人和截止时间都需要长期复用。"
+  },
+  {
+    "case_id": "cand_skip_027",
+    "type": "copilot_candidate",
+    "text": "哈哈这个先别记，等我们真定下来再说。",
+    "expected_candidate": false,
+    "expected_reason": "这是明确要求暂不沉淀的口语化闲聊，不应创建 candidate。"
   }
 ]

@@ -15,6 +15,14 @@
 - 权限缺失或畸形时是否 fail closed。
 - 审计、告警和 evidence 是否能被人工读回。
 
+进入手动测试前，先记住当前代码边界：
+
+- `scripts/start_copilot_feishu_live.sh` 默认跑的是 allowlist 测试群的 Copilot lark-cli sandbox，不是全量 Feishu workspace 监听。
+- 不在 allowlist 的 chat 会被直接忽略。
+- allowlist 群里，非 `@Bot` 消息会做静默 candidate probe，但默认不回群消息；`@Bot` / 私聊才是主动交互路径。
+- 问句不会因为命中“部署 / 负责人 / 截止”这类主题词就自动变成 candidate。
+- OpenClaw websocket 下的受控 DM 验收，是另一条入口；不要把它和 `copilot-feishu listen` 的测试群入口混成一条链路。
+
 不能把本指南的通过结果写成：
 
 - 生产部署已完成。
@@ -216,7 +224,8 @@ trace_id=trace_manual_dm_search_YYYYMMDD_HHMM。
 发送给受控测试群或测试私聊 bot：
 
 ```text
-/remember 决定：飞书记忆审核卡片必须可点击确认，点击后仍走 CopilotService。
+群聊：@Bot /remember 决定：飞书记忆审核卡片必须可点击确认，点击后仍走 CopilotService。
+私聊：/remember 决定：飞书记忆审核卡片必须可点击确认，点击后仍走 CopilotService。
 ```
 
 通过标准：

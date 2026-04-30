@@ -86,9 +86,9 @@ class CopilotBenchmarkTest(unittest.TestCase):
         case_ids = [case["case_id"] for case in cases]
         expected = Counter(case["expected_candidate"] for case in cases)
 
-        self.assertEqual(55, len(cases))
+        self.assertEqual(57, len(cases))
         self.assertEqual(len(case_ids), len(set(case_ids)))
-        self.assertEqual({True: 29, False: 26}, dict(expected))
+        self.assertEqual({True: 30, False: 27}, dict(expected))
         for case in cases:
             self.assertEqual("copilot_candidate", case["type"], msg=case["case_id"])
             self.assertTrue(case["text"].strip(), msg=case["case_id"])
@@ -99,7 +99,7 @@ class CopilotBenchmarkTest(unittest.TestCase):
         summary = result["summary"]
 
         self.assertEqual("copilot_candidate", result["benchmark_type"])
-        self.assertEqual(55, summary["case_count"])
+        self.assertEqual(57, summary["case_count"])
         self.assertGreaterEqual(summary["candidate_precision"], 0.6)
         self.assertIn("failure_type_counts", summary)
 

@@ -51,6 +51,10 @@ MEMORY_SIGNALS = (
     "截止",
     "不对",
     "改成",
+    "负责人",
+    "截止",
+    "上线窗口",
+    "回滚负责人",
 )
 PREFETCH_SIGNALS = ("准备", "checklist", "清单", "计划", "执行前", "任务前", "上线前")
 
@@ -220,7 +224,8 @@ def handle_copilot_message_event(
             chat_node_id=graph_node.get("node_id"),
         ).to_dict()
 
-    invocation = invocation_from_event(event, scope=scope)
+    interaction_mode = _interaction_mode(event)
+    invocation = _initial_invocation(event, scope=scope, interaction_mode=interaction_mode)
     if invocation.tool_name == "copilot.help":
         reply = _format_help()
         publish_result = _publish(publisher, event, reply, config)
@@ -249,16 +254,12 @@ def handle_copilot_message_event(
 
     repo = MemoryRepository(conn)
     if invocation.tool_name == "memory.create_candidate" and repo.has_source_event(SOURCE_TYPE, event.message_id):
-        reply = _reply(
-            "Memory Copilot 已经处理过这条飞书消息。",
-            [
-                "类型：重复投递",
-                "入口：Feishu live sandbox",
-                "状态：duplicate",
-                "处理结果：没有重复创建 candidate。",
-            ],
+        publish_result = _publish_duplicate_result(
+            publisher,
+            event,
+            config,
+            interaction_mode=interaction_mode,
         )
-        publish_result = _publish(publisher, event, reply, config)
         return _event_result(
             event,
             scope,
@@ -272,14 +273,13 @@ def handle_copilot_message_event(
     service = CopilotService(repository=repo)
     invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
     tool_result = handle_tool_request(invocation.tool_name, invocation.payload, service=service)
-    reply = format_tool_result(invocation, tool_result)
-    publish_result = _publish(
+    publish_result = _publish_tool_result(
         publisher,
         event,
-        reply,
         config,
         invocation=invocation,
         tool_result=tool_result,
+        interaction_mode=interaction_mode,
     )
     return _event_result(event, scope, invocation, tool_result, publish_result, graph_node, message_graph)
 
@@ -350,7 +350,7 @@ def format_tool_result(invocation: CopilotFeishuInvocation, result: dict[str, An
     if not result.get("ok"):
         return _format_error(invocation, result)
     if invocation.tool_name == "memory.search":
-        return _format_search(result)
+        return _format_search(result, routing_reason=invocation.reason)
     if invocation.tool_name == "memory.create_candidate":
         return _format_candidate(result)
     if invocation.tool_name == "memory.confirm":
@@ -422,6 +422,74 @@ def _candidate_invocation(event: FeishuMessageEvent, scope: str, text: str, *, r
         },
         text,
         reason,
+    )
+
+
+def _passive_candidate_invocation(event: FeishuMessageEvent, *, scope: str) -> CopilotFeishuInvocation:
+    return _candidate_invocation(event, scope, event.text, reason="passive_candidate_probe")
+
+
+def _interaction_mode(event: FeishuMessageEvent) -> str:
+    if event.chat_type == "group" and not event.bot_mentioned:
+        return "passive_candidate_probe"
+    return "active_interaction"
+
+
+def _initial_invocation(
+    event: FeishuMessageEvent,
+    *,
+    scope: str,
+    interaction_mode: str,
+) -> CopilotFeishuInvocation:
+    if interaction_mode == "passive_candidate_probe":
+        return _passive_candidate_invocation(event, scope=scope)
+    return invocation_from_event(event, scope=scope)
+
+
+def _publish_duplicate_result(
+    publisher,
+    event: FeishuMessageEvent,
+    config: FeishuConfig,
+    *,
+    interaction_mode: str,
+) -> dict[str, Any]:
+    if interaction_mode == "passive_candidate_probe":
+        return _silent_publish_result(event)
+    return _publish(
+        publisher,
+        event,
+        _reply(
+            "Memory Copilot 已经处理过这条飞书消息。",
+            [
+                "类型：重复投递",
+                "入口：Feishu live sandbox",
+                "状态：duplicate",
+                "处理结果：没有重复创建 candidate。",
+            ],
+        ),
+        config,
+    )
+
+
+def _publish_tool_result(
+    publisher,
+    event: FeishuMessageEvent,
+    config: FeishuConfig,
+    *,
+    invocation: CopilotFeishuInvocation,
+    tool_result: dict[str, Any],
+    interaction_mode: str,
+) -> dict[str, Any]:
+    if interaction_mode == "passive_candidate_probe":
+        return _silent_publish_result(event)
+    reply = format_tool_result(invocation, tool_result)
+    return _publish(
+        publisher,
+        event,
+        reply,
+        config,
+        invocation=invocation,
+        tool_result=tool_result,
     )
 
 
@@ -594,6 +662,7 @@ def _resolve_contextual_invocation(
             payload = dict(invocation.payload)
             payload["candidate_id"] = candidate["candidate_id"]
             context = dict(payload.get("current_context") or {})
+            _grant_owner_role_if_applicable(repo, context, event.sender_id, candidate["candidate_id"])
             context["thread_topic"] = str(candidate.get("subject") or candidate["candidate_id"])[:80]
             context["metadata"] = {
                 **dict(context.get("metadata") or {}),
@@ -604,6 +673,12 @@ def _resolve_contextual_invocation(
             payload["current_context"] = context
             reason = f"{invocation.reason}_recent_candidate"
             return CopilotFeishuInvocation(invocation.tool_name, payload, invocation.user_text, reason)
+    if invocation.tool_name in review_tools and invocation.payload.get("candidate_id"):
+        payload = dict(invocation.payload)
+        context = dict(payload.get("current_context") or {})
+        _grant_owner_role_if_applicable(repo, context, event.sender_id, str(invocation.payload.get("candidate_id")))
+        payload["current_context"] = context
+        return CopilotFeishuInvocation(invocation.tool_name, payload, invocation.user_text, invocation.reason)
     if invocation.tool_name == "memory.explain_versions" and not invocation.payload.get("memory_id"):
         memory = _recent_memory_id(repo, event, scope)
         if memory:
@@ -621,6 +696,42 @@ def _resolve_contextual_invocation(
                 invocation.tool_name, payload, invocation.user_text, f"{invocation.reason}_recent_memory"
             )
     return invocation
+
+
+def _grant_owner_role_if_applicable(
+    repo: MemoryRepository,
+    context: dict[str, Any],
+    sender_id: str,
+    candidate_id: str,
+) -> None:
+    owner_id = _candidate_owner_id(repo, candidate_id)
+    if not owner_id or owner_id != sender_id:
+        return
+    permission = context.get("permission") if isinstance(context.get("permission"), dict) else {}
+    actor = permission.get("actor") if isinstance(permission.get("actor"), dict) else {}
+    roles = actor.get("roles") if isinstance(actor.get("roles"), list) else []
+    if "owner" not in roles:
+        actor["roles"] = sorted(set([*map(str, roles), "owner"]))
+    permission["actor"] = actor
+    context["permission"] = permission
+
+
+def _candidate_owner_id(repo: MemoryRepository, candidate_id: str) -> str | None:
+    row = repo.conn.execute("SELECT owner_id FROM memories WHERE id = ?", (candidate_id,)).fetchone()
+    if row and isinstance(row["owner_id"], str) and row["owner_id"]:
+        return str(row["owner_id"])
+    version_row = repo.conn.execute(
+        """
+        SELECT m.owner_id
+        FROM memory_versions mv
+        JOIN memories m ON m.id = mv.memory_id
+        WHERE mv.id = ?
+        """,
+        (candidate_id,),
+    ).fetchone()
+    if version_row and isinstance(version_row["owner_id"], str) and version_row["owner_id"]:
+        return str(version_row["owner_id"])
+    return None
 
 
 def _recent_candidate_id(repo: MemoryRepository, event: FeishuMessageEvent, scope: str) -> dict[str, Any] | None:
@@ -818,21 +929,26 @@ def _roles_for_sender(sender_id: str) -> list[str]:
     return base
 
 
-def _format_search(result: dict[str, Any]) -> str:
+def _format_search(result: dict[str, Any], *, routing_reason: str) -> str:
     rows = result.get("results") if isinstance(result.get("results"), list) else []
     if not rows:
+        lines = [
+            "结论：没有找到可直接采用的当前有效结论。",
+            "证据：默认只搜索 active memory，没有返回 candidate、superseded 或 raw events。",
+            "下一步：可以补充更具体的主题，或先创建一条待确认记忆。",
+        ]
+        if routing_reason == "default_search":
+            lines.insert(1, "候选判断：本次消息按查询处理，未尝试创建待确认记忆。")
+        lines.extend(_audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", "状态：not_found"]))
         return _reply(
             "Memory Copilot 没找到当前有效记忆。",
-            [
-                "结论：没有找到可直接采用的当前有效结论。",
-                "证据：默认只搜索 active memory，没有返回 candidate、superseded 或 raw events。",
-                "下一步：可以补充更具体的主题，或先创建一条待确认记忆。",
-                *_audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", "状态：not_found"]),
-            ],
+            lines,
         )
     lines = [
         "结论：找到当前有效记忆，只返回 active 当前结论。",
     ]
+    if routing_reason == "default_search":
+        lines.append("候选判断：本次消息按查询处理，未尝试创建待确认记忆。")
     for index, item in enumerate(rows[:3], start=1):
         evidence = item.get("evidence") if isinstance(item.get("evidence"), list) else []
         quote = "-"
@@ -1139,7 +1255,7 @@ def _interactive_card(
         "memory.needs_evidence",
         "memory.expire",
     }
-    if invocation.tool_name in review_tools and not tool_result.get("ok"):
+    if invocation.tool_name in review_tools:
         return build_candidate_review_card(tool_result)
     return build_card_from_text(reply)
 
@@ -1160,6 +1276,7 @@ def _event_result(
         "entrypoint": ENTRYPOINT,
         "tool": invocation.tool_name,
         "routing_reason": invocation.reason,
+        "message_disposition": _message_disposition(invocation, tool_result),
         "tool_result": tool_result,
         "publish": publish_result,
     }
@@ -1179,6 +1296,58 @@ def _scope(config: FeishuConfig) -> str:
         or os.environ.get("MEMORY_DEFAULT_SCOPE")
         or DEFAULT_SCOPE
     )
+
+
+def _message_disposition(invocation: CopilotFeishuInvocation, tool_result: dict[str, Any]) -> dict[str, str]:
+    if invocation.tool_name == "memory.search":
+        return {
+            "memory_path": "search_only",
+            "candidate_path": "not_attempted",
+            "reason_code": invocation.reason,
+        }
+    if invocation.tool_name == "memory.create_candidate":
+        action = str(tool_result.get("action") or "")
+        if invocation.reason == "passive_candidate_probe":
+            return {
+                "memory_path": "silent_candidate_probe",
+                "candidate_path": action or "attempted",
+                "reason_code": "passive_group_detection",
+            }
+        if action == "ignored":
+            return {
+                "memory_path": "candidate_ignored",
+                "candidate_path": "ignored",
+                "reason_code": "low_memory_signal",
+            }
+        return {
+            "memory_path": "candidate_attempted",
+            "candidate_path": action or "attempted",
+            "reason_code": invocation.reason,
+        }
+    if invocation.tool_name in {"memory.confirm", "memory.reject", "memory.needs_evidence", "memory.expire"}:
+        return {
+            "memory_path": "candidate_review",
+            "candidate_path": "reviewed",
+            "reason_code": invocation.reason,
+        }
+    return {
+        "memory_path": invocation.tool_name,
+        "candidate_path": "not_applicable",
+        "reason_code": invocation.reason,
+    }
+
+
+def _silent_publish_result(event: FeishuMessageEvent) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "dry_run": False,
+        "mode": "silent_no_reply",
+        "reply_to": event.message_id,
+        "chat_id": event.chat_id,
+        "text": "",
+        "card": None,
+        "suppressed": True,
+    }
 
 
 def _chat_allowed(chat_id: str) -> bool:

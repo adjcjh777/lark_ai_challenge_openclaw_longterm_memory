@@ -32,6 +32,7 @@ class FeishuMessageEvent:
     create_time: int
     raw: dict[str, Any]
     ignore_reason: str | None = None
+    bot_mentioned: bool = False
 
     def as_text_event(self) -> FeishuTextEvent:
         return FeishuTextEvent(
@@ -79,7 +80,8 @@ def message_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEvent | 
         return None
 
     text = _content_text(message.get("content") or payload.get("content") or payload.get("text"))
-    text = _strip_mentions(text, message.get("mentions") or payload.get("mentions") or [])
+    mentions = message.get("mentions") or payload.get("mentions") or []
+    text = _strip_mentions(text, mentions)
     ignore_reason = None
     if sender_type == "bot":
         ignore_reason = "bot self message"
@@ -99,6 +101,7 @@ def message_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEvent | 
         create_time=_int(message.get("create_time") or payload.get("create_time")),
         raw=payload,
         ignore_reason=ignore_reason,
+        bot_mentioned=_mentions_bot(mentions),
     )
 
 
@@ -133,6 +136,7 @@ def _card_action_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEve
         create_time=_int(event.get("create_time") or payload.get("create_time")),
         raw=payload,
         ignore_reason=None,
+        bot_mentioned=True,
     )
 
 
@@ -213,6 +217,18 @@ def _strip_mentions(text: str, mentions: Any) -> str:
                 result = result.replace(f"@{name}", "")
     result = re.sub(r"^@\S+\s*", "", result.strip())
     return result.strip()
+
+
+def _mentions_bot(mentions: Any) -> bool:
+    if not isinstance(mentions, list):
+        return False
+    for mention in mentions:
+        if not isinstance(mention, dict):
+            continue
+        mentioned_type = _string(mention.get("mentioned_type"))
+        if mentioned_type == "bot":
+            return True
+    return False
 
 
 def _string(value: Any) -> str:
