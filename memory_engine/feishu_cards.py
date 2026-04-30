@@ -137,6 +137,15 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
         "subject": candidate.get("subject") or memory.get("subject"),
         "new_value": candidate.get("current_value") or memory.get("current_value"),
         "summary": candidate.get("summary") or memory.get("summary"),
+        "scope_hint": _scope_hint(
+            visibility_policy=(
+                candidate_response.get("visibility_policy")
+                or candidate.get("visibility_policy")
+                or memory.get("visibility_policy")
+            ),
+            scope=candidate_response.get("scope") or candidate.get("scope") or memory.get("scope"),
+            permission_decision=permission_decision,
+        ),
         "evidence": evidence,
         "risk_flags": risk_flags,
         "recommended_action": candidate_response.get("recommended_action") or candidate.get("recommended_action"),
@@ -372,12 +381,23 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
     fields = [
         ("状态", _candidate_review_status_label(payload)),
         ("主题", str(payload.get("subject") or "")),
-        ("记忆内容", str(payload.get("new_value") or "")),
-        ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
-        ("来源", _source_summary(payload.get("evidence") or {})),
+        ("适用范围", str(payload.get("scope_hint") or "当前团队范围")),
     ]
     if conflict["has_conflict"] and payload.get("review_status") == "pending":
-        fields.append(("原结论", str(conflict.get("old_value") or "")))
+        fields.extend(
+            [
+                ("旧结论", str(conflict.get("old_value") or "未找到可展示的旧结论")),
+                ("新结论", str(payload.get("new_value") or "")),
+            ]
+        )
+    else:
+        fields.append(("记忆内容", str(payload.get("new_value") or "")))
+    fields.extend(
+        [
+            ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
+            ("来源", _source_summary(payload.get("evidence") or {})),
+        ]
+    )
 
     card = {
         "config": {"wide_screen_mode": True, "update_multi": False},
@@ -390,7 +410,7 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
                 "tag": "div",
                 "fields": [
                     {
-                        "is_short": label not in {"记忆内容", "证据", "原结论"},
+                        "is_short": label not in {"记忆内容", "旧结论", "新结论", "证据"},
                         "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
                     }
                     for label, value in fields
@@ -672,7 +692,7 @@ def build_card_from_text(text: str) -> dict[str, Any]:
     template = _template_for(card_name, fields.get("状态"))
     core_labels = ("结论", "理由", "状态", "版本", "来源", "是否被覆盖")
     display_fields = [(label, fields[label]) for label in core_labels if fields.get(label)]
-    for label in ("主题", "候选序号", "记忆类型", "memory_id", "版本数量", "request_id", "trace_id", "处理结果"):
+    for label in ("主题", "候选序号", "记忆类型", "版本数量", "处理结果"):
         if fields.get(label):
             display_fields.append((label, fields[label]))
 
@@ -802,6 +822,39 @@ def _actor_id(actor: dict[str, Any]) -> str | None:
         if isinstance(value, str) and value:
             return value
     return None
+
+
+def _scope_hint(
+    *,
+    visibility_policy: Any = None,
+    scope: Any = None,
+    permission_decision: dict[str, Any] | None = None,
+) -> str:
+    policy = str(visibility_policy or "").strip().lower()
+    if policy in {"private", "self", "owner", "only_me", "user"}:
+        return "仅自己"
+    if policy in {"group", "chat", "team"}:
+        return "本群或团队"
+    if policy in {"org", "organization", "tenant", "workspace"}:
+        return "本组织"
+    if policy in {"project", "current_project"}:
+        return "当前项目"
+
+    scope_text = str(scope or "").strip().lower()
+    if scope_text.startswith(("user:", "private:", "self:")):
+        return "仅自己"
+    if scope_text.startswith(("chat:", "group:", "team:")):
+        return "本群或团队"
+    if scope_text.startswith(("org:", "organization:", "tenant:", "workspace:")):
+        return "本组织"
+    if scope_text.startswith("project:"):
+        return "当前项目"
+
+    decision = permission_decision if isinstance(permission_decision, dict) else {}
+    requested_visibility = str(decision.get("requested_visibility") or "").strip().lower()
+    if requested_visibility:
+        return _scope_hint(visibility_policy=requested_visibility)
+    return "当前团队范围"
 
 
 def _conflict_summary(conflict: dict[str, Any]) -> str:
@@ -1174,10 +1227,6 @@ def _permission_denied_card(title: str, payload: dict[str, Any]) -> dict[str, An
         ("状态", "permission_denied"),
         ("拒绝原因", str(payload.get("permission_reason") or "permission_denied")),
     ]
-    if payload.get("request_id"):
-        fields.append(("request_id", str(payload["request_id"])))
-    if payload.get("trace_id"):
-        fields.append(("trace_id", str(payload["trace_id"])))
     return {
         "config": {"wide_screen_mode": True},
         "header": {

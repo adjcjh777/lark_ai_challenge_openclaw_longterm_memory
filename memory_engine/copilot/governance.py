@@ -16,7 +16,14 @@ from memory_engine.models import (
 from memory_engine.repository import MemoryRepository, new_id, now_ms
 
 from .permissions import sensitive_risk_flags
-from .schemas import ConfirmRequest, CopilotError, CreateCandidateRequest, ExplainVersionsRequest, RejectRequest
+from .schemas import (
+    ConfirmRequest,
+    CopilotError,
+    CreateCandidateRequest,
+    ExplainVersionsRequest,
+    RejectRequest,
+    UndoReviewRequest,
+)
 
 _PREFIX_SIGNALS = ("记忆", "规则", "结论", "约束", "风险", "负责人", "决定")
 
@@ -152,6 +159,21 @@ class CopilotGovernance:
         version = self._version_by_id(request.candidate_id)
         if version is not None:
             return self._mark_candidate_version(request, version, status="expired", action="expired")
+
+        return CopilotError(
+            "memory_not_found",
+            "candidate was not found",
+            details={"candidate_id": request.candidate_id},
+        ).to_response()
+
+    def undo_review(self, request: UndoReviewRequest) -> dict[str, Any]:
+        memory = self._memory_by_id(request.candidate_id)
+        if memory is not None:
+            return self._undo_memory_review(request, memory)
+
+        version = self._version_by_id(request.candidate_id)
+        if version is not None:
+            return self._undo_version_review(request, version)
 
         return CopilotError(
             "memory_not_found",
@@ -598,6 +620,147 @@ class CopilotGovernance:
         response["memory"]["status"] = status
         response["review_status"] = _review_status(status)
         return response
+
+    def _undo_memory_review(self, request: UndoReviewRequest, memory: Any) -> dict[str, Any]:
+        if not self._memory_scope_matches(memory, request.scope):
+            return self._scope_error(request.scope)
+        if memory["status"] == "candidate":
+            return self._status_response(
+                "review_undo_noop", memory, candidate_id=str(memory["id"]), actor_id=request.actor_id
+            )
+        if memory["status"] not in {"active", "rejected", "needs_evidence", "expired"}:
+            return self._not_confirmable(request.candidate_id, str(memory["status"]))
+
+        ts = now_ms()
+        with self.repository.conn:
+            self.repository.conn.execute(
+                "UPDATE memories SET status = 'candidate', updated_by = ?, updated_at = ? WHERE id = ?",
+                (request.actor_id, ts, memory["id"]),
+            )
+            if memory["active_version_id"]:
+                self.repository.conn.execute(
+                    "UPDATE memory_versions SET status = 'candidate' WHERE id = ?",
+                    (memory["active_version_id"],),
+                )
+        return self._status_response(
+            "review_undone",
+            self._memory_by_id(str(memory["id"])),
+            candidate_id=str(memory["id"]),
+            actor_id=request.actor_id,
+        )
+
+    def _undo_version_review(self, request: UndoReviewRequest, version: Any) -> dict[str, Any]:
+        memory = self._memory_by_id(str(version["memory_id"]))
+        if memory is None:
+            return CopilotError("memory_not_found", "candidate parent memory was not found").to_response()
+        if not self._memory_scope_matches(memory, request.scope):
+            return self._scope_error(request.scope)
+        if version["status"] == "candidate":
+            return self._version_status_response(
+                "review_undo_noop", memory, version, status="candidate", actor_id=request.actor_id
+            )
+        if version["status"] not in {"active", "rejected", "needs_evidence", "expired"}:
+            return self._not_confirmable(request.candidate_id, str(version["status"]))
+
+        ts = now_ms()
+        restore_version = None
+        if version["status"] == "active" and version["supersedes_version_id"]:
+            restore_version = self._version_by_id(str(version["supersedes_version_id"]))
+
+        with self.repository.conn:
+            self.repository.conn.execute(
+                "UPDATE memory_versions SET status = 'candidate' WHERE id = ?",
+                (version["id"],),
+            )
+            if restore_version is not None:
+                self.repository.conn.execute(
+                    "UPDATE memory_versions SET status = 'active' WHERE id = ?",
+                    (restore_version["id"],),
+                )
+                self.repository.conn.execute(
+                    """
+                    UPDATE memories
+                    SET current_value = ?,
+                        reason = ?,
+                        source_event_id = ?,
+                        active_version_id = ?,
+                        status = 'active',
+                        updated_by = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        restore_version["value"],
+                        restore_version["reason"],
+                        restore_version["source_event_id"],
+                        restore_version["id"],
+                        request.actor_id,
+                        ts,
+                        memory["id"],
+                    ),
+                )
+            else:
+                self.repository.conn.execute(
+                    "UPDATE memories SET updated_by = ?, updated_at = ? WHERE id = ?",
+                    (request.actor_id, ts, memory["id"]),
+                )
+        return self._version_status_response(
+            "review_undone",
+            self._memory_by_id(str(memory["id"])),
+            self._version_by_id(str(version["id"])),
+            status="candidate",
+            actor_id=request.actor_id,
+        )
+
+    def _version_status_response(
+        self, action: str, memory: Any, version: Any, *, status: str, actor_id: str | None = None
+    ) -> dict[str, Any]:
+        evidence = self._latest_evidence(str(memory["id"]), str(version["id"]))
+        ts = int(memory["updated_at"] or 0)
+        return {
+            "ok": True,
+            "action": action,
+            "candidate_id": str(version["id"]),
+            "memory_id": str(memory["id"]),
+            "version_id": str(version["id"]),
+            "status": status,
+            "review_status": _review_status(status),
+            "last_handler": actor_id or memory["updated_by"],
+            "last_handled_at": ts,
+            "review_queue": {
+                "review_status": _review_status(status),
+                "last_handler": actor_id or memory["updated_by"],
+                "last_handled_at": ts,
+                "state_mutation": action,
+            },
+            "candidate": {
+                "candidate_id": str(version["id"]),
+                "memory_id": str(memory["id"]),
+                "version_id": str(version["id"]),
+                "type": str(memory["type"]),
+                "subject": str(memory["subject"]),
+                "current_value": str(version["value"]),
+                "summary": version["reason"],
+                "status": status,
+                "review_status": _review_status(status),
+                "version": int(version["version_no"]),
+                "evidence": evidence,
+                "owner_id": version["created_by"],
+            },
+            "memory": {
+                "memory_id": str(memory["id"]),
+                "type": str(memory["type"]),
+                "subject": str(memory["subject"]),
+                "current_value": str(memory["current_value"]),
+                "owner_id": memory["owner_id"],
+                "status": str(memory["status"]),
+                "version_id": memory["active_version_id"],
+                "version": self._version_no(str(memory["id"])),
+                "summary": memory["reason"],
+                "evidence": self._latest_evidence(str(memory["id"]), memory["active_version_id"]),
+            },
+            "evidence": evidence,
+        }
 
     def _candidate_response(self, action: str, scope: str, candidate: dict[str, Any]) -> dict[str, Any]:
         return {

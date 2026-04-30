@@ -7,7 +7,7 @@
 ## 先看这个
 
 1. 本清单记录 7 个用户体验缺口是否完成，来源是 2026-04-29 产品复盘。
-2. 当前技术基线已经完成 MVP / Demo / Pre-production、本地 OpenClaw `fmc_*` 工具调用验证、受控飞书测试群 sandbox、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E、candidate-only 治理、权限门控、审计和 benchmark。
+2. 当前技术基线已经完成 MVP / Demo / Pre-production、本地 OpenClaw `fmc_*` 工具调用验证、受控飞书测试群 sandbox、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E、review-policy 治理、权限门控、审计和 benchmark。
 3. 本清单不改变 no-overclaim 边界：当前只能说已有一次受控真实 DM allow-path 证据，不能说真实 Feishu DM 已稳定长期路由到本项目 `fmc_*` / `memory.*` 工具链路；productized live 长期运行仍未完成。
 4. 完成标准优先看普通用户能否在飞书里完成动作，而不是只看 tool call、trace 或脚本通过。
 
@@ -183,7 +183,7 @@
 
 当前情况：
 
-- candidate-only 是核心亮点。
+- review policy 是核心亮点：低重要性安全候选减少确认负担，重要/敏感/冲突候选仍由人确认。
 - Bitable Candidate Review 已有本地写回、upsert 和读回确认。
 - 已补清晰的待处理队列、状态视图和 `needs_evidence` / `expired` 服务层状态动作。
 
@@ -292,7 +292,7 @@
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
 - 当前失败样例包括解释缺口、闲聊误记和旧值泄漏，后续应修能力而不是删样例。
-- 真实飞书来源仍 candidate-only，不自动 active。
+- 真实飞书来源先走 review policy；低重要性安全候选可自动 active，重要/敏感/冲突候选仍需人工确认。
 - 本阶段不宣称 production live、真实 Feishu DM 稳定长期路由或 productized live 长期运行完成；一次受控 DM allow-path 只覆盖 `fmc_memory_search`。
 
 主要文件：

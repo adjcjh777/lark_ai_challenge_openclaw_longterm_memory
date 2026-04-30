@@ -142,9 +142,13 @@ def check_scope_access(
         )
 
     roles = {role.strip().lower() for role in permission.actor.roles}
-    if action in {"memory.confirm", "memory.reject", "memory.needs_evidence", "memory.expire"} and not roles.intersection(
-        REVIEW_ROLES
-    ):
+    if action in {
+        "memory.confirm",
+        "memory.reject",
+        "memory.needs_evidence",
+        "memory.expire",
+        "memory.undo_review",
+    } and not roles.intersection(REVIEW_ROLES):
         return _permission_error(
             "review_role_required", "reviewer, owner, or admin role is required", permission=permission, action=action
         )

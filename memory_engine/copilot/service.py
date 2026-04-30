@@ -15,6 +15,7 @@ from .governance import CopilotGovernance
 from .heartbeat import DEFAULT_COOLDOWN_MS, HeartbeatReminderEngine, _reminder_key, parse_review_at_ms
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
+from .review_policy import evaluate_review_policy
 from .retrieval import LayerAwareRetriever
 from .schemas import (
     WORKING_CONTEXT_FIELDS,
@@ -27,6 +28,7 @@ from .schemas import (
     RejectRequest,
     ReminderActionRequest,
     SearchRequest,
+    UndoReviewRequest,
     ValidationError,
     WorkingContext,
 )
@@ -131,6 +133,44 @@ class CopilotService:
         if auto_confirm_ignored:
             response["auto_confirm_ignored"] = True
             response["candidate_only_reason"] = "feishu_source_candidate_only"
+        review_policy = _review_policy_for_candidate_response(response, request)
+        if review_policy is not None:
+            response["review_policy"] = review_policy
+            review_queue = response.get("review_queue")
+            if isinstance(review_queue, dict):
+                review_queue["delivery_channel"] = review_policy["delivery_channel"]
+                review_queue["review_targets"] = list(review_policy["review_targets"])
+                review_queue["visibility_label"] = review_policy["visibility_label"]
+            candidate = response.get("candidate")
+            if isinstance(candidate, dict):
+                candidate["review_policy"] = review_policy
+            if (
+                review_policy["decision"] == "auto_confirm"
+                and response.get("ok")
+                and response.get("status") == "candidate"
+                and response.get("candidate_id")
+            ):
+                self._record_audit(
+                    "memory.create_candidate",
+                    request.scope,
+                    request.current_context,
+                    response,
+                    target_type="candidate",
+                    event_type="limited_ingestion_candidate" if _is_real_feishu_source(request.source.source_type) else None,
+                )
+                confirmed = self.confirm(
+                    ConfirmRequest(
+                        candidate_id=str(response["candidate_id"]),
+                        scope=request.scope,
+                        actor_id=request.source.actor_id or "auto_confirm_policy",
+                        reason="auto_confirm low-importance memory after review policy checks",
+                        current_context=_context_for_policy_auto_confirm(request.current_context),
+                    )
+                )
+                if confirmed.get("ok"):
+                    confirmed["action"] = "auto_confirmed"
+                    confirmed["review_policy"] = review_policy
+                return confirmed
         self._record_audit(
             "memory.create_candidate",
             request.scope,
@@ -228,6 +268,31 @@ class CopilotService:
         response = CopilotGovernance(self._repository()).expire(request)
         self._record_audit(
             "memory.expire",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        return response
+
+    def undo_review(self, request: UndoReviewRequest) -> dict[str, object]:
+        permission_denied = self._permission_denied(
+            "memory.undo_review",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+            target_id=request.candidate_id,
+            candidate_id=request.candidate_id,
+        )
+        if permission_denied is not None:
+            return permission_denied
+        response = CopilotGovernance(self._repository()).undo_review(request)
+        if response.get("ok"):
+            response["cognee_sync"] = self._sync_withdrawn_memory_from_cognee(request.scope, response)
+        self._record_audit(
+            "memory.undo_review",
             request.scope,
             request.current_context,
             response,
@@ -648,9 +713,50 @@ def _context_for_action(context: dict[str, object], action: str) -> dict[str, ob
     return next_context
 
 
+def _context_for_policy_auto_confirm(context: dict[str, object]) -> dict[str, object]:
+    next_context = _context_for_action(context, "memory.confirm")
+    permission = next_context.get("permission")
+    if isinstance(permission, dict):
+        next_permission = dict(permission)
+        actor = next_permission.get("actor")
+        if isinstance(actor, dict):
+            next_actor = dict(actor)
+            roles = next_actor.get("roles")
+            role_list = [str(role) for role in roles] if isinstance(roles, list) else []
+            if not any(role in {"reviewer", "owner", "admin"} for role in role_list):
+                role_list.append("reviewer")
+            next_actor["roles"] = role_list
+            next_permission["actor"] = next_actor
+        next_permission["auto_confirm_policy"] = "low_importance_safe_candidate"
+        next_context["permission"] = next_permission
+    return next_context
+
+
 def _is_real_feishu_source(source_type: str) -> bool:
     normalized = source_type.strip().lower()
     return normalized.startswith("feishu_") or normalized in {"document_feishu", "lark_doc", "lark_bitable"}
+
+
+def _review_policy_for_candidate_response(
+    response: dict[str, object], request: CreateCandidateRequest
+) -> dict[str, object] | None:
+    if not response.get("ok") or not isinstance(response.get("candidate"), dict):
+        return None
+    candidate = dict(response["candidate"])  # type: ignore[index]
+    permission = request.current_context.get("permission") if isinstance(request.current_context, dict) else {}
+    actor = permission.get("actor") if isinstance(permission, dict) else {}
+    return evaluate_review_policy(
+        candidate={
+            **candidate,
+            "scope": request.scope,
+            "visibility_policy": request.current_context.get("visibility_policy"),
+        },
+        risk_flags=list(response.get("risk_flags") or []),
+        conflict=response.get("conflict") if isinstance(response.get("conflict"), dict) else {},
+        source=request.source.to_dict(),
+        actor=actor if isinstance(actor, dict) else None,
+        current_context=request.current_context,
+    )
 
 
 def _audit_payload(
@@ -772,6 +878,8 @@ def _event_type(action: str, denied: bool) -> str:
         return "candidate_needs_evidence"
     if action == "memory.expire":
         return "candidate_expired"
+    if action == "memory.undo_review":
+        return "candidate_review_undone"
     if action == "memory.create_candidate":
         return "candidate_created"
     if action == "heartbeat.review_due":
@@ -786,7 +894,7 @@ def _visible_fields(action: str, denied: bool) -> list[str]:
         return ["memory_id", "subject", "current_value", "evidence", "trace"]
     if action in {"memory.confirm", "memory.reject"}:
         return ["candidate_id", "memory_id", "status"]
-    if action in {"memory.needs_evidence", "memory.expire"}:
+    if action in {"memory.needs_evidence", "memory.expire", "memory.undo_review"}:
         return ["candidate_id", "memory_id", "review_status", "last_handler", "last_handled_at"]
     if action == "memory.create_candidate":
         return ["candidate_id", "status", "evidence", "risk_flags"]

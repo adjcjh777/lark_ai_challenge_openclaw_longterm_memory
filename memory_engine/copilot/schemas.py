@@ -69,6 +69,7 @@ SEARCH_FILTER_FIELDS = {"type", "layer", "status"}
 CREATE_CANDIDATE_FIELDS = {"text", "scope", "source", "current_context", "auto_confirm"}
 CONFIRM_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context"}
 REJECT_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context"}
+UNDO_REVIEW_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_context"}
 EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived", "current_context"}
 PREFETCH_FIELDS = {"task", "scope", "current_context", "top_k"}
 HEARTBEAT_REVIEW_DUE_FIELDS = {"scope", "current_context", "limit"}
@@ -700,6 +701,28 @@ class RejectRequest:
     def from_payload(cls, payload: Any) -> "RejectRequest":
         data = _require_object(payload, "payload")
         _reject_unknown_fields(data, REJECT_FIELDS, "memory.reject")
+        current_context = _optional_object(data, "current_context")
+        return cls(
+            candidate_id=_require_string(data, "candidate_id"),
+            scope=_require_scope(data),
+            actor_id=_optional_string(data, "actor_id") or _actor_id_from_context(current_context) or "",
+            reason=_optional_string(data, "reason"),
+            current_context=current_context,
+        )
+
+
+@dataclass(frozen=True)
+class UndoReviewRequest:
+    candidate_id: str
+    scope: str
+    actor_id: str
+    reason: str | None = None
+    current_context: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "UndoReviewRequest":
+        data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, UNDO_REVIEW_FIELDS, "memory.undo_review")
         current_context = _optional_object(data, "current_context")
         return cls(
             candidate_id=_require_string(data, "candidate_id"),

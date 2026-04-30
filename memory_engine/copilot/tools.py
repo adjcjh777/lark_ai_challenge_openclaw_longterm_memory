@@ -13,6 +13,7 @@ from .schemas import (
     PrefetchRequest,
     RejectRequest,
     SearchRequest,
+    UndoReviewRequest,
     ValidationError,
 )
 from .service import CopilotService
@@ -32,6 +33,7 @@ INTERNAL_REQUEST_TYPES: dict[str, Callable[[Any], Any]] = {
     **REQUEST_TYPES,
     "memory.needs_evidence": RejectRequest.from_payload,
     "memory.expire": RejectRequest.from_payload,
+    "memory.undo_review": UndoReviewRequest.from_payload,
 }
 
 
@@ -110,6 +112,8 @@ def handle_tool_request(tool_name: str, payload: Any, *, service: CopilotService
         return _with_bridge_metadata(copilot_service.needs_evidence(request), tool_name, request)
     if tool_name == "memory.expire":
         return _with_bridge_metadata(copilot_service.expire_candidate(request), tool_name, request)
+    if tool_name == "memory.undo_review":
+        return _with_bridge_metadata(copilot_service.undo_review(request), tool_name, request)
     if tool_name == "memory.explain_versions":
         return _with_bridge_metadata(copilot_service.explain_versions(request), tool_name, request)
     if tool_name == "memory.prefetch":

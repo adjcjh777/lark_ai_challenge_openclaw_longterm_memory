@@ -166,16 +166,17 @@ memory_engine/copilot/permissions.py
 tests/test_copilot_permissions.py
 ```
 
-### 真实飞书来源不能自动 active
+### 真实飞书来源必须经过 review policy
 
-真实飞书消息、文档、Bitable 来源只能进入 candidate。
+真实飞书消息、文档、Bitable 来源必须先进入 `memory.create_candidate` 和 review policy。
 
-不能自动变成 active memory。必须经过 reviewer 确认。
+低重要性、无冲突、无敏感风险的候选可以自动确认成 active memory；项目进展重要、重要角色发言、敏感/高风险或冲突内容必须停在 candidate，并优先私聊相关 reviewer / owner 确认。
 
 相关文件：
 
 ```text
 memory_engine/copilot/governance.py
+memory_engine/copilot/review_policy.py
 memory_engine/copilot/feishu_live.py
 memory_engine/document_ingestion.py
 ```

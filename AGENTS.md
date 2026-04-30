@@ -107,7 +107,7 @@ benchmarks/day*.json
 - OpenClaw 工具变更先看 `agent_adapters/openclaw/memory_tools.schema.json`。
 - 服务入口必须统一到 `handle_tool_request()` / `CopilotService`。
 - `memory.*` 工具必须带 `current_context.permission`，缺失、畸形、scope / tenant / org mismatch 都 fail closed。
-- 真实飞书来源只能进入 candidate，不能自动 active，必须经过 reviewer 确认。
+- 真实飞书来源必须先进入 review policy 判定：低风险、低重要性、无冲突内容可以自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容必须停在 candidate 并经过 reviewer/owner 人工确认。
 - 默认只对 curated memory 做 embedding，不向量化全部 raw events。
 - Cognee 是当前选定 memory / knowledge engine，只能通过 `memory_engine/copilot/cognee_adapter.py` 窄 adapter 接入。
 - OpenClaw 固定版本 `2026.4.24`，禁止主动 `openclaw update` 或安装 latest。

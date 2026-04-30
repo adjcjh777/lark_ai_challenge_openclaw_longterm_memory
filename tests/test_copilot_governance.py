@@ -10,6 +10,7 @@ from memory_engine.copilot.schemas import (
     ExplainVersionsRequest,
     RejectRequest,
     SearchRequest,
+    UndoReviewRequest,
 )
 from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
@@ -272,6 +273,96 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertEqual("ignored", result["action"])
         self.assertIsNone(result["candidate"])
         self.assertIn("low_memory_signal", result["risk_flags"])
+
+    def test_low_importance_candidate_auto_confirms_without_review_card(self) -> None:
+        result = self.service.create_candidate(candidate_request("偏好：周报默认用简洁版格式。"))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("auto_confirmed", result["action"])
+        self.assertEqual("active", result["status"])
+        self.assertEqual("auto_confirm", result["review_policy"]["decision"])
+        self.assertEqual("low", result["review_policy"]["importance_level"])
+        self.assertEqual("none", result["review_policy"]["delivery_channel"])
+        recalled = self.repo.recall(SCOPE, "周报")
+        self.assertIsNotNone(recalled)
+        assert recalled is not None
+        self.assertIn("简洁版", recalled["answer"])
+
+    def test_important_conflict_stays_candidate_and_routes_private_review_targets(self) -> None:
+        self.repo.remember(SCOPE, "生产部署 region 固定 cn-shanghai。", source_type="unit_test")
+
+        result = self.service.create_candidate(candidate_request("不对，生产部署 region 改成 ap-shanghai。"))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("candidate_conflict", result["action"])
+        self.assertEqual("candidate", result["status"])
+        self.assertEqual("human_review", result["review_policy"]["decision"])
+        self.assertEqual("high", result["review_policy"]["importance_level"])
+        self.assertEqual("routed_private_review", result["review_policy"]["delivery_channel"])
+        self.assertIn("ou_test", result["review_policy"]["review_targets"])
+        before = self.repo.recall(SCOPE, "生产部署 region")
+        self.assertIsNotNone(before)
+        assert before is not None
+        self.assertIn("cn-shanghai", before["answer"])
+
+    def test_undo_confirm_returns_new_memory_to_candidate(self) -> None:
+        created = self.service.create_candidate(candidate_request("决定：演示脚本必须先展示权限拒绝。"))
+        confirmed = self.service.confirm(
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+
+        undone = self.service.undo_review(
+            UndoReviewRequest(
+                candidate_id=confirmed["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="误点撤销",
+                current_context=current_context("memory.undo_review"),
+            )
+        )
+
+        self.assertTrue(undone["ok"])
+        self.assertEqual("review_undone", undone["action"])
+        self.assertEqual("candidate", undone["status"])
+        self.assertEqual("pending", undone["review_status"])
+        self.assertIsNone(self.repo.recall(SCOPE, "演示脚本权限拒绝"))
+
+    def test_undo_confirmed_conflict_restores_previous_active_version(self) -> None:
+        self.repo.remember(SCOPE, "生产部署 region 固定 cn-shanghai。", source_type="unit_test")
+        created = self.service.create_candidate(candidate_request("不对，生产部署 region 改成 ap-shanghai。"))
+        confirmed = self.service.confirm(
+            ConfirmRequest(
+                candidate_id=created["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="确认覆盖",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+        self.assertIn("ap-shanghai", self.repo.recall(SCOPE, "生产部署 region")["answer"])
+
+        undone = self.service.undo_review(
+            UndoReviewRequest(
+                candidate_id=confirmed["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="误点撤销",
+                current_context=current_context("memory.undo_review"),
+            )
+        )
+
+        self.assertTrue(undone["ok"])
+        self.assertEqual("review_undone", undone["action"])
+        after = self.repo.recall(SCOPE, "生产部署 region")
+        self.assertIsNotNone(after)
+        assert after is not None
+        self.assertIn("cn-shanghai", after["answer"])
 
     def test_owner_deadline_style_sentence_becomes_candidate_without_decision_prefix(self) -> None:
         result = self.service.create_candidate(

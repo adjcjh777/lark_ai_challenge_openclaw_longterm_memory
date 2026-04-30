@@ -338,6 +338,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
                 "memory_id": "mem_1",
                 "version_id": "ver_new",
                 "status": "candidate",
+                "visibility_policy": "project",
                 "type": "workflow",
                 "subject": "生产部署",
                 "current_value": "不对，生产部署 region 改成 ap-shanghai。",
@@ -347,10 +348,12 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         payload = candidate_review_payload(response)
         card = build_candidate_review_card(response)
+        rendered = json.dumps(card, ensure_ascii=False)
 
         self.assertEqual("copilot_candidate_review", payload["surface"])
         self.assertEqual("none", payload["state_mutation"])
         self.assertTrue(payload["conflict"]["has_conflict"])
+        self.assertEqual("当前项目", payload["scope_hint"])
         self.assertEqual("pending", payload["review_status"])
         self.assertEqual("medium", payload["risk_level"])
         self.assertEqual("overrides_active", payload["conflict_status"])
@@ -360,6 +363,16 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("要求补证据", [action["label"] for action in payload["buttons"]])
         self.assertIn("标记过期", [action["label"] for action in payload["buttons"]])
         self.assertEqual("orange", card["header"]["template"])
+        self.assertIn("旧结论", rendered)
+        self.assertIn("生产部署 region 固定 cn-shanghai。", rendered)
+        self.assertIn("新结论", rendered)
+        self.assertIn("生产部署 region 改成 ap-shanghai。", rendered)
+        self.assertIn("适用范围", rendered)
+        self.assertIn("当前项目", rendered)
+        self.assertNotIn("**candidate_id**", rendered)
+        self.assertNotIn("**memory_id**", rendered)
+        self.assertNotIn("**trace_id**", rendered)
+        self.assertNotIn("**request_id**", rendered)
 
     def test_copilot_candidate_review_payload_marks_high_risk_review_view(self) -> None:
         response = {
@@ -444,11 +457,47 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertIn("待确认", rendered)
         self.assertIn("决定：周五 18:00 前完成灰度发布。", rendered)
-        self.assertIn("原结论", rendered)
+        self.assertIn("旧结论", rendered)
+        self.assertIn("新结论", rendered)
+        self.assertIn("适用范围", rendered)
+        self.assertIn("当前团队范围", rendered)
         self.assertIn("确认保存", rendered)
         self.assertNotIn("队列视图", rendered)
         self.assertNotIn("操作建议", rendered)
         self.assertNotIn("conflict_candidate", rendered)
+        self.assertNotIn("**candidate_id**", rendered)
+        self.assertNotIn("**memory_id**", rendered)
+        self.assertNotIn("**trace_id**", rendered)
+        self.assertNotIn("**request_id**", rendered)
+
+    def test_candidate_review_card_maps_visibility_policy_to_user_scope_hint(self) -> None:
+        cases = [
+            ("private", "仅自己"),
+            ("team", "本群或团队"),
+            ("organization", "本组织"),
+            ("project", "当前项目"),
+        ]
+        for visibility_policy, expected in cases:
+            with self.subTest(visibility_policy=visibility_policy):
+                response = {
+                    "candidate_id": f"ver_{visibility_policy}",
+                    "memory_id": f"mem_{visibility_policy}",
+                    "status": "candidate",
+                    "visibility_policy": visibility_policy,
+                    "candidate": {
+                        "type": "decision",
+                        "subject": "适用范围测试",
+                        "current_value": "决定：按范围展示。",
+                    },
+                    "evidence": {"quote": "决定：按范围展示。", "source_type": "unit_test"},
+                }
+
+                payload = candidate_review_payload(response)
+                rendered = json.dumps(build_candidate_review_card(response), ensure_ascii=False)
+
+                self.assertEqual(expected, payload["scope_hint"])
+                self.assertIn("适用范围", rendered)
+                self.assertIn(expected, rendered)
 
     def test_copilot_candidate_review_payload_hides_reviewer_buttons_for_member(self) -> None:
         response = {
@@ -703,7 +752,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         payload = candidate_review_payload(denied)
         card = build_candidate_review_card(denied)
-        rendered = json.dumps({"payload": payload, "card": card}, ensure_ascii=False)
+        rendered = json.dumps(card, ensure_ascii=False)
         status = self.conn.execute("SELECT status FROM memories WHERE id = ?", (created["candidate_id"],)).fetchone()[
             "status"
         ]
@@ -718,6 +767,10 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual([], payload["buttons"])
         self.assertNotIn("ap-shanghai", rendered)
         self.assertNotIn("决定：生产部署 region", rendered)
+        self.assertNotIn("request_id", rendered)
+        self.assertNotIn("trace_id", rendered)
+        self.assertNotIn("req_denied_review_card", rendered)
+        self.assertNotIn("trace_denied_review_card", rendered)
 
     def test_card_action_review_surface_uses_copilot_bridge_and_fails_closed(self) -> None:
         service = CopilotService(repository=MemoryRepository(self.conn))
@@ -772,8 +825,10 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("permission_denied", result["tool_result"]["error"]["code"])
         self.assertEqual("review_role_required", result["tool_result"]["bridge"]["permission_decision"]["reason_code"])
         self.assertEqual("candidate", status)
-        self.assertIn("req_card_action_denied", rendered)
-        self.assertIn("trace_card_action_denied", rendered)
+        self.assertEqual("req_card_action_denied", result["tool_result"]["bridge"]["request_id"])
+        self.assertEqual("trace_card_action_denied", result["tool_result"]["bridge"]["trace_id"])
+        self.assertNotIn("req_card_action_denied", rendered)
+        self.assertNotIn("trace_card_action_denied", rendered)
         self.assertNotIn("Phase 3 review surface 必须走 CopilotService", rendered)
 
     def test_card_action_without_permission_context_fails_closed(self) -> None:
