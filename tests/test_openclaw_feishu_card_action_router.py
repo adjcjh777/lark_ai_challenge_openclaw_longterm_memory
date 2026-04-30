@@ -79,6 +79,58 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertFalse(denied["ok"])
         self.assertEqual("permission_denied", denied["tool_result"]["error"]["code"])
 
+    def test_conflict_version_creator_can_confirm_when_parent_owner_is_blank(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            first = route_remember_message(
+                text="/remember 决定：冲突版本 owner 回退测试值 A。",
+                message_id="om_conflict_owner_action_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            route_card_action(
+                action="confirm",
+                candidate_id=first["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_initial_confirm",
+                db_path=str(db_path),
+            )
+
+            conn = connect(db_path)
+            conn.execute(
+                "UPDATE memories SET owner_id = NULL WHERE id = ?",
+                (first["tool_result"]["memory_id"],),
+            )
+            conn.commit()
+            conn.close()
+
+            conflict = route_remember_message(
+                text="/remember 决定：冲突版本 owner 回退测试值 B。",
+                message_id="om_conflict_owner_action_002",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            self.assertTrue(conflict["tool_result"]["candidate_id"].startswith("ver_"))
+
+            confirmed = route_card_action(
+                action="confirm",
+                candidate_id=conflict["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_conflict_owner_confirm",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(confirmed["ok"])
+        self.assertEqual("confirmed", confirmed["tool_result"]["review_status"])
+
 
 if __name__ == "__main__":
     unittest.main()

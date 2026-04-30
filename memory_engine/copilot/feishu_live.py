@@ -722,7 +722,7 @@ def _candidate_owner_id(repo: MemoryRepository, candidate_id: str) -> str | None
         return str(row["owner_id"])
     version_row = repo.conn.execute(
         """
-        SELECT m.owner_id
+        SELECT m.owner_id, mv.created_by
         FROM memory_versions mv
         JOIN memories m ON m.id = mv.memory_id
         WHERE mv.id = ?
@@ -731,6 +731,8 @@ def _candidate_owner_id(repo: MemoryRepository, candidate_id: str) -> str | None
     ).fetchone()
     if version_row and isinstance(version_row["owner_id"], str) and version_row["owner_id"]:
         return str(version_row["owner_id"])
+    if version_row and isinstance(version_row["created_by"], str) and version_row["created_by"]:
+        return str(version_row["created_by"])
     return None
 
 

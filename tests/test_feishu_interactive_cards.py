@@ -34,8 +34,10 @@ class FakePublisher(LarkCliPublisher):
         self.outcomes = outcomes
         self.modes: list[str] = []
         self.timeouts: list[float | None] = []
+        self.commands: list[list[str]] = []
 
     def _run(self, command, mode, event, text, *, card=None, timeout=None):  # type: ignore[override]
+        self.commands.append(command)
         self.modes.append(mode)
         self.timeouts.append(timeout)
         outcome = self.outcomes.pop(0) if self.outcomes else True
@@ -309,6 +311,8 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("reject", result["command"])
         self.assertEqual(["update_card"], publisher.modes)
         self.assertEqual("card_token_1", result["publish"]["card_update_token"])
+        data = json.loads(publisher.commands[0][publisher.commands[0].index("--data") + 1])
+        self.assertEqual(["ou_operator"], data["card"]["open_ids"])
 
     def test_copilot_candidate_review_payload_marks_conflict_without_mutation(self) -> None:
         response = {

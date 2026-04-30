@@ -186,6 +186,7 @@ class LarkCliPublisher:
         token: str,
         timeout: float,
     ) -> dict[str, Any]:
+        update_card = _with_card_open_ids(card, event.sender_id)
         command = self._base_command() + [
             "api",
             "POST",
@@ -193,9 +194,9 @@ class LarkCliPublisher:
             "--as",
             self.config.lark_as,
             "--data",
-            json.dumps({"token": token, "card": card}, ensure_ascii=False, separators=(",", ":")),
+            json.dumps({"token": token, "card": update_card}, ensure_ascii=False, separators=(",", ":")),
         ]
-        result = self._run(command, "update_card", event, "", card=card, timeout=timeout)
+        result = self._run(command, "update_card", event, "", card=update_card, timeout=timeout)
         result["card_update_token"] = token
         return result
 
@@ -272,6 +273,18 @@ def _card_update_token(event: FeishuTextEvent) -> str | None:
     if isinstance(token, str) and token.strip():
         return token.strip()
     return None
+
+
+def _with_card_open_ids(card: dict[str, Any], open_id: str) -> dict[str, Any]:
+    if not open_id:
+        return card
+    existing = card.get("open_ids")
+    if isinstance(existing, list) and open_id in existing:
+        return card
+    open_ids = [item for item in existing if isinstance(item, str)] if isinstance(existing, list) else []
+    update_card = dict(card)
+    update_card["open_ids"] = [*open_ids, open_id]
+    return update_card
 
 
 def _attempt_summary(result: dict[str, Any], attempt_no: int) -> dict[str, Any]:
