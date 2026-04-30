@@ -15,6 +15,7 @@ from memory_engine.feishu_cards import (
     build_candidate_review_card,
     build_card_from_text,
     build_prefetch_context_card,
+    build_review_inbox_card,
     build_search_result_card,
     build_version_chain_card,
 )
@@ -314,6 +315,12 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return _review_invocation(event, scope, "memory.needs_evidence", argument, reason="explicit_needs_evidence")
     if command_name == "expire":
         return _review_invocation(event, scope, "memory.expire", argument, reason="explicit_expire")
+    if command_name == "undo":
+        return _review_invocation(event, scope, "memory.undo_review", argument, reason="explicit_undo")
+    if command_name == "merge":
+        return _review_invocation(event, scope, "memory.confirm", argument, reason="explicit_merge")
+    if command_name in {"review", "inbox", "review_inbox"}:
+        return _review_inbox_invocation(event, scope, argument, reason="explicit_review_inbox")
     if command_name in {"versions", "explain"}:
         return _versions_invocation(event, scope, argument, reason="explicit_versions")
     if command_name == "prefetch":
@@ -361,6 +368,10 @@ def format_tool_result(invocation: CopilotFeishuInvocation, result: dict[str, An
         return _format_review(result, action="要求补证据")
     if invocation.tool_name == "memory.expire":
         return _format_review(result, action="标记过期")
+    if invocation.tool_name == "memory.undo_review":
+        return _format_review(result, action="撤销")
+    if invocation.tool_name == "memory.review_inbox":
+        return _format_review_inbox(result)
     if invocation.tool_name == "memory.explain_versions":
         return _format_versions(result)
     if invocation.tool_name == "memory.prefetch":
@@ -516,6 +527,48 @@ def _review_invocation(
     )
 
 
+def _review_inbox_invocation(
+    event: FeishuMessageEvent,
+    scope: str,
+    argument: str,
+    *,
+    reason: str,
+) -> CopilotFeishuInvocation:
+    tool = "memory.review_inbox"
+    view = _review_inbox_view(argument)
+    context = _current_context(event, scope, tool, intent="review_inbox", thread_topic=view)
+    return CopilotFeishuInvocation(
+        tool,
+        {
+            "scope": scope,
+            "view": view,
+            "limit": 10,
+            "current_context": context,
+        },
+        argument,
+        reason,
+    )
+
+
+def _review_inbox_view(argument: str) -> str:
+    value = (argument or "").strip().lower()
+    aliases = {
+        "": "mine",
+        "mine": "mine",
+        "我": "mine",
+        "我的": "mine",
+        "all": "all",
+        "全部": "all",
+        "conflict": "conflicts",
+        "conflicts": "conflicts",
+        "冲突": "conflicts",
+        "high_risk": "high_risk",
+        "risk": "high_risk",
+        "高风险": "high_risk",
+    }
+    return aliases.get(value, "mine")
+
+
 def _versions_invocation(
     event: FeishuMessageEvent, scope: str, memory_id: str, *, reason: str
 ) -> CopilotFeishuInvocation:
@@ -655,6 +708,7 @@ def _resolve_contextual_invocation(
         "memory.reject",
         "memory.needs_evidence",
         "memory.expire",
+        "memory.undo_review",
     }
     if invocation.tool_name in review_tools and not invocation.payload.get("candidate_id"):
         candidate = _recent_candidate_id(repo, event, scope)
@@ -986,7 +1040,26 @@ def _format_candidate(result: dict[str, Any]) -> str:
             ],
         )
     candidate = result.get("candidate") if isinstance(result.get("candidate"), dict) else {}
-    candidate_id = result.get("candidate_id") or candidate.get("candidate_id") or result.get("memory_id")
+    if result.get("action") == "auto_confirmed":
+        memory = result.get("memory") if isinstance(result.get("memory"), dict) else {}
+        lines = [
+            "结论：这条低重要性、无冲突、无敏感风险的记忆已自动保存为当前有效记忆。",
+            f"主题：{memory.get('subject') or candidate.get('subject') or '-'}",
+            f"证据：{_clip(memory.get('current_value') or candidate.get('current_value') or '-')}",
+            "下一步：如需撤销，可在卡片上点“撤销这次处理”或回复 /undo。",
+            f"risk_flags：{', '.join(result.get('risk_flags') or []) or '-'}",
+        ]
+        lines.extend(
+            _audit_lines(
+                "memory.create_candidate",
+                result,
+                extra=[
+                    f"状态：{memory.get('status') or result.get('status') or 'active'}",
+                    f"处理结果：{result.get('action') or '-'}",
+                ],
+            )
+        )
+        return _reply("Memory Copilot 已自动保存低风险记忆。", lines)
     lines = [
         "结论：已生成待确认记忆，不会自动成为 active memory。",
         f"主题：{candidate.get('subject') or '-'}",
@@ -1002,7 +1075,6 @@ def _format_candidate(result: dict[str, Any]) -> str:
             result,
             extra=[
                 f"状态：{candidate.get('status') or result.get('status') or 'candidate'}",
-                f"candidate_id：{candidate_id or '-'}",
                 f"recommended_action：{result.get('recommended_action') or '-'}",
             ],
         )
@@ -1017,12 +1089,14 @@ def _format_review(result: dict[str, Any], *, action: str) -> str:
         "拒绝": "下一步：这条候选已拒绝，不会成为当前有效记忆。",
         "要求补证据": "下一步：这条候选已进入 needs_evidence，补齐证据前不会成为当前有效记忆。",
         "标记过期": "下一步：这条候选已标记 expired，不会进入默认审核队列或当前有效记忆。",
+        "撤销": "下一步：本次审核已撤销，相关记忆回到待审核状态。",
     }
     action_name_by_label = {
         "确认": "confirm",
         "拒绝": "reject",
         "要求补证据": "needs_evidence",
         "标记过期": "expire",
+        "撤销": "undo_review",
     }
     return _reply(
         f"Memory Copilot 已{action}候选记忆。",
@@ -1036,12 +1110,25 @@ def _format_review(result: dict[str, Any], *, action: str) -> str:
                 extra=[
                     f"状态：{memory.get('status') or result.get('status') or '-'}",
                     f"处理结果：{result.get('action') or '-'}",
-                    f"memory_id：{result.get('memory_id') or '-'}",
-                    f"candidate_id：{result.get('candidate_id') or '-'}",
                 ],
             ),
         ],
     )
+
+
+def _format_review_inbox(result: dict[str, Any]) -> str:
+    items = result.get("items") if isinstance(result.get("items"), list) else []
+    counts = result.get("counts") if isinstance(result.get("counts"), dict) else {}
+    lines = [
+        f"结论：当前有 {len(items)} 条与你相关的待审核记忆。",
+        f"视图：{result.get('view') or 'mine'}",
+        f"统计：全部待审={counts.get('all', 0)} 待我审核={counts.get('mine', 0)} 冲突需判断={counts.get('conflicts', 0)} 高风险={counts.get('high_risk', 0)}",
+        "下一步：在卡片上点确认/拒绝/补证据；不会在可见内容里暴露内部 ID。",
+    ]
+    for index, item in enumerate(items[:5], start=1):
+        if isinstance(item, dict):
+            lines.append(f"{index}. {item.get('subject') or '-'}：{_clip(str(item.get('new_value') or '-'))}")
+    return _reply("Memory Copilot 已打开待审核记忆。", lines)
 
 
 def _format_versions(result: dict[str, Any]) -> str:
@@ -1192,13 +1279,15 @@ def _format_help() -> str:
             "创建候选：@Bot /remember 规则：生产部署必须加 --canary",
             "人工确认：@Bot /confirm <candidate_id>",
             "拒绝候选：@Bot /reject <candidate_id>",
+            "审核收件箱：@Bot /review，也可以 /review conflicts 或 /review high_risk",
+            "撤销审核：@Bot /undo <candidate_id>",
             "版本解释：@Bot /versions <memory_id>",
             "任务预取：@Bot /prefetch 生成今天上线 checklist",
             "健康检查：@Bot /health",
             "飞书任务：@Bot /task <task_id>",
             "飞书会议：@Bot /meeting <minute_token>",
             "多维表格：@Bot /bitable <app_token> <table_id> <record_id>",
-            "边界：真实飞书消息进入 candidate/review 流程；不会自动 active，也不是生产全量 workspace ingestion。",
+            "边界：真实飞书消息先经过 review policy；低重要性安全候选可自动 active，重要/敏感/冲突候选仍需人工审核；不是生产全量 workspace ingestion。",
         ],
     )
 
@@ -1243,6 +1332,8 @@ def _interactive_card(
 ) -> dict[str, Any]:
     if invocation is None or tool_result is None:
         return build_card_from_text(reply)
+    if tool_result is not None and not tool_result.get("ok", True):
+        return build_card_from_text(reply)
     if invocation.tool_name == "memory.search":
         return build_search_result_card(tool_result)
     if invocation.tool_name == "memory.create_candidate" and tool_result.get("action") != "ignored":
@@ -1251,11 +1342,14 @@ def _interactive_card(
         return build_version_chain_card(tool_result)
     if invocation.tool_name == "memory.prefetch":
         return build_prefetch_context_card(tool_result)
+    if invocation.tool_name == "memory.review_inbox":
+        return build_review_inbox_card(tool_result)
     review_tools = {
         "memory.confirm",
         "memory.reject",
         "memory.needs_evidence",
         "memory.expire",
+        "memory.undo_review",
     }
     if invocation.tool_name in review_tools:
         return build_candidate_review_card(tool_result)
@@ -1326,10 +1420,22 @@ def _message_disposition(invocation: CopilotFeishuInvocation, tool_result: dict[
             "candidate_path": action or "attempted",
             "reason_code": invocation.reason,
         }
-    if invocation.tool_name in {"memory.confirm", "memory.reject", "memory.needs_evidence", "memory.expire"}:
+    if invocation.tool_name in {
+        "memory.confirm",
+        "memory.reject",
+        "memory.needs_evidence",
+        "memory.expire",
+        "memory.undo_review",
+    }:
         return {
             "memory_path": "candidate_review",
             "candidate_path": "reviewed",
+            "reason_code": invocation.reason,
+        }
+    if invocation.tool_name == "memory.review_inbox":
+        return {
+            "memory_path": "review_inbox",
+            "candidate_path": "read_only",
             "reason_code": invocation.reason,
         }
     return {

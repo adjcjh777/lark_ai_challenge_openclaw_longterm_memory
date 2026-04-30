@@ -44,7 +44,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertEqual("fmc_memory_confirm", confirmed["tool_result"]["bridge"]["tool"])
         self.assertEqual("confirmed", confirmed["tool_result"]["review_status"])
         actions = [element for element in confirmed["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual([], actions)
+        self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
 
     def test_non_owner_confirm_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -163,7 +163,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(second["tool_result"]["idempotent"])
         self.assertEqual("confirmed", second["tool_result"]["review_status"])
         actions = [element for element in second["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual([], actions)
+        self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
 
     def test_reject_after_confirm_returns_current_confirmed_card(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -201,7 +201,7 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(late_reject["tool_result"]["idempotent"])
         self.assertEqual("confirmed", late_reject["tool_result"]["review_status"])
         actions = [element for element in late_reject["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual([], actions)
+        self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
 
     def test_reject_conflict_version_final_card_shows_rejected_candidate_value(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -300,7 +300,134 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(duplicate["tool_result"]["idempotent"])
         self.assertEqual("confirmed", duplicate["tool_result"]["review_status"])
         actions = [element for element in duplicate["card"]["elements"] if element.get("tag") == "action"]
-        self.assertEqual([], actions)
+        self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
+
+    def test_owner_undo_after_confirm_returns_candidate_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            created = route_remember_message(
+                text="/remember 决定：确认后撤销必须回到候选态。",
+                message_id="om_owner_undo_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            candidate_id = created["tool_result"]["candidate_id"]
+            route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_undo_confirm_first",
+                db_path=str(db_path),
+            )
+            undone = route_card_action(
+                action="undo",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_undo_confirm_second",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(undone["ok"])
+        self.assertEqual("memory.undo_review", undone["tool_result"]["bridge"]["tool"])
+        self.assertEqual("candidate", undone["tool_result"]["memory"]["status"])
+        actions = [element for element in undone["card"]["elements"] if element.get("tag") == "action"]
+        self.assertEqual(1, len(actions))
+
+    def test_replayed_confirm_token_after_undo_does_not_confirm_again(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            created = route_remember_message(
+                text="/remember 决定：旧确认 token 重放不能覆盖撤销结果。",
+                message_id="om_owner_replay_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            candidate_id = created["tool_result"]["candidate_id"]
+            route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_replay_confirm",
+                db_path=str(db_path),
+            )
+            route_card_action(
+                action="undo",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_replay_undo",
+                db_path=str(db_path),
+            )
+            replayed = route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_replay_confirm",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(replayed["ok"])
+        self.assertTrue(replayed["tool_result"]["idempotent"])
+        self.assertEqual("card_action_token_already_processed", replayed["tool_result"]["idempotent_reason"])
+        self.assertEqual("candidate", replayed["tool_result"]["memory"]["status"])
+        self.assertEqual("pending", replayed["tool_result"]["review_status"])
+
+    def test_merge_action_confirms_conflict_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            first = route_remember_message(
+                text="/remember 决定：合并入口旧值 A。",
+                message_id="om_merge_action_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            route_card_action(
+                action="confirm",
+                candidate_id=first["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_merge_initial",
+                db_path=str(db_path),
+            )
+            conflict = route_remember_message(
+                text="/remember 决定：合并入口新值 B。",
+                message_id="om_merge_action_002",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            merged = route_card_action(
+                action="merge",
+                candidate_id=conflict["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_merge_confirm",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(merged["ok"])
+        self.assertEqual("fmc_memory_confirm", merged["tool_result"]["bridge"]["tool"])
+        self.assertEqual("confirmed", merged["tool_result"]["review_status"])
+        self.assertIn("合并入口新值 B", merged["tool_result"]["memory"]["current_value"])
 
 
 if __name__ == "__main__":

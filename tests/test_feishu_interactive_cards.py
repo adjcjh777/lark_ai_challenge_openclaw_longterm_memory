@@ -13,6 +13,7 @@ from memory_engine.feishu_cards import (
     build_card_from_text,
     build_prefetch_context_card,
     build_reminder_candidate_card,
+    build_review_inbox_card,
     build_search_result_card,
     build_version_chain_card,
     candidate_review_payload,
@@ -182,6 +183,27 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual(3, len(result["publish"]["card_attempts"]))
         self.assertEqual([2.0, 2.0, 2.0, None], publisher.timeouts)
         json.dumps(result, ensure_ascii=False)
+
+    def test_targeted_review_card_failure_suppresses_public_text_fallback(self) -> None:
+        event = message_event_from_payload(text_payload("om_targeted_card_fallback", "/review"))
+        self.assertIsNotNone(event)
+        publisher = FakePublisher(self.config, [False, False, False])
+        card = build_review_inbox_card(
+            {
+                "delivery_channel": "routed_private_review",
+                "open_ids": ["ou_owner"],
+                "counts": {"all": 1, "mine": 1},
+                "items": [],
+            }
+        )
+
+        result = publisher.publish(event, "这里包含不应回退到群聊的审核文本", card)
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["fallback_used"])
+        self.assertTrue(result["fallback_suppressed"])
+        self.assertEqual("targeted_review_card_text_fallback_suppressed", result["fallback_reason"])
+        self.assertEqual(["reply_card", "reply_card", "reply_card"], publisher.modes)
 
     def test_timeout_suppresses_text_fallback_to_avoid_double_send(self) -> None:
         event = message_event_from_payload(text_payload("om_card_timeout", "/remember 生产部署必须加 --canary"))
@@ -360,6 +382,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("待我审核", payload["queue_views"])
         self.assertIn("冲突需判断", payload["queue_views"])
         self.assertIn("确认保存", [action["label"] for action in payload["buttons"]])
+        self.assertIn("确认合并", [action["label"] for action in payload["buttons"]])
         self.assertIn("要求补证据", [action["label"] for action in payload["buttons"]])
         self.assertIn("标记过期", [action["label"] for action in payload["buttons"]])
         self.assertEqual("orange", card["header"]["template"])
@@ -462,6 +485,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("适用范围", rendered)
         self.assertIn("当前团队范围", rendered)
         self.assertIn("确认保存", rendered)
+        self.assertIn("确认合并", rendered)
         self.assertNotIn("队列视图", rendered)
         self.assertNotIn("操作建议", rendered)
         self.assertNotIn("conflict_candidate", rendered)
@@ -469,6 +493,160 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertNotIn("**memory_id**", rendered)
         self.assertNotIn("**trace_id**", rendered)
         self.assertNotIn("**request_id**", rendered)
+
+    def test_candidate_review_card_limits_visibility_for_routed_private_review_targets(self) -> None:
+        response = {
+            "candidate_id": "ver_private_review",
+            "memory_id": "mem_private_review",
+            "status": "candidate",
+            "delivery_channel": "routed_private_review",
+            "review_targets": ["ou_owner", "ou_reviewer"],
+            "candidate": {
+                "type": "decision",
+                "subject": "发布审批",
+                "current_value": "决定：发布审批由 owner 和 reviewer 双人确认。",
+                "summary": "私聊审核目标",
+            },
+            "evidence": {"quote": "决定：发布审批由 owner 和 reviewer 双人确认。", "source_type": "feishu_message"},
+            "review_policy": {
+                "delivery_channel": "routed_private_review",
+                "review_targets": ["ou_owner", "ou_reviewer"],
+            },
+            "bridge": {
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "actor": {"user_id": "ou_owner", "roles": ["member", "owner"]},
+                },
+            },
+        }
+
+        card = build_candidate_review_card(response)
+
+        self.assertEqual(["ou_owner", "ou_reviewer"], card["open_ids"])
+
+    def test_candidate_review_card_does_not_add_open_ids_without_targets(self) -> None:
+        response = {
+            "candidate_id": "ver_no_targets",
+            "memory_id": "mem_no_targets",
+            "status": "candidate",
+            "review_policy": {"delivery_channel": "routed_private_review"},
+            "candidate": {
+                "type": "decision",
+                "subject": "无目标审核",
+                "current_value": "决定：没有目标时不要限制可见人。",
+            },
+            "evidence": {"quote": "决定：没有目标时不要限制可见人。"},
+        }
+
+        card = build_candidate_review_card(response)
+
+        self.assertNotIn("open_ids", card)
+
+    def test_terminal_candidate_review_card_shows_only_undo_action(self) -> None:
+        response = {
+            "candidate_id": "mem_terminal_undo",
+            "memory_id": "mem_terminal_undo",
+            "status": "active",
+            "review_status": "confirmed",
+            "action": "confirmed",
+            "memory": {
+                "type": "decision",
+                "subject": "撤销入口",
+                "current_value": "决定：确认后的卡片只保留撤销入口。",
+                "status": "active",
+                "owner_id": "ou_owner",
+            },
+            "bridge": {
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "actor": {"user_id": "ou_owner", "roles": ["owner"]},
+                }
+            },
+        }
+
+        card = build_candidate_review_card(response)
+        actions = [element for element in card["elements"] if element.get("tag") == "action"]
+
+        self.assertEqual(1, len(actions))
+        labels = [action["text"]["content"] for action in actions[0]["actions"]]
+        self.assertEqual(["撤销这次处理"], labels)
+        self.assertNotIn("确认保存", json.dumps(card, ensure_ascii=False))
+
+    def test_review_inbox_card_summarizes_items_and_hides_internal_ids(self) -> None:
+        inbox_response = {
+            "counts": {"pending": 2, "conflict": 1, "high_risk": 1},
+            "review_targets": ["ou_owner", "ou_reviewer"],
+            "items": [
+                {
+                    "candidate_id": "cand_internal_1",
+                    "memory_id": "mem_internal_1",
+                    "request_id": "req_internal_1",
+                    "trace_id": "trace_internal_1",
+                    "subject": "生产部署",
+                    "new_value": "生产部署 region 改成 ap-shanghai。",
+                    "old_value": "生产部署 region 固定 cn-shanghai。",
+                    "evidence": {"quote": "不对，生产部署 region 以后统一改成 ap-shanghai。"},
+                    "scope_hint": "当前项目",
+                    "recommended_action": "确认是否覆盖旧规则",
+                },
+                {
+                    "candidate_id": "cand_internal_2",
+                    "memory_id": "mem_internal_2",
+                    "subject": "临时密钥",
+                    "current_value": "临时 app_secret 只能本地调试。",
+                    "evidence": "安全同学提醒：临时 app_secret 只能本地调试。",
+                    "scope": "本组织",
+                    "recommended_action": "要求补证据",
+                },
+            ],
+        }
+
+        card = build_review_inbox_card(inbox_response)
+        rendered = json.dumps(card, ensure_ascii=False)
+        visible_rendered = json.dumps(
+            [element for element in card["elements"] if element.get("tag") != "action"],
+            ensure_ascii=False,
+        )
+
+        self.assertEqual("待审核记忆", card["header"]["title"]["content"])
+        self.assertEqual(["ou_owner", "ou_reviewer"], card["open_ids"])
+        self.assertIn("待处理: 2", rendered)
+        self.assertIn("冲突需判断: 1", rendered)
+        self.assertIn("主题", rendered)
+        self.assertIn("生产部署", rendered)
+        self.assertIn("新结论", rendered)
+        self.assertIn("生产部署 region 改成 ap-shanghai。", rendered)
+        self.assertIn("旧结论", rendered)
+        self.assertIn("生产部署 region 固定 cn-shanghai。", rendered)
+        self.assertIn("证据", rendered)
+        self.assertIn("适用范围", rendered)
+        self.assertIn("建议动作", rendered)
+        self.assertIn("确认第1条", rendered)
+        self.assertIn("拒绝第1条", rendered)
+        self.assertIn("补证据第1条", rendered)
+        action_blocks = [element for element in card["elements"] if element.get("tag") == "action"]
+        self.assertGreaterEqual(len(action_blocks), 1)
+        self.assertEqual("cand_internal_1", action_blocks[0]["actions"][0]["value"]["candidate_id"])
+        for hidden in (
+            "candidate_id",
+            "memory_id",
+            "request_id",
+            "trace_id",
+            "cand_internal_1",
+            "mem_internal_1",
+            "req_internal_1",
+            "trace_internal_1",
+            "cand_internal_2",
+            "mem_internal_2",
+        ):
+            self.assertNotIn(hidden, visible_rendered)
+
+    def test_review_inbox_card_does_not_add_open_ids_without_targets(self) -> None:
+        card = build_review_inbox_card({"counts": {"pending": 0}, "items": []})
+
+        self.assertNotIn("open_ids", card)
 
     def test_candidate_review_card_maps_visibility_policy_to_user_scope_hint(self) -> None:
         cases = [
@@ -578,8 +756,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertEqual("confirmed", payload["review_status"])
         self.assertEqual("confirmed", payload["state_mutation"])
-        self.assertEqual([], payload["buttons"])
-        self.assertEqual([], actions)
+        self.assertEqual(["undo"], [button["action"] for button in payload["buttons"]])
+        self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
+        self.assertNotIn("确认保存", json.dumps(card, ensure_ascii=False))
 
     def test_copilot_search_result_payload_separates_user_content_and_audit(self) -> None:
         response = {

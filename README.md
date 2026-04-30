@@ -38,6 +38,7 @@
 | 权限门控 | 已完成 fail-closed 本地闭环 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` |
 | 真实飞书权限映射 | 已完成本地权限映射闭环 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/permissions.py`、`docs/productization/handoffs/real-feishu-permission-mapping-handoff.md` |
 | 真实飞书可点击卡片 | 已完成受控 sandbox/pre-production 路径：Feishu live interactive 回复使用 typed card，候选审核卡可点击确认、拒绝、要求补证据和标记过期；点击动作重新生成当前 operator 权限上下文并进入 `handle_tool_request()` / `CopilotService` | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_events.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/real-feishu-interactive-cards-handoff.md` |
+| 定向审核收件箱与撤销/合并体验 | 已完成本地受控路径：`/review` 默认打开“待我审核”收件箱卡片，只对当前 reviewer/owner 定向可见；收件箱可按 mine/conflicts/high_risk 查看并直接点击确认、拒绝、补证据；冲突候选卡显示旧结论/新结论并提供“确认合并”；`/undo` 和 card action router 可把已确认/拒绝/补证据/过期的候选撤回待审核 | `memory_engine/copilot/review_inbox.py`、`memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`memory_engine/feishu_events.py`、`scripts/openclaw_feishu_card_action_router.py`、`tests/test_copilot_review_inbox.py`、`tests/test_copilot_feishu_live.py`、`tests/test_openclaw_feishu_card_action_router.py` |
 | 候选记忆治理 | 已完成 candidate / confirm / reject / conflict / version chain | `memory_engine/copilot/governance.py` |
 | 检索链路 | 已完成 L0/L1/L2/L3 分层混合检索 | `memory_engine/copilot/orchestrator.py`、`retrieval.py` |
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
@@ -71,6 +72,7 @@
 |---|---|---|
 | P1 | 扩大真实飞书样本实测 | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 做 smoke，继续保留 review-policy gate、失败 fallback 和 no-overclaim |
 | P1 | 扩大真实飞书可点击卡片实测 | 在受控测试群里用真实卡片点击覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`，并读回审计；不把一次 sandbox 点击写成生产长期运行 |
+| P1 | 扩大真实飞书审核收件箱实测 | 在受控测试群里用 `/review`、`/review conflicts`、`确认合并` 和 `/undo` 覆盖真实卡片点击与审计读回；当前只完成本地受控路径，不宣称真实 DM/群长期稳定运行 |
 | P2 | 选择一个 productized live gate 进入实施 | 从 L1 internal pilot、PostgreSQL pilot、权限后台最小化或审计 read-only view 中选一个小 gate 实施；仍不宣称 productized live 完成 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 

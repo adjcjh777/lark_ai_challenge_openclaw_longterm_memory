@@ -186,18 +186,24 @@
 - review policy 是核心亮点：低重要性安全候选减少确认负担，重要/敏感/冲突候选仍由人确认。
 - Bitable Candidate Review 已有本地写回、upsert 和读回确认。
 - 已补清晰的待处理队列、状态视图和 `needs_evidence` / `expired` 服务层状态动作。
+- 已新增 Feishu live `/review` 审核收件箱：默认显示“待我审核”，支持 `/review conflicts`、`/review high_risk`，卡片只对当前 reviewer/owner 定向可见。
+- 审核收件箱卡片不在可见内容里展示 `candidate_id`、`memory_id`、`request_id`、`trace_id`；按钮 value 仍携带候选定位字段以便回调路由。
+- 冲突候选卡显示“旧结论 / 新结论”，并提供“确认合并”动作；合并仍走 `memory.confirm` / `CopilotService`，不是绕过治理层直接改库。
+- 已补 `/undo` 和 card action router 的撤销入口，可把已确认/已拒绝/需补证据/已过期的候选撤回待审核状态。
 
 要做什么：
 
-1. 设计三类视图：待我审核、有冲突需要判断、高风险/敏感暂不建议确认。
-2. 让候选状态流转可读：新候选 -> 待审核 -> 已确认 / 已拒绝 / 需补证据 / 已过期。
-3. 每条候选显示来源、风险、冲突、建议动作和最后处理人。
+1. 已完成：设计三类视图：待我审核、有冲突需要判断、高风险/敏感暂不建议确认。
+2. 已完成：让候选状态流转可读：新候选 -> 待审核 -> 已确认 / 已拒绝 / 需补证据 / 已过期 -> 可撤销回待审核。
+3. 已完成：每条候选显示来源、风险、冲突、建议动作和适用范围，不把内部 ID 放进可见主内容。
 
 验收标准：
 
-- Bitable 或文档入口能按状态查看候选。
-- confirm / reject / 需补证据 / 过期都能被记录到审计或同步字段。
-- 写回失败时不声称同步成功。
+- 已完成：Feishu `/review` 卡片能按 mine/conflicts/high_risk 查看候选，并直接触发 confirm / reject / needs_evidence。
+- 已完成：冲突候选能在卡片上比较旧结论和新结论，并通过“确认合并”进入 `memory.confirm`。
+- 已完成：`/undo` 和 card action router 支持撤销确认后的状态变更。
+- 已完成：confirm / reject / 需补证据 / 过期 / undo 都走 `handle_tool_request()` / `CopilotService`，并进入审计。
+- 剩余：真实飞书测试群还需要继续扩样点击 `/review`、`确认合并`、`/undo` 并读回审计；当前不能写成生产级长期运行。
 
 主要文件：
 

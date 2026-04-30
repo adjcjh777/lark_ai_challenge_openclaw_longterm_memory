@@ -15,6 +15,7 @@ from .governance import CopilotGovernance
 from .heartbeat import DEFAULT_COOLDOWN_MS, HeartbeatReminderEngine, _reminder_key, parse_review_at_ms
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
+from .review_inbox import list_review_inbox
 from .review_policy import evaluate_review_policy
 from .retrieval import LayerAwareRetriever
 from .schemas import (
@@ -27,6 +28,7 @@ from .schemas import (
     PrefetchRequest,
     RejectRequest,
     ReminderActionRequest,
+    ReviewInboxRequest,
     SearchRequest,
     UndoReviewRequest,
     ValidationError,
@@ -299,6 +301,48 @@ class CopilotService:
             target_type="candidate",
             target_id=request.candidate_id,
             candidate_id=request.candidate_id,
+        )
+        return response
+
+    def review_inbox(self, request: ReviewInboxRequest) -> dict[str, object]:
+        permission_denied = self._permission_denied(
+            "memory.review_inbox",
+            request.scope,
+            request.current_context,
+            target_type="candidate",
+        )
+        if permission_denied is not None:
+            return permission_denied
+        permission = _parse_permission(request.current_context.get("permission"))
+        actor_id = permission.actor.primary_id() if permission is not None else None
+        actor_roles = permission.actor.roles if permission is not None else []
+        tenant_id = permission.actor.tenant_id if permission is not None else None
+        organization_id = permission.actor.organization_id if permission is not None else None
+        response = list_review_inbox(
+            self._repository(),
+            scope=request.scope,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            actor_id=actor_id,
+            actor_roles=actor_roles,
+            view=request.view,
+            limit=request.limit,
+        )
+        response.update(
+            {
+                "delivery_channel": "routed_private_review",
+                "review_targets": [actor_id] if actor_id else [],
+                "open_ids": [actor_id] if actor_id else [],
+                "current_context": request.current_context,
+            }
+        )
+        self._record_audit(
+            "memory.review_inbox",
+            request.scope,
+            request.current_context,
+            response,
+            target_type="candidate",
+            event_type="review_inbox_viewed",
         )
         return response
 

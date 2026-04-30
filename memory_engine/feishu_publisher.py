@@ -90,6 +90,27 @@ class LarkCliPublisher:
                 "card_timeout_seconds": self.config.card_timeout_seconds,
             }
 
+        if _card_targets_specific_users(card):
+            return {
+                "ok": False,
+                "dry_run": False,
+                "mode": "interactive_card",
+                "reply_to": event.message_id,
+                "chat_id": event.chat_id,
+                "text": "",
+                "card": card,
+                "returncode": None,
+                "stdout": "",
+                "stderr": "interactive card failed; text fallback suppressed for targeted review card",
+                "timed_out": False,
+                "latency_ms": sum(float(attempt.get("latency_ms") or 0) for attempt in attempts),
+                "card_attempts": attempts,
+                "fallback_used": False,
+                "fallback_suppressed": True,
+                "fallback_reason": "targeted_review_card_text_fallback_suppressed",
+                "card_timeout_seconds": self.config.card_timeout_seconds,
+            }
+
         fallback = self._publish_text(event, text, idempotency_key=idempotency_key)
         fallback["card_attempts"] = attempts
         fallback["fallback_used"] = True
@@ -291,6 +312,11 @@ def _with_card_open_ids(card: dict[str, Any], open_id: str) -> dict[str, Any]:
     else:
         update_card["config"] = {"update_multi": False}
     return update_card
+
+
+def _card_targets_specific_users(card: dict[str, Any]) -> bool:
+    open_ids = card.get("open_ids")
+    return isinstance(open_ids, list) and any(isinstance(item, str) and item.strip() for item in open_ids)
 
 
 def _attempt_summary(result: dict[str, Any], attempt_no: int) -> dict[str, Any]:

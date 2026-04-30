@@ -115,6 +115,7 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
             candidate_id=candidate_id,
             review_status=str(candidate_response.get("review_status") or candidate.get("review_status") or "pending"),
             action=str(candidate_response.get("action") or ""),
+            has_conflict=bool(conflict.get("has_conflict")),
         )
     return {
         "surface": "copilot_candidate_review",
@@ -374,7 +375,9 @@ def reminder_candidate_payload(reminder: dict[str, Any]) -> dict[str, Any]:
 def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str, Any]:
     payload = candidate_review_payload(candidate_response)
     if payload.get("status") == "permission_denied":
-        return _permission_denied_card("待确认记忆", payload)
+        card = _permission_denied_card("待确认记忆", payload)
+        _apply_review_open_ids(card, candidate_response)
+        return card
 
     conflict = payload["conflict"]
     title, template = _candidate_review_card_title_and_template(payload)
@@ -423,6 +426,16 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
     actions = []
     for button in payload.get("buttons") or []:
         action = button.get("action")
+        if action == "merge":
+            actions.append(
+                _button(
+                    "确认合并",
+                    _review_button_type("confirm", selected_action=button.get("selected_action")),
+                    {CARD_ACTION_KEY: "merge", "candidate_id": str(payload.get("candidate_id") or "")},
+                    disabled=bool(button.get("disabled")),
+                )
+            )
+            continue
         if action == "confirm":
             actions.append(
                 _button(
@@ -459,8 +472,82 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
                     disabled=bool(button.get("disabled")),
                 )
             )
+        elif action == "undo":
+            actions.append(
+                _button(
+                    "撤销这次处理",
+                    "default",
+                    {CARD_ACTION_KEY: "undo", "candidate_id": str(payload.get("candidate_id") or "")},
+                    disabled=bool(button.get("disabled")),
+                )
+            )
     if actions:
         card["elements"].append({"tag": "action", "actions": actions})
+    _apply_review_open_ids(card, candidate_response)
+    return card
+
+
+def build_review_inbox_card(inbox_response: dict[str, Any]) -> dict[str, Any]:
+    counts = inbox_response.get("counts") if isinstance(inbox_response.get("counts"), dict) else {}
+    items = inbox_response.get("items") if isinstance(inbox_response.get("items"), list) else []
+    fields: list[tuple[str, str]] = []
+    count_summary = _review_counts_summary(counts)
+    if count_summary:
+        fields.append(("counts", count_summary))
+
+    elements: list[dict[str, Any]] = []
+    if fields:
+        elements.append(
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": False,
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                ],
+            }
+        )
+
+    if items:
+        for index, item in enumerate(items[:10], start=1):
+            if not isinstance(item, dict):
+                continue
+            item_fields = _review_inbox_item_fields(item)
+            if not item_fields:
+                continue
+            elements.append(
+                {
+                    "tag": "div",
+                    "fields": [
+                        {
+                            "is_short": label not in {"新结论", "旧结论", "证据", "建议动作"},
+                            "text": {
+                                "tag": "lark_md",
+                                "content": f"**{label} {index if label == '主题' else ''}**\n{value}",
+                            },
+                        }
+                        for label, value in item_fields
+                        if value
+                    ],
+                }
+            )
+            item_actions = _review_inbox_item_actions(item, index)
+            if item_actions:
+                elements.append({"tag": "action", "actions": item_actions})
+    else:
+        elements.append({"tag": "div", "text": {"tag": "lark_md", "content": "暂无待审核记忆。"}})
+
+    card = {
+        "config": {"wide_screen_mode": True, "update_multi": False},
+        "header": {
+            "template": "orange",
+            "title": {"tag": "plain_text", "content": "待审核记忆"},
+        },
+        "elements": elements,
+    }
+    _apply_review_open_ids(card, inbox_response)
     return card
 
 
@@ -768,6 +855,135 @@ def _audit_details(bridge: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _apply_review_open_ids(card: dict[str, Any], response: dict[str, Any]) -> None:
+    open_ids = _review_open_ids(response)
+    if open_ids:
+        card["open_ids"] = open_ids
+
+
+def _review_open_ids(response: dict[str, Any]) -> list[str]:
+    review_policy = response.get("review_policy") if isinstance(response.get("review_policy"), dict) else {}
+    delivery_channel = response.get("delivery_channel") or review_policy.get("delivery_channel")
+    targets = (
+        response.get("open_ids")
+        or response.get("review_targets")
+        or review_policy.get("open_ids")
+        or review_policy.get("review_targets")
+    )
+    if delivery_channel and str(delivery_channel) != "routed_private_review":
+        return []
+    if targets is None:
+        return []
+    if isinstance(targets, str):
+        targets = [targets]
+    if not isinstance(targets, list):
+        return []
+    open_ids: list[str] = []
+    seen: set[str] = set()
+    for target in targets:
+        value: Any = target
+        if isinstance(target, dict):
+            value = target.get("open_id") or target.get("user_id")
+        if not isinstance(value, str):
+            continue
+        value = value.strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        open_ids.append(value)
+    return open_ids
+
+
+def _review_counts_summary(counts: dict[str, Any]) -> str:
+    if not counts:
+        return ""
+    lines = []
+    labels = {
+        "all": "全部待审",
+        "mine": "待我审核",
+        "conflicts": "冲突需判断",
+        "conflict": "冲突需判断",
+        "high_risk": "高风险",
+        "pending": "待处理",
+    }
+    for key, value in counts.items():
+        if isinstance(value, (str, int, float)):
+            lines.append(f"{labels.get(str(key), str(key))}: {value}")
+    return "\n".join(lines)
+
+
+def _review_inbox_item_fields(item: dict[str, Any]) -> list[tuple[str, str]]:
+    conflict = item.get("conflict") if isinstance(item.get("conflict"), dict) else {}
+    evidence = item.get("evidence") or item.get("evidence_quote")
+    new_value = item.get("new_value") or item.get("current_value") or item.get("value")
+    old_value = item.get("old_value") or conflict.get("old_value")
+    scope_hint = item.get("scope_hint") or _review_scope_hint(
+        item.get("visibility") or item.get("visibility_policy") or item.get("scope")
+    )
+    fields = [
+        ("主题", str(item.get("subject") or "未命名候选")),
+        ("新结论", str(new_value or "")),
+    ]
+    if old_value:
+        fields.append(("旧结论", str(old_value)))
+    fields.extend(
+        [
+            ("证据", _evidence_quote(evidence)),
+            ("适用范围", str(scope_hint or "当前团队范围")),
+            ("建议动作", str(item.get("recommended_action") or item.get("suggested_action") or "人工审核")),
+        ]
+    )
+    return fields
+
+
+def _review_inbox_item_actions(item: dict[str, Any], index: int) -> list[dict[str, Any]]:
+    candidate_id = str(item.get("candidate_id") or "")
+    if not candidate_id:
+        return []
+    return [
+        _button(
+            f"确认第{index}条",
+            "primary",
+            {CARD_ACTION_KEY: "confirm", "candidate_id": candidate_id, "candidate_label": f"候选 {index}"},
+        ),
+        _button(
+            f"拒绝第{index}条",
+            "default",
+            {CARD_ACTION_KEY: "reject", "candidate_id": candidate_id, "candidate_label": f"候选 {index}"},
+        ),
+        _button(
+            f"补证据第{index}条",
+            "default",
+            {CARD_ACTION_KEY: "needs_evidence", "candidate_id": candidate_id, "candidate_label": f"候选 {index}"},
+        ),
+    ]
+
+
+def _review_scope_hint(value: Any) -> str:
+    return {
+        "private": "仅自己",
+        "team": "当前团队范围",
+        "organization": "当前组织范围",
+        "tenant": "当前租户范围",
+        "public_demo": "公开演示数据",
+        "project": "当前项目",
+    }.get(str(value or ""), str(value or "当前团队范围"))
+
+
+def _evidence_quote(evidence: Any) -> str:
+    if isinstance(evidence, dict):
+        return str(evidence.get("quote") or evidence.get("summary") or "")
+    if isinstance(evidence, list):
+        for item in evidence:
+            quote = _evidence_quote(item)
+            if quote:
+                return quote
+        return ""
+    if isinstance(evidence, str):
+        return evidence
+    return ""
+
+
 def _review_actions_allowed(bridge: dict[str, Any], *, owner_id: str | None = None) -> bool:
     decision = bridge.get("permission_decision")
     if not isinstance(decision, dict) or not decision:
@@ -1071,16 +1287,24 @@ def _button(label: str, button_type: str, value: dict[str, str], *, disabled: bo
     return button
 
 
-def _candidate_review_buttons(*, candidate_id: str, review_status: str, action: str) -> list[dict[str, Any]]:
+def _candidate_review_buttons(
+    *,
+    candidate_id: str,
+    review_status: str,
+    action: str,
+    has_conflict: bool = False,
+) -> list[dict[str, Any]]:
     selected = _selected_review_action(review_status, action)
     if selected is not None:
-        return []
+        return [{"action": "undo", "label": "撤销这次处理", "required_for_mvp": True, "candidate_id": candidate_id}]
     buttons = [
         {"action": "confirm", "label": "确认保存", "required_for_mvp": True, "candidate_id": candidate_id},
         {"action": "reject", "label": "拒绝候选", "required_for_mvp": True, "candidate_id": candidate_id},
         {"action": "needs_evidence", "label": "要求补证据", "required_for_mvp": True, "candidate_id": candidate_id},
         {"action": "expire", "label": "标记过期", "required_for_mvp": True, "candidate_id": candidate_id},
     ]
+    if has_conflict:
+        buttons.insert(0, {"action": "merge", "label": "确认合并", "required_for_mvp": True, "candidate_id": candidate_id})
     return buttons
 
 

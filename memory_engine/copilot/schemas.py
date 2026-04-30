@@ -73,6 +73,7 @@ UNDO_REVIEW_FIELDS = {"candidate_id", "scope", "actor_id", "reason", "current_co
 EXPLAIN_VERSIONS_FIELDS = {"memory_id", "scope", "include_archived", "current_context"}
 PREFETCH_FIELDS = {"task", "scope", "current_context", "top_k"}
 HEARTBEAT_REVIEW_DUE_FIELDS = {"scope", "current_context", "limit"}
+REVIEW_INBOX_FIELDS = {"scope", "view", "limit", "current_context"}
 REMINDER_ACTION_FIELDS = {
     "reminder_id",
     "scope",
@@ -731,6 +732,36 @@ class UndoReviewRequest:
             reason=_optional_string(data, "reason"),
             current_context=current_context,
         )
+
+
+@dataclass(frozen=True)
+class ReviewInboxRequest:
+    scope: str
+    view: str = "mine"
+    limit: int = 10
+    current_context: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_payload(cls, payload: Any) -> "ReviewInboxRequest":
+        data = _require_object(payload, "payload")
+        _reject_unknown_fields(data, REVIEW_INBOX_FIELDS, "memory.review_inbox")
+        view = _optional_string(data, "view") or "mine"
+        if view not in {"all", "mine", "conflicts", "high_risk"}:
+            raise ValidationError("view must be one of: all, mine, conflicts, high_risk")
+        return cls(
+            scope=_require_scope(data),
+            view=view,
+            limit=_top_k(data.get("limit"), default=10),
+            current_context=_optional_object(data, "current_context"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "scope": self.scope,
+            "view": self.view,
+            "limit": self.limit,
+            "current_context": dict(self.current_context),
+        }
 
 
 @dataclass(frozen=True)

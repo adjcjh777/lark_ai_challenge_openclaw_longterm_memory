@@ -634,7 +634,7 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertTrue(clicked["message_id"].startswith("card_action_"))
         clicked_card = clicked["publish"]["card"]
         clicked_actions = [element for element in clicked_card["elements"] if element.get("tag") == "action"]
-        self.assertEqual([], clicked_actions)
+        self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in clicked_actions[0]["actions"]])
 
     def test_interactive_candidate_card_shows_review_buttons_for_candidate_owner(self) -> None:
         config = FeishuConfig(
@@ -720,6 +720,120 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("memory.needs_evidence", clicked["tool"])
         self.assertEqual("needs_evidence", clicked["tool_result"]["status"])
         self.assertEqual("needs_evidence", clicked["tool_result"]["review_status"])
+
+    def test_review_command_returns_private_inbox_card_without_internal_ids(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        self.handle(
+            "om_live_review_inbox_seed",
+            "/remember 决定：发布前检查清单 owner 是程俊豪，截止周五中午。",
+        )
+
+        event = message_event_from_payload(payload("om_live_review_inbox", "/review"))
+        self.assertIsNotNone(event)
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.review_inbox", result["tool"])
+        self.assertEqual("memory.review_inbox", result["tool_result"]["bridge"]["tool"])
+        self.assertEqual("allow", result["tool_result"]["bridge"]["permission_decision"]["decision"])
+        self.assertEqual("mine", result["tool_result"]["view"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        card = result["publish"]["card"]
+        rendered = str(card)
+        visible_rendered = str([element for element in card["elements"] if element.get("tag") != "action"])
+        self.assertEqual(["ou_live_user"], card["open_ids"])
+        self.assertIn("待审核记忆", rendered)
+        self.assertIn("发布前检查清单", rendered)
+        self.assertIn("确认第1条", rendered)
+        self.assertNotIn("candidate_id", visible_rendered)
+        self.assertNotIn("memory_id", visible_rendered)
+        self.assertNotIn("request_id", visible_rendered)
+        self.assertNotIn("trace_id", visible_rendered)
+        audit = self.conn.execute(
+            "SELECT event_type, action FROM memory_audit_events WHERE action = 'memory.review_inbox'"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("review_inbox_viewed", audit["event_type"])
+
+    def test_interactive_card_undo_action_routes_to_service(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        created = handle_copilot_message_event(
+            self.conn,
+            message_event_from_payload(payload("om_live_undo_seed", "/remember 决定：撤销确认必须回到候选。")),
+            DryRunPublisher(),
+            config,
+            dry_run=True,
+        )
+        candidate_id = created["tool_result"]["candidate_id"]
+        self.handle("om_live_undo_confirm", f"/confirm {candidate_id}")
+        undo_event = message_event_from_payload(
+            card_action_payload({"memory_engine_action": "undo", "candidate_id": candidate_id})
+        )
+        self.assertIsNotNone(undo_event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            undone = handle_copilot_message_event(self.conn, undo_event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(undone["ok"])
+        self.assertEqual("memory.undo_review", undone["tool"])
+        self.assertEqual("candidate", undone["tool_result"]["memory"]["status"])
+        self.assertEqual("review_undone", undone["tool_result"]["action"])
+
+    def test_interactive_conflict_merge_action_routes_to_confirm(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        first = handle_copilot_message_event(
+            self.conn,
+            message_event_from_payload(payload("om_live_merge_old", "/remember 决定：生产部署 region 固定 cn-shanghai。")),
+            DryRunPublisher(),
+            config,
+            dry_run=True,
+        )
+        self.handle("om_live_merge_confirm_old", f"/confirm {first['tool_result']['candidate_id']}")
+        conflict = handle_copilot_message_event(
+            self.conn,
+            message_event_from_payload(payload("om_live_merge_new", "/remember 不对，生产部署 region 以后统一改成 ap-shanghai。")),
+            DryRunPublisher(),
+            config,
+            dry_run=True,
+        )
+        action_blocks = [element for element in conflict["publish"]["card"]["elements"] if element.get("tag") == "action"]
+        merge_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认合并")
+        merge_event = message_event_from_payload(card_action_payload(merge_button["value"]))
+        self.assertIsNotNone(merge_event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+            merged = handle_copilot_message_event(self.conn, merge_event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(merged["ok"])
+        self.assertEqual("memory.confirm", merged["tool"])
+        self.assertEqual("explicit_merge", merged["routing_reason"])
+        self.assertEqual("confirmed", merged["tool_result"]["review_status"])
+        self.assertIn("ap-shanghai", merged["tool_result"]["memory"]["current_value"])
 
     def test_forged_interactive_card_click_by_non_reviewer_fails_closed(self) -> None:
         config = FeishuConfig(

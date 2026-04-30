@@ -25,9 +25,11 @@ VISIBILITY = "team"
 
 ACTION_TO_TOOL = {
     "confirm": "memory.confirm",
+    "merge": "memory.confirm",
     "reject": "memory.reject",
     "needs_evidence": "memory.needs_evidence",
     "expire": "memory.expire",
+    "undo": "memory.undo_review",
 }
 
 
@@ -45,6 +47,23 @@ def route_card_action(
     conn = connect(db_path)
     init_db(conn)
     repo = MemoryRepository(conn)
+    if _action_token_seen(repo, token):
+        idempotent_result = _current_candidate_result(
+            repo=repo,
+            candidate_id=candidate_id,
+            action="duplicate_card_action_ignored",
+            review_status=None,
+        )
+        conn.close()
+        if idempotent_result is None:
+            return {"ok": False, "tool_result": {"ok": False, "error": {"code": "candidate_not_found"}}}
+        idempotent_result["idempotent"] = True
+        idempotent_result["idempotent_reason"] = "card_action_token_already_processed"
+        return {
+            "ok": True,
+            "tool_result": idempotent_result,
+            "card": build_candidate_review_card(idempotent_result),
+        }
     context = {
         "session_id": f"feishu:{chat_id}",
         "chat_id": chat_id,
@@ -131,9 +150,8 @@ def _already_reviewed_result(
     if memory is None:
         return None
 
-    response = _status_result_from_memory(
+    response = _current_candidate_result(
         repo=repo,
-        memory=memory,
         candidate_id=candidate_id,
         action=review_status,
         review_status=review_status,
@@ -144,6 +162,21 @@ def _already_reviewed_result(
     response["idempotent"] = True
     response["idempotent_reason"] = "candidate_already_reviewed"
     return response
+
+
+def _action_token_seen(repo: MemoryRepository, token: str) -> bool:
+    if not token:
+        return False
+    row = repo.conn.execute(
+        """
+        SELECT 1
+        FROM memory_audit_events
+        WHERE request_id = ?
+        LIMIT 1
+        """,
+        (token,),
+    ).fetchone()
+    return row is not None
 
 
 def _review_status(status: str) -> str | None:
@@ -170,6 +203,25 @@ def _memory_for_candidate(repo: MemoryRepository, candidate_id: str) -> Any | No
     if version is None:
         return None
     return repo.conn.execute("SELECT * FROM memories WHERE id = ?", (str(version["memory_id"]),)).fetchone()
+
+
+def _current_candidate_result(
+    *,
+    repo: MemoryRepository,
+    candidate_id: str,
+    action: str,
+    review_status: str | None,
+) -> dict[str, Any] | None:
+    memory = _memory_for_candidate(repo, candidate_id)
+    if memory is None:
+        return None
+    return _status_result_from_memory(
+        repo=repo,
+        memory=memory,
+        candidate_id=candidate_id,
+        action=action,
+        review_status=review_status or _review_status(str(memory["status"])) or "pending",
+    )
 
 
 def _status_result_from_memory(
