@@ -131,6 +131,141 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertTrue(confirmed["ok"])
         self.assertEqual("confirmed", confirmed["tool_result"]["review_status"])
 
+    def test_duplicate_confirm_returns_confirmed_card_instead_of_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            created = route_remember_message(
+                text="/remember 决定：重复点击确认必须保持 confirmed，不得覆盖失败卡。",
+                message_id="om_duplicate_confirm_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            candidate_id = created["tool_result"]["candidate_id"]
+            first = route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_duplicate_confirm_first",
+                db_path=str(db_path),
+            )
+            second = route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_duplicate_confirm_second",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(first["ok"])
+        self.assertTrue(second["ok"])
+        self.assertTrue(second["tool_result"]["idempotent"])
+        self.assertEqual("confirmed", second["tool_result"]["review_status"])
+        actions = [element for element in second["card"]["elements"] if element.get("tag") == "action"]
+        self.assertEqual(1, len(actions))
+        self.assertTrue(all(action.get("disabled") for action in actions[0]["actions"]))
+        self.assertEqual("primary", actions[0]["actions"][0]["type"])
+
+    def test_reject_after_confirm_returns_current_confirmed_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            created = route_remember_message(
+                text="/remember 决定：确认后的拒绝事件必须按当前状态幂等返回。",
+                message_id="om_duplicate_confirm_002",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            candidate_id = created["tool_result"]["candidate_id"]
+            route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_confirm_before_late_reject",
+                db_path=str(db_path),
+            )
+            late_reject = route_card_action(
+                action="reject",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_late_reject_after_confirm",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(late_reject["ok"])
+        self.assertTrue(late_reject["tool_result"]["idempotent"])
+        self.assertEqual("confirmed", late_reject["tool_result"]["review_status"])
+        actions = [element for element in late_reject["card"]["elements"] if element.get("tag") == "action"]
+        self.assertEqual("primary", actions[0]["actions"][0]["type"])
+        self.assertEqual("default", actions[0]["actions"][1]["type"])
+
+    def test_duplicate_confirm_on_conflict_version_returns_confirmed_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            first = route_remember_message(
+                text="/remember 决定：冲突版本重复确认初始值 A。",
+                message_id="om_duplicate_version_confirm_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            route_card_action(
+                action="confirm",
+                candidate_id=first["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_duplicate_version_initial",
+                db_path=str(db_path),
+            )
+            conflict = route_remember_message(
+                text="/remember 决定：冲突版本重复确认新值 B。",
+                message_id="om_duplicate_version_confirm_002",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            candidate_id = conflict["tool_result"]["candidate_id"]
+            self.assertTrue(candidate_id.startswith("ver_"))
+            route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_duplicate_version_first",
+                db_path=str(db_path),
+            )
+            duplicate = route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_duplicate_version_second",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(duplicate["ok"])
+        self.assertTrue(duplicate["tool_result"]["idempotent"])
+        self.assertEqual("confirmed", duplicate["tool_result"]["review_status"])
+        actions = [element for element in duplicate["card"]["elements"] if element.get("tag") == "action"]
+        self.assertEqual("primary", actions[0]["actions"][0]["type"])
+        self.assertTrue(all(action.get("disabled") for action in actions[0]["actions"]))
+
 
 if __name__ == "__main__":
     unittest.main()

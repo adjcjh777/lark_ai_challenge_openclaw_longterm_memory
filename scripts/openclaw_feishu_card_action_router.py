@@ -89,6 +89,19 @@ def route_card_action(
     }
     service = CopilotService(repository=repo)
     tool_result = handle_tool_request(tool_name, payload, service=service)
+    if not tool_result.get("ok"):
+        idempotent_result = _already_reviewed_result(
+            repo=repo,
+            tool_result=tool_result,
+            candidate_id=candidate_id,
+        )
+        if idempotent_result is not None:
+            conn.close()
+            return {
+                "ok": True,
+                "tool_result": idempotent_result,
+                "card": build_candidate_review_card(idempotent_result),
+            }
     conn.close()
     if not tool_result.get("ok"):
         return {"ok": False, "tool_result": tool_result}
@@ -96,6 +109,121 @@ def route_card_action(
         "ok": True,
         "tool_result": tool_result,
         "card": build_candidate_review_card(tool_result),
+    }
+
+
+def _already_reviewed_result(
+    *,
+    repo: MemoryRepository,
+    tool_result: dict[str, Any],
+    candidate_id: str,
+) -> dict[str, Any] | None:
+    error = tool_result.get("error") if isinstance(tool_result.get("error"), dict) else {}
+    details = error.get("details") if isinstance(error.get("details"), dict) else {}
+    if error.get("code") != "candidate_not_confirmable":
+        return None
+    status = str(details.get("status") or "")
+    review_status = _review_status(status)
+    if review_status is None:
+        return None
+
+    memory = _memory_for_candidate(repo, candidate_id)
+    if memory is None:
+        return None
+
+    response = _status_result_from_memory(
+        repo=repo,
+        memory=memory,
+        candidate_id=candidate_id,
+        action=review_status,
+        review_status=review_status,
+    )
+    bridge = tool_result.get("bridge")
+    if isinstance(bridge, dict):
+        response["bridge"] = bridge
+    response["idempotent"] = True
+    response["idempotent_reason"] = "candidate_already_reviewed"
+    return response
+
+
+def _review_status(status: str) -> str | None:
+    return {
+        "active": "confirmed",
+        "rejected": "rejected",
+        "needs_evidence": "needs_evidence",
+        "expired": "expired",
+    }.get(status)
+
+
+def _memory_for_candidate(repo: MemoryRepository, candidate_id: str) -> Any | None:
+    memory = repo.conn.execute("SELECT * FROM memories WHERE id = ?", (candidate_id,)).fetchone()
+    if memory is not None:
+        return memory
+    version = repo.conn.execute(
+        """
+        SELECT memory_id
+        FROM memory_versions
+        WHERE id = ?
+        """,
+        (candidate_id,),
+    ).fetchone()
+    if version is None:
+        return None
+    return repo.conn.execute("SELECT * FROM memories WHERE id = ?", (str(version["memory_id"]),)).fetchone()
+
+
+def _status_result_from_memory(
+    *,
+    repo: MemoryRepository,
+    memory: Any,
+    candidate_id: str,
+    action: str,
+    review_status: str,
+) -> dict[str, Any]:
+    evidence = _latest_evidence(repo, str(memory["id"]), memory["active_version_id"])
+    return {
+        "ok": True,
+        "action": action,
+        "candidate_id": candidate_id,
+        "memory_id": str(memory["id"]),
+        "version_id": memory["active_version_id"],
+        "status": str(memory["status"]),
+        "review_status": review_status,
+        "last_handler": memory["updated_by"],
+        "last_handled_at": int(memory["updated_at"] or 0),
+        "memory": {
+            "memory_id": str(memory["id"]),
+            "type": str(memory["type"]),
+            "subject": str(memory["subject"]),
+            "current_value": str(memory["current_value"]),
+            "owner_id": memory["owner_id"],
+            "status": str(memory["status"]),
+            "version_id": memory["active_version_id"],
+            "summary": memory["reason"],
+            "evidence": evidence,
+        },
+        "evidence": evidence,
+    }
+
+
+def _latest_evidence(repo: MemoryRepository, memory_id: str, version_id: str | None) -> dict[str, Any]:
+    row = repo.conn.execute(
+        """
+        SELECT source_type, source_event_id, quote
+        FROM memory_evidence
+        WHERE memory_id = ?
+          AND version_id IS ?
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (memory_id, version_id),
+    ).fetchone()
+    if row is None:
+        return {"source_type": "unknown", "source_id": None, "quote": None}
+    return {
+        "source_type": row["source_type"],
+        "source_id": row["source_event_id"],
+        "quote": row["quote"],
     }
 
 
