@@ -274,6 +274,8 @@ def handle_copilot_message_event(
     service = CopilotService(repository=repo)
     invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
     tool_result = handle_tool_request(invocation.tool_name, invocation.payload, service=service)
+    if invocation.tool_name == "memory.review_inbox":
+        tool_result = _decorate_review_inbox_result(tool_result, event, invocation)
     publish_result = _publish_tool_result(
         publisher,
         event,
@@ -567,6 +569,25 @@ def _review_inbox_view(argument: str) -> str:
         "高风险": "high_risk",
     }
     return aliases.get(value, "mine")
+
+
+def _decorate_review_inbox_result(
+    result: dict[str, Any],
+    event: FeishuMessageEvent,
+    invocation: CopilotFeishuInvocation,
+) -> dict[str, Any]:
+    if not result.get("ok"):
+        return result
+    decorated = dict(result)
+    decorated.update(
+        {
+            "delivery_channel": "routed_private_review",
+            "review_targets": [event.sender_id] if event.sender_id else [],
+            "open_ids": [event.sender_id] if event.sender_id else [],
+            "current_context": invocation.payload.get("current_context"),
+        }
+    )
+    return decorated
 
 
 def _versions_invocation(

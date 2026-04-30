@@ -6,7 +6,7 @@ from pathlib import Path
 
 from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.review_inbox import list_review_inbox
-from memory_engine.copilot.schemas import ConfirmRequest, CreateCandidateRequest
+from memory_engine.copilot.schemas import ConfirmRequest, CreateCandidateRequest, ReviewInboxRequest
 from memory_engine.copilot.service import CopilotService
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
@@ -247,6 +247,44 @@ class CopilotReviewInboxTest(unittest.TestCase):
         self.assertTrue(other["ok"])
         self.assertNotIn(str(other["candidate_id"]), {item["candidate_id"] for item in inbox["items"]})
         self.assertEqual(3, inbox["counts"]["all"])
+
+    def test_service_review_inbox_uses_permission_tenant_and_records_audit(self) -> None:
+        other = self.service.create_candidate(
+            candidate_request(
+                "风险：外部租户候选不能通过 service 收件箱串读。",
+                actor_id="ou_other_service_tenant",
+                reviewers=["ou_reviewer_a"],
+                tenant_id="tenant:other",
+                organization_id="org:other",
+            )
+        )
+
+        inbox = self.service.review_inbox(
+            ReviewInboxRequest(
+                scope=SCOPE,
+                view="all",
+                limit=10,
+                current_context=current_context("memory.review_inbox", actor_id="ou_reviewer_a"),
+            )
+        )
+
+        self.assertTrue(other["ok"])
+        self.assertTrue(inbox["ok"])
+        self.assertNotIn(str(other["candidate_id"]), {item["candidate_id"] for item in inbox["items"]})
+        self.assertEqual(3, inbox["counts"]["all"])
+        audit = self.conn.execute(
+            """
+            SELECT event_type, tool_name, permission_decision
+            FROM memory_audit_events
+            WHERE tool_name = 'memory.review_inbox'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        assert audit is not None
+        self.assertEqual("review_inbox_viewed", audit["event_type"])
+        self.assertEqual("allow", audit["permission_decision"])
 
 
 if __name__ == "__main__":
