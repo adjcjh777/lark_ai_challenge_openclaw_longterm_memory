@@ -9,7 +9,7 @@
 2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
 3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
 4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API review-policy 拉取入口、审计查询/告警/运维 healthcheck 面、productized live 长期运行方案、真实飞书可点击卡片的受控 sandbox/pre-production 路径、Feishu 群/用户/消息作为企业图谱拓扑的本地发现能力、OpenClaw gateway 本地不 @ 静默候选筛选入口、审核卡片 publisher 层 DM/private 定向投递，以及只读群级设置卡片。
+5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API review-policy 拉取入口、审计查询/告警/运维 healthcheck 面、productized live 长期运行方案、真实飞书可点击卡片的受控 sandbox/pre-production 路径、Feishu 群/用户/消息作为企业图谱拓扑的本地发现能力、OpenClaw gateway 本地不 @ 静默候选筛选入口、审核卡片 publisher 层 DM/private 定向投递、只读群级设置卡片，以及本地/pre-production LLM Wiki / Graph Admin tenant policy editor。
 6. 所有未完成任务仍由程俊豪负责，后续不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
 
 ## 结论总览
@@ -99,7 +99,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 | 扩大真实飞书卡片点击实测 | P1 | 程俊豪 | 待定 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_events.py`、`docs/manual-testing-guide.md` | 在受控测试群里真实点击 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期` 并读回审计；失败时保留 fallback，不冒称生产级 card action 长期运行。 |
 | 扩大真实 DM 定向投递实测 | P1 | 程俊豪 | 待定 | `memory_engine/feishu_publisher.py`、`docs/manual-testing-guide.md` | lark-cli 认证可用后，用受控 reviewer/owner open_id 读回 DM 卡片投递、DM 文本 fallback 和超时不回群行为；失败时保留 fallback，不冒称生产级长期运行。 |
 | 跟踪 7 个用户体验产品化缺口 | P0 | 程俊豪 | 待定 | [user-experience-todo.md](user-experience-todo.md) | 逐项跟踪飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包；只有普通用户不理解内部 ID 也能完成动作时才标记完成。 |
-| 选择 productized live 第一个实施 gate | P2 | 程俊豪 | 待定 | [productized-live-long-run-plan.md](productized-live-long-run-plan.md) | 在 L1 internal pilot、PostgreSQL pilot、权限后台最小化、审计 read-only view 中选一个小 gate 实施；本阶段仍不把 productized live 写成已完成。 |
+| 继续推进 productized live gate | P2 | 程俊豪 | 待定 | [productized-live-long-run-plan.md](productized-live-long-run-plan.md) | 已完成本地 tenant policy editor；后续在 L1 internal pilot、PostgreSQL pilot、真实企业 IdP SSO 验收、审计 read-only view 中选一个小 gate 实施；本阶段仍不把 productized live 写成已完成。 |
 
 ## Phase E 已完成审查
 

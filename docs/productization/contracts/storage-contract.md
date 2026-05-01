@@ -34,7 +34,7 @@
 - allowlist 通过且消息可处理后，会登记 `feishu_user` 和 `feishu_message` 节点，并建立 user -> chat、user -> message、chat -> message 边。
 - 同一 tenant/org 下同一个 Feishu actor ID 只对应一个 `feishu_user` 节点；其不同群上下文由 `member_of_feishu_chat` 边表达，不复制成多个“群内用户”节点。
 - 消息正文不写入 `knowledge_graph_nodes.metadata_json`。授权消息正文只在 allowlist、permission 和 candidate gate 通过后进入 `raw_events.content`、candidate/evidence quote。
-- SQLite `SCHEMA_VERSION` 升为 `3`；这仍是本地/pre-production 存储演进，不等于生产图谱服务。
+- SQLite `SCHEMA_VERSION` 升为 `4`；新增 `tenant_admin_policies` 用于本地/pre-production tenant policy editor。这仍是本地/pre-production 存储演进，不等于生产图谱服务或完整多租户权限后台。
 
 ## 2. Scope / Tenant 语义
 

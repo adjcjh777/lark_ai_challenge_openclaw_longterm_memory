@@ -26,7 +26,7 @@
 | `organization_id` | `org:demo` | 本地 demo/benchmark 默认组织。 |
 | `workspace_id` | old `scope_id` | 若 scope 是 project/chat/doc，优先映射旧 scope。 |
 | `visibility_policy` | `public_demo` 或 `team` | benchmark/replay 可用 `public_demo`；手动候选默认 `team`。 |
-| `schema_version` | `3` | Phase 1 + 群/用户/消息图谱拓扑本地底座后的目标版本。 |
+| `schema_version` | `4` | Phase 1 + 群/用户/消息图谱拓扑 + 本地 tenant policy editor 后的目标版本。 |
 
 ## 4. Migration Steps
 

@@ -8,7 +8,7 @@ DEFAULT_DB_PATH = Path("data/memory.sqlite")
 DEFAULT_TENANT_ID = "tenant:demo"
 DEFAULT_ORGANIZATION_ID = "org:demo"
 DEFAULT_VISIBILITY_POLICY = "team"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 SCHEMA = """
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS memories (
   owner_id TEXT,
   created_by TEXT,
   updated_by TEXT,
-  schema_version INTEGER NOT NULL DEFAULT 3,
+  schema_version INTEGER NOT NULL DEFAULT 4,
   source_event_id TEXT,
   active_version_id TEXT,
   created_at INTEGER NOT NULL,
@@ -162,6 +162,25 @@ CREATE TABLE IF NOT EXISTS knowledge_graph_edges (
   FOREIGN KEY(target_node_id) REFERENCES knowledge_graph_nodes(id)
 );
 
+CREATE TABLE IF NOT EXISTS tenant_admin_policies (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  default_visibility_policy TEXT NOT NULL DEFAULT 'team',
+  auto_confirm_low_risk INTEGER NOT NULL DEFAULT 1,
+  require_review_for_conflicts INTEGER NOT NULL DEFAULT 1,
+  reviewer_roles TEXT NOT NULL DEFAULT '[]',
+  admin_users TEXT NOT NULL DEFAULT '[]',
+  sso_allowed_domains TEXT NOT NULL DEFAULT '[]',
+  notes TEXT,
+  created_by TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(tenant_id, organization_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_raw_events_scope_time
   ON raw_events(scope_type, scope_id, event_time);
 
@@ -182,6 +201,9 @@ CREATE INDEX IF NOT EXISTS idx_kg_nodes_tenant_org_type_key
 
 CREATE INDEX IF NOT EXISTS idx_kg_edges_tenant_org_type
   ON knowledge_graph_edges(tenant_id, organization_id, edge_type);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_admin_policies_tenant_org
+  ON tenant_admin_policies(tenant_id, organization_id, status);
 """
 
 
@@ -204,7 +226,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("owner_id", "TEXT"),
         ("created_by", "TEXT"),
         ("updated_by", "TEXT"),
-        ("schema_version", "INTEGER NOT NULL DEFAULT 3"),
+        ("schema_version", "INTEGER NOT NULL DEFAULT 4"),
         ("source_visibility_revoked_at", "INTEGER"),
     ],
     "memory_versions": [

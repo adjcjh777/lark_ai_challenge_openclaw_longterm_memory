@@ -245,15 +245,22 @@ async function checkAdminTenants(browser, viewport, label) {
   await page.click('[data-view="tenants"]');
   await page.waitForSelector("text=Tenant Inventory");
   await page.waitForSelector("text=Tenant / Organization Readiness");
-  await page.waitForSelector("text=enterprise_sso");
-  await page.waitForSelector("text=tenant_config_editor");
+  await page.waitForSelector("text=enterprise_idp_sso_validation");
+  await page.waitForSelector("text=Tenant Policy Editor");
+  await page.fill('input[name="admin_users"]', "admin@example.com");
+  await page.fill('input[name="sso_allowed_domains"]', "example.com");
+  await page.click('button:has-text("保存策略")');
+  await page.waitForSelector("text=configured");
   await assertNoHorizontalOverflow(page, `admin tenants ${label}`);
   const panelText = await page.locator("#panel").innerText();
-  if (!panelText.includes("ledger_derived_tenant_inventory") || !panelText.includes("Read only")) {
-    throw new Error(`admin tenants ${label} missing source/read-only boundary`);
+  if (!panelText.includes("ledger_and_tenant_policy_inventory") || !panelText.includes("Policy editor")) {
+    throw new Error(`admin tenants ${label} missing source/policy editor boundary`);
   }
   if (!panelText.includes("open review") || !panelText.includes("Graph") || !panelText.includes("Audit")) {
     throw new Error(`admin tenants ${label} missing readiness counters`);
+  }
+  if (panelText.includes("tenant_config_editor") || panelText.includes("role_policy_editor")) {
+    throw new Error(`admin tenants ${label} still reports policy editor as missing`);
   }
   const file = path.join(config.outputDir, `admin-tenants-${label}.png`);
   await page.screenshot({ path: file, fullPage: true });
@@ -288,9 +295,9 @@ async function checkStaticSite(browser, viewport, label) {
     await checkAdminGraph(browser, { width: 390, height: 844 }, "mobile");
     pass("admin_mobile_graph", "Mobile Graph tab renders selectable edge detail without horizontal overflow.");
     await checkAdminTenants(browser, { width: 1440, height: 1000 }, "desktop");
-    pass("admin_desktop_tenants", "Tenants tab renders readiness counters and missing capabilities without horizontal overflow.");
+    pass("admin_desktop_tenants", "Tenants tab renders readiness counters, policy editor save, and missing capabilities without horizontal overflow.");
     await checkAdminTenants(browser, { width: 390, height: 844 }, "mobile");
-    pass("admin_mobile_tenants", "Mobile Tenants tab renders readiness counters without horizontal overflow.");
+    pass("admin_mobile_tenants", "Mobile Tenants tab renders readiness counters and policy editor without horizontal overflow.");
     await checkStaticSite(browser, { width: 1440, height: 1000 }, "desktop");
     pass("static_desktop_site", "Static site renders graph detail and Deerflow attribution.");
     await checkStaticSite(browser, { width: 390, height: 844 }, "mobile");

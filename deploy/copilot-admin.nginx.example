@@ -1,4 +1,4 @@
-# Example reverse proxy for the read-only LLM Wiki / Graph admin.
+# Example reverse proxy for the LLM Wiki / Graph admin.
 # Replace `admin.example.com` and certificate paths before use.
 
 server {

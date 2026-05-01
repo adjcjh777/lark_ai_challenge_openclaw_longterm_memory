@@ -30,6 +30,7 @@ REQUIRED_TABLES = {
     "memory_audit_events",
     "knowledge_graph_nodes",
     "knowledge_graph_edges",
+    "tenant_admin_policies",
 }
 STATUS_ORDER = ("pass", "fail", "warning")
 
@@ -120,10 +121,11 @@ def run_admin_readiness(
             checks["wiki_export"] = _wiki_export_check(service, require_export=strict or required_wiki_cards > 0)
             checks["graph"] = _graph_check(service, require_compiled_memory=strict)
             checks["tenants"] = _tenants_check(service, require_inventory=strict)
-            checks["read_only_api"] = {
+            checks["restricted_write_api"] = {
                 "status": "pass",
                 "supported_methods": ["GET", "HEAD"],
-                "blocked_methods": ["POST", "PUT", "PATCH", "DELETE"],
+                "admin_only_write_methods": ["POST /api/tenant-policies"],
+                "blocked_methods": ["POST other paths", "PUT", "PATCH", "DELETE"],
             }
         finally:
             conn.close()
@@ -248,16 +250,16 @@ def _tenants_check(service: AdminQueryService, *, require_inventory: bool) -> di
     organization_count = int(tenants.get("organization_count") or 0)
     missing_capabilities = set(tenants.get("missing_capabilities") or [])
     expected_missing = {
-        "enterprise_sso",
-        "tenant_config_editor",
-        "role_policy_editor",
+        "enterprise_idp_sso_validation",
         "production_db_operations",
+        "productized_live_long_run",
     }
-    has_boundary = "no tenant config write API" in str(tenants.get("boundary") or "")
+    unexpected_missing = {"tenant_config_editor", "role_policy_editor"} & missing_capabilities
+    has_boundary = "local/pre-production tenant policy write API" in str(tenants.get("boundary") or "")
     has_expected_missing = expected_missing.issubset(missing_capabilities)
     if require_inventory and tenant_count == 0:
         status = "fail"
-    elif not has_boundary or not has_expected_missing:
+    elif not has_boundary or not has_expected_missing or unexpected_missing:
         status = "fail"
     elif tenant_count == 0:
         status = "warning"
@@ -268,12 +270,14 @@ def _tenants_check(service: AdminQueryService, *, require_inventory: bool) -> di
         "tenant_count": tenant_count,
         "organization_count": organization_count,
         "read_only": bool(tenants.get("read_only")),
+        "tenant_policy_editor_available": bool(tenants.get("tenant_policy_editor_available")),
         "source": tenants.get("source"),
         "missing_capabilities": sorted(missing_capabilities),
+        "unexpected_missing_capabilities": sorted(unexpected_missing),
         "require_inventory": require_inventory,
         "next_step": ""
         if status == "pass"
-        else "Confirm tenant/org scoped ledger rows and missing production capabilities before launch.",
+        else "Confirm tenant/org scoped ledger rows and local tenant policy editor availability before launch.",
     }
 
 

@@ -235,15 +235,44 @@ class CopilotAdminTest(unittest.TestCase):
 
         tenants = service.tenant_overview()
         self.assertEqual(2, tenants["tenant_count"])
-        self.assertIn("enterprise_sso", tenants["missing_capabilities"])
+        self.assertNotIn("tenant_config_editor", tenants["missing_capabilities"])
+        self.assertNotIn("role_policy_editor", tenants["missing_capabilities"])
+        self.assertIn("enterprise_idp_sso_validation", tenants["missing_capabilities"])
+        self.assertTrue(tenants["tenant_policy_editor_available"])
         demo_tenant = next(item for item in tenants["items"] if item["tenant_id"] == "tenant:demo")
         self.assertEqual("org:demo", demo_tenant["organization_id"])
         self.assertEqual(2, demo_tenant["memory_total"])
         self.assertEqual(1, demo_tenant["open_review_count"])
-        self.assertEqual("missing", demo_tenant["readiness"]["sso"])
+        self.assertEqual("available_unconfigured", demo_tenant["readiness"]["policy_editor"])
+        self.assertEqual("header_gate_available_not_idp_validated", demo_tenant["readiness"]["sso"])
         filtered_tenants = service.tenant_overview(tenant_id="tenant:other", organization_id="org:other")
         self.assertEqual(1, filtered_tenants["tenant_count"])
         self.assertEqual("tenant:other", filtered_tenants["items"][0]["tenant_id"])
+
+        upserted = service.upsert_tenant_policy(
+            {
+                "tenant_id": "tenant:demo",
+                "organization_id": "org:demo",
+                "status": "active",
+                "default_visibility_policy": "team",
+                "auto_confirm_low_risk": True,
+                "require_review_for_conflicts": True,
+                "reviewer_roles": ["reviewer", "owner"],
+                "admin_users": ["Admin@Example.com"],
+                "sso_allowed_domains": ["Example.com"],
+                "notes": "staging tenant policy",
+            },
+            actor_id="copilot_admin_test",
+        )
+        self.assertTrue(upserted["created"])
+        policies = service.tenant_policies(tenant_id="tenant:demo", organization_id="org:demo")
+        self.assertEqual(1, policies["total"])
+        self.assertEqual(["admin@example.com"], policies["items"][0]["admin_users"])
+        updated_tenants = service.tenant_overview(tenant_id="tenant:demo", organization_id="org:demo")
+        self.assertEqual("configured", updated_tenants["items"][0]["readiness"]["policy_editor"])
+        self.assertEqual(
+            "tenant_policy_upserted", service.list_audit(event_type="tenant_policy_upserted")["items"][0]["event_type"]
+        )
 
     def test_http_admin_is_read_only_and_serves_json_api(self) -> None:
         self._seed_rows()
@@ -264,7 +293,9 @@ class CopilotAdminTest(unittest.TestCase):
             with urlopen(f"{base_url}/api/health", timeout=5) as response:
                 health = json.loads(response.read().decode("utf-8"))
             self.assertTrue(health["ok"])
-            self.assertTrue(health["data"]["read_only"])
+            self.assertFalse(health["data"]["read_only"])
+            self.assertTrue(health["data"]["read_only_knowledge_surfaces"])
+            self.assertTrue(health["data"]["tenant_policy_write_api"])
             self.assertTrue(health["data"]["wiki_ready"])
 
             with urlopen(f"{base_url}/api/live", timeout=5) as response:
@@ -310,7 +341,13 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(tenants_payload["ok"])
             self.assertEqual(1, tenants_payload["data"]["tenant_count"])
             self.assertEqual("tenant:other", tenants_payload["data"]["items"][0]["tenant_id"])
-            self.assertIn("enterprise_sso", tenants_payload["data"]["missing_capabilities"])
+            self.assertNotIn("tenant_config_editor", tenants_payload["data"]["missing_capabilities"])
+            self.assertIn("enterprise_idp_sso_validation", tenants_payload["data"]["missing_capabilities"])
+
+            with urlopen(f"{base_url}/api/tenant-policies?tenant_id=tenant%3Aother", timeout=5) as response:
+                policies_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(policies_payload["ok"])
+            self.assertTrue(policies_payload["data"]["available"])
 
             with urlopen(base_url, timeout=5) as response:
                 html = response.read().decode("utf-8")
@@ -374,6 +411,42 @@ class CopilotAdminTest(unittest.TestCase):
                 viewer_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(viewer_payload["ok"])
             self.assertEqual(3, viewer_payload["data"]["memory_total"])
+
+            policy_body = json.dumps(
+                {
+                    "tenant_id": "tenant:demo",
+                    "organization_id": "org:demo",
+                    "status": "active",
+                    "default_visibility_policy": "team",
+                    "reviewer_roles": ["reviewer", "owner"],
+                    "admin_users": ["admin@example.com"],
+                    "sso_allowed_domains": ["example.com"],
+                    "auto_confirm_low_risk": True,
+                    "require_review_for_conflicts": True,
+                    "notes": "token protected policy",
+                }
+            ).encode("utf-8")
+            request = Request(
+                f"{base_url}/api/tenant-policies",
+                data=policy_body,
+                headers={"Authorization": "Bearer viewer-token", "Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(request, timeout=5)
+            self.assertEqual(403, raised.exception.code)
+
+            request = Request(
+                f"{base_url}/api/tenant-policies",
+                data=policy_body,
+                headers={"Authorization": "Bearer test-token", "Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request, timeout=5) as response:
+                policy_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(policy_payload["ok"])
+            self.assertTrue(policy_payload["data"]["created"])
+            self.assertEqual(["owner", "reviewer"], sorted(policy_payload["data"]["policy"]["reviewer_roles"]))
 
             request = Request(
                 f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
@@ -516,7 +589,9 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual("pass", strict_ok["checks"]["graph"]["status"])
         self.assertEqual("pass", strict_ok["checks"]["tenants"]["status"])
         self.assertEqual(2, strict_ok["checks"]["tenants"]["tenant_count"])
-        self.assertIn("enterprise_sso", strict_ok["checks"]["tenants"]["missing_capabilities"])
+        self.assertTrue(strict_ok["checks"]["tenants"]["tenant_policy_editor_available"])
+        self.assertNotIn("tenant_config_editor", strict_ok["checks"]["tenants"]["missing_capabilities"])
+        self.assertIn("enterprise_idp_sso_validation", strict_ok["checks"]["tenants"]["missing_capabilities"])
         self.assertEqual("pass", strict_ok["checks"]["access_policy"]["status"])
 
         missing_auth = run_admin_readiness(

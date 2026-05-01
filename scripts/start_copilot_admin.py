@@ -22,7 +22,9 @@ from memory_engine.db import connect, db_path_from_env, init_db
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Start the local read-only Feishu Memory Copilot admin backend.")
+    parser = argparse.ArgumentParser(
+        description="Start the local Feishu Memory Copilot admin backend with read-only knowledge views and admin-only tenant policy writes."
+    )
     parser.add_argument("--host", default=DEFAULT_ADMIN_HOST, help="Bind host. Defaults to 127.0.0.1.")
     parser.add_argument("--port", type=int, default=DEFAULT_ADMIN_PORT, help="Bind port. Defaults to 8765.")
     parser.add_argument("--db-path", default=str(db_path_from_env()), help="SQLite database path.")
@@ -38,7 +40,8 @@ def main() -> int:
         "--viewer-token",
         default=None,
         help=(
-            "Optional read-only bearer token for /api/* requests. Viewer tokens cannot export Wiki markdown. "
+            "Optional read-only bearer token for /api/* requests. Viewer tokens cannot export Wiki markdown "
+            "or update tenant policies. "
             "Defaults to FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN or COPILOT_ADMIN_VIEWER_TOKEN."
         ),
     )
@@ -104,7 +107,7 @@ def main() -> int:
         sso_config=sso_config,
     )
     url = f"http://{args.host}:{server.server_port}"
-    print(f"Feishu Memory Copilot read-only admin: {url}", flush=True)
+    print(f"Feishu Memory Copilot admin: {url}", flush=True)
     print(f"SQLite database: {db_path}", flush=True)
     print(
         f"Admin API auth: {'enabled' if auth_token or viewer_token or sso_config.enabled else 'disabled'}", flush=True
@@ -114,7 +117,7 @@ def main() -> int:
         f"admin_token={'configured' if auth_token else 'missing'}, "
         f"viewer_token={'configured' if viewer_token else 'missing'}, "
         f"sso={'enabled' if sso_config.enabled else 'disabled'}, "
-        "viewer_export=disabled",
+        "viewer_export=disabled, tenant_policy_write=admin_only",
         flush=True,
     )
     print("Press Ctrl+C to stop.", flush=True)

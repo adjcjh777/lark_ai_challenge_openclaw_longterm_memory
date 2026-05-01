@@ -46,6 +46,7 @@
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
 | 存储迁移方案 | 已完成本地 migration dry-run / apply 和索引检查 | `scripts/migrate_copilot_storage.py`、`tests/test_copilot_storage_migration.py` |
 | 企业图谱群/用户/消息拓扑 | 已完成本地 Feishu 群节点发现与授权消息拓扑：新群会登记为同企业下的 `feishu_chat` 图谱节点；未在 allowlist 的群只记录 org/chat 最小元数据；授权群会把同一用户建模为 tenant/org 内唯一 `feishu_user` 节点，并用 membership/message 边表达其在不同群里的上下文；消息正文仍只进入 `raw_events` / candidate evidence，不写入图谱节点 | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/feishu-group-graph-node-handoff.md` |
+| LLM Wiki / Graph Admin | 已完成本地 / staging 后台：active curated memory 编译成 LLM Wiki，Graph tab 展示 storage graph + compiled memory graph，Tenants tab 支持 tenant/org 过滤、readiness、admin-only tenant policy editor 和 `tenant_policy_upserted` 审计；这不是生产 DB、真实企业 IdP SSO 或完整多租户权限后台 | `memory_engine/copilot/admin.py`、`memory_engine/db.py`、`scripts/check_copilot_admin_readiness.py`、`scripts/check_copilot_admin_ui_smoke.py`、`tests/test_copilot_admin.py`、`docs/productization/admin-llm-wiki-launch-runbook.md` |
 | Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
 | Feishu live sandbox | 已完成受控测试群联调；当前稳定路径是 allowlist 测试群，群内非 `@Bot` 消息可静默探测 candidate，`@Bot` / 私聊走主动交互 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py` |
 | 群级设置卡片 | 已完成只读设置卡：`/settings` / `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和 no-overclaim 边界；不提供写入动作 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
@@ -78,7 +79,7 @@
 | P1 | 扩大真实飞书可点击卡片实测 | 在受控测试群里用真实卡片点击覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`，并读回审计；不把一次 sandbox 点击写成生产长期运行 |
 | P1 | 扩大真实飞书审核收件箱实测 | 在受控测试群里用 `/review`、`/review conflicts`、`确认合并` 和 `/undo` 覆盖真实卡片点击与审计读回；当前只完成本地受控路径，不宣称真实 DM/群长期稳定运行 |
 | P1 | 扩大真实 DM 定向投递实测 | 在 lark-cli 认证可用后，用受控 reviewer/owner open_id 读回 DM 卡片投递和失败 fallback；当前完成 publisher 本地测试，不宣称生产长期运行 |
-| P2 | 选择一个 productized live gate 进入实施 | 从 L1 internal pilot、PostgreSQL pilot、权限后台最小化或审计 read-only view 中选一个小 gate 实施；仍不宣称 productized live 完成 |
+| P2 | 继续推进 productized live gate | 已完成本地 tenant policy editor；后续从 L1 internal pilot、PostgreSQL pilot、真实企业 IdP SSO 验收、审计 read-only view 中选一个小 gate 实施；仍不宣称 productized live 完成 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 
 ---
@@ -244,9 +245,9 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 | endpoint | http://localhost:11434 | Ollama 服务地址 |
 | dimensions | 1024 | 向量维度 |
 
-### 2.5 本地只读 LLM Wiki / 知识图谱后台
+### 2.5 本地 LLM Wiki / 知识图谱后台
 
-Dashboard 不是单独的产品服务。它提供本地只读的 LLM Wiki、知识图谱、tenant readiness、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Wiki / Graph / Tenants / Ledger / Audit 支持按 `tenant_id` 和 `organization_id` 收敛展示；Tenants tab 会从 ledger 派生租户/组织计数、open review、graph/audit 状态和缺失生产能力，但这仍不是完整租户管理控制台。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
+Dashboard 不是单独的产品服务。它提供本地 LLM Wiki、知识图谱、tenant readiness、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Wiki / Graph / Ledger / Audit 仍是只读知识面；Tenants tab 已有 admin-only 的本地/pre-production 租户策略编辑入口，可配置默认 visibility、reviewer roles、admin users、SSO allowed domains、低风险 auto-confirm 和冲突人工审核开关。Wiki / Graph / Tenants / Ledger / Audit 支持按 `tenant_id` 和 `organization_id` 收敛展示；这仍不等于生产 DB、真实企业 IdP SSO 验收或 productized live。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
 
 - OpenClaw 加载 `feishu-memory-copilot` 插件时，只有 `FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1` 或 `COPILOT_ADMIN_ENABLED=1` 才会尝试启动本地 dashboard。
 - 仓库内 `python3 -m memory_engine copilot-feishu listen` / `scripts/start_copilot_feishu_live.sh` 启动时，也会带起 dashboard。
@@ -283,15 +284,16 @@ python3 scripts/start_copilot_admin.py
 python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8766
 ```
 
-如果绑定到非本机地址，必须设置 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN` / `FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN`，或传 `--admin-token` / `--viewer-token`；否则启动脚本会拒绝运行。admin token 可读取 `/api/*` 并导出 Wiki Markdown；viewer token 只能读取 `/api/*`，访问 `/api/wiki/export` 会返回 `403`。页面会在首次加载数据时提示输入 token。
+如果绑定到非本机地址，必须设置 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN` / `FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN`，或传 `--admin-token` / `--viewer-token`；否则启动脚本会拒绝运行。admin token 可读取 `/api/*`、导出 Wiki Markdown 并保存 `/api/tenant-policies`；viewer token 只能读取 `/api/*`，访问 `/api/wiki/export` 或提交租户策略会返回 `403`。页面会在首次加载数据时提示输入 token。
 
-主要只读 API：
+主要 API：
 
 ```text
 /api/wiki                active curated memory 编译视图，不包含 raw events，不写飞书
 /api/wiki/export?scope=  指定 scope 的 Markdown Wiki 导出，只接受 admin token，仍只读 SQLite
 /api/graph               知识图谱节点/关系视图
-/api/tenants             ledger 派生的 tenant / organization readiness 概览，只读，不写租户配置
+/api/tenants             ledger + tenant policy 派生的 tenant / organization readiness 概览
+/api/tenant-policies     GET 读取租户策略；POST 仅 admin 可 upsert 本地/pre-production 租户策略
 /api/memories            memory ledger 和 evidence
 /api/audit               权限、治理和工具调用审计
 /api/health              带认证的后台 readiness 摘要
@@ -300,7 +302,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 
 `/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 都接受 `tenant_id` / `organization_id` 查询参数，用于受控 staging 下按企业租户边界检查后台展示结果。
 
-上线前或共享给评委/队友前，先跑只读后台 readiness gate：
+上线前或共享给评委/队友前，先跑后台 readiness gate：
 
 ```bash
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
@@ -321,7 +323,7 @@ open reports/copilot-knowledge-site/index.html
 当前目标完成度、证据清单和生产缺口见 [LLM Wiki Enterprise Knowledge Site Completion Audit](docs/productization/llm-wiki-enterprise-site-completion-audit.md)。
 受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
-这个后台只开放 `GET` / `HEAD` 查询接口，写请求会返回 `405`。它是本机运维/调试入口，不代表生产部署或完整多租户企业后台。
+这个后台的知识视图只读；唯一写接口是 admin-only 的 `/api/tenant-policies`，用于本地/pre-production 租户策略配置和审计。它是本机运维/调试入口，不代表生产部署、真实企业 IdP SSO 验收、生产 DB 运维或 productized live。
 
 ### 2.6 运行 Demo readiness
 
@@ -584,7 +586,7 @@ scripts/start_copilot_feishu_live.sh
 
 | 任务 | 位置 | 完成标准 |
 |---|---|---|
-| 选择 productized live 的第一个实施 gate | `docs/productization/productized-live-long-run-plan.md` | 在 L1 internal pilot、PostgreSQL pilot、权限后台最小化、审计 read-only view 中选一项实施并验证 |
+| 继续推进 productized live gate | `docs/productization/productized-live-long-run-plan.md` | 已完成本地 tenant policy editor；下一步在 L1 internal pilot、PostgreSQL pilot、真实企业 IdP SSO 验收、审计 read-only view 中选一项实施并验证 |
 | 保持 no-overclaim 文档口径 | README、白皮书、Demo runbook、Benchmark report | 不把 demo、dry-run、sandbox、staging 写成 production live |
 
 ---

@@ -1,5 +1,5 @@
 [Unit]
-Description=Feishu Memory Copilot read-only LLM Wiki / Graph Admin
+Description=Feishu Memory Copilot LLM Wiki / Graph Admin
 Documentation=docs/productization/admin-llm-wiki-launch-runbook.md
 After=network-online.target
 Wants=network-online.target

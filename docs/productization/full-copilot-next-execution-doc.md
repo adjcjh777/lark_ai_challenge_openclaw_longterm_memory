@@ -83,7 +83,7 @@ docs/productization/feishu-single-listener-handoff.md
 - 真实 Feishu 样本实测扩样：任务、会议、Bitable 读取入口和 review-policy 路径已补；后续仍可用受控真实资源 ID 继续扩样，但不能冒称全量 workspace ingestion 或生产 live。
 - 用户体验产品化：7 个 UX 缺口已单独进入 [用户体验产品化 TODO 清单](user-experience-todo.md)，包括飞书主路径、记忆卡片、解释层、审核队列、可控提醒、真实表达样本和 10 分钟评委体验包；当前已完成受控 UX 路径，但仍不能写成 production live、全量 workspace 接入或长期稳定线上运行。
 - OpenClaw health running 字段一致性：OpenClaw 2026.4.24 的 `openclaw health --json` 总览仍把 Feishu running 报为 `false`，但 `openclaw channels status --probe --json` 和 gateway 日志显示 running；当前作为 warning 记录。
-- productized live：长期运行方案已完成，但没有生产 DB 部署、生产级 Prometheus/Grafana 长期监控、完整多租户后台，也没有长期线上运行证据。
+- productized live：长期运行方案已完成，本地/pre-production LLM Wiki / Graph Admin 已有 admin-only tenant policy editor；但没有生产 DB 部署、生产级 Prometheus/Grafana 长期监控、真实企业目录/IdP/RBAC 接入，也没有长期线上运行证据。
 
 ## 产品完成定义
 

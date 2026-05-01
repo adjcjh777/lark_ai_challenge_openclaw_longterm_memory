@@ -1,15 +1,15 @@
 # LLM Wiki / Graph Admin Launch Runbook
 
 日期：2026-05-01
-状态：本地 / staging 只读后台上线 gate；不是 productized live 完成证明。
+状态：本地 / staging 后台上线 gate；不是 productized live 完成证明。
 
 ## 1. 范围
 
-本 runbook 只覆盖本地或受控 staging 的只读 LLM Wiki / 知识图谱后台：
+本 runbook 只覆盖本地或受控 staging 的 LLM Wiki / 知识图谱后台：
 
 - LLM Wiki：active curated memory 编译视图。
 - Graph：`knowledge_graph_*` 表节点/边，以及由 active memory 编译出的 `memory -> grounded_by -> evidence_source` 图谱。
-- Tenants：ledger 派生的 tenant / organization readiness、open review、graph/audit 计数和缺失生产能力清单。
+- Tenants：ledger + tenant policy 派生的 tenant / organization readiness、open review、graph/audit 计数、本地/pre-production 租户策略编辑和缺失生产能力清单。
 - Ledger / Audit / Tables：只读排障和审计视图。
 
 不覆盖：
@@ -17,6 +17,7 @@
 - 生产 DB 部署。
 - 已接真实企业 IdP 的生产 SSO。
 - 完整多租户权限后台。
+- 真实企业 IdP / Feishu workspace SSO 生产验收。
 - productized live 长期运行。
 
 ## 2. 启动前检查
@@ -30,7 +31,7 @@ python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --s
 git diff --check
 ```
 
-UI smoke 会启动本机只读 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、Tenants tab、节点/边详情、租户 readiness 计数、缺失生产能力清单、静态站 Deerflow attribution 和横向溢出。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
+UI smoke 会启动本机 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、Tenants tab、节点/边详情、租户 readiness 计数、admin-only tenant policy editor、缺失生产能力清单、静态站 Deerflow attribution 和横向溢出。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
 GitHub Actions 的 `Admin UI Smoke` job 会运行同一脚本并上传截图 artifact。
 
 如果要绑定到非本机地址，必须设置后台 token：
@@ -47,13 +48,13 @@ python3 scripts/check_copilot_admin_readiness.py \
   --min-wiki-cards 1
 ```
 
-admin token 可读取 `/api/*` 并导出 Wiki Markdown；viewer token 只能读取 `/api/*`，访问 `/api/wiki/export` 会返回 `403`。两个 token 必须不同。本机调试可以不设置 token，但 readiness 会给出 warning：
+admin token 可读取 `/api/*`、导出 Wiki Markdown 并保存 `/api/tenant-policies`；viewer token 只能读取 `/api/*`，访问 `/api/wiki/export` 或提交租户策略会返回 `403`。两个 token 必须不同。本机调试可以不设置 token，但 readiness 会给出 warning：
 
 ```bash
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 ```
 
-readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown export、compiled Graph、Tenants readiness、只读 API 和 access policy；Tenants check 只验证 ledger 派生租户清单和缺失生产能力边界，不代表已具备租户配置写入后台。
+readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown export、compiled Graph、Tenants readiness、本地 tenant policy editor 表/API 能力、知识只读面和 access policy；Tenants check 不代表已完成生产 DB、真实企业 IdP SSO 或完整企业权限后台。
 
 可选企业 SSO header gate：
 
@@ -115,7 +116,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-模板只代理到本机 `127.0.0.1:8765`。正式使用前必须替换域名和证书路径，并确保后台 API token 已启用；评委/队友只读浏览优先发 viewer token，Markdown 导出只发 admin token 给维护者。
+模板只代理到本机 `127.0.0.1:8765`。正式使用前必须替换域名和证书路径，并确保后台 API token 已启用；评委/队友只读浏览优先发 viewer token，Markdown 导出和租户策略编辑只发 admin token 给维护者。
 
 ## 4. 探活和验收
 
@@ -137,7 +138,7 @@ curl -fsS \
 
 1. 打开 `/`。
 2. 输入 token 后确认 Summary 有 Memory / Active / Audit / Evidence 计数。
-3. 在 `tenant_id` / `organization_id` 输入框里填入当前测试租户，确认 `LLM Wiki`、`Graph`、`Tenants`、`Ledger`、`Audit` 都会按租户边界收敛结果；这只是只读过滤和 readiness 展示，不代表完整租户管理后台。
+3. 在 `tenant_id` / `organization_id` 输入框里填入当前测试租户，确认 `LLM Wiki`、`Graph`、`Tenants`、`Ledger`、`Audit` 都会按租户边界收敛结果；这仍不代表生产多租户后台。
 4. 进入 `LLM Wiki`，确认 generation policy 为：
    - `active_curated_memory_only`
    - `raw events = excluded`
@@ -155,8 +156,20 @@ curl -fsS \
 导出内容应以 `# 项目记忆卡册：...` 开头，只包含 active curated memory 和 evidence，不包含 raw events。
 6. 使用 viewer token 访问 `/api/wiki/export?scope=...` 应返回 `403`，确认只读浏览 token 不能批量导出知识卡册。
 7. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
-8. 进入 `Tenants`，确认每个 tenant / organization 显示 memory、open review、graph、audit 计数，并明确标出 `enterprise_sso`、`tenant_config_editor`、`role_policy_editor`、`production_db_operations` 仍缺失。
-9. 进入 `Audit`，确认权限和工具调用审计可读。
+8. 进入 `Tenants`，确认每个 tenant / organization 显示 memory、open review、graph、audit 计数；用 admin token 保存一条 tenant policy，确认 readiness 从 `available_unconfigured` 变为 `configured`，并读回 `tenant_policy_upserted` 审计。
+9. 使用 viewer token 提交 `/api/tenant-policies` 应返回 `403`；admin token 可提交如下最小 payload：
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"tenant_id":"tenant:demo","organization_id":"org:demo","default_visibility_policy":"team","reviewer_roles":["reviewer","owner"],"admin_users":["admin@example.com"],"sso_allowed_domains":["example.com"],"auto_confirm_low_risk":true,"require_review_for_conflicts":true,"notes":"staging tenant policy"}' \
+  http://127.0.0.1:8765/api/tenant-policies
+```
+
+10. 确认缺失能力只保留真实生产缺口：`enterprise_idp_sso_validation`、`production_db_operations`、`productized_live_long_run`。
+11. 进入 `Audit`，确认权限和工具调用审计可读。
 
 静态知识站导出验收：
 
@@ -182,22 +195,23 @@ wiki/project_feishu_ai_challenge.md
 
 ## 5. 回滚
 
-后台是只读服务，不应修改 SQLite / Feishu / Bitable。回滚动作：
+后台知识面是只读服务；唯一写接口是 admin-only tenant policy upsert，不修改 memory active/candidate 状态，也不写 Feishu / Bitable。回滚动作：
 
 1. 停止 `scripts/start_copilot_admin.py` 进程。
 2. 取消暴露端口或反向代理路由。
-3. 轮换 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN`。
-4. 保留 `memory_audit_events` 和启动日志用于排障。
+3. 如需撤销本地租户策略，停服后备份 SQLite，再删除或更新 `tenant_admin_policies` 中对应测试行。
+4. 轮换 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN`。
+5. 保留 `memory_audit_events` 和启动日志用于排障。
 
 ## 6. 对外口径
 
 可以说：
 
-- 已完成本地 / staging 只读 LLM Wiki 和知识图谱后台。
-- 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出、静态知识站导出和敏感字段脱敏。
-- 已有 admin / viewer token 分级：viewer 只读浏览，admin 才能导出 Wiki Markdown。
+- 已完成本地 / staging LLM Wiki 和知识图谱后台。
+- 已有 token gate、知识只读 API、healthz、readiness gate、Markdown Wiki 导出、静态知识站导出和敏感字段脱敏。
+- 已有 admin / viewer token 分级：viewer 只读浏览，admin 才能导出 Wiki Markdown 和保存 tenant policy。
 - 已有可选 reverse-proxy SSO header gate：admin allowlist 可导出，allowed domain viewer 只能浏览；直接远程绑定仍需 bearer token。
-- 已有 tenant / organization 只读过滤和 Tenants readiness 概览，可用于 staging 下检查租户边界展示与上线缺口。
+- 已有 tenant / organization 过滤、Tenants readiness 概览和本地/pre-production tenant policy editor，可用于 staging 下检查租户边界展示与上线缺口。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import html
 import json
@@ -15,8 +16,8 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from memory_engine.copilot.knowledge_pages import compile_project_memory_cards
-from memory_engine.db import db_path_from_env
-from memory_engine.repository import MemoryRepository
+from memory_engine.db import db_path_from_env, init_db
+from memory_engine.repository import MemoryRepository, now_ms
 
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
@@ -165,19 +166,20 @@ class AdminQueryService:
             conditions.append("organization_id = ?")
             params.append(organization_id)
         where = "WHERE " + " AND ".join(conditions)
+        tenant_sources = [
+            "SELECT tenant_id, organization_id FROM memories",
+            "SELECT tenant_id, organization_id FROM raw_events",
+            "SELECT tenant_id, organization_id FROM memory_audit_events",
+            "SELECT tenant_id, organization_id FROM knowledge_graph_nodes",
+            "SELECT tenant_id, organization_id FROM knowledge_graph_edges",
+        ]
+        if _table_exists(self.conn, "tenant_admin_policies"):
+            tenant_sources.append("SELECT tenant_id, organization_id FROM tenant_admin_policies")
         rows = self.conn.execute(
             f"""
             SELECT tenant_id, COALESCE(organization_id, '-') AS organization_id
             FROM (
-              SELECT tenant_id, organization_id FROM memories
-              UNION
-              SELECT tenant_id, organization_id FROM raw_events
-              UNION
-              SELECT tenant_id, organization_id FROM memory_audit_events
-              UNION
-              SELECT tenant_id, organization_id FROM knowledge_graph_nodes
-              UNION
-              SELECT tenant_id, organization_id FROM knowledge_graph_edges
+              {" UNION ".join(tenant_sources)}
             )
             {where}
             ORDER BY tenant_id ASC, organization_id ASC
@@ -185,21 +187,157 @@ class AdminQueryService:
             """,
             [*params, limit],
         ).fetchall()
+        policy_available = _table_exists(self.conn, "tenant_admin_policies")
         items = [self._tenant_org_overview(str(row["tenant_id"]), str(row["organization_id"])) for row in rows]
+        missing_capabilities = [
+            "enterprise_idp_sso_validation",
+            "production_db_operations",
+            "productized_live_long_run",
+        ]
+        if not policy_available:
+            missing_capabilities.extend(["tenant_config_editor", "role_policy_editor"])
         return {
             "tenant_count": len({item["tenant_id"] for item in items}),
             "organization_count": len(items),
             "items": items,
-            "read_only": True,
-            "source": "ledger_derived_tenant_inventory",
-            "boundary": "tenant inventory and readiness view only; no tenant config write API, SSO, or policy editor.",
-            "missing_capabilities": [
-                "enterprise_sso",
-                "tenant_config_editor",
-                "role_policy_editor",
-                "production_db_operations",
-            ],
+            "read_only": False,
+            "tenant_policy_editor_available": policy_available,
+            "source": "ledger_and_tenant_policy_inventory",
+            "boundary": (
+                "tenant inventory plus local/pre-production tenant policy write API; "
+                "not real enterprise IdP validation, production DB operations, or productized live."
+            ),
+            "missing_capabilities": missing_capabilities,
         }
+
+    def tenant_policies(
+        self,
+        *,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
+        limit: int = 80,
+    ) -> dict[str, Any]:
+        if not _table_exists(self.conn, "tenant_admin_policies"):
+            return {"available": False, "items": [], "total": 0, "limit": _clamp_limit(limit)}
+        limit = _clamp_limit(limit)
+        conditions: list[str] = []
+        params: list[Any] = []
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
+        if organization_id:
+            conditions.append("organization_id = ?")
+            params.append(organization_id)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        total = int(self.conn.execute(f"SELECT COUNT(*) FROM tenant_admin_policies {where}", params).fetchone()[0])
+        rows = self.conn.execute(
+            f"""
+            SELECT id, tenant_id, organization_id, status, default_visibility_policy,
+                   auto_confirm_low_risk, require_review_for_conflicts,
+                   reviewer_roles, admin_users, sso_allowed_domains, notes,
+                   created_by, updated_by, created_at, updated_at
+            FROM tenant_admin_policies
+            {where}
+            ORDER BY updated_at DESC, tenant_id ASC, organization_id ASC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+        return {
+            "available": True,
+            "total": total,
+            "limit": limit,
+            "items": [_tenant_policy_row_to_dict(row) for row in rows],
+        }
+
+    def upsert_tenant_policy(self, payload: dict[str, Any], *, actor_id: str) -> dict[str, Any]:
+        policy = _validate_tenant_policy_payload(payload)
+        now = now_ms()
+        policy_id = _tenant_policy_id(policy["tenant_id"], policy["organization_id"])
+        existing = self.conn.execute(
+            """
+            SELECT id, created_at, created_by
+            FROM tenant_admin_policies
+            WHERE tenant_id = ? AND organization_id = ?
+            """,
+            (policy["tenant_id"], policy["organization_id"]),
+        ).fetchone()
+        created_at = int(existing["created_at"]) if existing else now
+        created_by = str(existing["created_by"]) if existing else actor_id
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO tenant_admin_policies (
+                  id, tenant_id, organization_id, status, default_visibility_policy,
+                  auto_confirm_low_risk, require_review_for_conflicts,
+                  reviewer_roles, admin_users, sso_allowed_domains, notes,
+                  created_by, updated_by, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, organization_id) DO UPDATE SET
+                  status = excluded.status,
+                  default_visibility_policy = excluded.default_visibility_policy,
+                  auto_confirm_low_risk = excluded.auto_confirm_low_risk,
+                  require_review_for_conflicts = excluded.require_review_for_conflicts,
+                  reviewer_roles = excluded.reviewer_roles,
+                  admin_users = excluded.admin_users,
+                  sso_allowed_domains = excluded.sso_allowed_domains,
+                  notes = excluded.notes,
+                  updated_by = excluded.updated_by,
+                  updated_at = excluded.updated_at
+                """,
+                (
+                    policy_id,
+                    policy["tenant_id"],
+                    policy["organization_id"],
+                    policy["status"],
+                    policy["default_visibility_policy"],
+                    int(policy["auto_confirm_low_risk"]),
+                    int(policy["require_review_for_conflicts"]),
+                    json.dumps(policy["reviewer_roles"], ensure_ascii=False),
+                    json.dumps(policy["admin_users"], ensure_ascii=False),
+                    json.dumps(policy["sso_allowed_domains"], ensure_ascii=False),
+                    policy["notes"],
+                    created_by,
+                    actor_id,
+                    created_at,
+                    now,
+                ),
+            )
+            MemoryRepository(self.conn).record_audit_event(
+                event_type="tenant_policy_upserted",
+                action="admin.tenant_policy.upsert",
+                tool_name="admin.tenant_policy.upsert",
+                target_type="tenant_policy",
+                target_id=policy_id,
+                actor_id=actor_id,
+                actor_roles=["admin"],
+                tenant_id=policy["tenant_id"],
+                organization_id=policy["organization_id"],
+                permission_decision="allow",
+                reason_code="admin_policy_updated",
+                request_id=f"req_{policy_id}_{now}",
+                trace_id=f"trace_{policy_id}_{now}",
+                visible_fields=[
+                    "tenant_id",
+                    "organization_id",
+                    "status",
+                    "default_visibility_policy",
+                    "reviewer_roles",
+                    "admin_users",
+                    "sso_allowed_domains",
+                ],
+                source_context={
+                    "surface": "copilot_admin",
+                    "boundary": "local_preproduction_tenant_policy_editor",
+                },
+                created_at=now,
+            )
+        row = self.conn.execute(
+            "SELECT * FROM tenant_admin_policies WHERE tenant_id = ? AND organization_id = ?",
+            (policy["tenant_id"], policy["organization_id"]),
+        ).fetchone()
+        return {"created": existing is None, "policy": _tenant_policy_row_to_dict(row)}
 
     def wiki_overview(
         self,
@@ -800,6 +938,7 @@ class AdminQueryService:
         )
 
     def _tenant_org_overview(self, tenant_id: str, organization_id: str) -> dict[str, Any]:
+        policy = self._tenant_policy_for(tenant_id, organization_id)
         active_memory_count = self._count_tenant_rows(
             "memories",
             tenant_id=tenant_id,
@@ -872,6 +1011,8 @@ class AdminQueryService:
                 organization_id,
             ),
         ).fetchone()["latest_activity"]
+        if latest_activity is None and policy:
+            latest_activity = policy.get("updated_at")
         return {
             "tenant_id": tenant_id,
             "organization_id": None if organization_id == "-" else organization_id,
@@ -902,15 +1043,32 @@ class AdminQueryService:
             "scopes": [{"scope": str(row["scope"]), "count": int(row["count"])} for row in scopes],
             "latest_activity_at": latest_activity,
             "latest_activity_at_iso": _ms_to_iso(latest_activity),
+            "tenant_policy": policy,
             "readiness": {
                 "data_isolation": "derived_from_tenant_org_columns",
-                "access_gate": "admin_viewer_token",
-                "sso": "missing",
-                "policy_editor": "missing",
-                "config_write_api": "missing",
+                "access_gate": "admin_viewer_token_or_loopback_sso_header",
+                "sso": "header_gate_available_not_idp_validated",
+                "policy_editor": "configured" if policy else "available_unconfigured",
+                "config_write_api": "admin_only_tenant_policy_upsert",
                 "production_db": "not_verified",
             },
         }
+
+    def _tenant_policy_for(self, tenant_id: str, organization_id: str) -> dict[str, Any] | None:
+        if not _table_exists(self.conn, "tenant_admin_policies"):
+            return None
+        row = self.conn.execute(
+            """
+            SELECT id, tenant_id, organization_id, status, default_visibility_policy,
+                   auto_confirm_low_risk, require_review_for_conflicts,
+                   reviewer_roles, admin_users, sso_allowed_domains, notes,
+                   created_by, updated_by, created_at, updated_at
+            FROM tenant_admin_policies
+            WHERE tenant_id = ? AND COALESCE(organization_id, '-') = ?
+            """,
+            (tenant_id, organization_id),
+        ).fetchone()
+        return _tenant_policy_row_to_dict(row) if row else None
 
     def _recent_raw_events(self, *, limit: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -1012,7 +1170,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         self._handle_get(send_body=False)
 
     def do_POST(self) -> None:
-        self._method_not_allowed()
+        self._handle_post()
 
     def do_PUT(self) -> None:
         self._method_not_allowed()
@@ -1060,6 +1218,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/tenants":
                 self._send_json(self._api_tenants(parsed.query), send_body=send_body)
+                return
+            if parsed.path == "/api/tenant-policies":
+                self._send_json(self._api_tenant_policies(parsed.query), send_body=send_body)
                 return
             if parsed.path == "/api/memories":
                 self._send_json(self._api_memories(parsed.query), send_body=send_body)
@@ -1123,6 +1284,49 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 send_body=send_body,
             )
 
+    def _handle_post(self) -> None:
+        parsed = urlparse(self.path)
+        auth_role = self._auth_role(parsed.query) if parsed.path.startswith("/api/") else None
+        try:
+            if parsed.path.startswith("/api/") and auth_role is None:
+                self._send_json(
+                    {"ok": False, "error": {"code": "admin_auth_required", "message": "Admin token required."}},
+                    status=HTTPStatus.UNAUTHORIZED,
+                    send_body=True,
+                    headers={"WWW-Authenticate": 'Bearer realm="Feishu Memory Copilot Admin"'},
+                )
+                return
+            if parsed.path == "/api/tenant-policies":
+                if auth_role != "admin":
+                    self._send_json(
+                        {
+                            "ok": False,
+                            "error": {
+                                "code": "admin_policy_forbidden",
+                                "message": "Tenant policy changes require an admin token.",
+                            },
+                        },
+                        status=HTTPStatus.FORBIDDEN,
+                        send_body=True,
+                    )
+                    return
+                payload = self._read_json_body()
+                self._send_json(self._api_tenant_policy_upsert(payload, actor_id=self._auth_actor_id()), send_body=True)
+                return
+            self._method_not_allowed()
+        except ValueError as exc:
+            self._send_json(
+                {"ok": False, "error": {"code": "bad_request", "message": str(exc)}},
+                status=HTTPStatus.BAD_REQUEST,
+                send_body=True,
+            )
+        except sqlite3.OperationalError as exc:
+            self._send_json(
+                {"ok": False, "error": {"code": "database_unavailable", "message": str(exc)}},
+                status=HTTPStatus.SERVICE_UNAVAILABLE,
+                send_body=True,
+            )
+
     def _api_summary(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).summary()}
@@ -1132,6 +1336,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             service = AdminQueryService(conn)
             wiki = service.wiki_overview(limit=1)
             graph = service.graph_workspace(limit=10)
+            policies = service.tenant_policies(limit=1)
             return {
                 "ok": True,
                 "db_path": self.db_path,
@@ -1154,7 +1359,10 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                             self.viewer_token or self.auth_token or self.sso_config.enabled
                         ),
                     },
-                    "read_only": True,
+                    "read_only": False,
+                    "read_only_knowledge_surfaces": True,
+                    "tenant_policy_write_api": True,
+                    "tenant_policy_table_available": bool(policies.get("available")),
                     "wiki_ready": bool(wiki.get("generation_policy"))
                     and wiki["generation_policy"].get("source") == "active_curated_memory_only",
                     "graph_ready": int(graph.get("workspace_node_count") or 0) >= 0,
@@ -1176,6 +1384,22 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 organization_id=_param(params, "organization_id"),
                 limit=_int_param(params, "limit", 80),
             )
+        return {"ok": True, "data": data}
+
+    def _api_tenant_policies(self, query_string: str) -> dict[str, Any]:
+        params = parse_qs(query_string)
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).tenant_policies(
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
+                limit=_int_param(params, "limit", 80),
+            )
+        return {"ok": True, "data": data}
+
+    def _api_tenant_policy_upsert(self, payload: dict[str, Any], *, actor_id: str) -> dict[str, Any]:
+        with _open_writable_connection(self.db_path) as conn:
+            init_db(conn)
+            data = AdminQueryService(conn).upsert_tenant_policy(payload, actor_id=actor_id)
         return {"ok": True, "data": data}
 
     def _api_memories(self, query_string: str) -> dict[str, Any]:
@@ -1299,10 +1523,32 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
 
     def _method_not_allowed(self) -> None:
         self._send_json(
-            {"ok": False, "error": {"code": "read_only_admin", "message": "Only GET and HEAD are supported."}},
+            {
+                "ok": False,
+                "error": {
+                    "code": "admin_method_not_allowed",
+                    "message": "Only GET/HEAD and admin-only POST /api/tenant-policies are supported.",
+                },
+            },
             status=HTTPStatus.METHOD_NOT_ALLOWED,
             send_body=True,
         )
+
+    def _read_json_body(self) -> dict[str, Any]:
+        raw_length = self.headers.get("Content-Length", "0")
+        try:
+            length = int(raw_length)
+        except ValueError as exc:
+            raise ValueError("invalid Content-Length") from exc
+        if length <= 0:
+            raise ValueError("JSON body is required")
+        if length > 65536:
+            raise ValueError("JSON body is too large")
+        body = self.rfile.read(length)
+        data = json.loads(body.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("JSON body must be an object")
+        return data
 
     def _auth_role(self, query_string: str) -> str | None:
         if not self.auth_token and not self.viewer_token and not self.sso_config.enabled:
@@ -1335,11 +1581,28 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         email = self.headers.get(self.sso_config.email_header)
         return self.sso_config.role_for(user=user, email=email)
 
+    def _auth_actor_id(self) -> str:
+        if self.sso_config.enabled and _is_loopback_client(self.client_address[0]):
+            email = self.headers.get(self.sso_config.email_header)
+            user = self.headers.get(self.sso_config.user_header)
+            identity = (email or user or "").strip()
+            if identity:
+                return f"sso:{identity.lower()}"
+        return "copilot_admin"
+
 
 def _open_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
     path = Path(db_path).expanduser().resolve()
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _open_writable_connection(db_path: str | Path) -> sqlite3.Connection:
+    path = Path(db_path).expanduser().resolve()
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -1392,6 +1655,102 @@ def _env_csv(names: tuple[str, ...]) -> list[str]:
 
 def _is_loopback_client(address: str) -> bool:
     return address in {"127.0.0.1", "::1", "localhost"} or address.startswith("127.")
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _tenant_policy_id(tenant_id: str, organization_id: str) -> str:
+    digest = hashlib.sha256(f"{tenant_id}\n{organization_id}".encode("utf-8")).hexdigest()[:16]
+    return f"tenant_policy_{digest}"
+
+
+def _validate_tenant_policy_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    tenant_id = _required_policy_string(payload, "tenant_id", max_len=160)
+    organization_id = _required_policy_string(payload, "organization_id", max_len=160)
+    status = _optional_policy_string(payload, "status", default="active", max_len=32)
+    if status not in {"active", "disabled"}:
+        raise ValueError("status must be active or disabled")
+    default_visibility_policy = _optional_policy_string(
+        payload,
+        "default_visibility_policy",
+        default="team",
+        max_len=32,
+    )
+    if default_visibility_policy not in {"private", "team", "project", "org"}:
+        raise ValueError("default_visibility_policy must be private, team, project, or org")
+    return {
+        "tenant_id": tenant_id,
+        "organization_id": organization_id,
+        "status": status,
+        "default_visibility_policy": default_visibility_policy,
+        "auto_confirm_low_risk": _optional_bool(payload, "auto_confirm_low_risk", default=True),
+        "require_review_for_conflicts": _optional_bool(payload, "require_review_for_conflicts", default=True),
+        "reviewer_roles": _string_list(payload.get("reviewer_roles"), field="reviewer_roles"),
+        "admin_users": _string_list(payload.get("admin_users"), field="admin_users"),
+        "sso_allowed_domains": _string_list(payload.get("sso_allowed_domains"), field="sso_allowed_domains"),
+        "notes": _optional_policy_string(payload, "notes", default="", max_len=1000),
+    }
+
+
+def _required_policy_string(payload: dict[str, Any], field: str, *, max_len: int) -> str:
+    value = _optional_policy_string(payload, field, default="", max_len=max_len)
+    if not value:
+        raise ValueError(f"{field} is required")
+    return value
+
+
+def _optional_policy_string(payload: dict[str, Any], field: str, *, default: str, max_len: int) -> str:
+    value = payload.get(field, default)
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    value = value.strip()
+    if len(value) > max_len:
+        raise ValueError(f"{field} is too long")
+    return value
+
+
+def _optional_bool(payload: dict[str, Any], field: str, *, default: bool) -> bool:
+    value = payload.get(field, default)
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f"{field} must be a boolean")
+
+
+def _string_list(value: Any, *, field: str) -> list[str]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"{field} must be a list")
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError(f"{field} items must be strings")
+        normalized = item.strip().lower()
+        if normalized and normalized not in items:
+            items.append(normalized[:160])
+    return items[:50]
+
+
+def _tenant_policy_row_to_dict(row: sqlite3.Row | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    payload = dict(row)
+    payload["auto_confirm_low_risk"] = bool(payload.get("auto_confirm_low_risk"))
+    payload["require_review_for_conflicts"] = bool(payload.get("require_review_for_conflicts"))
+    payload["reviewer_roles"] = _loads_json(payload.get("reviewer_roles"), [])
+    payload["admin_users"] = _loads_json(payload.get("admin_users"), [])
+    payload["sso_allowed_domains"] = _loads_json(payload.get("sso_allowed_domains"), [])
+    payload["created_at_iso"] = _ms_to_iso(payload.get("created_at"))
+    payload["updated_at_iso"] = _ms_to_iso(payload.get("updated_at"))
+    return payload
 
 
 def _memory_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -1872,6 +2231,59 @@ def _index_html() -> str:
       flex-wrap: wrap;
       margin: 0 0 12px;
     }}
+    .policy-form {{
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 7px;
+      padding: 12px;
+      margin-top: 12px;
+    }}
+    .policy-form h3 {{
+      margin: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.2;
+    }}
+    .form-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }}
+    .form-grid label {{
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .form-grid input, .form-grid select, .form-grid textarea {{
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      padding: 9px 10px;
+      font: inherit;
+      font-size: 13px;
+    }}
+    .form-grid textarea {{
+      min-height: 70px;
+      resize: vertical;
+      grid-column: 1 / -1;
+    }}
+    .form-grid .wide {{ grid-column: 1 / -1; }}
+    .checkbox-row {{
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+      font-size: 13px;
+    }}
+    .checkbox-row label {{
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--ink);
+    }}
     .wiki-card {{
       border: 1px solid var(--line);
       background: #fffdf8;
@@ -2030,6 +2442,7 @@ def _index_html() -> str:
       .graph-board {{ min-height: 620px; grid-template-columns: 1fr; }}
       .edge-item {{ grid-template-columns: 1fr; gap: 3px; }}
       .detail-grid {{ grid-template-columns: 1fr; }}
+      .form-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -2098,6 +2511,26 @@ def _index_html() -> str:
         if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
         return payload.data;
       }}
+
+    async function postJson(path, body) {{
+      const token = sessionStorage.getItem("copilotAdminToken") || "";
+      const headers = {{ "Accept": "application/json", "Content-Type": "application/json" }};
+      if (token) headers.Authorization = `Bearer ${{token}}`;
+      let response = await fetch(path, {{ method: "POST", headers, body: JSON.stringify(body) }});
+      if (response.status === 401) {{
+        const entered = window.prompt("Admin token required");
+        if (!entered) throw new Error("admin auth required");
+        sessionStorage.setItem("copilotAdminToken", entered);
+        response = await fetch(path, {{
+          method: "POST",
+          headers: {{ "Accept": "application/json", "Content-Type": "application/json", "Authorization": `Bearer ${{entered}}` }},
+          body: JSON.stringify(body)
+        }});
+      }}
+      const payload = await response.json();
+      if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
+      return payload.data;
+    }}
 
     async function getText(path) {{
       const token = sessionStorage.getItem("copilotAdminToken") || "";
@@ -2416,6 +2849,10 @@ def _index_html() -> str:
       const rows = (data.items || []).map(item => {{
         const scopes = (item.scopes || []).map(scope => `${{scope.scope}}(${{scope.count}})`).join(", ");
         const readiness = item.readiness || {{}};
+        const policy = item.tenant_policy || {{}};
+        const policySummary = policy.id
+          ? `${{policy.status}} · visibility=${{policy.default_visibility_policy}} · reviewers=${{(policy.reviewer_roles || []).join(", ") || "-"}}`
+          : "not configured";
         return `
           <tr>
             <td class="mono">${{esc(item.tenant_id)}}<br>${{esc(item.organization_id)}}</td>
@@ -2423,20 +2860,48 @@ def _index_html() -> str:
             <td>${{esc(item.graph_node_count)}} nodes<br><span class="mono">${{esc(item.graph_edge_count)}} edges</span></td>
             <td>${{esc(item.audit_total)}} events<br><span class="mono">${{esc(item.denied_audit_count)}} deny</span></td>
             <td class="content-cell">${{esc(scopes || "-")}}</td>
-            <td class="mono">${{esc(readiness.access_gate)}}<br>SSO=${{esc(readiness.sso)}}<br>Policy=${{esc(readiness.policy_editor)}}</td>
+            <td class="mono">${{esc(readiness.access_gate)}}<br>SSO=${{esc(readiness.sso)}}<br>Policy=${{esc(readiness.policy_editor)}}<br>${{esc(policySummary)}}</td>
             <td class="mono">${{esc(item.latest_activity_at_iso)}}</td>
           </tr>`;
       }}).join("");
+      const first = (data.items || [])[0] || {{}};
+      const firstPolicy = first.tenant_policy || {{}};
       $("panel").innerHTML = `
         <div class="split-view">
           <section class="workspace-column">
             <div class="section-title"><h2>Tenant Inventory</h2><span>${{esc(data.tenant_count)}} tenants / ${{esc(data.organization_count)}} orgs</span></div>
             <div class="kv">
               <span>Source</span><strong>${{esc(data.source)}}</strong>
-              <span>Read only</span><strong>${{esc(data.read_only ? "yes" : "no")}}</strong>
+              <span>Policy editor</span><strong>${{esc(data.tenant_policy_editor_available ? "available" : "missing")}}</strong>
               <span>Boundary</span><strong>${{esc(data.boundary)}}</strong>
             </div>
             <div class="tag-row">${{capabilityRows || `<span class="tag">no missing capability listed</span>`}}</div>
+            <form class="policy-form" id="tenant-policy-form">
+              <h3>Tenant Policy Editor</h3>
+              <div class="form-grid">
+                <label>tenant_id<input name="tenant_id" value="${{esc($("tenant").value.trim() || first.tenant_id || "tenant:demo")}}"></label>
+                <label>organization_id<input name="organization_id" value="${{esc($("organization").value.trim() || first.organization_id || "org:demo")}}"></label>
+                <label>Status<select name="status">
+                  <option value="active" ${{firstPolicy.status === "disabled" ? "" : "selected"}}>active</option>
+                  <option value="disabled" ${{firstPolicy.status === "disabled" ? "selected" : ""}}>disabled</option>
+                </select></label>
+                <label>Default visibility<select name="default_visibility_policy">
+                  ${{["team", "project", "org", "private"].map(value => `<option value="${{value}}" ${{(firstPolicy.default_visibility_policy || "team") === value ? "selected" : ""}}>${{value}}</option>`).join("")}}
+                </select></label>
+                <label class="wide">Reviewer roles<input name="reviewer_roles" value="${{esc((firstPolicy.reviewer_roles || ["reviewer", "owner"]).join(", "))}}"></label>
+                <label class="wide">Admin users<input name="admin_users" value="${{esc((firstPolicy.admin_users || []).join(", "))}}" placeholder="admin@example.com, owner@example.com"></label>
+                <label class="wide">SSO allowed domains<input name="sso_allowed_domains" value="${{esc((firstPolicy.sso_allowed_domains || []).join(", "))}}" placeholder="example.com"></label>
+                <label class="wide">Notes<textarea name="notes">${{esc(firstPolicy.notes || "本地/pre-production 租户策略；真实企业 IdP 与生产 DB 仍需单独验收。")}}</textarea></label>
+              </div>
+              <div class="checkbox-row">
+                <label><input type="checkbox" name="auto_confirm_low_risk" ${{firstPolicy.auto_confirm_low_risk === false ? "" : "checked"}}> low-risk auto confirm</label>
+                <label><input type="checkbox" name="require_review_for_conflicts" ${{firstPolicy.require_review_for_conflicts === false ? "" : "checked"}}> conflicts require review</label>
+              </div>
+              <div class="action-row">
+                <button type="submit">保存策略</button>
+                <span class="feed-meta mono">admin-only POST /api/tenant-policies</span>
+              </div>
+            </form>
           </section>
           <section class="workspace-column">
             <div class="section-title"><h2>Tenant / Organization Readiness</h2><span>counts are scoped by tenant_id and organization_id</span></div>
@@ -2470,6 +2935,31 @@ def _index_html() -> str:
     }}
 
     $("filters").addEventListener("submit", event => {{ event.preventDefault(); loadView(); }});
+    document.addEventListener("submit", event => {{
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || form.id !== "tenant-policy-form") return;
+      event.preventDefault();
+      const data = new FormData(form);
+      const splitList = (value) => String(value || "").split(",").map(item => item.trim()).filter(Boolean);
+      postJson("/api/tenant-policies", {{
+        tenant_id: String(data.get("tenant_id") || "").trim(),
+        organization_id: String(data.get("organization_id") || "").trim(),
+        status: String(data.get("status") || "active"),
+        default_visibility_policy: String(data.get("default_visibility_policy") || "team"),
+        reviewer_roles: splitList(data.get("reviewer_roles")),
+        admin_users: splitList(data.get("admin_users")),
+        sso_allowed_domains: splitList(data.get("sso_allowed_domains")),
+        notes: String(data.get("notes") || ""),
+        auto_confirm_low_risk: data.get("auto_confirm_low_risk") === "on",
+        require_review_for_conflicts: data.get("require_review_for_conflicts") === "on"
+      }}).then(() => {{
+        $("panel").insertAdjacentHTML("afterbegin", `<div class="feed-item"><strong>Tenant policy saved</strong></div>`);
+        loadView({{ quiet: true }});
+        loadSummary();
+      }}).catch(error => {{
+        $("panel").insertAdjacentHTML("afterbegin", `<div class="error">${{esc(error.message)}}</div>`);
+      }});
+    }});
     document.addEventListener("click", event => {{
       const target = event.target;
       if (target && target.id === "wiki-export") {{
