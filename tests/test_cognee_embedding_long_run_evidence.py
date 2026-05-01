@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.collect_cognee_embedding_long_run_evidence import (
     collect_cognee_embedding_long_run_evidence,
+    _parse_json_object,
     _read_embedding_samples,
 )
 
@@ -95,6 +96,15 @@ class CogneeEmbeddingLongRunEvidenceTest(unittest.TestCase):
 
         self.assertEqual(2, len(samples))
         self.assertEqual("2026-05-01T00:00:00+00:00", samples[0]["sampled_at"])
+
+    def test_reads_noisy_curated_sync_stdout_before_json(self) -> None:
+        parsed = _parse_json_object(
+            "User abc has registered.\n"
+            "Provider List: https://docs.litellm.ai/docs/providers\n"
+            "{\"ok\": true, \"cognee_sync\": {\"status\": \"pass\", \"fallback\": null}}\n"
+        )
+
+        self.assertEqual({"ok": True, "cognee_sync": {"status": "pass", "fallback": None}}, parsed)
 
 
 def _embedding_sample(sampled_at: str) -> dict[str, object]:

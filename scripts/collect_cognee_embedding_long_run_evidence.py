@@ -206,10 +206,27 @@ def _check(ok: bool, description: str, **details: Any) -> dict[str, Any]:
 
 
 def _read_json_object(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.expanduser().read_text(encoding="utf-8"))
+    payload = _parse_json_object(path.expanduser().read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"{path} must contain a JSON object")
     return payload
+
+
+def _parse_json_object(text: str) -> Any:
+    parsed = _parse_json(text)
+    if isinstance(parsed, dict):
+        return parsed
+    decoder = json.JSONDecoder()
+    for index, character in enumerate(text):
+        if character != "{":
+            continue
+        try:
+            value, _end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
 
 
 def _read_embedding_samples(path: Path) -> Iterable[dict[str, Any]]:
