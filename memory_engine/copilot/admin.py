@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import html
 import hmac
+import html
 import json
 import os
 import re
@@ -17,7 +17,6 @@ from urllib.parse import parse_qs, unquote, urlparse
 from memory_engine.copilot.knowledge_pages import compile_project_memory_cards
 from memory_engine.db import db_path_from_env
 from memory_engine.repository import MemoryRepository
-
 
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
@@ -111,6 +110,8 @@ class AdminQueryService:
         self,
         *,
         scope: str | None = None,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
         query: str | None = None,
         limit: int = 50,
     ) -> dict[str, Any]:
@@ -120,6 +121,12 @@ class AdminQueryService:
         if scope:
             conditions.append("(m.scope_type || ':' || m.scope_id) = ?")
             params.append(scope)
+        if tenant_id:
+            conditions.append("m.tenant_id = ?")
+            params.append(tenant_id)
+        if organization_id:
+            conditions.append("m.organization_id = ?")
+            params.append(organization_id)
         if query:
             like = f"%{query}%"
             conditions.append(
@@ -168,25 +175,30 @@ class AdminQueryService:
             [*params, limit],
         ).fetchall()
         cards = [_wiki_card_row_to_dict(row) for row in rows]
+        tenancy_where, tenancy_params = _tenancy_where(alias=None, tenant_id=tenant_id, organization_id=organization_id)
         scopes = self.conn.execute(
-            """
+            f"""
             SELECT scope_type || ':' || scope_id AS scope, COUNT(*) AS count
             FROM memories
             WHERE status = 'active'
+            {tenancy_where}
             GROUP BY scope_type, scope_id
             ORDER BY count DESC, scope ASC
             LIMIT 20
-            """
+            """,
+            tenancy_params,
         ).fetchall()
         open_questions = self.conn.execute(
-            """
+            f"""
             SELECT scope_type || ':' || scope_id AS scope, COUNT(*) AS count
             FROM memories
             WHERE status IN ('candidate', 'needs_evidence')
+            {tenancy_where}
             GROUP BY scope_type, scope_id
             ORDER BY count DESC, scope ASC
             LIMIT 20
-            """
+            """,
+            tenancy_params,
         ).fetchall()
         return {
             "card_count": len(cards),
@@ -214,6 +226,9 @@ class AdminQueryService:
         self,
         *,
         node_type: str | None = None,
+        status: str | None = None,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
         query: str | None = None,
         limit: int = 80,
     ) -> dict[str, Any]:
@@ -223,6 +238,15 @@ class AdminQueryService:
         if node_type:
             conditions.append("node_type = ?")
             params.append(node_type)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
+        if organization_id:
+            conditions.append("organization_id = ?")
+            params.append(organization_id)
         if query:
             like = f"%{query}%"
             conditions.append("(id LIKE ? OR node_key LIKE ? OR label LIKE ? OR metadata_json LIKE ?)")
@@ -244,6 +268,16 @@ class AdminQueryService:
         edge_rows: list[sqlite3.Row] = []
         if node_ids:
             placeholders = ", ".join("?" for _ in node_ids)
+            edge_conditions = [
+                f"(e.source_node_id IN ({placeholders}) OR e.target_node_id IN ({placeholders}))",
+            ]
+            edge_params: list[Any] = [*node_ids, *node_ids]
+            if tenant_id:
+                edge_conditions.append("e.tenant_id = ?")
+                edge_params.append(tenant_id)
+            if organization_id:
+                edge_conditions.append("e.organization_id = ?")
+                edge_params.append(organization_id)
             edge_rows = self.conn.execute(
                 f"""
                 SELECT e.id, e.tenant_id, e.organization_id, e.edge_type,
@@ -254,23 +288,37 @@ class AdminQueryService:
                 FROM knowledge_graph_edges e
                 LEFT JOIN knowledge_graph_nodes source ON source.id = e.source_node_id
                 LEFT JOIN knowledge_graph_nodes target ON target.id = e.target_node_id
-                WHERE e.source_node_id IN ({placeholders})
-                   OR e.target_node_id IN ({placeholders})
+                WHERE {" AND ".join(edge_conditions)}
                 ORDER BY e.observation_count DESC, e.last_seen_at DESC, e.id DESC
                 LIMIT ?
                 """,
-                [*node_ids, *node_ids, limit],
+                [*edge_params, limit],
             ).fetchall()
         nodes = [_graph_node_row_to_dict(row) for row in node_rows]
         edges = [_graph_edge_row_to_dict(row) for row in edge_rows]
-        self._append_compiled_memory_graph(nodes, edges, query=query, limit=limit)
+        self._append_compiled_memory_graph(
+            nodes,
+            edges,
+            query=query,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            status=status,
+            limit=limit,
+        )
         return {
             "node_total": self._count("knowledge_graph_nodes"),
             "edge_total": self._count("knowledge_graph_edges"),
             "workspace_node_count": len(nodes),
             "workspace_edge_count": len(edges),
-            "nodes_by_type": self._count_by("knowledge_graph_nodes", "node_type"),
-            "edges_by_type": self._count_by("knowledge_graph_edges", "edge_type"),
+            "nodes_by_type": _count_items_by(nodes, "node_type"),
+            "edges_by_type": _count_items_by(edges, "edge_type"),
+            "filters": {
+                "node_type": node_type,
+                "status": status,
+                "tenant_id": tenant_id,
+                "organization_id": organization_id,
+                "query": query,
+            },
             "nodes": nodes,
             "edges": edges,
         }
@@ -281,11 +329,21 @@ class AdminQueryService:
         edges: list[dict[str, Any]],
         *,
         query: str | None,
+        tenant_id: str | None,
+        organization_id: str | None,
+        status: str | None,
         limit: int,
     ) -> None:
+        if status and status != "active":
+            return
         existing_node_ids = {str(node["id"]) for node in nodes}
         existing_node_keys = {str(node.get("node_key")) for node in nodes if node.get("node_key")}
-        cards = self.wiki_overview(query=query, limit=max(1, min(30, limit)))["cards"]
+        cards = self.wiki_overview(
+            query=query,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            limit=max(1, min(30, limit)),
+        )["cards"]
         for card in cards:
             memory_node_id = f"memory:{card['id']}"
             if memory_node_id not in existing_node_ids:
@@ -372,13 +430,21 @@ class AdminQueryService:
         *,
         status: str | None = None,
         scope: str | None = None,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
         limit = _clamp_limit(limit)
         offset = max(0, offset)
-        where, params = self._memory_filters(status=status, scope=scope, query=query)
+        where, params = self._memory_filters(
+            status=status,
+            scope=scope,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            query=query,
+        )
         total = int(self.conn.execute(f"SELECT COUNT(*) FROM memories {where}", params).fetchone()[0])
         rows = self.conn.execute(
             f"""
@@ -466,6 +532,7 @@ class AdminQueryService:
         event_type: str | None = None,
         actor_id: str | None = None,
         tenant_id: str | None = None,
+        organization_id: str | None = None,
         permission_decision: str | None = None,
         query: str | None = None,
         limit: int = 50,
@@ -484,6 +551,9 @@ class AdminQueryService:
         if tenant_id:
             conditions.append("tenant_id = ?")
             params.append(tenant_id)
+        if organization_id:
+            conditions.append("organization_id = ?")
+            params.append(organization_id)
         if permission_decision:
             conditions.append("permission_decision = ?")
             params.append(permission_decision)
@@ -548,6 +618,8 @@ class AdminQueryService:
         *,
         status: str | None = None,
         scope: str | None = None,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
         query: str | None = None,
     ) -> tuple[str, list[Any]]:
         conditions: list[str] = []
@@ -558,11 +630,15 @@ class AdminQueryService:
         if scope:
             conditions.append("(scope_type || ':' || scope_id) = ?")
             params.append(scope)
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
+        if organization_id:
+            conditions.append("organization_id = ?")
+            params.append(organization_id)
         if query:
             like = f"%{query}%"
-            conditions.append(
-                "(id LIKE ? OR subject LIKE ? OR current_value LIKE ? OR COALESCE(summary, '') LIKE ?)"
-            )
+            conditions.append("(id LIKE ? OR subject LIKE ? OR current_value LIKE ? OR COALESCE(summary, '') LIKE ?)")
             params.extend([like, like, like, like])
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         return where, params
@@ -786,7 +862,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/tables":
                 self._send_json(self._api_tables(), send_body=send_body)
                 return
-            self._send_json({"ok": False, "error": {"code": "not_found"}}, status=HTTPStatus.NOT_FOUND, send_body=send_body)
+            self._send_json(
+                {"ok": False, "error": {"code": "not_found"}}, status=HTTPStatus.NOT_FOUND, send_body=send_body
+            )
         except LookupError as exc:
             self._send_json(
                 {"ok": False, "error": {"code": "not_found", "message": str(exc)}},
@@ -847,6 +925,8 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             data = AdminQueryService(conn).list_memories(
                 status=_param(params, "status"),
                 scope=_param(params, "scope"),
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
                 query=_param(params, "q"),
                 limit=_int_param(params, "limit", 50),
                 offset=_int_param(params, "offset", 0),
@@ -865,6 +945,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 event_type=_param(params, "event_type"),
                 actor_id=_param(params, "actor_id"),
                 tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
                 permission_decision=_param(params, "permission_decision"),
                 query=_param(params, "q"),
                 limit=_int_param(params, "limit", 50),
@@ -877,6 +958,8 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         with _open_readonly_connection(self.db_path) as conn:
             data = AdminQueryService(conn).wiki_overview(
                 scope=_param(params, "scope"),
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
                 query=_param(params, "q"),
                 limit=_int_param(params, "limit", 50),
             )
@@ -895,6 +978,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         with _open_readonly_connection(self.db_path) as conn:
             data = AdminQueryService(conn).graph_workspace(
                 node_type=_param(params, "node_type"),
+                status=_param(params, "status"),
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
                 query=_param(params, "q"),
                 limit=_int_param(params, "limit", 80),
             )
@@ -1145,6 +1231,32 @@ def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
+def _tenancy_where(
+    *,
+    alias: str | None,
+    tenant_id: str | None,
+    organization_id: str | None,
+) -> tuple[str, list[Any]]:
+    prefix = f"{alias}." if alias else ""
+    conditions: list[str] = []
+    params: list[Any] = []
+    if tenant_id:
+        conditions.append(f"{prefix}tenant_id = ?")
+        params.append(tenant_id)
+    if organization_id:
+        conditions.append(f"{prefix}organization_id = ?")
+        params.append(organization_id)
+    return (" AND " + " AND ".join(conditions), params) if conditions else ("", [])
+
+
+def _count_items_by(items: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        value = str(item.get(key) or "-")
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
+
+
 def _param(params: dict[str, list[str]], name: str) -> str | None:
     values = params.get(name)
     if not values:
@@ -1235,7 +1347,7 @@ def _index_html() -> str:
     }}
     .toolbar {{
       display: grid;
-      grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(120px, 1fr)) auto;
+      grid-template-columns: minmax(180px, 2fr) repeat(5, minmax(120px, 1fr)) auto;
       gap: 10px;
       padding: 12px;
       position: sticky;
@@ -1635,6 +1747,7 @@ def _index_html() -> str:
       </select>
       <input id="scope" name="scope" placeholder="scope，例如 project:admin_demo">
       <input id="tenant" name="tenant" placeholder="tenant_id">
+      <input id="organization" name="organization" placeholder="organization_id">
       <select id="decision" name="decision">
         <option value="">全部权限</option>
         <option value="allow">allow</option>
@@ -1653,9 +1766,9 @@ def _index_html() -> str:
       <button class="tab" data-view="audit">Audit</button>
       <button class="tab" data-view="tables">Tables</button>
     </nav>
-	    <section class="panel" id="panel"><div class="empty">加载中</div></section>
-	    <div class="footer-mark">Created By <a href="https://deerflow.tech" target="_blank" rel="noreferrer">Deerflow</a></div>
-	  </main>
+      <section class="panel" id="panel"><div class="empty">加载中</div></section>
+      <div class="footer-mark">Created By <a href="https://deerflow.tech" target="_blank" rel="noreferrer">Deerflow</a></div>
+    </main>
   <script>
     const state = {{ view: "home", selectedGraphItem: null }};
     let currentGraphData = null;
@@ -1663,21 +1776,21 @@ def _index_html() -> str:
     const text = (value) => value === null || value === undefined || value === "" ? "-" : String(value);
     const esc = (value) => text(value).replace(/[&<>"']/g, c => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[c]);
 
-	    async function getJson(path) {{
-	      const token = sessionStorage.getItem("copilotAdminToken") || "";
-	      const headers = {{ "Accept": "application/json" }};
-	      if (token) headers.Authorization = `Bearer ${{token}}`;
-	      let response = await fetch(path, {{ headers }});
-	      if (response.status === 401) {{
-	        const entered = window.prompt("Admin token required");
-	        if (!entered) throw new Error("admin auth required");
-	        sessionStorage.setItem("copilotAdminToken", entered);
-	        response = await fetch(path, {{ headers: {{ "Accept": "application/json", "Authorization": `Bearer ${{entered}}` }} }});
-	      }}
-	      const payload = await response.json();
-	      if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
-	      return payload.data;
-	    }}
+      async function getJson(path) {{
+        const token = sessionStorage.getItem("copilotAdminToken") || "";
+        const headers = {{ "Accept": "application/json" }};
+        if (token) headers.Authorization = `Bearer ${{token}}`;
+        let response = await fetch(path, {{ headers }});
+        if (response.status === 401) {{
+          const entered = window.prompt("Admin token required");
+          if (!entered) throw new Error("admin auth required");
+          sessionStorage.setItem("copilotAdminToken", entered);
+          response = await fetch(path, {{ headers: {{ "Accept": "application/json", "Authorization": `Bearer ${{entered}}` }} }});
+        }}
+        const payload = await response.json();
+        if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
+        return payload.data;
+      }}
 
     async function getText(path) {{
       const token = sessionStorage.getItem("copilotAdminToken") || "";
@@ -1719,17 +1832,19 @@ def _index_html() -> str:
       const status = $("status").value;
       const scope = $("scope").value.trim();
       const tenant = $("tenant").value.trim();
+      const organization = $("organization").value.trim();
       const decision = $("decision").value;
       if (q) params.set("q", q);
+      if (tenant) params.set("tenant_id", tenant);
+      if (organization) params.set("organization_id", organization);
       if (view === "wiki") {{
         if (scope) params.set("scope", scope);
       }} else if (view === "graph") {{
-        if (status) params.set("node_type", status);
+        if (status) params.set("status", status);
       }} else if (view === "memories") {{
         if (status) params.set("status", status);
         if (scope) params.set("scope", scope);
       }} else if (view === "audit") {{
-        if (tenant) params.set("tenant_id", tenant);
         if (decision) params.set("permission_decision", decision);
       }}
       params.set("limit", "80");
@@ -1750,8 +1865,8 @@ def _index_html() -> str:
       }}
     }}
 
-	    function renderHome(data) {{
-	      const activity = data.bot_activity || {{}};
+      function renderHome(data) {{
+        const activity = data.bot_activity || {{}};
       const rawRows = data.recent_raw_events.map(item => `
         <div class="feed-item">
           <div class="feed-title">
@@ -1817,54 +1932,54 @@ def _index_html() -> str:
             <h2>Wiki 记忆卡片</h2>
             ${{memoryRows || `<div class="empty">暂无 active memory</div>`}}
           </section>
-	        </div>`;
-	    }}
+          </div>`;
+      }}
 
-	    function renderWiki(data) {{
-	      const policy = data.generation_policy || {{}};
-	      const exportScope = $("scope").value.trim() || (data.scopes[0] && data.scopes[0].scope) || "";
-	      const exportDisabled = exportScope ? "" : "disabled";
-	      const scopeRows = data.scopes.map(item => `<span class="tag">${{esc(item.scope)}} · ${{esc(item.count)}}</span>`).join("");
-	      const openRows = data.open_questions_by_scope.map(item => `<span class="tag warn">${{esc(item.scope)}} · open ${{esc(item.count)}}</span>`).join("");
-	      const cards = data.cards.map(item => {{
-	        const evidence = item.evidence || {{}};
-	        return `
-	          <article class="wiki-card">
-	            <h3>${{esc(item.subject)}}</h3>
-	            <div class="wiki-value">${{esc(item.current_value)}}</div>
-	            <div class="wiki-evidence">${{esc(evidence.quote)}}<br><span class="feed-meta mono">${{esc(evidence.source_type)}} / ${{esc(evidence.source_id)}} / ${{esc(evidence.document_title)}}</span></div>
-	            <div class="tag-row">
-	              <span class="tag">${{esc(item.scope)}}</span>
-	              <span class="tag">${{esc(item.type)}}</span>
-	              <span class="tag">v${{esc(item.version || 1)}}</span>
-	              <span class="tag">importance ${{esc(Number(item.importance || 0).toFixed(2))}}</span>
-	              ${{item.superseded_version_count ? `<span class="tag warn">${{esc(item.superseded_version_count)}} superseded</span>` : `<span class="tag">no superseded</span>`}}
-	            </div>
-	          </article>`;
-	      }}).join("");
-	      $("panel").innerHTML = `
-	        <div class="split-view">
-	          <section class="workspace-column">
-	            <div class="section-title"><h2>Compiled LLM Wiki</h2><span>${{esc(data.card_count)}} active cards</span></div>
-	            <div class="kv">
-	              <span>来源</span><strong>${{esc(policy.source)}}</strong>
-	              <span>raw events</span><strong>${{esc(policy.raw_events_included ? "included" : "excluded")}}</strong>
-	              <span>证据要求</span><strong>${{esc(policy.requires_evidence ? "required" : "optional")}}</strong>
-	              <span>写入飞书</span><strong>${{esc(policy.writes_feishu ? "yes" : "no")}}</strong>
-	            </div>
-	            <div class="action-row">
-	              <button type="button" id="wiki-export" data-scope="${{esc(exportScope)}}" ${{exportDisabled}}>导出 Markdown</button>
-	              <span class="feed-meta mono">${{esc(exportScope || "select a scope")}}</span>
-	            </div>
-	            <div class="tag-row">${{scopeRows || `<span class="tag">no active scope</span>`}}</div>
-	            <div class="tag-row">${{openRows || `<span class="tag">no open question</span>`}}</div>
-	          </section>
-	          <section class="workspace-column">
-	            <div class="section-title"><h2>Knowledge Cards</h2><span>evidence-backed current facts</span></div>
-	            ${{cards || `<div class="empty">暂无可编译 active memory</div>`}}
-	          </section>
-	        </div>`;
-	    }}
+      function renderWiki(data) {{
+        const policy = data.generation_policy || {{}};
+        const exportScope = $("scope").value.trim() || (data.scopes[0] && data.scopes[0].scope) || "";
+        const exportDisabled = exportScope ? "" : "disabled";
+        const scopeRows = data.scopes.map(item => `<span class="tag">${{esc(item.scope)}} · ${{esc(item.count)}}</span>`).join("");
+        const openRows = data.open_questions_by_scope.map(item => `<span class="tag warn">${{esc(item.scope)}} · open ${{esc(item.count)}}</span>`).join("");
+        const cards = data.cards.map(item => {{
+          const evidence = item.evidence || {{}};
+          return `
+            <article class="wiki-card">
+              <h3>${{esc(item.subject)}}</h3>
+              <div class="wiki-value">${{esc(item.current_value)}}</div>
+              <div class="wiki-evidence">${{esc(evidence.quote)}}<br><span class="feed-meta mono">${{esc(evidence.source_type)}} / ${{esc(evidence.source_id)}} / ${{esc(evidence.document_title)}}</span></div>
+              <div class="tag-row">
+                <span class="tag">${{esc(item.scope)}}</span>
+                <span class="tag">${{esc(item.type)}}</span>
+                <span class="tag">v${{esc(item.version || 1)}}</span>
+                <span class="tag">importance ${{esc(Number(item.importance || 0).toFixed(2))}}</span>
+                ${{item.superseded_version_count ? `<span class="tag warn">${{esc(item.superseded_version_count)}} superseded</span>` : `<span class="tag">no superseded</span>`}}
+              </div>
+            </article>`;
+        }}).join("");
+        $("panel").innerHTML = `
+          <div class="split-view">
+            <section class="workspace-column">
+              <div class="section-title"><h2>Compiled LLM Wiki</h2><span>${{esc(data.card_count)}} active cards</span></div>
+              <div class="kv">
+                <span>来源</span><strong>${{esc(policy.source)}}</strong>
+                <span>raw events</span><strong>${{esc(policy.raw_events_included ? "included" : "excluded")}}</strong>
+                <span>证据要求</span><strong>${{esc(policy.requires_evidence ? "required" : "optional")}}</strong>
+                <span>写入飞书</span><strong>${{esc(policy.writes_feishu ? "yes" : "no")}}</strong>
+              </div>
+              <div class="action-row">
+                <button type="button" id="wiki-export" data-scope="${{esc(exportScope)}}" ${{exportDisabled}}>导出 Markdown</button>
+                <span class="feed-meta mono">${{esc(exportScope || "select a scope")}}</span>
+              </div>
+              <div class="tag-row">${{scopeRows || `<span class="tag">no active scope</span>`}}</div>
+              <div class="tag-row">${{openRows || `<span class="tag">no open question</span>`}}</div>
+            </section>
+            <section class="workspace-column">
+              <div class="section-title"><h2>Knowledge Cards</h2><span>evidence-backed current facts</span></div>
+              ${{cards || `<div class="empty">暂无可编译 active memory</div>`}}
+            </section>
+          </div>`;
+      }}
 
     async function downloadWikiExport(scope) {{
       if (!scope) throw new Error("select a scope before export");
@@ -1880,95 +1995,95 @@ def _index_html() -> str:
       URL.revokeObjectURL(url);
     }}
 
-	    function renderGraph(data) {{
-	      currentGraphData = data;
-	      const nodes = data.nodes || [];
-	      const edges = data.edges || [];
-	      if (!state.selectedGraphItem || !graphItemExists(state.selectedGraphItem, nodes, edges)) {{
-	        state.selectedGraphItem = nodes[0] ? {{ type: "node", id: nodes[0].id }} : edges[0] ? {{ type: "edge", id: edges[0].id }} : null;
-	      }}
-	      const nodeHtml = nodes.map(node => {{
-	        const selected = state.selectedGraphItem?.type === "node" && state.selectedGraphItem.id === node.id ? "selected" : "";
-	        return `<div class="graph-node ${{esc(node.node_type)}} ${{selected}}" role="button" tabindex="0" data-node-id="${{esc(node.id)}}">
-	          <strong>${{esc(node.label)}}</strong>
-	          <small class="mono">${{esc(node.node_type)}}<br>${{esc(node.node_key)}}<br>obs=${{esc(node.observation_count)}}</small>
-	        </div>`;
-	      }}).join("");
-	      const edgeRows = edges.map(edge => `
-	        <div class="edge-item ${{state.selectedGraphItem?.type === "edge" && state.selectedGraphItem.id === edge.id ? "selected" : ""}}" data-edge-id="${{esc(edge.id)}}">
-	          <span>${{esc(edge.source_label || edge.source_node_id)}}</span>
-	          <span class="edge-type">${{esc(edge.edge_type)}} x${{esc(edge.observation_count)}}</span>
-	          <span>${{esc(edge.target_label || edge.target_node_id)}}</span>
-	        </div>`).join("");
-	      $("panel").innerHTML = `
-	        <div class="split-view">
-	          <section class="workspace-column">
-	            <div class="section-title"><h2>Knowledge Graph</h2><span>${{esc(data.workspace_node_count)}} visible nodes / ${{esc(data.workspace_edge_count)}} visible edges</span></div>
-	            <div class="kv">
-	              <span>节点类型</span><span class="mono">${{esc(JSON.stringify(data.nodes_by_type))}}</span>
-	              <span>边类型</span><span class="mono">${{esc(JSON.stringify(data.edges_by_type))}}</span>
-	            </div>
-	            <div class="graph-board">${{nodeHtml || `<div class="empty">暂无 graph node</div>`}}</div>
-	            <div class="graph-detail" id="graph-detail">${{renderGraphDetail(nodes, edges)}}</div>
-	          </section>
-	          <section class="workspace-column">
-	            <div class="section-title"><h2>Relationship Ledger</h2><span>source / edge / target</span></div>
-	            <div class="graph-edge-list">${{edgeRows || `<div class="empty">暂无 graph edge</div>`}}</div>
-	          </section>
-	        </div>`;
-	    }}
+      function renderGraph(data) {{
+        currentGraphData = data;
+        const nodes = data.nodes || [];
+        const edges = data.edges || [];
+        if (!state.selectedGraphItem || !graphItemExists(state.selectedGraphItem, nodes, edges)) {{
+          state.selectedGraphItem = nodes[0] ? {{ type: "node", id: nodes[0].id }} : edges[0] ? {{ type: "edge", id: edges[0].id }} : null;
+        }}
+        const nodeHtml = nodes.map(node => {{
+          const selected = state.selectedGraphItem?.type === "node" && state.selectedGraphItem.id === node.id ? "selected" : "";
+          return `<div class="graph-node ${{esc(node.node_type)}} ${{selected}}" role="button" tabindex="0" data-node-id="${{esc(node.id)}}">
+            <strong>${{esc(node.label)}}</strong>
+            <small class="mono">${{esc(node.node_type)}}<br>${{esc(node.node_key)}}<br>obs=${{esc(node.observation_count)}}</small>
+          </div>`;
+        }}).join("");
+        const edgeRows = edges.map(edge => `
+          <div class="edge-item ${{state.selectedGraphItem?.type === "edge" && state.selectedGraphItem.id === edge.id ? "selected" : ""}}" data-edge-id="${{esc(edge.id)}}">
+            <span>${{esc(edge.source_label || edge.source_node_id)}}</span>
+            <span class="edge-type">${{esc(edge.edge_type)}} x${{esc(edge.observation_count)}}</span>
+            <span>${{esc(edge.target_label || edge.target_node_id)}}</span>
+          </div>`).join("");
+        $("panel").innerHTML = `
+          <div class="split-view">
+            <section class="workspace-column">
+              <div class="section-title"><h2>Knowledge Graph</h2><span>${{esc(data.workspace_node_count)}} visible nodes / ${{esc(data.workspace_edge_count)}} visible edges</span></div>
+              <div class="kv">
+                <span>节点类型</span><span class="mono">${{esc(JSON.stringify(data.nodes_by_type))}}</span>
+                <span>边类型</span><span class="mono">${{esc(JSON.stringify(data.edges_by_type))}}</span>
+              </div>
+              <div class="graph-board">${{nodeHtml || `<div class="empty">暂无 graph node</div>`}}</div>
+              <div class="graph-detail" id="graph-detail">${{renderGraphDetail(nodes, edges)}}</div>
+            </section>
+            <section class="workspace-column">
+              <div class="section-title"><h2>Relationship Ledger</h2><span>source / edge / target</span></div>
+              <div class="graph-edge-list">${{edgeRows || `<div class="empty">暂无 graph edge</div>`}}</div>
+            </section>
+          </div>`;
+      }}
 
-	    function graphItemExists(item, nodes, edges) {{
-	      if (item.type === "node") return nodes.some(node => node.id === item.id);
-	      if (item.type === "edge") return edges.some(edge => edge.id === item.id);
-	      return false;
-	    }}
+      function graphItemExists(item, nodes, edges) {{
+        if (item.type === "node") return nodes.some(node => node.id === item.id);
+        if (item.type === "edge") return edges.some(edge => edge.id === item.id);
+        return false;
+      }}
 
-	    function renderGraphDetail(nodes, edges) {{
-	      if (!state.selectedGraphItem) return `<div class="empty">选择节点或关系</div>`;
-	      if (state.selectedGraphItem.type === "edge") {{
-	        const edge = edges.find(item => item.id === state.selectedGraphItem.id);
-	        return edge ? edgeDetail(edge) : `<div class="empty">选择 graph edge</div>`;
-	      }}
-	      const node = nodes.find(item => item.id === state.selectedGraphItem.id);
-	      return node ? nodeDetail(node, edges) : `<div class="empty">选择 graph node</div>`;
-	    }}
+      function renderGraphDetail(nodes, edges) {{
+        if (!state.selectedGraphItem) return `<div class="empty">选择节点或关系</div>`;
+        if (state.selectedGraphItem.type === "edge") {{
+          const edge = edges.find(item => item.id === state.selectedGraphItem.id);
+          return edge ? edgeDetail(edge) : `<div class="empty">选择 graph edge</div>`;
+        }}
+        const node = nodes.find(item => item.id === state.selectedGraphItem.id);
+        return node ? nodeDetail(node, edges) : `<div class="empty">选择 graph node</div>`;
+      }}
 
-	    function nodeDetail(node, edges) {{
-	      const related = edges.filter(edge => edge.source_node_id === node.id || edge.target_node_id === node.id);
-	      return `<h3>${{esc(node.label)}}</h3>
-	        <div class="detail-grid">
-	          <span>Node type</span><strong class="mono">${{esc(node.node_type)}}</strong>
-	          <span>Node key</span><strong class="mono">${{esc(node.node_key || node.id)}}</strong>
-	          <span>Tenant</span><strong class="mono">${{esc(node.tenant_id)}}</strong>
-	          <span>Organization</span><strong class="mono">${{esc(node.organization_id)}}</strong>
-	          <span>Visibility</span><strong>${{esc(node.visibility_policy)}}</strong>
-	          <span>Status</span><strong>${{esc(node.status)}}</strong>
-	          <span>Observations</span><strong>${{esc(node.observation_count)}}</strong>
-	          <span>First seen</span><strong class="mono">${{esc(node.first_seen_at_iso)}}</strong>
-	          <span>Last seen</span><strong class="mono">${{esc(node.last_seen_at_iso)}}</strong>
-	          <span>Related edges</span><strong>${{esc(related.length)}}</strong>
-	        </div>
-	        <pre class="detail-json mono">${{esc(JSON.stringify(node.metadata || {{}}, null, 2))}}</pre>`;
-	    }}
+      function nodeDetail(node, edges) {{
+        const related = edges.filter(edge => edge.source_node_id === node.id || edge.target_node_id === node.id);
+        return `<h3>${{esc(node.label)}}</h3>
+          <div class="detail-grid">
+            <span>Node type</span><strong class="mono">${{esc(node.node_type)}}</strong>
+            <span>Node key</span><strong class="mono">${{esc(node.node_key || node.id)}}</strong>
+            <span>Tenant</span><strong class="mono">${{esc(node.tenant_id)}}</strong>
+            <span>Organization</span><strong class="mono">${{esc(node.organization_id)}}</strong>
+            <span>Visibility</span><strong>${{esc(node.visibility_policy)}}</strong>
+            <span>Status</span><strong>${{esc(node.status)}}</strong>
+            <span>Observations</span><strong>${{esc(node.observation_count)}}</strong>
+            <span>First seen</span><strong class="mono">${{esc(node.first_seen_at_iso)}}</strong>
+            <span>Last seen</span><strong class="mono">${{esc(node.last_seen_at_iso)}}</strong>
+            <span>Related edges</span><strong>${{esc(related.length)}}</strong>
+          </div>
+          <pre class="detail-json mono">${{esc(JSON.stringify(node.metadata || {{}}, null, 2))}}</pre>`;
+      }}
 
-	    function edgeDetail(edge) {{
-	      return `<h3>${{esc(edge.edge_type)}}</h3>
-	        <div class="detail-grid">
-	          <span>Source</span><strong class="mono">${{esc(edge.source_label || edge.source_node_id)}}</strong>
-	          <span>Target</span><strong class="mono">${{esc(edge.target_label || edge.target_node_id)}}</strong>
-	          <span>Source type</span><strong>${{esc(edge.source_type)}}</strong>
-	          <span>Target type</span><strong>${{esc(edge.target_type)}}</strong>
-	          <span>Tenant</span><strong class="mono">${{esc(edge.tenant_id)}}</strong>
-	          <span>Organization</span><strong class="mono">${{esc(edge.organization_id)}}</strong>
-	          <span>Observations</span><strong>${{esc(edge.observation_count)}}</strong>
-	          <span>First seen</span><strong class="mono">${{esc(edge.first_seen_at_iso)}}</strong>
-	          <span>Last seen</span><strong class="mono">${{esc(edge.last_seen_at_iso)}}</strong>
-	        </div>
-	        <pre class="detail-json mono">${{esc(JSON.stringify(edge.metadata || {{}}, null, 2))}}</pre>`;
-	    }}
+      function edgeDetail(edge) {{
+        return `<h3>${{esc(edge.edge_type)}}</h3>
+          <div class="detail-grid">
+            <span>Source</span><strong class="mono">${{esc(edge.source_label || edge.source_node_id)}}</strong>
+            <span>Target</span><strong class="mono">${{esc(edge.target_label || edge.target_node_id)}}</strong>
+            <span>Source type</span><strong>${{esc(edge.source_type)}}</strong>
+            <span>Target type</span><strong>${{esc(edge.target_type)}}</strong>
+            <span>Tenant</span><strong class="mono">${{esc(edge.tenant_id)}}</strong>
+            <span>Organization</span><strong class="mono">${{esc(edge.organization_id)}}</strong>
+            <span>Observations</span><strong>${{esc(edge.observation_count)}}</strong>
+            <span>First seen</span><strong class="mono">${{esc(edge.first_seen_at_iso)}}</strong>
+            <span>Last seen</span><strong class="mono">${{esc(edge.last_seen_at_iso)}}</strong>
+          </div>
+          <pre class="detail-json mono">${{esc(JSON.stringify(edge.metadata || {{}}, null, 2))}}</pre>`;
+      }}
 
-	    function renderMemories(data) {{
+      function renderMemories(data) {{
       if (!data.items.length) return $("panel").innerHTML = `<div class="empty">没有匹配的 memory</div>`;
       const rows = data.items.map(item => `
         <tr>

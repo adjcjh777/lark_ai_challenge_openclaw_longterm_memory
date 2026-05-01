@@ -171,6 +171,14 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual(1, wiki["card_count"])
         self.assertEqual(self.active_id, wiki["cards"][0]["id"])
         self.assertIn("后台服务", wiki["cards"][0]["evidence"]["quote"])
+        tenant_wiki = service.wiki_overview(
+            scope="project:admin_demo",
+            tenant_id="tenant:demo",
+            organization_id="org:demo",
+        )
+        self.assertEqual(1, tenant_wiki["card_count"])
+        other_tenant_wiki = service.wiki_overview(scope="project:admin_demo", tenant_id="tenant:other")
+        self.assertEqual(0, other_tenant_wiki["card_count"])
         wiki_export = service.wiki_export_markdown(scope="project:admin_demo")
         self.assertIn("# 项目记忆卡册：project:admin_demo", wiki_export)
         self.assertIn("后台服务默认只绑定", wiki_export)
@@ -185,6 +193,22 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertGreaterEqual(compiled_graph["workspace_node_count"], 4)
         self.assertIn("memory", {node["node_type"] for node in compiled_graph["nodes"]})
         self.assertIn("grounded_by", {edge["edge_type"] for edge in compiled_graph["edges"]})
+        tenant_graph = service.graph_workspace(tenant_id="tenant:demo", organization_id="org:demo", status="active")
+        self.assertGreaterEqual(tenant_graph["workspace_node_count"], 4)
+        self.assertEqual({"tenant:demo"}, {node["tenant_id"] for node in tenant_graph["nodes"]})
+        other_tenant_graph = service.graph_workspace(tenant_id="tenant:other")
+        self.assertEqual(0, other_tenant_graph["workspace_node_count"])
+        self.assertEqual(0, other_tenant_graph["workspace_edge_count"])
+
+        tenant_memories = service.list_memories(tenant_id="tenant:demo", organization_id="org:demo")
+        self.assertEqual(2, tenant_memories["total"])
+        other_tenant_memories = service.list_memories(tenant_id="tenant:other")
+        self.assertEqual(0, other_tenant_memories["total"])
+
+        tenant_audit = service.list_audit(tenant_id="tenant:demo", organization_id="org:demo")
+        self.assertEqual(1, tenant_audit["total"])
+        other_org_audit = service.list_audit(organization_id="org:other")
+        self.assertEqual(0, other_org_audit["total"])
 
     def test_http_admin_is_read_only_and_serves_json_api(self) -> None:
         self._seed_rows()
@@ -219,6 +243,11 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertEqual(1, wiki_payload["data"]["card_count"])
             self.assertFalse(wiki_payload["data"]["generation_policy"]["writes_feishu"])
 
+            with urlopen(f"{base_url}/api/wiki?tenant_id=tenant%3Aother", timeout=5) as response:
+                other_tenant_wiki = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(other_tenant_wiki["ok"])
+            self.assertEqual(0, other_tenant_wiki["data"]["card_count"])
+
             with urlopen(f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo", timeout=5) as response:
                 wiki_export = response.read().decode("utf-8")
                 content_type = response.getheader("Content-Type")
@@ -231,12 +260,23 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(graph_payload["ok"])
             self.assertEqual(1, len(graph_payload["data"]["nodes"]))
 
+            with urlopen(f"{base_url}/api/graph?tenant_id=tenant%3Aother", timeout=5) as response:
+                other_tenant_graph = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(other_tenant_graph["ok"])
+            self.assertEqual(0, other_tenant_graph["data"]["workspace_node_count"])
+
+            with urlopen(f"{base_url}/api/memories?organization_id=org%3Aother", timeout=5) as response:
+                other_org_memories = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(other_org_memories["ok"])
+            self.assertEqual(0, other_org_memories["data"]["total"])
+
             with urlopen(base_url, timeout=5) as response:
                 html = response.read().decode("utf-8")
             self.assertLess(html.index("<th>Updated</th>"), html.index("<th>Status</th>"))
             self.assertIn('data-view="home"', html)
             self.assertIn('data-view="wiki"', html)
             self.assertIn('data-view="graph"', html)
+            self.assertIn('id="organization"', html)
             self.assertIn('id="graph-detail"', html)
             self.assertIn("data-node-id", html)
             self.assertIn("data-edge-id", html)
