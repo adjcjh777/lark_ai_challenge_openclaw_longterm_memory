@@ -42,6 +42,15 @@ def main() -> int:
     parser.add_argument("--review-event-log", type=Path, default=DEFAULT_REVIEW_EVENT_LOG)
     parser.add_argument("--routing-event-log", type=Path, default=DEFAULT_ROUTING_EVENT_LOG)
     parser.add_argument(
+        "--feishu-live-evidence-packet",
+        type=Path,
+        default=None,
+        help=(
+            "Optional sanitized packet from collect_feishu_live_evidence_packet.py. When present, items 1/3/4/5 "
+            "are audited from the packet reports instead of raw logs."
+        ),
+    )
+    parser.add_argument(
         "--cognee-long-run-evidence",
         type=Path,
         default=None,
@@ -59,6 +68,7 @@ def main() -> int:
         permission_event_log=args.permission_event_log,
         review_event_log=args.review_event_log,
         routing_event_log=args.routing_event_log,
+        feishu_live_evidence_packet=args.feishu_live_evidence_packet,
         cognee_long_run_evidence=args.cognee_long_run_evidence,
     )
     if args.json:
@@ -74,19 +84,23 @@ def build_completion_audit(
     permission_event_log: Path | None = DEFAULT_PERMISSION_EVENT_LOG,
     review_event_log: Path | None = DEFAULT_REVIEW_EVENT_LOG,
     routing_event_log: Path | None = DEFAULT_ROUTING_EVENT_LOG,
+    feishu_live_evidence_packet: Path | None = None,
     cognee_long_run_evidence: Path | None = None,
 ) -> dict[str, Any]:
+    live_packet = _load_live_packet(feishu_live_evidence_packet) if feishu_live_evidence_packet else None
     items = [
-        _live_gate_item(
+        _live_gate_item_or_packet(
             item_id="1",
             name="non_at_group_message_live_delivery",
             requirement="普通非 @ 群文本消息必须真实进入当前单监听入口，并可触发 passive screening 前置判断。",
             evidence_path=passive_event_log,
+            packet=live_packet,
+            packet_key="passive_group_message",
             gate=check_passive_message_events,
             pass_reason="passive_group_message_seen",
         ),
         _single_listener_item(),
-        _live_gate_item(
+        _live_gate_item_or_packet(
             item_id="3",
             name="first_class_memory_tool_live_routing",
             requirement=(
@@ -94,22 +108,28 @@ def build_completion_audit(
                 "create_candidate 和 prefetch 的成功结果。"
             ),
             evidence_path=routing_event_log,
+            packet=live_packet,
+            packet_key="first_class_routing",
             gate=lambda text: check_live_routing_events(text, required_tools=REQUIRED_ROUTING_TOOLS),
             pass_reason="first_class_live_routing_evidence_seen",
         ),
-        _live_gate_item(
+        _live_gate_item_or_packet(
             item_id="4",
             name="live_negative_permission_second_user",
             requirement="第二个真实非 reviewer 用户在受控群里执行 /enable_memory 必须被拒绝，并输出 live result。",
             evidence_path=permission_event_log,
+            packet=live_packet,
+            packet_key="permission_negative",
             gate=check_permission_negative_events,
             pass_reason="non_reviewer_enable_memory_denied",
         ),
-        _live_gate_item(
+        _live_gate_item_or_packet(
             item_id="5",
             name="review_dm_card_e2e",
             requirement="真实 /review 私聊 DM、interactive card 点击和 update_card 结果必须出现在同一类 live 日志证据中。",
             evidence_path=review_event_log,
+            packet=live_packet,
+            packet_key="review_delivery",
             gate=check_review_delivery_log_events,
             pass_reason="review_delivery_e2e_evidence_seen",
         ),
@@ -201,6 +221,68 @@ def _live_gate_item(
         reason=str(report.get("reason") or ("gate_passed" if ok else "gate_failed")),
         evidence={
             "path": str(resolved),
+            "gate": report.get("gate"),
+            "summary": report.get("summary"),
+            "missing_required_tools": report.get("missing_required_tools"),
+            "failures": report.get("failures"),
+        },
+        next_step="" if ok else str(report.get("next_step") or "Collect live evidence that satisfies this gate."),
+    )
+
+
+def _live_gate_item_or_packet(
+    *,
+    item_id: str,
+    name: str,
+    requirement: str,
+    evidence_path: Path | None,
+    packet: dict[str, Any] | None,
+    packet_key: str,
+    gate: Callable[[str], dict[str, Any]],
+    pass_reason: str,
+) -> dict[str, Any]:
+    if packet is None:
+        return _live_gate_item(
+            item_id=item_id,
+            name=name,
+            requirement=requirement,
+            evidence_path=evidence_path,
+            gate=gate,
+            pass_reason=pass_reason,
+        )
+    if not packet.get("ok") and packet.get("reason"):
+        return _item(
+            item_id=item_id,
+            name=name,
+            requirement=requirement,
+            status="fail",
+            reason=str(packet.get("reason")),
+            evidence={"packet": str(packet.get("path") or ""), "packet_ok": False},
+            next_step="Fix the Feishu live evidence packet JSON or rerun the packet collector.",
+        )
+    reports = packet.get("reports") if isinstance(packet.get("reports"), dict) else {}
+    report = reports.get(packet_key) if isinstance(reports.get(packet_key), dict) else None
+    if report is None:
+        return _item(
+            item_id=item_id,
+            name=name,
+            requirement=requirement,
+            status="fail",
+            reason="live_evidence_packet_report_missing",
+            evidence={"packet": str(packet.get("path") or ""), "packet_key": packet_key},
+            next_step=f"Regenerate the Feishu live evidence packet with `{packet_key}` report included.",
+        )
+    ok = bool(report.get("ok")) and report.get("reason") == pass_reason
+    return _item(
+        item_id=item_id,
+        name=name,
+        requirement=requirement,
+        status="pass" if ok else "fail",
+        reason=str(report.get("reason") or ("gate_passed" if ok else "gate_failed")),
+        evidence={
+            "packet": str(packet.get("path") or ""),
+            "packet_key": packet_key,
+            "source_log": report.get("source_log"),
             "gate": report.get("gate"),
             "summary": report.get("summary"),
             "missing_required_tools": report.get("missing_required_tools"),
@@ -426,6 +508,17 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {"ok": False, "reason": "long_run_evidence_must_be_json_object"}
     return {"ok": True, "payload": payload}
+
+
+def _load_live_packet(path: Path) -> dict[str, Any]:
+    loaded = _load_json(path)
+    if not loaded["ok"]:
+        return {"ok": False, "path": str(path), "reason": loaded["reason"], "reports": {}}
+    payload = loaded["payload"]
+    payload["path"] = str(path)
+    if not isinstance(payload.get("reports"), dict):
+        return {"ok": False, "path": str(path), "reason": "live_evidence_packet_reports_missing", "reports": {}}
+    return payload
 
 
 def _number(value: Any) -> float:
