@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -14,6 +15,7 @@ from memory_engine.cli import build_parser
 from memory_engine.copilot.admin import AdminQueryService, create_admin_server, start_embedded_admin
 from memory_engine.db import init_db
 from memory_engine.repository import MemoryRepository, now_ms
+from scripts.check_copilot_admin_readiness import run_admin_readiness
 
 
 class CopilotAdminTest(unittest.TestCase):
@@ -315,6 +317,37 @@ class CopilotAdminTest(unittest.TestCase):
 
         self.assertEqual(2, result.returncode)
         self.assertIn("non-loopback host without an admin token", result.stderr)
+
+    def test_admin_readiness_strict_mode_requires_auth_wiki_and_graph(self) -> None:
+        self._seed_rows()
+
+        strict_ok = run_admin_readiness(
+            db_path=Path(self.tmp.name),
+            host="0.0.0.0",
+            admin_token="test-token",
+            strict=True,
+        )
+        self.assertTrue(strict_ok["ok"])
+        self.assertEqual("pass", strict_ok["checks"]["wiki"]["status"])
+        self.assertEqual("pass", strict_ok["checks"]["graph"]["status"])
+
+        missing_auth = run_admin_readiness(
+            db_path=Path(self.tmp.name),
+            host="127.0.0.1",
+            admin_token=None,
+            strict=True,
+        )
+        self.assertFalse(missing_auth["ok"])
+        self.assertEqual("fail", missing_auth["checks"]["remote_bind_auth"]["status"])
+
+        too_few_cards = run_admin_readiness(
+            db_path=Path(self.tmp.name),
+            host="127.0.0.1",
+            admin_token="test-token",
+            min_wiki_cards=2,
+        )
+        self.assertFalse(too_few_cards["ok"])
+        self.assertEqual("fail", too_few_cards["checks"]["wiki"]["status"])
 
 
 if __name__ == "__main__":

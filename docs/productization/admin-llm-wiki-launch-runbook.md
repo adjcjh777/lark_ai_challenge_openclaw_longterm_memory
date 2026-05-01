@@ -36,7 +36,9 @@ export FEISHU_MEMORY_COPILOT_ADMIN_TOKEN="$(openssl rand -hex 24)"
 python3 scripts/check_copilot_admin_readiness.py \
   --db-path data/memory.sqlite \
   --host 0.0.0.0 \
-  --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN"
+  --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" \
+  --strict \
+  --min-wiki-cards 1
 ```
 
 本机调试可以不设置 token，但 readiness 会给出 warning：

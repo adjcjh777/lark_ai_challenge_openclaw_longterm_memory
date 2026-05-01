@@ -34,6 +34,17 @@ def main() -> int:
     parser.add_argument("--db-path", default=str(db_path_from_env()), help="SQLite database path.")
     parser.add_argument("--host", default=DEFAULT_ADMIN_HOST, help="Planned admin bind host.")
     parser.add_argument("--admin-token", default=None, help="Planned admin bearer token.")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail on missing admin auth, empty Wiki cards, or missing compiled graph nodes.",
+    )
+    parser.add_argument(
+        "--min-wiki-cards",
+        type=int,
+        default=None,
+        help="Minimum active evidence-backed Wiki cards required. Defaults to 1 in --strict mode, else 0.",
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON report.")
     args = parser.parse_args()
 
@@ -41,6 +52,8 @@ def main() -> int:
         db_path=Path(args.db_path),
         host=args.host,
         admin_token=args.admin_token or _admin_token_from_env(),
+        strict=args.strict,
+        min_wiki_cards=args.min_wiki_cards,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
@@ -51,9 +64,17 @@ def main() -> int:
     return 0 if report["ok"] else 1
 
 
-def run_admin_readiness(*, db_path: Path, host: str, admin_token: str | None) -> dict[str, Any]:
+def run_admin_readiness(
+    *,
+    db_path: Path,
+    host: str,
+    admin_token: str | None,
+    strict: bool = False,
+    min_wiki_cards: int | None = None,
+) -> dict[str, Any]:
+    required_wiki_cards = 1 if strict and min_wiki_cards is None else int(min_wiki_cards or 0)
     checks: dict[str, dict[str, Any]] = {
-        "remote_bind_auth": _remote_bind_auth_check(host=host, admin_token=admin_token),
+        "remote_bind_auth": _remote_bind_auth_check(host=host, admin_token=admin_token, require_auth=strict),
     }
     if not db_path.exists():
         checks["database"] = {
@@ -70,8 +91,8 @@ def run_admin_readiness(*, db_path: Path, host: str, admin_token: str | None) ->
             service = AdminQueryService(conn)
             checks["database"] = {"status": "pass", "path": str(db_path)}
             checks["storage_schema"] = _storage_schema_check(conn)
-            checks["wiki"] = _wiki_check(service)
-            checks["graph"] = _graph_check(service)
+            checks["wiki"] = _wiki_check(service, min_cards=required_wiki_cards)
+            checks["graph"] = _graph_check(service, require_compiled_memory=strict)
             checks["read_only_api"] = {
                 "status": "pass",
                 "supported_methods": ["GET", "HEAD"],
@@ -116,7 +137,7 @@ def _storage_schema_check(conn: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
-def _wiki_check(service: AdminQueryService) -> dict[str, Any]:
+def _wiki_check(service: AdminQueryService, *, min_cards: int) -> dict[str, Any]:
     wiki = service.wiki_overview(limit=20)
     policy = wiki.get("generation_policy") or {}
     policy_ok = (
@@ -128,6 +149,8 @@ def _wiki_check(service: AdminQueryService) -> dict[str, Any]:
     card_count = int(wiki.get("card_count") or 0)
     if not policy_ok:
         status = "fail"
+    elif card_count < min_cards:
+        status = "fail"
     elif card_count == 0:
         status = "warning"
     else:
@@ -135,17 +158,22 @@ def _wiki_check(service: AdminQueryService) -> dict[str, Any]:
     return {
         "status": status,
         "card_count": card_count,
+        "min_cards": min_cards,
         "generation_policy": policy,
-        "next_step": "" if card_count else "Confirm active memories with evidence before using this as a knowledge site.",
+        "next_step": ""
+        if card_count >= max(1, min_cards)
+        else f"Confirm at least {max(1, min_cards)} active memories with evidence before launch.",
     }
 
 
-def _graph_check(service: AdminQueryService) -> dict[str, Any]:
+def _graph_check(service: AdminQueryService, *, require_compiled_memory: bool) -> dict[str, Any]:
     graph = service.graph_workspace(limit=80)
     workspace_nodes = int(graph.get("workspace_node_count") or 0)
     workspace_edges = int(graph.get("workspace_edge_count") or 0)
     has_compiled_memory = any(node.get("node_type") == "memory" for node in graph.get("nodes") or [])
-    if workspace_nodes == 0:
+    if require_compiled_memory and not has_compiled_memory:
+        status = "fail"
+    elif workspace_nodes == 0:
         status = "warning"
     elif has_compiled_memory:
         status = "pass"
@@ -158,18 +186,19 @@ def _graph_check(service: AdminQueryService) -> dict[str, Any]:
         "workspace_node_count": workspace_nodes,
         "workspace_edge_count": workspace_edges,
         "compiled_memory_nodes": has_compiled_memory,
+        "require_compiled_memory": require_compiled_memory,
         "next_step": "" if has_compiled_memory else "Confirm active memories with evidence or ingest graph context.",
     }
 
 
-def _remote_bind_auth_check(*, host: str, admin_token: str | None) -> dict[str, Any]:
+def _remote_bind_auth_check(*, host: str, admin_token: str | None, require_auth: bool) -> dict[str, Any]:
     remote_bind = host not in {"127.0.0.1", "localhost", "::1"}
-    if remote_bind and not admin_token:
+    if (remote_bind or require_auth) and not admin_token:
         return {
             "status": "fail",
             "host": host,
             "auth": "missing",
-            "next_step": "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or pass --admin-token for non-loopback binds.",
+            "next_step": "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or pass --admin-token before launch.",
         }
     return {
         "status": "pass" if admin_token else "warning",
