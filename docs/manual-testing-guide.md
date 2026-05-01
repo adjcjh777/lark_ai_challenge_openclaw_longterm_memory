@@ -342,6 +342,7 @@ python3 scripts/query_audit_events.py --event-type ingestion_failed --json --lim
 
 ```bash
 python3 -m unittest tests.test_copilot_permissions -v
+python3 -m unittest tests.test_feishu_permission_negative_gate -v
 ```
 
 手动 Feishu / OpenClaw 输入建议：
@@ -355,6 +356,30 @@ python3 -m unittest tests.test_copilot_permissions -v
 - 系统拒绝执行或返回 permission denied。
 - 错误原因是 `missing_permission_context`、`malformed_permission_context`、`scope_mismatch`、`tenant_mismatch` 或类似 fail-closed reason。
 - 回复不包含未授权 `current_value`、evidence quote 或 raw events。
+
+真实 Feishu 群级启用负例：
+
+```text
+由非 reviewer/admin 的第二个真实用户在受控测试群发送：
+@Bot /enable_memory
+```
+
+把当前单监听入口的 NDJSON/JSON result log 保存后运行：
+
+```bash
+python3 scripts/check_feishu_permission_negative_gate.py \
+  --event-log /path/to/feishu-result-log.ndjson \
+  --expected-chat-id <controlled_chat_id> \
+  --expected-actor-id <non_reviewer_open_id> \
+  --json
+```
+
+通过标准：
+
+- `ok=true`。
+- `reason=non_reviewer_enable_memory_denied`。
+- `summary.denied_enable_memory_results >= 1`。
+- 只看到 `feishu_group_policy_denied` audit 还不够；gate 会返回 `audit_only_no_denied_live_result`，需要同时保留 live result log。
 
 失败处理：
 
