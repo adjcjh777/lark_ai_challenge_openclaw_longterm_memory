@@ -13,25 +13,36 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from memory_engine.copilot.cognee_adapter import CogneeMemoryAdapter, load_cognee_client  # noqa: E402
-from memory_engine.copilot.local_env import load_local_env_files, read_key_value_file  # noqa: E402
+from memory_engine.copilot.local_env import read_key_value_file  # noqa: E402
 from memory_engine.copilot.schemas import CandidateSource, ConfirmRequest, CreateCandidateRequest  # noqa: E402
 from memory_engine.copilot.service import CopilotService  # noqa: E402
 from memory_engine.db import connect, init_db  # noqa: E402
 from memory_engine.repository import MemoryRepository  # noqa: E402
 
 EMBEDDING_LOCK_FILE = ROOT / "memory_engine/copilot/embedding-provider.lock"
+COGNEE_ENV_KEYS = (
+    "LLM_PROVIDER",
+    "LLM_ENDPOINT",
+    "LLM_MODEL",
+    "LLM_API_KEY",
+    "OPENAI_API_KEY",
+    "EMBEDDING_MODEL",
+    "EMBEDDING_ENDPOINT",
+    "EMBEDDING_DIMENSIONS",
+)
 
 
 def main() -> None:
+    env_defaults = load_cognee_gate_env_defaults(root=ROOT)
     parser = argparse.ArgumentParser(
         description="Verify real Cognee SDK curated memory sync through CopilotService.confirm in an isolated store."
     )
     parser.add_argument("--scope", default="project:feishu_ai_challenge")
     parser.add_argument("--data-root", default=None, help="Cognee DATA_ROOT_DIRECTORY. Defaults to a temp dir.")
     parser.add_argument("--system-root", default=None, help="Cognee SYSTEM_ROOT_DIRECTORY. Defaults under data root.")
-    parser.add_argument("--llm-provider", default=os.environ.get("LLM_PROVIDER") or "ollama")
-    parser.add_argument("--llm-endpoint", default=os.environ.get("LLM_ENDPOINT") or "http://localhost:11434")
-    parser.add_argument("--llm-model", default=os.environ.get("LLM_MODEL") or "qwen3.5:0.8b")
+    parser.add_argument("--llm-provider", default=env_defaults.get("LLM_PROVIDER") or "ollama")
+    parser.add_argument("--llm-endpoint", default=env_defaults.get("LLM_ENDPOINT") or "http://localhost:11434")
+    parser.add_argument("--llm-model", default=env_defaults.get("LLM_MODEL") or "qwen3.5:0.8b")
     parser.add_argument("--json", action="store_true", help="Print compact JSON only.")
     args = parser.parse_args()
 
@@ -61,7 +72,7 @@ def run_gate(
     llm_endpoint: str,
     llm_model: str,
 ) -> dict[str, Any]:
-    load_local_env_files(root=ROOT, override=False)
+    apply_cognee_gate_env_defaults(root=ROOT)
     _configure_environment(
         data_root=data_root,
         system_root=system_root,
@@ -107,6 +118,7 @@ def run_gate(
         return {
             "ok": ok,
             "gate": "cognee_curated_sync",
+            "provider": _provider_report(llm_provider=llm_provider, llm_endpoint=llm_endpoint, llm_model=llm_model),
             "scope": scope,
             "dataset_name": cognee_sync.get("dataset_name"),
             "memory_id": cognee_sync.get("memory_id"),
@@ -119,6 +131,7 @@ def run_gate(
         return {
             "ok": False,
             "gate": "cognee_curated_sync",
+            "provider": _provider_report(llm_provider=llm_provider, llm_endpoint=llm_endpoint, llm_model=llm_model),
             "scope": scope,
             "error_type": type(exc).__name__,
             "error": str(exc),
@@ -163,6 +176,54 @@ def _configure_environment(
     os.environ.setdefault("EMBEDDING_MODEL", embedding_lock.get("litellm_model", "ollama/qwen3-embedding:0.6b-fp16"))
     os.environ.setdefault("EMBEDDING_ENDPOINT", embedding_lock.get("endpoint", "http://localhost:11434"))
     os.environ.setdefault("EMBEDDING_DIMENSIONS", embedding_lock.get("dimensions", "1024"))
+
+
+def load_cognee_gate_env_defaults(
+    *,
+    root: Path = ROOT,
+    environ: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Resolve Cognee gate config without exposing secret values.
+
+    Precedence is process environment, then .env.local, then .env. CLI
+    arguments are applied by argparse after these defaults are resolved.
+    """
+
+    values: dict[str, str] = {}
+    values.update(_non_empty_values(read_key_value_file(root / ".env")))
+    values.update(_non_empty_values(read_key_value_file(root / ".env.local")))
+    source_environ = environ if environ is not None else os.environ
+    for key in COGNEE_ENV_KEYS:
+        value = source_environ.get(key)
+        if value:
+            values[key] = value
+    return values
+
+
+def apply_cognee_gate_env_defaults(*, root: Path = ROOT) -> None:
+    for key, value in load_cognee_gate_env_defaults(root=root).items():
+        if not os.environ.get(key):
+            os.environ[key] = value
+
+
+def _non_empty_values(values: dict[str, str]) -> dict[str, str]:
+    return {key: value for key, value in values.items() if value}
+
+
+def _provider_report(*, llm_provider: str, llm_endpoint: str, llm_model: str) -> dict[str, Any]:
+    return {
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_endpoint": _redacted_endpoint(llm_endpoint),
+        "llm_api_key_configured": bool(os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")),
+        "embedding_model": os.environ.get("EMBEDDING_MODEL"),
+        "embedding_endpoint": _redacted_endpoint(os.environ.get("EMBEDDING_ENDPOINT") or ""),
+        "embedding_dimensions": os.environ.get("EMBEDDING_DIMENSIONS"),
+    }
+
+
+def _redacted_endpoint(endpoint: str) -> str:
+    return endpoint.split("?", 1)[0].rstrip("/")
 
 
 def _permission(scope: str, *, requested_action: str) -> dict[str, Any]:
