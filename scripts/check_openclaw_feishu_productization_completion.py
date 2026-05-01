@@ -69,6 +69,15 @@ def main() -> int:
             "and embedding_service.healthcheck_sample_count>=3."
         ),
     )
+    parser.add_argument(
+        "--cognee-sampler-status",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON from check_cognee_embedding_sampler_status.py. Used only to explain item 8 progress "
+            "when final long-run evidence is not ready."
+        ),
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -80,6 +89,7 @@ def main() -> int:
         feishu_live_evidence_packet=args.feishu_live_evidence_packet,
         feishu_event_diagnostics=args.feishu_event_diagnostics,
         cognee_long_run_evidence=args.cognee_long_run_evidence,
+        cognee_sampler_status=args.cognee_sampler_status,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
@@ -97,6 +107,7 @@ def build_completion_audit(
     feishu_live_evidence_packet: Path | None = None,
     feishu_event_diagnostics: Path | None = None,
     cognee_long_run_evidence: Path | None = None,
+    cognee_sampler_status: Path | None = None,
 ) -> dict[str, Any]:
     live_packet = _load_live_packet(feishu_live_evidence_packet) if feishu_live_evidence_packet else None
     event_diagnostics = _load_event_diagnostics(feishu_event_diagnostics) if feishu_event_diagnostics else None
@@ -142,7 +153,7 @@ def build_completion_audit(
         ),
         _dashboard_access_control_item(),
         _clean_demo_db_item(),
-        _cognee_long_term_item(cognee_long_run_evidence),
+        _cognee_long_term_item(cognee_long_run_evidence, sampler_status_path=cognee_sampler_status),
         _no_overclaim_item(),
     ]
     blockers = [
@@ -427,7 +438,7 @@ def _clean_demo_db_item() -> dict[str, Any]:
     )
 
 
-def _cognee_long_term_item(evidence_path: Path | None) -> dict[str, Any]:
+def _cognee_long_term_item(evidence_path: Path | None, *, sampler_status_path: Path | None = None) -> dict[str, Any]:
     local_sync_gate = _file_contains(
         ROOT / "scripts/check_cognee_curated_sync_gate.py",
         "CogneeMemoryAdapter",
@@ -435,6 +446,9 @@ def _cognee_long_term_item(evidence_path: Path | None) -> dict[str, Any]:
         "production_boundary",
     )
     if evidence_path is None:
+        sampler_status = _load_sampler_status(sampler_status_path) if sampler_status_path else None
+        if sampler_status is not None:
+            return _cognee_sampler_status_item(local_sync_gate=local_sync_gate, sampler_status=sampler_status)
         return _item(
             item_id="8",
             name="cognee_embedding_long_term_service",
@@ -480,6 +494,48 @@ def _cognee_long_term_item(evidence_path: Path | None) -> dict[str, Any]:
         reason="long_term_cognee_embedding_evidence_seen" if ok else "long_term_cognee_embedding_evidence_incomplete",
         evidence={"path": str(evidence_path), "checks": checks},
         next_step="" if ok else "Provide Cognee sync pass, reopened persistent-store readback, and >=24h embedding service samples.",
+    )
+
+
+def _cognee_sampler_status_item(*, local_sync_gate: bool, sampler_status: dict[str, Any]) -> dict[str, Any]:
+    evidence = {
+        "local_curated_sync_gate_present": local_sync_gate,
+        "long_run_evidence_path": "",
+        "sampler_status": {
+            "path": sampler_status.get("path"),
+            "ok": sampler_status.get("ok"),
+            "completion_ready": sampler_status.get("completion_ready"),
+            "sample_count": sampler_status.get("sample_count"),
+            "successful_sample_count": sampler_status.get("successful_sample_count"),
+            "embedding_window_hours": sampler_status.get("embedding_window_hours"),
+            "estimated_ready_at": sampler_status.get("estimated_ready_at"),
+            "failed_checks": sampler_status.get("failed_checks"),
+            "warning_checks": sampler_status.get("warning_checks"),
+        },
+    }
+    if sampler_status.get("completion_ready") is True:
+        reason = "cognee_sampler_ready_but_long_run_evidence_missing"
+        next_step = (
+            "Sampler status is ready; run collect_cognee_embedding_long_run_evidence.py with curated-sync and "
+            "persistent readback reports, then pass --cognee-long-run-evidence."
+        )
+    elif sampler_status.get("ok"):
+        reason = "cognee_sampler_running_but_window_incomplete"
+        next_step = str(
+            sampler_status.get("next_step")
+            or "Leave the sampler running until successful samples and the required time window are complete."
+        )
+    else:
+        reason = "cognee_sampler_status_failed"
+        next_step = str(sampler_status.get("next_step") or "Restart or repair the Cognee embedding sampler.")
+    return _item(
+        item_id="8",
+        name="cognee_embedding_long_term_service",
+        requirement="Cognee curated sync 和 embedding provider 必须有真实持久 store、重启后读回和长时间运行证据。",
+        status="fail",
+        reason=reason,
+        evidence=evidence,
+        next_step=next_step,
     )
 
 
@@ -553,6 +609,8 @@ def _load_json(path: Path) -> dict[str, Any]:
         return {"ok": False, "reason": "long_run_evidence_file_missing"}
     try:
         payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except OSError:
+        return {"ok": False, "reason": "long_run_evidence_file_unreadable"}
     except json.JSONDecodeError:
         return {"ok": False, "reason": "long_run_evidence_invalid_json"}
     if not isinstance(payload, dict):
@@ -594,6 +652,15 @@ def _diagnostics_group_scope_missing(diagnostics: dict[str, Any]) -> bool:
     failed = diagnostics.get("failed_checks") if isinstance(diagnostics.get("failed_checks"), list) else []
     schema = diagnostics.get("message_event_schema") if isinstance(diagnostics.get("message_event_schema"), dict) else {}
     return "message_schema_group_message_scope" in failed or schema.get("has_group_message_scope") is False
+
+
+def _load_sampler_status(path: Path) -> dict[str, Any]:
+    loaded = _load_json(path)
+    if not loaded["ok"]:
+        return {"ok": False, "path": str(path), "reason": loaded["reason"]}
+    payload = loaded["payload"]
+    payload["path"] = str(path)
+    return payload
 
 
 def _number(value: Any) -> float:
