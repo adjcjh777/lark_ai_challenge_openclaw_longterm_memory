@@ -37,8 +37,23 @@ def main() -> int:
     parser.add_argument(
         "--keep-output", action="store_true", help="Keep temporary output when --output-dir is omitted."
     )
+    parser.add_argument(
+        "--visual-baseline-dir",
+        default=None,
+        help=(
+            "Optional directory containing baseline PNG screenshots. "
+            "When set, the smoke compares current screenshots with baseline images."
+        ),
+    )
+    parser.add_argument(
+        "--update-visual-baseline",
+        action="store_true",
+        help="Write current screenshots and metrics to --visual-baseline-dir instead of comparing.",
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON report.")
     args = parser.parse_args()
+    if args.update_visual_baseline and not args.visual_baseline_dir:
+        parser.error("--update-visual-baseline requires --visual-baseline-dir")
 
     with _workspace(
         db_path=args.db_path,
@@ -46,7 +61,13 @@ def main() -> int:
         keep_output=args.keep_output,
         scope=args.scope,
     ) as workspace:
-        report = run_ui_smoke(db_path=workspace["db_path"], output_dir=workspace["output_dir"], scope=args.scope)
+        report = run_ui_smoke(
+            db_path=workspace["db_path"],
+            output_dir=workspace["output_dir"],
+            scope=args.scope,
+            visual_baseline_dir=Path(args.visual_baseline_dir).expanduser() if args.visual_baseline_dir else None,
+            update_visual_baseline=args.update_visual_baseline,
+        )
         if args.json:
             print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
         else:
@@ -54,7 +75,14 @@ def main() -> int:
         return 0 if report["ok"] else 1
 
 
-def run_ui_smoke(*, db_path: Path, output_dir: Path, scope: str) -> dict[str, Any]:
+def run_ui_smoke(
+    *,
+    db_path: Path,
+    output_dir: Path,
+    scope: str,
+    visual_baseline_dir: Path | None = None,
+    update_visual_baseline: bool = False,
+) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     static_dir = output_dir / "static-site"
     export_result = export_knowledge_site(db_path=db_path, output_dir=static_dir, scope=scope)
@@ -67,6 +95,8 @@ def run_ui_smoke(*, db_path: Path, output_dir: Path, scope: str) -> dict[str, An
             "adminUrl": f"http://127.0.0.1:{server.server_port}/",
             "staticUrl": (Path(export_result["entrypoint"]).resolve()).as_uri(),
             "outputDir": str(output_dir.resolve()),
+            "visualBaselineDir": str(visual_baseline_dir.resolve()) if visual_baseline_dir else None,
+            "updateVisualBaseline": update_visual_baseline,
         }
         node_result = _run_playwright_smoke(config=config, work_dir=output_dir)
     finally:
@@ -83,6 +113,11 @@ def run_ui_smoke(*, db_path: Path, output_dir: Path, scope: str) -> dict[str, An
         "checks": node_result.get("checks", {}),
         "screenshots": node_result.get("screenshots", {}),
         "visual_metrics": node_result.get("visual_metrics", {}),
+        "visual_diffs": node_result.get("visual_diffs", {}),
+        "visual_baseline_dir": str(visual_baseline_dir.resolve()) if visual_baseline_dir else None,
+        "visual_baseline_mode": "update"
+        if update_visual_baseline
+        else ("compare" if visual_baseline_dir else "integrity"),
     }
 
 
@@ -204,12 +239,18 @@ const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const screenshots = {};
 const checks = {};
 const visual_metrics = {};
+const visual_diffs = {};
+const VISUAL_BASELINE_MANIFEST = "visual-baseline.json";
 const VISUAL_BASELINE = {
   minFileBytes: 8000,
   minUniqueColors: 32,
   minInkRatio: 0.015,
   maxDominantColorRatio: 0.985,
   sampleStride: 6,
+  diffSampleStride: 8,
+  maxPixelDiffRatio: 0.035,
+  maxMeanPixelDelta: 8,
+  significantPixelDelta: 30,
 };
 
 function pass(name, message) {
@@ -327,8 +368,73 @@ function analyzePng(filePath) {
   };
 }
 
+function comparePng(currentPath, baselinePath) {
+  const current = decodePng(currentPath);
+  const baseline = decodePng(baselinePath);
+  if (current.width !== baseline.width || current.height !== baseline.height) {
+    return {
+      status: "dimension_mismatch",
+      current_size: `${current.width}x${current.height}`,
+      baseline_size: `${baseline.width}x${baseline.height}`,
+      diff_ratio: 1,
+      mean_pixel_delta: 255,
+    };
+  }
+  const step = Math.max(1, VISUAL_BASELINE.diffSampleStride);
+  let sampled = 0;
+  let changed = 0;
+  let totalDelta = 0;
+  for (let y = 0; y < current.height; y += step) {
+    for (let x = 0; x < current.width; x += step) {
+      const currentOffset = (y * current.width + x) * current.channels;
+      const baselineOffset = (y * baseline.width + x) * baseline.channels;
+      const currentRgb = [
+        current.pixels[currentOffset],
+        current.pixels[currentOffset + 1],
+        current.pixels[currentOffset + 2],
+      ];
+      const baselineRgb = [
+        baseline.pixels[baselineOffset],
+        baseline.pixels[baselineOffset + 1],
+        baseline.pixels[baselineOffset + 2],
+      ];
+      const delta = colorDistance(currentRgb, baselineRgb) / 3;
+      sampled += 1;
+      totalDelta += delta;
+      if (delta > VISUAL_BASELINE.significantPixelDelta) changed += 1;
+    }
+  }
+  return {
+    status: "compared",
+    sampled_pixels: sampled,
+    changed_pixels: changed,
+    diff_ratio: Number((changed / sampled).toFixed(4)),
+    mean_pixel_delta: Number((totalDelta / sampled).toFixed(2)),
+  };
+}
+
+function writeVisualBaselineManifest(baselineDir, baselineEntries) {
+  fs.mkdirSync(baselineDir, { recursive: true });
+  const manifest = {
+    version: 1,
+    boundary: "Visual baseline for local/staging UI regression only; not production deployment evidence.",
+    thresholds: VISUAL_BASELINE,
+    screenshots: baselineEntries,
+  };
+  fs.writeFileSync(
+    path.join(baselineDir, VISUAL_BASELINE_MANIFEST),
+    JSON.stringify(manifest, null, 2),
+    "utf8"
+  );
+}
+
 function assertVisualBaseline() {
   const failures = [];
+  const baselineEntries = {};
+  const baselineDir = config.visualBaselineDir || null;
+  if (baselineDir && config.updateVisualBaseline) {
+    fs.mkdirSync(baselineDir, { recursive: true });
+  }
   for (const [name, file] of Object.entries(screenshots)) {
     const metrics = analyzePng(file);
     visual_metrics[name] = metrics;
@@ -344,9 +450,42 @@ function assertVisualBaseline() {
     if (metrics.dominant_color_ratio > VISUAL_BASELINE.maxDominantColorRatio) {
       failures.push(`${name} dominated by one color: ${metrics.dominant_color_ratio}`);
     }
+    if (baselineDir) {
+      const baselinePng = path.join(baselineDir, `${name}.png`);
+      if (config.updateVisualBaseline) {
+        fs.copyFileSync(file, baselinePng);
+        baselineEntries[name] = {
+          file: `${name}.png`,
+          metrics,
+        };
+      } else if (!fs.existsSync(baselinePng)) {
+        failures.push(`${name} missing visual baseline: ${baselinePng}`);
+      } else {
+        const diff = comparePng(file, baselinePng);
+        visual_diffs[name] = diff;
+        if (diff.status === "dimension_mismatch") {
+          failures.push(
+            `${name} baseline dimension mismatch: current=${diff.current_size} baseline=${diff.baseline_size}`
+          );
+        }
+        if (diff.diff_ratio > VISUAL_BASELINE.maxPixelDiffRatio) {
+          failures.push(`${name} pixel diff ratio too high: ${diff.diff_ratio}`);
+        }
+        if (diff.mean_pixel_delta > VISUAL_BASELINE.maxMeanPixelDelta) {
+          failures.push(`${name} mean pixel delta too high: ${diff.mean_pixel_delta}`);
+        }
+      }
+    }
+  }
+  if (baselineDir && config.updateVisualBaseline) {
+    writeVisualBaselineManifest(baselineDir, baselineEntries);
   }
   if (failures.length) {
     fail("visual_pixel_integrity", failures.join("; "));
+  } else if (baselineDir && config.updateVisualBaseline) {
+    pass("visual_pixel_integrity", "Updated screenshot visual baseline and metrics manifest.");
+  } else if (baselineDir) {
+    pass("visual_pixel_integrity", "Screenshots match visual baseline within pixel diff thresholds.");
   } else {
     pass(
       "visual_pixel_integrity",
@@ -482,7 +621,7 @@ async function checkStaticSite(browser, viewport, label) {
     await browser.close();
   }
   const ok = Object.values(checks).every((check) => check.status === "pass");
-  console.log(JSON.stringify({ ok, checks, screenshots, visual_metrics }, null, 2));
+  console.log(JSON.stringify({ ok, checks, screenshots, visual_metrics, visual_diffs }, null, 2));
 })();
 """
 

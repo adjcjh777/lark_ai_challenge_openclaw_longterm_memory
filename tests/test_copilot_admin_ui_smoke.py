@@ -13,6 +13,14 @@ class CopilotAdminUiSmokeScriptTest(unittest.TestCase):
         self.assertIn("dominant_color_ratio", _NODE_SMOKE_SCRIPT)
         self.assertIn("visual_metrics", _NODE_SMOKE_SCRIPT)
 
+    def test_ui_smoke_supports_visual_baseline_diff_gate(self) -> None:
+        self.assertIn("visual-baseline.json", _NODE_SMOKE_SCRIPT)
+        self.assertIn("comparePng", _NODE_SMOKE_SCRIPT)
+        self.assertIn("maxPixelDiffRatio", _NODE_SMOKE_SCRIPT)
+        self.assertIn("maxMeanPixelDelta", _NODE_SMOKE_SCRIPT)
+        self.assertIn("visual_diffs", _NODE_SMOKE_SCRIPT)
+        self.assertIn("updateVisualBaseline", _NODE_SMOKE_SCRIPT)
+
 
 if __name__ == "__main__":
     unittest.main()
