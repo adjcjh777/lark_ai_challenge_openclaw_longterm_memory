@@ -311,8 +311,9 @@ def _cognee_long_term_item(evidence_path: Path | None) -> dict[str, Any]:
             reason="long_term_cognee_embedding_evidence_missing",
             evidence={"local_curated_sync_gate_present": local_sync_gate, "long_run_evidence_path": ""},
             next_step=(
-                "Run a persistent Cognee/embedding service long-run, prove reopened store/readback and >=24h "
-                "embedding health samples, then pass --cognee-long-run-evidence."
+                "Run scripts/collect_cognee_embedding_long_run_evidence.py with a real curated-sync report, "
+                "persistent-store reopen/readback proof, and >=24h embedding health samples; then pass "
+                "--cognee-long-run-evidence."
             ),
         )
     loaded = _load_json(evidence_path)

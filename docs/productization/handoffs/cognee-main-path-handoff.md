@@ -5,6 +5,8 @@
 
 2026-05-01 补充：本机真实 Cognee SDK 调用发现当前安装版本的 `add()` 不接受 `metadata=`，且 `add` / `cognify` 会返回 awaitable；已在窄 adapter 内兼容该 SDK 形态，并新增隔离 Cognee store gate 去真实执行 `CopilotService.confirm -> sync_curated_memory -> Cognee add -> cognify`。当天进一步修正 gate 的 provider/model 读取顺序，按 `process env > .env.local > .env > defaults` 解析配置；用 `.env.local` 中的 custom LLM 与 OpenAI-compatible embedding 配置已跑通隔离 store，返回 `cognee_sync.status=pass`、`fallback=null`。该 gate 证明 curated sync 可用，但仍不是长期 embedding 服务或生产持久化 Cognee store 完成证据。
 
+2026-05-02 补充：新增 `scripts/collect_cognee_embedding_long_run_evidence.py`，用于把真实 curated-sync JSON、persistent store reopen/readback 结果和周期 embedding sample log 规范成 `check_openclaw_feishu_productization_completion.py --cognee-long-run-evidence` 可读取的证据。collector 默认要求 sync pass、store reopened、reopened search/readback pass、embedding sample 窗口 >=24h、成功 sample >=3、service owner 和 evidence ref；它只规范证据，不创建长期服务，也不能单独证明生产持久化。
+
 ## 本轮完成了什么
 
 本轮把 Cognee 从“adapter / live gate 可用”补成了本地可控、可回退、可观测的 recall substrate：
@@ -26,9 +28,11 @@
 | `memory_engine/copilot/governance.py` | confirm / reject 响应携带 version、summary、evidence，供 adapter 同步 curated fields。 |
 | `memory_engine/copilot/retrieval.py` | 已有 ledger ownership 过滤和 async Cognee search 归一化。 |
 | `scripts/check_cognee_curated_sync_gate.py` | 在隔离 Cognee store 中真实执行 `CopilotService.confirm -> Cognee add -> cognify`，按 `.env.local` provider/model 配置运行，不覆盖本地 `.data/cognee`。 |
+| `scripts/collect_cognee_embedding_long_run_evidence.py` | 规范 curated-sync report、persistent store reopen/readback 和 embedding long-run samples，输出 completion audit 可读 JSON；不创建长期服务。 |
 | `tests/test_copilot_cognee_adapter.py` | 锁住 dataset、add/cognify、withdrawal 和 curated-only 文本。 |
 | `tests/test_copilot_governance.py` | 锁住 confirm sync、reject withdrawal 和 sync failure fallback。 |
 | `tests/test_copilot_retrieval.py` | 锁住 Cognee result 必须匹配本地 ledger。 |
+| `tests/test_cognee_embedding_long_run_evidence.py` | 锁住 long-run collector 对 24h window、reopen/readback、fallback 和 sample log 的判定。 |
 
 ## 验证结果
 
@@ -63,6 +67,11 @@ ollama ps
 - 初次 `python3 scripts/check_cognee_curated_sync_gate.py --json` 暴露出配置读取问题：gate 在加载 `.env.local` 前已经把 CLI defaults 固定为本地 Ollama，导致 Cognee `extract_graph_from_data` 阶段出现 `InstructorRetryException`。
 - 修正后再次运行 `python3 scripts/check_cognee_curated_sync_gate.py --json`：隔离 store gate 通过，`ok=true`，`cognee_sync.status=pass`，`fallback=null`，provider report 显示 custom LLM、OpenAI-compatible embedding、`llm_api_key_configured=true`，并生成隔离 dataset `feishu_memory_copilot_project_feishu_ai_challenge`。
 - 当前仓库 `.data/cognee` 本地 store 曾出现 Cognee 内部 graph UUID TypeError；未自动清理或覆盖该本地状态。需要真实长期服务前，应通过受控 reset/migration 处理 store，而不是把隔离 gate 说成长期持久服务。
+
+2026-05-02 追加验证：
+
+- `python3 -m unittest tests.test_cognee_embedding_long_run_evidence`：4 tests OK。
+- `scripts/collect_cognee_embedding_long_run_evidence.py` 的输出 JSON 可直接作为 `scripts/check_openclaw_feishu_productization_completion.py --cognee-long-run-evidence` 输入，但只有真实 24h+ sample、store reopen/readback 和 ops metadata 齐全时才应写入完成证据。
 
 ## 边界
 
