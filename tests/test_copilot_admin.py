@@ -273,6 +273,11 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual(
             "tenant_policy_upserted", service.list_audit(event_type="tenant_policy_upserted")["items"][0]["event_type"]
         )
+        launch = service.launch_readiness()
+        self.assertEqual("pass", launch["staging_status"])
+        self.assertEqual("blocked", launch["production_status"])
+        self.assertIn("enterprise_idp_sso_validation", {item["id"] for item in launch["production_blockers"]})
+        self.assertIn("tenant_policy_editor", {item["id"] for item in launch["checks"]})
 
     def test_http_admin_is_read_only_and_serves_json_api(self) -> None:
         self._seed_rows()
@@ -302,6 +307,16 @@ class CopilotAdminTest(unittest.TestCase):
                 live_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(live_payload["ok"])
             self.assertIn("msg_admin", {item["source_id"] for item in live_payload["data"]["recent_raw_events"]})
+
+            with urlopen(f"{base_url}/api/launch-readiness", timeout=5) as response:
+                launch_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(launch_payload["ok"])
+            self.assertEqual("blocked", launch_payload["data"]["production_status"])
+            self.assertIn("llm_wiki", {item["id"] for item in launch_payload["data"]["checks"]})
+            self.assertIn(
+                "enterprise_idp_sso_validation",
+                {item["id"] for item in launch_payload["data"]["production_blockers"]},
+            )
 
             with urlopen(f"{base_url}/api/wiki?scope=project%3Aadmin_demo", timeout=5) as response:
                 wiki_payload = json.loads(response.read().decode("utf-8"))
@@ -356,6 +371,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertIn('data-view="wiki"', html)
             self.assertIn('data-view="graph"', html)
             self.assertIn('data-view="tenants"', html)
+            self.assertIn('data-view="launch"', html)
             self.assertIn('id="organization"', html)
             self.assertIn('id="graph-detail"', html)
             self.assertIn("data-node-id", html)

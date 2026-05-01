@@ -54,7 +54,7 @@ admin token 可读取 `/api/*`、导出 Wiki Markdown 并保存 `/api/tenant-pol
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 ```
 
-readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown export、compiled Graph、Tenants readiness、本地 tenant policy editor 表/API 能力、知识只读面和 access policy；Tenants check 不代表已完成生产 DB、真实企业 IdP SSO 或完整企业权限后台。
+readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown export、compiled Graph、Tenants readiness、本地 tenant policy editor 表/API 能力、Launch readiness、知识只读面和 access policy；Tenants / Launch check 不代表已完成生产 DB、真实企业 IdP SSO 或完整企业权限后台。
 
 可选企业 SSO header gate：
 
@@ -134,6 +134,14 @@ curl -fsS \
   http://127.0.0.1:8765/api/health
 ```
 
+上线 gate 摘要：
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" \
+  http://127.0.0.1:8765/api/launch-readiness
+```
+
 核心页面验收：
 
 1. 打开 `/`。
@@ -169,7 +177,8 @@ curl -fsS \
 ```
 
 10. 确认缺失能力只保留真实生产缺口：`enterprise_idp_sso_validation`、`production_db_operations`、`productized_live_long_run`。
-11. 进入 `Audit`，确认权限和工具调用审计可读。
+11. 进入 `Launch`，确认 staging gates 有真实 evidence，production status 明确是 `blocked`，并列出真实生产 blocker。
+12. 进入 `Audit`，确认权限和工具调用审计可读。
 
 静态知识站导出验收：
 
@@ -212,6 +221,7 @@ wiki/project_feishu_ai_challenge.md
 - 已有 admin / viewer token 分级：viewer 只读浏览，admin 才能导出 Wiki Markdown 和保存 tenant policy。
 - 已有可选 reverse-proxy SSO header gate：admin allowlist 可导出，allowed domain viewer 只能浏览；直接远程绑定仍需 bearer token。
 - 已有 tenant / organization 过滤、Tenants readiness 概览和本地/pre-production tenant policy editor，可用于 staging 下检查租户边界展示与上线缺口。
+- 已有 Launch readiness 面板和 `/api/launch-readiness`，把 staging gate 与 production blocker 分开展示。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

@@ -296,6 +296,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 /api/tenant-policies     GET 读取租户策略；POST 仅 admin 可 upsert 本地/pre-production 租户策略
 /api/memories            memory ledger 和 evidence
 /api/audit               权限、治理和工具调用审计
+/api/launch-readiness   staging gate、生产 blocker 和上线证据摘要
 /api/health              带认证的后台 readiness 摘要
 /healthz                 不含敏感数据的进程 liveness 探活
 ```

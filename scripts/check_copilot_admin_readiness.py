@@ -121,6 +121,7 @@ def run_admin_readiness(
             checks["wiki_export"] = _wiki_export_check(service, require_export=strict or required_wiki_cards > 0)
             checks["graph"] = _graph_check(service, require_compiled_memory=strict)
             checks["tenants"] = _tenants_check(service, require_inventory=strict)
+            checks["launch_readiness"] = _launch_readiness_check(service, require_staging=strict)
             checks["restricted_write_api"] = {
                 "status": "pass",
                 "supported_methods": ["GET", "HEAD"],
@@ -278,6 +279,31 @@ def _tenants_check(service: AdminQueryService, *, require_inventory: bool) -> di
         "next_step": ""
         if status == "pass"
         else "Confirm tenant/org scoped ledger rows and local tenant policy editor availability before launch.",
+    }
+
+
+def _launch_readiness_check(service: AdminQueryService, *, require_staging: bool) -> dict[str, Any]:
+    launch = service.launch_readiness()
+    staging_status = str(launch.get("staging_status") or "fail")
+    production_status = str(launch.get("production_status") or "unknown")
+    blockers = [str(item.get("id")) for item in launch.get("production_blockers") or [] if isinstance(item, dict)]
+    if require_staging and staging_status == "fail":
+        status = "fail"
+    elif production_status != "blocked" or "enterprise_idp_sso_validation" not in blockers:
+        status = "fail"
+    elif staging_status == "warning":
+        status = "warning"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "staging_status": staging_status,
+        "production_status": production_status,
+        "production_blockers": blockers,
+        "summary": launch.get("summary"),
+        "next_step": ""
+        if status == "pass"
+        else "Resolve launch gate warnings before shared staging, and keep production blockers explicit.",
     }
 
 

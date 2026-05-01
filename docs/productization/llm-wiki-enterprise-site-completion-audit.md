@@ -36,12 +36,13 @@
 | live admin `/api/graph` | `memory_engine/copilot/admin.py` | 节点、边、metadata、tenant/org/visibility 字段可查 |
 | live admin `/api/tenants` | `memory_engine/copilot/admin.py` | ledger + tenant policy 派生的 tenant / organization readiness，显示 memory、open review、graph、audit、policy editor 状态和缺失生产能力 |
 | live admin `/api/tenant-policies` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | GET 可读租户策略；POST 仅 admin 可 upsert 本地/pre-production tenant policy，并写 `tenant_policy_upserted` 审计 |
+| live admin `/api/launch-readiness` | `memory_engine/copilot/admin.py`、`scripts/check_copilot_admin_readiness.py` | staging gates 与 production blockers 分开展示，明确 production 仍 blocked |
 | tenant/org 过滤 | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | `/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 可按 `tenant_id` / `organization_id` 收敛结果 |
 | Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata |
 | restricted write gate | `tests/test_copilot_admin.py` | 非 tenant policy 写请求返回 `405`；tenant policy POST 要求 admin |
 | admin/viewer token gate | `tests/test_copilot_admin.py`、`scripts/check_copilot_admin_readiness.py` | admin 可导出和保存 tenant policy；viewer 只读；token 相同被启动脚本拒绝 |
 | reverse-proxy SSO header gate | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py`、`deploy/copilot-admin.nginx.example` | 本机反向代理注入 `X-Forwarded-Email` 后，admin allowlist 可导出，allowed domain viewer 只能浏览；非生产 IdP 验收 |
-| staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、tenant policy editor availability、restricted write API、access policy |
+| staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、Launch readiness、tenant policy editor availability、restricted write API、access policy |
 | OpenClaw 固定版本 | `python3 scripts/check_openclaw_version.py` | 验证 `2026.4.24` 锁定 |
 | harness contract | `python3 scripts/check_agent_harness.py` | 验证 AGENTS、执行 contract、Cognee adapter 边界 |
 | Python 编译 | `python3 -m compileall memory_engine scripts` | 覆盖 Python 语法和导入编译 |
@@ -96,6 +97,7 @@ admin mobile graph detail and horizontal overflow
 admin desktop tenants readiness and horizontal overflow
 admin mobile tenants readiness and horizontal overflow
 admin tenant policy editor save and configured readiness
+admin desktop/mobile launch readiness and production blockers
 static site desktop graph detail and Deerflow attribution
 static site mobile graph detail and horizontal overflow
 ```

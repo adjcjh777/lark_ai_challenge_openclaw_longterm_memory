@@ -268,6 +268,25 @@ async function checkAdminTenants(browser, viewport, label) {
   await page.close();
 }
 
+async function checkAdminLaunch(browser, viewport, label) {
+  const page = await browser.newPage({ viewport });
+  await page.goto(config.adminUrl, { waitUntil: "networkidle" });
+  await page.click('[data-view="launch"]');
+  await page.waitForSelector("text=Launch Readiness");
+  await page.waitForSelector("text=production=blocked");
+  await page.waitForSelector("text=Real enterprise IdP");
+  await page.waitForSelector("text=Admin export/write gate");
+  await assertNoHorizontalOverflow(page, `admin launch ${label}`);
+  const panelText = await page.locator("#panel").innerText();
+  if (!panelText.includes("staging launch readiness only") || !panelText.includes("Production monitoring and alerting")) {
+    throw new Error(`admin launch ${label} missing launch boundary or blockers`);
+  }
+  const file = path.join(config.outputDir, `admin-launch-${label}.png`);
+  await page.screenshot({ path: file, fullPage: true });
+  screenshots[`admin_launch_${label}`] = file;
+  await page.close();
+}
+
 async function checkStaticSite(browser, viewport, label) {
   const page = await browser.newPage({ viewport });
   await page.goto(config.staticUrl, { waitUntil: "networkidle" });
@@ -298,6 +317,10 @@ async function checkStaticSite(browser, viewport, label) {
     pass("admin_desktop_tenants", "Tenants tab renders readiness counters, policy editor save, and missing capabilities without horizontal overflow.");
     await checkAdminTenants(browser, { width: 390, height: 844 }, "mobile");
     pass("admin_mobile_tenants", "Mobile Tenants tab renders readiness counters and policy editor without horizontal overflow.");
+    await checkAdminLaunch(browser, { width: 1440, height: 1000 }, "desktop");
+    pass("admin_desktop_launch", "Launch tab renders staging readiness and production blockers without horizontal overflow.");
+    await checkAdminLaunch(browser, { width: 390, height: 844 }, "mobile");
+    pass("admin_mobile_launch", "Mobile Launch tab renders readiness gates without horizontal overflow.");
     await checkStaticSite(browser, { width: 1440, height: 1000 }, "desktop");
     pass("static_desktop_site", "Static site renders graph detail and Deerflow attribution.");
     await checkStaticSite(browser, { width: 390, height: 844 }, "mobile");

@@ -149,6 +149,96 @@ class AdminQueryService:
             "knowledge_cards": wiki["cards"],
         }
 
+    def launch_readiness(self) -> dict[str, Any]:
+        summary = self.summary()
+        wiki = self.wiki_overview(limit=20)
+        graph = self.graph_workspace(limit=80)
+        tenants = self.tenant_overview(limit=80)
+        policies = self.tenant_policies(limit=80)
+        checks = [
+            _launch_check(
+                "llm_wiki",
+                "LLM Wiki cards",
+                "pass" if int(wiki.get("card_count") or 0) > 0 else "fail",
+                f"{int(wiki.get('card_count') or 0)} active evidence-backed cards",
+                "Confirm active memories with evidence before sharing the knowledge site.",
+            ),
+            _launch_check(
+                "knowledge_graph",
+                "Knowledge graph",
+                "pass" if int(graph.get("workspace_node_count") or 0) > 0 else "fail",
+                f"{int(graph.get('workspace_node_count') or 0)} nodes / {int(graph.get('workspace_edge_count') or 0)} edges",
+                "Ingest graph context or confirm evidence-backed memories.",
+            ),
+            _launch_check(
+                "tenant_inventory",
+                "Tenant inventory",
+                "pass" if int(tenants.get("tenant_count") or 0) > 0 else "fail",
+                f"{int(tenants.get('tenant_count') or 0)} tenants / {int(tenants.get('organization_count') or 0)} orgs",
+                "Create tenant/org scoped ledger rows before staging review.",
+            ),
+            _launch_check(
+                "tenant_policy_editor",
+                "Tenant policy editor",
+                "pass"
+                if bool(policies.get("available")) and int(policies.get("total") or 0) > 0
+                else "warning"
+                if bool(policies.get("available"))
+                else "fail",
+                f"{int(policies.get('total') or 0)} configured policies",
+                "Save at least one tenant policy for the staging tenant.",
+            ),
+            _launch_check(
+                "audit_ledger",
+                "Audit ledger",
+                "pass" if int(summary.get("audit_total") or 0) > 0 else "warning",
+                f"{int(summary.get('audit_total') or 0)} audit events",
+                "Run a candidate/review or tenant policy action to prove audit writeback.",
+            ),
+        ]
+        staging_status = _rollup_status(checks)
+        production_blockers = [
+            {
+                "id": "enterprise_idp_sso_validation",
+                "label": "Real enterprise IdP / Feishu SSO validation",
+                "status": "blocker",
+            },
+            {
+                "id": "production_db_operations",
+                "label": "Production database operations",
+                "status": "blocker",
+            },
+            {
+                "id": "production_monitoring_alerts",
+                "label": "Production monitoring and alerting",
+                "status": "blocker",
+            },
+            {
+                "id": "productized_live_long_run",
+                "label": "Productized live long-run evidence",
+                "status": "blocker",
+            },
+        ]
+        return {
+            "staging_status": staging_status,
+            "production_status": "blocked",
+            "checks": checks,
+            "production_blockers": production_blockers,
+            "summary": {
+                "memory_total": summary.get("memory_total"),
+                "audit_total": summary.get("audit_total"),
+                "wiki_card_count": wiki.get("card_count"),
+                "graph_node_count": graph.get("workspace_node_count"),
+                "graph_edge_count": graph.get("workspace_edge_count"),
+                "tenant_count": tenants.get("tenant_count"),
+                "tenant_policy_count": policies.get("total"),
+            },
+            "boundary": (
+                "staging launch readiness only; production remains blocked until real IdP, "
+                "production DB ops, monitoring, and long-run live evidence are complete."
+            ),
+        }
+
     def tenant_overview(
         self,
         *,
@@ -1216,6 +1306,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/live":
                 self._send_json(self._api_live(), send_body=send_body)
                 return
+            if parsed.path == "/api/launch-readiness":
+                self._send_json(self._api_launch_readiness(), send_body=send_body)
+                return
             if parsed.path == "/api/tenants":
                 self._send_json(self._api_tenants(parsed.query), send_body=send_body)
                 return
@@ -1337,6 +1430,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             wiki = service.wiki_overview(limit=1)
             graph = service.graph_workspace(limit=10)
             policies = service.tenant_policies(limit=1)
+            launch = service.launch_readiness()
             return {
                 "ok": True,
                 "db_path": self.db_path,
@@ -1368,6 +1462,10 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                     "graph_ready": int(graph.get("workspace_node_count") or 0) >= 0,
                     "wiki_card_count": int(wiki.get("card_count") or 0),
                     "graph_workspace_node_count": int(graph.get("workspace_node_count") or 0),
+                    "launch_readiness": {
+                        "staging_status": launch.get("staging_status"),
+                        "production_status": launch.get("production_status"),
+                    },
                     "boundary": "local/pre-production admin readiness; no production deployment claim.",
                 },
             }
@@ -1375,6 +1473,41 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     def _api_live(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).live_overview()}
+
+    def _api_launch_readiness(self) -> dict[str, Any]:
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).launch_readiness()
+        access_checks = [
+            _launch_check(
+                "shared_access_gate",
+                "Shared access gate",
+                "pass" if self.auth_token or self.viewer_token or self.sso_config.enabled else "warning",
+                "token_or_sso_configured"
+                if self.auth_token or self.viewer_token or self.sso_config.enabled
+                else "local_only_auth_disabled",
+                "Configure admin/viewer token or loopback SSO header gate before shared staging.",
+            ),
+            _launch_check(
+                "admin_export_gate",
+                "Admin export/write gate",
+                "pass" if self.auth_token or (self.sso_config.enabled and self.sso_config.admin_users) else "warning",
+                "admin_export_available"
+                if self.auth_token or (self.sso_config.enabled and self.sso_config.admin_users)
+                else "no_admin_export_identity",
+                "Configure an admin token or SSO admin allowlist before Markdown export or tenant policy edits.",
+            ),
+        ]
+        data["checks"] = [*data.get("checks", []), *access_checks]
+        data["staging_status"] = _rollup_status(data["checks"])
+        data["access_policy"] = {
+            "admin_token_configured": bool(self.auth_token),
+            "viewer_token_configured": bool(self.viewer_token),
+            "sso_enabled": bool(self.sso_config.enabled),
+            "sso_admin_users_configured": bool(self.sso_config.admin_users),
+            "viewer_token_can_export": False,
+            "tenant_policy_write_requires_admin": True,
+        }
+        return {"ok": True, "db_path": self.db_path, "data": data}
 
     def _api_tenants(self, query_string: str) -> dict[str, Any]:
         params = parse_qs(query_string)
@@ -1922,6 +2055,31 @@ def _count_items_by(items: list[dict[str, Any]], key: str) -> dict[str, int]:
     return dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
 
 
+def _launch_check(
+    check_id: str,
+    label: str,
+    status: str,
+    evidence: str,
+    next_step: str,
+) -> dict[str, Any]:
+    return {
+        "id": check_id,
+        "label": label,
+        "status": status,
+        "evidence": evidence,
+        "next_step": "" if status == "pass" else next_step,
+    }
+
+
+def _rollup_status(checks: list[dict[str, Any]]) -> str:
+    statuses = {str(check.get("status")) for check in checks}
+    if "fail" in statuses:
+        return "fail"
+    if "warning" in statuses:
+        return "warning"
+    return "pass"
+
+
 def _param(params: dict[str, list[str]], name: str) -> str | None:
     values = params.get(name)
     if not values:
@@ -2120,7 +2278,15 @@ def _index_html() -> str:
       background: #fff2d6;
       color: var(--accent-2);
     }}
+    .status.warning, .status.blocker {{
+      background: #fbedd7;
+      color: var(--accent-2);
+    }}
     .status.rejected, .status.expired, .status.deny {{
+      background: #f7dddd;
+      color: var(--danger);
+    }}
+    .status.fail {{
       background: #f7dddd;
       color: var(--danger);
     }}
@@ -2482,6 +2648,7 @@ def _index_html() -> str:
       <button class="tab" data-view="wiki">LLM Wiki</button>
       <button class="tab" data-view="graph">Graph</button>
       <button class="tab" data-view="tenants">Tenants</button>
+      <button class="tab" data-view="launch">Launch</button>
       <button class="tab" data-view="memories">Ledger</button>
       <button class="tab" data-view="audit">Audit</button>
       <button class="tab" data-view="tables">Tables</button>
@@ -2598,6 +2765,7 @@ def _index_html() -> str:
         if (state.view === "wiki") return renderWiki(await getJson(`/api/wiki?${{paramsFor("wiki")}}`));
         if (state.view === "graph") return renderGraph(await getJson(`/api/graph?${{paramsFor("graph")}}`));
         if (state.view === "tenants") return renderTenants(await getJson(`/api/tenants?${{paramsFor("tenants")}}`));
+        if (state.view === "launch") return renderLaunch(await getJson("/api/launch-readiness"));
         if (state.view === "memories") return renderMemories(await getJson(`/api/memories?${{paramsFor("memories")}}`));
         if (state.view === "audit") return renderAudit(await getJson(`/api/audit?${{paramsFor("audit")}}`));
         return renderTables(await getJson("/api/tables"));
@@ -2906,6 +3074,39 @@ def _index_html() -> str:
           <section class="workspace-column">
             <div class="section-title"><h2>Tenant / Organization Readiness</h2><span>counts are scoped by tenant_id and organization_id</span></div>
             ${{rows ? `<table><thead><tr><th>Tenant / Org</th><th>Memory</th><th>Graph</th><th>Audit</th><th>Scopes</th><th>Readiness</th><th>Latest Activity</th></tr></thead><tbody>${{rows}}</tbody></table>` : `<div class="empty">暂无 tenant / organization ledger</div>`}}
+          </section>
+        </div>`;
+    }}
+
+    function renderLaunch(data) {{
+      const checks = data.checks || [];
+      const blockers = data.production_blockers || [];
+      const summary = data.summary || {{}};
+      const rows = checks.map(item => `
+        <tr>
+          <td><span class="status ${{esc(item.status)}}">${{esc(item.status)}}</span></td>
+          <td>${{esc(item.label)}}<br><span class="mono">${{esc(item.id)}}</span></td>
+          <td class="content-cell">${{esc(item.evidence)}}</td>
+          <td class="content-cell">${{esc(item.next_step || "-")}}</td>
+        </tr>`).join("");
+      const blockerRows = blockers.map(item => `<span class="tag warn">${{esc(item.label || item.id)}}</span>`).join("");
+      $("panel").innerHTML = `
+        <div class="split-view">
+          <section class="workspace-column">
+            <div class="section-title"><h2>Launch Readiness</h2><span>staging=${{esc(data.staging_status)}} / production=${{esc(data.production_status)}}</span></div>
+            <div class="kv">
+              <span>Wiki cards</span><strong>${{esc(summary.wiki_card_count)}}</strong>
+              <span>Graph</span><strong>${{esc(summary.graph_node_count)}} nodes / ${{esc(summary.graph_edge_count)}} edges</strong>
+              <span>Tenants</span><strong>${{esc(summary.tenant_count)}}</strong>
+              <span>Tenant policies</span><strong>${{esc(summary.tenant_policy_count)}}</strong>
+              <span>Audit events</span><strong>${{esc(summary.audit_total)}}</strong>
+              <span>Boundary</span><strong>${{esc(data.boundary)}}</strong>
+            </div>
+            <div class="tag-row">${{blockerRows}}</div>
+          </section>
+          <section class="workspace-column">
+            <div class="section-title"><h2>Gate Evidence</h2><span>pass / warning / fail</span></div>
+            <table><thead><tr><th>Status</th><th>Gate</th><th>Evidence</th><th>Next step</th></tr></thead><tbody>${{rows}}</tbody></table>
           </section>
         </div>`;
     }}
