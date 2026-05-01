@@ -263,12 +263,7 @@ def _chat_id(payload: dict[str, Any]) -> str:
 
 def _actor_id(payload: dict[str, Any]) -> str:
     tool_result = payload.get("tool_result") if isinstance(payload.get("tool_result"), dict) else {}
-    return str(
-        payload.get("actor_id")
-        or payload.get("sender_open_id")
-        or tool_result.get("actor_id")
-        or ""
-    ).strip()
+    return str(payload.get("actor_id") or payload.get("sender_open_id") or tool_result.get("actor_id") or "").strip()
 
 
 def _error_code(tool_result: dict[str, Any]) -> str:
@@ -296,7 +291,7 @@ def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
     if isinstance(parsed, dict):
         if isinstance(parsed.get("lines"), list):
             return [_payload_from_log_line(item) for item in parsed["lines"] if isinstance(item, dict)]
-        return [parsed]
+        return [_payload_from_log_line(parsed)]
 
     payloads: list[dict[str, Any]] = []
     for raw_line in text.splitlines():
@@ -314,6 +309,12 @@ def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
 def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
     if "result" in line or "tool" in line or "tool_result" in line or "event_type" in line:
         return line
+    raw_line = line.get("raw_line")
+    if isinstance(raw_line, str):
+        parsed = _parse_json(raw_line)
+        if isinstance(parsed, dict):
+            return parsed
+        return {"log_message": raw_line}
     for key in ("payload", "data", "raw", "message"):
         value = line.get(key)
         if isinstance(value, dict):

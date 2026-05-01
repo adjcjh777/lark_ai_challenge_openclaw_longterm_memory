@@ -5,7 +5,6 @@ import unittest
 
 from scripts.check_feishu_permission_negative_gate import check_permission_negative_events
 
-
 CHAT_ID = "oc_permission_negative_gate"
 ACTOR_ID = "ou_non_reviewer"
 
@@ -104,6 +103,22 @@ class FeishuPermissionNegativeGateTest(unittest.TestCase):
 
         self.assertTrue(report["ok"])
         self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
+
+    def test_reads_copilot_listener_raw_line_attempt_wrappers(self) -> None:
+        line = json.dumps(
+            {
+                "ts": "2026-05-01T10:00:00+08:00",
+                "event": "copilot_live_event_received",
+                "raw_line": json.dumps(_enable_memory_message(), ensure_ascii=False),
+            },
+            ensure_ascii=False,
+        )
+
+        report = check_permission_negative_events(line)
+
+        self.assertFalse(report["ok"])
+        self.assertEqual("enable_memory_attempt_without_denied_result", report["reason"])
+        self.assertEqual(1, report["summary"]["enable_memory_attempt_events"])
 
     def test_audit_only_is_not_enough_for_live_result_gate(self) -> None:
         report = check_permission_negative_events(json.dumps(_audit_only(), ensure_ascii=False))

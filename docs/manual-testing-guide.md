@@ -381,6 +381,8 @@ python3 scripts/check_feishu_permission_negative_gate.py \
 - `summary.denied_enable_memory_results >= 1`。
 - 只看到 `feishu_group_policy_denied` audit 还不够；gate 会返回 `audit_only_no_denied_live_result`，需要同时保留 live result log。
 
+2026-05-01 gate 已支持 Copilot listener 的 `raw_line` attempt wrapper。对现有 isolated listener logs 重跑时只看到 reviewer/admin allow-path，仍没有第二真实用户 denial result；这不是权限负例完成证据。
+
 失败处理：
 
 - 如果缺权限仍返回了具体记忆内容，立即停止真实飞书测试。
