@@ -199,6 +199,18 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="production_evidence_patch_merger",
+        path="scripts/merge_copilot_production_evidence.py",
+        description="Production evidence patch merger combines collector outputs and validates the merged manifest.",
+        required_patterns=(
+            "merge_production_evidence_patches",
+            "production_manifest_patch",
+            "run_production_evidence_check",
+            "require-production-ready",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="production_evidence_manifest_example",
         path="deploy/copilot-admin.production-evidence.example.json",
         description="Example manifest lists required production evidence without real secrets.",

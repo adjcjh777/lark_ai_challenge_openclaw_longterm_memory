@@ -89,6 +89,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `collect_copilot_admin_long_run_evidence.py` 用于真实运行窗口的证据采集：它会探测正在运行的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，并输出可填入 production evidence manifest 的 `productized_live_long_run` patch。采集器本身不创建生产 DB、IdP、TLS、监控或生产 readiness。
 
+`merge_copilot_production_evidence.py` 用于把 `collect_copilot_production_db_evidence.py`、`collect_copilot_external_production_evidence.py` 和 `collect_copilot_admin_long_run_evidence.py` 输出的 `production_manifest_patch` 合并成一个 production evidence manifest，并立即复用 `check_copilot_admin_production_evidence.py` 验证。它会拒绝未知 section、placeholder 和 secret-like patch 值；它不创建真实 DB、IdP、TLS、监控或长期运行证据。
+
 `check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
 
 `export_copilot_admin_launch_evidence.py` 会把当前本地/staging admin 状态导出为固定 JSON bundle：`summary.json`、`wiki.json`、`graph.json`、`graph-quality.json`、`audit.json`、`audit-readonly-gate.json`、`launch-readiness.json`、`deploy-bundle.json`、`production-evidence.json`、`completion-audit.json` 和 `manifest.json`。manifest 保留 `goal_complete=false`、`production_blocked=true` 和 production blockers；它是交付证据包，不是生产上线证明。
@@ -251,6 +253,23 @@ python3 scripts/collect_copilot_admin_long_run_evidence.py \
 ```
 
 真实 productized live gate 至少要在生产入口运行 24 小时，例如 `--sample-count 25 --sample-interval-seconds 3600 --min-window-hours 24 --min-sample-count 24`，并把输出中的 `production_manifest_patch.productized_live_long_run` 合并到真实 production evidence manifest。短跑 smoke 只证明采集器和接口可用，不代表长期线上运行完成。
+
+生产证据 patch 合并示例：
+
+```bash
+python3 scripts/merge_copilot_production_evidence.py \
+  --patch /tmp/copilot-production-db-patch.json \
+  --patch /tmp/copilot-external-production-patch.json \
+  --patch /tmp/copilot-long-run-patch.json \
+  --output /tmp/copilot-production-evidence.json \
+  --json
+python3 scripts/check_copilot_admin_production_evidence.py \
+  --manifest /tmp/copilot-production-evidence.json \
+  --require-production-ready \
+  --json
+```
+
+合并器只接受各 collector 的 `production_manifest_patch`，并把合并结果重新交给 production evidence gate。不要把合并成功写成生产上线完成；只有真实外部证据齐全且 `--require-production-ready` 通过后，才可以消除对应 blocker。
 
 ### Prometheus Alert Rules
 

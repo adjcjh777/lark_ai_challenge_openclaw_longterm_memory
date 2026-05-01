@@ -190,6 +190,18 @@ STAGING_CHECKS = (
         ),
     ),
     EvidenceCheck(
+        requirement="Launch gates",
+        evidence="Production evidence patch merger combines collector outputs and validates the merged manifest.",
+        path="scripts/merge_copilot_production_evidence.py",
+        contains=(
+            "merge_production_evidence_patches",
+            "production_manifest_patch",
+            "run_production_evidence_check",
+            "require-production-ready",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
         requirement="Visible knowledge graph backend",
         evidence="Admin Launch UI exposes production evidence manifest status.",
         path="memory_engine/copilot/admin.py",
