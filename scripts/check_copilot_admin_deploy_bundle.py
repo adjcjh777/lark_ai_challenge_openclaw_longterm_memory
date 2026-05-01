@@ -189,6 +189,18 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="production_tls_live_probe",
+        path="scripts/check_copilot_admin_tls_probe.py",
+        description="TLS live probe validates an existing HTTPS endpoint, certificate hostname/expiry, and HSTS.",
+        required_patterns=(
+            "run_tls_probe",
+            "production_domain_tls",
+            "Strict-Transport-Security",
+            "live_tls_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="long_run_evidence_collector",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         description="Long-run evidence collector probes a running Admin backend and emits a productized live manifest patch.",

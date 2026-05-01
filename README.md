@@ -328,7 +328,7 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_admin_env_file.py` 默认校验 `deploy/copilot-admin.env.example` 是否保持安全占位符；传 `--env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 可校验本机真实 runtime env 是否替换 token、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
 
-`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
+`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、TLS live probe、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
 
 `export_copilot_admin_launch_evidence.py` 会导出一个固定 JSON evidence bundle，包含 summary、Wiki、Graph、Graph Quality、Audit、Audit read-only gate、Launch readiness、deploy bundle、production evidence 和 completion audit。它只生成本地/staging launch evidence，manifest 仍会保留 `goal_complete=false` 和 production blockers，不代表生产上线完成。
 
@@ -337,6 +337,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 `collect_copilot_production_db_evidence.py` 会把真实 PostgreSQL / managed PostgreSQL 迁移、PITR 和恢复演练证据规范成 production evidence manifest 的 `production_db` patch；它只校验 evidence ref、时间戳和报告摘要，不创建或连接生产数据库。
 
 `collect_copilot_external_production_evidence.py` 会把真实企业 IdP / SSO、生产域名 TLS、Prometheus/Grafana/Alertmanager 投递证据规范成 production evidence manifest patch；它不执行真实登录、证书签发、Prometheus scrape 或告警投递。
+
+`check_copilot_admin_tls_probe.py` 会对已经运行的生产 HTTPS URL 做 live probe，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并进 `production_domain_tls` 的 manifest patch；它不签发证书、不配置 DNS，也不证明 IdP、监控、DB 或 24 小时 productized live。
 
 `collect_copilot_admin_long_run_evidence.py` 会探测运行中的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，生成可合并到 production evidence manifest 的 `productized_live_long_run` patch；短跑 smoke 只证明采集器可用，不代表 productized live 长期运行完成。
 

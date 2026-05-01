@@ -214,6 +214,18 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Live TLS probe validates an existing HTTPS endpoint, certificate hostname/expiry, and HSTS.",
+        path="scripts/check_copilot_admin_tls_probe.py",
+        contains=(
+            "run_tls_probe",
+            "production_domain_tls",
+            "Strict-Transport-Security",
+            "live_tls_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Long-run evidence collector samples the running Admin backend and emits a productized live manifest patch.",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         contains=(

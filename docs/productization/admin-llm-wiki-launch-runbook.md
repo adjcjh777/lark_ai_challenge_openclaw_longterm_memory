@@ -89,6 +89,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `collect_copilot_external_production_evidence.py` 用于规范真实企业 IdP / SSO、生产域名 TLS 和生产监控投递证据：它接收登录测试、viewer 导出拒绝、证书有效期、HSTS、Prometheus scrape、Grafana dashboard、Alertmanager route 和告警投递测试时间，输出 `enterprise_idp_sso`、`production_domain_tls`、`production_monitoring` manifest patch。它不会执行真实登录、签发证书、配置 Grafana 或发送告警；真实生产 gate 仍必须由外部系统日志、截图或运维记录支撑。
 
+`check_copilot_admin_tls_probe.py` 用于真实生产域名已经可访问后的 live probe：它连接 `https://...`，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并到 `production_domain_tls` 的 manifest patch。它不会签发证书、配置 DNS、证明企业 IdP、生产监控、生产 DB 或 24 小时 productized live；失败时不要手填通过结果。
+
 `collect_copilot_admin_long_run_evidence.py` 用于真实运行窗口的证据采集：它会探测正在运行的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，并输出可填入 production evidence manifest 的 `productized_live_long_run` patch。采集器本身不创建生产 DB、IdP、TLS、监控或生产 readiness。
 
 `merge_copilot_production_evidence.py` 用于把 `collect_copilot_production_db_evidence.py`、`collect_copilot_external_production_evidence.py` 和 `collect_copilot_admin_long_run_evidence.py` 输出的 `production_manifest_patch` 合并成一个 production evidence manifest，并立即复用 `check_copilot_admin_production_evidence.py` 验证。它会拒绝未知 section、placeholder 和 secret-like patch 值；它不创建真实 DB、IdP、TLS、监控或长期运行证据。
@@ -239,6 +241,16 @@ python3 scripts/collect_copilot_external_production_evidence.py \
 ```
 
 这个命令只生成 `enterprise_idp_sso`、`production_domain_tls` 和 `production_monitoring` patch。不要把它的通过结果写成真实 IdP、TLS 或生产监控已完成；仍需要外部系统证据和 `check_copilot_admin_production_evidence.py --require-production-ready` 统一验收。
+
+真实生产域名 TLS live probe 示例：
+
+```bash
+python3 scripts/check_copilot_admin_tls_probe.py \
+  --url https://memory.company.internal \
+  --json
+```
+
+这个命令会实际连接 HTTPS endpoint，检查证书主机名、证书有效期和 HSTS header，并输出 `production_domain_tls` patch。它不能替代真实 IdP、生产 DB、生产监控或 24 小时 productized live 证据。
 
 本地/staging 长跑采集 smoke：
 
