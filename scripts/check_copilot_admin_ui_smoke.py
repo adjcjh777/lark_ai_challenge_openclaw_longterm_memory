@@ -82,6 +82,7 @@ def run_ui_smoke(*, db_path: Path, output_dir: Path, scope: str) -> dict[str, An
         "static_entrypoint": export_result["entrypoint"],
         "checks": node_result.get("checks", {}),
         "screenshots": node_result.get("screenshots", {}),
+        "visual_metrics": node_result.get("visual_metrics", {}),
     }
 
 
@@ -196,11 +197,20 @@ class _workspace:
 _NODE_SMOKE_SCRIPT = r"""
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 const { chromium } = require("playwright");
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const screenshots = {};
 const checks = {};
+const visual_metrics = {};
+const VISUAL_BASELINE = {
+  minFileBytes: 8000,
+  minUniqueColors: 32,
+  minInkRatio: 0.015,
+  maxDominantColorRatio: 0.985,
+  sampleStride: 6,
+};
 
 function pass(name, message) {
   checks[name] = { status: "pass", message };
@@ -208,6 +218,141 @@ function pass(name, message) {
 
 function fail(name, message) {
   checks[name] = { status: "fail", message };
+}
+
+function readUInt32(buffer, offset) {
+  return buffer.readUInt32BE(offset);
+}
+
+function paethPredictor(left, up, upperLeft) {
+  const p = left + up - upperLeft;
+  const pa = Math.abs(p - left);
+  const pb = Math.abs(p - up);
+  const pc = Math.abs(p - upperLeft);
+  if (pa <= pb && pa <= pc) return left;
+  if (pb <= pc) return up;
+  return upperLeft;
+}
+
+function decodePng(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  const signature = buffer.slice(0, 8).toString("hex");
+  if (signature !== "89504e470d0a1a0a") {
+    throw new Error(`${path.basename(filePath)} is not a PNG screenshot`);
+  }
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idatChunks = [];
+  while (offset < buffer.length) {
+    const length = readUInt32(buffer, offset);
+    const type = buffer.slice(offset + 4, offset + 8).toString("ascii");
+    const data = buffer.slice(offset + 8, offset + 8 + length);
+    offset += length + 12;
+    if (type === "IHDR") {
+      width = readUInt32(data, 0);
+      height = readUInt32(data, 4);
+      bitDepth = data[8];
+      colorType = data[9];
+      const interlace = data[12];
+      if (bitDepth !== 8 || interlace !== 0 || ![2, 6].includes(colorType)) {
+        throw new Error(`${path.basename(filePath)} uses unsupported PNG format`);
+      }
+    } else if (type === "IDAT") {
+      idatChunks.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const stride = width * channels;
+  const inflated = zlib.inflateSync(Buffer.concat(idatChunks));
+  const pixels = Buffer.alloc(width * height * channels);
+  let inputOffset = 0;
+  let outputOffset = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = inflated[inputOffset];
+    inputOffset += 1;
+    for (let x = 0; x < stride; x += 1) {
+      const raw = inflated[inputOffset + x];
+      const left = x >= channels ? pixels[outputOffset + x - channels] : 0;
+      const up = y > 0 ? pixels[outputOffset + x - stride] : 0;
+      const upperLeft = y > 0 && x >= channels ? pixels[outputOffset + x - stride - channels] : 0;
+      let value = raw;
+      if (filter === 1) value = raw + left;
+      else if (filter === 2) value = raw + up;
+      else if (filter === 3) value = raw + Math.floor((left + up) / 2);
+      else if (filter === 4) value = raw + paethPredictor(left, up, upperLeft);
+      else if (filter !== 0) throw new Error(`${path.basename(filePath)} has unsupported PNG filter ${filter}`);
+      pixels[outputOffset + x] = value & 0xff;
+    }
+    inputOffset += stride;
+    outputOffset += stride;
+  }
+  return { width, height, channels, pixels, bytes: buffer.length };
+}
+
+function colorDistance(a, b) {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+}
+
+function analyzePng(filePath) {
+  const png = decodePng(filePath);
+  const colors = new Map();
+  const first = [png.pixels[0], png.pixels[1], png.pixels[2]];
+  let sampled = 0;
+  let ink = 0;
+  const step = Math.max(1, VISUAL_BASELINE.sampleStride);
+  for (let y = 0; y < png.height; y += step) {
+    for (let x = 0; x < png.width; x += step) {
+      const offset = (y * png.width + x) * png.channels;
+      const rgb = [png.pixels[offset], png.pixels[offset + 1], png.pixels[offset + 2]];
+      const key = rgb.join(",");
+      colors.set(key, (colors.get(key) || 0) + 1);
+      sampled += 1;
+      if (colorDistance(rgb, first) > 24) ink += 1;
+    }
+  }
+  const dominant = Math.max(...colors.values());
+  return {
+    width: png.width,
+    height: png.height,
+    file_bytes: png.bytes,
+    sampled_pixels: sampled,
+    unique_colors: colors.size,
+    ink_ratio: Number((ink / sampled).toFixed(4)),
+    dominant_color_ratio: Number((dominant / sampled).toFixed(4)),
+  };
+}
+
+function assertVisualBaseline() {
+  const failures = [];
+  for (const [name, file] of Object.entries(screenshots)) {
+    const metrics = analyzePng(file);
+    visual_metrics[name] = metrics;
+    if (metrics.file_bytes < VISUAL_BASELINE.minFileBytes) {
+      failures.push(`${name} file too small: ${metrics.file_bytes}`);
+    }
+    if (metrics.unique_colors < VISUAL_BASELINE.minUniqueColors) {
+      failures.push(`${name} low color diversity: ${metrics.unique_colors}`);
+    }
+    if (metrics.ink_ratio < VISUAL_BASELINE.minInkRatio) {
+      failures.push(`${name} appears blank: ink_ratio=${metrics.ink_ratio}`);
+    }
+    if (metrics.dominant_color_ratio > VISUAL_BASELINE.maxDominantColorRatio) {
+      failures.push(`${name} dominated by one color: ${metrics.dominant_color_ratio}`);
+    }
+  }
+  if (failures.length) {
+    fail("visual_pixel_integrity", failures.join("; "));
+  } else {
+    pass(
+      "visual_pixel_integrity",
+      "Screenshots meet pixel-level nonblank, color diversity, and dominant-color thresholds."
+    );
+  }
 }
 
 async function assertNoHorizontalOverflow(page, name) {
@@ -325,13 +470,14 @@ async function checkStaticSite(browser, viewport, label) {
     pass("static_desktop_site", "Static site renders graph detail and Deerflow attribution.");
     await checkStaticSite(browser, { width: 390, height: 844 }, "mobile");
     pass("static_mobile_site", "Mobile static site renders graph detail without horizontal overflow.");
+    assertVisualBaseline();
   } catch (error) {
     fail("playwright", error.message);
   } finally {
     await browser.close();
   }
   const ok = Object.values(checks).every((check) => check.status === "pass");
-  console.log(JSON.stringify({ ok, checks, screenshots }, null, 2));
+  console.log(JSON.stringify({ ok, checks, screenshots, visual_metrics }, null, 2));
 })();
 """
 

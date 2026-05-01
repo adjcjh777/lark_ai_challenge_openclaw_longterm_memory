@@ -19,7 +19,7 @@
 | LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`scripts/check_copilot_knowledge_site_export.py --json`、`tests/test_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site_export_check.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
 | 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
-| 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格 | 还缺设计系统级组件抽象和完整视觉回归流水线 |
+| 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格；UI smoke 已加入截图像素完整性检查 | 还缺设计系统级组件抽象和固定截图基线 / pixel diff 阈值库 |
 | 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、`deploy/copilot-admin.production-evidence.example.json`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_env_file.py --expect-runtime --json`、`scripts/check_copilot_admin_deploy_bundle.py --json`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_copilot_admin_production_evidence.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成；production evidence manifest 目前只有示例模板 |
 
 ## 2. Prompt-to-Artifact Checklist
@@ -61,7 +61,7 @@
 | Python 编译 | `python3 -m compileall memory_engine scripts` | 覆盖 Python 语法和导入编译 |
 | 单元测试 | `python3 -m unittest tests.test_copilot_admin tests.test_copilot_knowledge_site tests.test_copilot_knowledge_pages` | 覆盖 admin API、静态站导出、Wiki 页面编译 |
 | 空白检查 | `git diff --check` | 避免 trailing whitespace 等提交问题 |
-| UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Graph 详情、Tenants readiness、缺失生产能力清单、Deerflow attribution 和横向溢出 |
+| UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Graph 详情、Tenants readiness、缺失生产能力清单、Deerflow attribution、横向溢出和截图像素完整性 |
 | 本地模型占用检查 | `ollama ps` | 确认没有残留 embedding/model runtime |
 
 ## 3. 当前已推送里程碑
@@ -153,12 +153,12 @@ static-site-mobile.png
 3. 生产 DB 部署未完成。当前 runbook 覆盖本地 / staging SQLite admin，不覆盖生产数据库运维。
 4. 长期 productized live 未完成。当前不能声明真实 Feishu DM 稳定路由到 first-class `memory.*` 工具或长期线上运行。
 5. 监控告警未完成。已有 health/readiness，但没有生产级 uptime、延迟、错误率、审计异常告警。
-6. UI 视觉回归已有 CI smoke，覆盖 Graph、Tenants、静态站关键 DOM、详情面板、readiness 文案和横向溢出，但没有固定截图基线或自动 pixel diff。
+6. UI 视觉回归已有 CI smoke，覆盖 Graph、Tenants、Launch、静态站关键 DOM、详情面板、readiness 文案、横向溢出和截图像素完整性；但还没有固定截图基线或自动 pixel diff 阈值库。
 
 ## 6. 下一步建议
 
 1. 明确目标部署方式：内网静态 artifact、受控 staging admin、还是真实生产服务。
 2. 选定企业认证边界：Feishu SSO、oauth2-proxy、Nginx `auth_request`，或其他 IdP。
 3. 将 tenant policy editor 接入真实企业目录、审批发布流程和权限矩阵执行链路。
-4. 给 `scripts/check_copilot_admin_ui_smoke.py` 增加固定截图基线或 pixel diff，继续扩大 dashboard tab 覆盖。
+4. 给 `scripts/check_copilot_admin_ui_smoke.py` 增加固定截图基线或 pixel diff 阈值库，继续扩大 dashboard tab 覆盖。
 5. 建立 productized live 运行证据：启动命令、日志窗口、健康探活、真实受控消息链路、回滚记录。

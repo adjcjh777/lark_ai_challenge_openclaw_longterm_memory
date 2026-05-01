@@ -329,6 +329,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_knowledge_site_export.py` 会导出一个临时静态知识站，并校验 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json`、`wiki/*.md`、Graph detail UI、read-only boundary 和 secret-like 文本脱敏。
 
+`check_copilot_admin_ui_smoke.py` 会启动本机 admin、导出静态站并截图，除桌面/移动端 Graph、Tenants、Launch 和静态站 DOM 断言外，还会对截图做像素级非空白、色彩多样性、主色占比和文件大小检查。
+
 `check_llm_wiki_enterprise_site_completion.py` 会把 LLM Wiki、知识图谱后台、UI smoke、上线 gate 和 no-overclaim 边界映射到具体 artifact；当前预期输出是 `staging_ok=true` 且 `goal_complete=false`，因为生产 DB、真实 IdP SSO、域名证书、生产监控和 productized live 长期运行仍未完成。
 
 如需生成可放到受控内网或反向代理后的静态知识站包：
