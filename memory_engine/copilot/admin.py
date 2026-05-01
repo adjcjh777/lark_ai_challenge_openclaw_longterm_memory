@@ -2404,6 +2404,11 @@ def _compact_production_evidence(result: dict[str, Any]) -> dict[str, Any]:
         for name, check in checks.items()
         if name in production_sections and isinstance(check, dict)
     }
+    section_missing = {
+        name: check.get("missing_or_placeholder") or []
+        for name, check in checks.items()
+        if name in production_sections and isinstance(check, dict)
+    }
     return {
         "ok": bool(result.get("ok")),
         "production_ready": bool(result.get("production_ready")),
@@ -2412,6 +2417,7 @@ def _compact_production_evidence(result: dict[str, Any]) -> dict[str, Any]:
         "warning_checks": result.get("warning_checks") or [],
         "failed_checks": result.get("failed_checks") or [],
         "section_status": section_status,
+        "section_missing": section_missing,
         "boundary": result.get("boundary"),
         "next_step": result.get("next_step"),
     }
@@ -3498,6 +3504,7 @@ def _index_html() -> str:
       const summary = data.summary || {{}};
       const evidence = data.production_evidence || {{}};
       const evidenceStatus = evidence.section_status || {{}};
+      const evidenceMissing = evidence.section_missing || {{}};
       const graphQuality = data.graph_quality || {{}};
       const graphQualitySummary = graphQuality.summary || {{}};
       const graphQualityStatus = graphQuality.check_status || {{}};
@@ -3510,7 +3517,11 @@ def _index_html() -> str:
         </tr>`).join("");
       const blockerRows = blockers.map(item => `<span class="tag warn">${{esc(item.label || item.id)}}</span>`).join("");
       const evidenceRows = Object.entries(evidenceStatus).map(([name, status]) => `
-        <tr><td class="mono">${{esc(name)}}</td><td><span class="status ${{esc(status)}}">${{esc(status)}}</span></td></tr>
+        <tr>
+          <td class="mono">${{esc(name)}}</td>
+          <td><span class="status ${{esc(status)}}">${{esc(status)}}</span></td>
+          <td class="content-cell mono">${{esc((evidenceMissing[name] || []).join(", ") || "none")}}</td>
+        </tr>
       `).join("");
       const graphQualityRows = Object.entries(graphQualityStatus).map(([name, status]) => `
         <tr><td class="mono">${{esc(name)}}</td><td><span class="status ${{esc(status)}}">${{esc(status)}}</span></td></tr>
@@ -3544,7 +3555,7 @@ def _index_html() -> str:
               <span>Failures</span><strong>${{esc((evidence.failed_checks || []).length)}}</strong>
               <span>Boundary</span><strong>${{esc(evidence.boundary)}}</strong>
             </div>
-            <table><thead><tr><th>Evidence section</th><th>Status</th></tr></thead><tbody>${{evidenceRows}}</tbody></table>
+            <table><thead><tr><th>Evidence section</th><th>Status</th><th>Missing fields</th></tr></thead><tbody>${{evidenceRows}}</tbody></table>
           </section>
           <section class="workspace-column">
             <div class="section-title"><h2>Gate Evidence</h2><span>pass / warning / fail</span></div>

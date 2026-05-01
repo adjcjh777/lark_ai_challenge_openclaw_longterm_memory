@@ -187,6 +187,8 @@ curl -fsS \
   http://127.0.0.1:8765/api/launch-readiness
 ```
 
+Launch 页的 Production Evidence 表会显示每个生产证据 section 的 `status` 和缺失字段（例如 `admin_login_passed`、`evidence_window_hours_at_least_24`），用于定位还缺哪类真实外部证据；它只读 manifest gate 结果，不代表后台可以替代真实生产验收。
+
 Prometheus text metrics，同样走 admin/viewer token 或 SSO：
 
 ```bash

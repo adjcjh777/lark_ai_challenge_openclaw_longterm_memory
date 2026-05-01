@@ -576,6 +576,9 @@ async function checkAdminLaunch(browser, viewport, label) {
   if (!panelText.includes("production_evidence_manifest") || !panelText.includes("productized_live_long_run")) {
     throw new Error(`admin launch ${label} missing production evidence manifest status`);
   }
+  if (!panelText.includes("Missing fields") || !panelText.includes("admin_login_passed")) {
+    throw new Error(`admin launch ${label} missing production evidence missing-field details`);
+  }
   if (!panelText.includes("orphan_ratio") || !panelText.includes("compiled_memory_graph")) {
     throw new Error(`admin launch ${label} missing graph quality status`);
   }

@@ -109,6 +109,7 @@ STAGING_CHECKS = (
             "visual_pixel_integrity",
             "visual-baseline.json",
             "maxPixelDiffRatio",
+            "Missing fields",
         ),
     ),
     EvidenceCheck(

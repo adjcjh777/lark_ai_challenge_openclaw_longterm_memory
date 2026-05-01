@@ -337,6 +337,14 @@ class CopilotAdminTest(unittest.TestCase):
                 launch_payload["data"]["production_evidence"]["section_status"],
             )
             self.assertIn(
+                "admin_login_passed",
+                launch_payload["data"]["production_evidence"]["section_missing"]["enterprise_idp_sso"],
+            )
+            self.assertIn(
+                "evidence_window_hours_at_least_24",
+                launch_payload["data"]["production_evidence"]["section_missing"]["productized_live_long_run"],
+            )
+            self.assertIn(
                 "enterprise_idp_sso_validation",
                 {item["id"] for item in launch_payload["data"]["production_blockers"]},
             )
