@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from memory_engine.copilot.admin import ADMIN_TOKEN_ENV_NAMES, AdminQueryService, DEFAULT_ADMIN_HOST
+from memory_engine.copilot.admin import (
+    ADMIN_TOKEN_ENV_NAMES,
+    ADMIN_VIEWER_TOKEN_ENV_NAMES,
+    AdminQueryService,
+    DEFAULT_ADMIN_HOST,
+)
 from memory_engine.db import db_path_from_env
 
 REQUIRED_TABLES = {
@@ -34,6 +39,7 @@ def main() -> int:
     parser.add_argument("--db-path", default=str(db_path_from_env()), help="SQLite database path.")
     parser.add_argument("--host", default=DEFAULT_ADMIN_HOST, help="Planned admin bind host.")
     parser.add_argument("--admin-token", default=None, help="Planned admin bearer token.")
+    parser.add_argument("--viewer-token", default=None, help="Planned read-only admin viewer bearer token.")
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -52,6 +58,7 @@ def main() -> int:
         db_path=Path(args.db_path),
         host=args.host,
         admin_token=args.admin_token or _admin_token_from_env(),
+        viewer_token=args.viewer_token or _admin_viewer_token_from_env(),
         strict=args.strict,
         min_wiki_cards=args.min_wiki_cards,
     )
@@ -69,12 +76,23 @@ def run_admin_readiness(
     db_path: Path,
     host: str,
     admin_token: str | None,
+    viewer_token: str | None = None,
     strict: bool = False,
     min_wiki_cards: int | None = None,
 ) -> dict[str, Any]:
     required_wiki_cards = 1 if strict and min_wiki_cards is None else int(min_wiki_cards or 0)
     checks: dict[str, dict[str, Any]] = {
-        "remote_bind_auth": _remote_bind_auth_check(host=host, admin_token=admin_token, require_auth=strict),
+        "remote_bind_auth": _remote_bind_auth_check(
+            host=host,
+            admin_token=admin_token,
+            viewer_token=viewer_token,
+            require_auth=strict,
+        ),
+        "access_policy": _access_policy_check(
+            admin_token=admin_token,
+            viewer_token=viewer_token,
+            require_export_admin=strict or required_wiki_cards > 0,
+        ),
     }
     if not db_path.exists():
         checks["database"] = {
@@ -216,20 +234,58 @@ def _graph_check(service: AdminQueryService, *, require_compiled_memory: bool) -
     }
 
 
-def _remote_bind_auth_check(*, host: str, admin_token: str | None, require_auth: bool) -> dict[str, Any]:
+def _remote_bind_auth_check(
+    *,
+    host: str,
+    admin_token: str | None,
+    viewer_token: str | None,
+    require_auth: bool,
+) -> dict[str, Any]:
     remote_bind = host not in {"127.0.0.1", "localhost", "::1"}
-    if (remote_bind or require_auth) and not admin_token:
+    if (remote_bind or require_auth) and not (admin_token or viewer_token):
         return {
             "status": "fail",
             "host": host,
             "auth": "missing",
-            "next_step": "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or pass --admin-token before launch.",
+            "next_step": "Set an admin or viewer token before launch.",
         }
     return {
-        "status": "pass" if admin_token else "warning",
+        "status": "pass" if admin_token or viewer_token else "warning",
         "host": host,
-        "auth": "enabled" if admin_token else "disabled_local_only",
-        "next_step": "" if admin_token else "Set an admin token before any shared/staging deployment.",
+        "auth": "enabled" if admin_token or viewer_token else "disabled_local_only",
+        "next_step": "" if admin_token or viewer_token else "Set an access token before any shared/staging deployment.",
+    }
+
+
+def _access_policy_check(
+    *,
+    admin_token: str | None,
+    viewer_token: str | None,
+    require_export_admin: bool,
+) -> dict[str, Any]:
+    if admin_token and viewer_token and admin_token == viewer_token:
+        return {
+            "status": "fail",
+            "admin_token_configured": True,
+            "viewer_token_configured": True,
+            "viewer_token_can_export": True,
+            "next_step": "Use distinct admin and viewer tokens before launch.",
+        }
+    if require_export_admin and not admin_token:
+        return {
+            "status": "fail",
+            "admin_token_configured": False,
+            "viewer_token_configured": bool(viewer_token),
+            "viewer_token_can_export": False,
+            "next_step": "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN for Wiki export.",
+        }
+    status = "pass" if admin_token else "warning"
+    return {
+        "status": status,
+        "admin_token_configured": bool(admin_token),
+        "viewer_token_configured": bool(viewer_token),
+        "viewer_token_can_export": False,
+        "next_step": "" if admin_token else "Viewer-only mode can browse but cannot export Wiki markdown.",
     }
 
 
@@ -248,6 +304,14 @@ def _report(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 def _admin_token_from_env() -> str | None:
     for name in ADMIN_TOKEN_ENV_NAMES:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _admin_viewer_token_from_env() -> str | None:
+    for name in ADMIN_VIEWER_TOKEN_ENV_NAMES:
         value = os.environ.get(name)
         if value:
             return value

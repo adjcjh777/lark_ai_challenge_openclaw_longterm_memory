@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 
 from memory_engine.copilot.admin import (
     ADMIN_TOKEN_ENV_NAMES,
+    ADMIN_VIEWER_TOKEN_ENV_NAMES,
     DEFAULT_ADMIN_HOST,
     DEFAULT_ADMIN_PORT,
     create_admin_server,
@@ -29,7 +30,18 @@ def main() -> int:
     parser.add_argument(
         "--admin-token",
         default=None,
-        help="Bearer token for /api/* requests. Defaults to FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or COPILOT_ADMIN_TOKEN.",
+        help=(
+            "Admin bearer token for /api/* requests and Wiki export. "
+            "Defaults to FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or COPILOT_ADMIN_TOKEN."
+        ),
+    )
+    parser.add_argument(
+        "--viewer-token",
+        default=None,
+        help=(
+            "Optional read-only bearer token for /api/* requests. Viewer tokens cannot export Wiki markdown. "
+            "Defaults to FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN or COPILOT_ADMIN_VIEWER_TOKEN."
+        ),
     )
     parser.add_argument(
         "--allow-unauthenticated-remote",
@@ -65,19 +77,31 @@ def main() -> int:
         return 1
 
     auth_token = args.admin_token or _admin_token_from_env()
-    if _remote_bind_requires_token(args.host) and not auth_token and not args.allow_unauthenticated_remote:
+    viewer_token = args.viewer_token or _admin_viewer_token_from_env()
+    if auth_token and viewer_token and auth_token == viewer_token:
+        print("Admin token and viewer token must be different.", file=sys.stderr)
+        return 2
+    if _remote_bind_requires_token(args.host) and not (auth_token or viewer_token) and not args.allow_unauthenticated_remote:
         print(
-            "Refusing to bind the admin backend to a non-loopback host without an admin token. "
-            "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or pass --admin-token.",
+            "Refusing to bind the admin backend to a non-loopback host without an access token. "
+            "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN / FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN "
+            "or pass --admin-token / --viewer-token.",
             file=sys.stderr,
         )
         return 2
 
-    server = create_admin_server(args.host, args.port, db_path, auth_token=auth_token)
+    server = create_admin_server(args.host, args.port, db_path, auth_token=auth_token, viewer_token=viewer_token)
     url = f"http://{args.host}:{server.server_port}"
     print(f"Feishu Memory Copilot read-only admin: {url}", flush=True)
     print(f"SQLite database: {db_path}", flush=True)
-    print(f"Admin API auth: {'enabled' if auth_token else 'disabled'}", flush=True)
+    print(f"Admin API auth: {'enabled' if auth_token or viewer_token else 'disabled'}", flush=True)
+    print(
+        "Admin access policy: "
+        f"admin_token={'configured' if auth_token else 'missing'}, "
+        f"viewer_token={'configured' if viewer_token else 'missing'}, "
+        "viewer_export=disabled",
+        flush=True,
+    )
     print("Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()
@@ -90,6 +114,14 @@ def main() -> int:
 
 def _admin_token_from_env() -> str | None:
     for name in ADMIN_TOKEN_ENV_NAMES:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _admin_viewer_token_from_env() -> str | None:
+    for name in ADMIN_VIEWER_TOKEN_ENV_NAMES:
         value = os.environ.get(name)
         if value:
             return value

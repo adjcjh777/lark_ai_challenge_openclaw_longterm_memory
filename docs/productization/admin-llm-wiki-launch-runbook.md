@@ -32,15 +32,17 @@ git diff --check
 
 ```bash
 export FEISHU_MEMORY_COPILOT_ADMIN_TOKEN="$(openssl rand -hex 24)"
+export FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN="$(openssl rand -hex 24)"
 python3 scripts/check_copilot_admin_readiness.py \
   --db-path data/memory.sqlite \
   --host 0.0.0.0 \
   --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" \
+  --viewer-token "$FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" \
   --strict \
   --min-wiki-cards 1
 ```
 
-本机调试可以不设置 token，但 readiness 会给出 warning：
+admin token 可读取 `/api/*` 并导出 Wiki Markdown；viewer token 只能读取 `/api/*`，访问 `/api/wiki/export` 会返回 `403`。两个 token 必须不同。本机调试可以不设置 token，但 readiness 会给出 warning：
 
 ```bash
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
@@ -58,6 +60,7 @@ python3 scripts/start_copilot_admin.py --db-path data/memory.sqlite --port 8765
 
 ```bash
 export FEISHU_MEMORY_COPILOT_ADMIN_TOKEN="<redacted-token>"
+export FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN="<redacted-viewer-token>"
 python3 scripts/start_copilot_admin.py \
   --host 0.0.0.0 \
   --port 8765 \
@@ -75,6 +78,7 @@ MEMORY_DB_PATH=/opt/feishu_ai_challenge/data/memory.sqlite
 FEISHU_MEMORY_COPILOT_ADMIN_HOST=0.0.0.0
 FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765
 FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=<redacted-token>
+FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN=<redacted-viewer-token>
 EOF
 sudo cp deploy/copilot-admin.service.example /etc/systemd/system/copilot-admin.service
 sudo systemctl daemon-reload
@@ -91,7 +95,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-模板只代理到本机 `127.0.0.1:8765`。正式使用前必须替换域名和证书路径，并确保后台 API token 已启用。
+模板只代理到本机 `127.0.0.1:8765`。正式使用前必须替换域名和证书路径，并确保后台 API token 已启用；评委/队友只读浏览优先发 viewer token，Markdown 导出只发 admin token 给维护者。
 
 ## 4. 探活和验收
 
@@ -118,7 +122,7 @@ curl -fsS \
    - `raw events = excluded`
    - `requires evidence = required`
    - `writes_feishu = no`
-4. 在 `LLM Wiki` 点击 `导出 Markdown`，或用 API 验证指定 scope 的静态 Wiki 导出：
+4. 在 `LLM Wiki` 用 admin token 点击 `导出 Markdown`，或用 API 验证指定 scope 的静态 Wiki 导出：
 
 ```bash
 curl -fsS \
@@ -128,8 +132,9 @@ curl -fsS \
 ```
 
 导出内容应以 `# 项目记忆卡册：...` 开头，只包含 active curated memory 和 evidence，不包含 raw events。
-5. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
-6. 进入 `Audit`，确认权限和工具调用审计可读。
+5. 使用 viewer token 访问 `/api/wiki/export?scope=...` 应返回 `403`，确认只读浏览 token 不能批量导出知识卡册。
+6. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
+7. 进入 `Audit`，确认权限和工具调用审计可读。
 
 静态知识站导出验收：
 
@@ -168,6 +173,7 @@ wiki/project_feishu_ai_challenge.md
 
 - 已完成本地 / staging 只读 LLM Wiki 和知识图谱后台。
 - 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出、静态知识站导出和敏感字段脱敏。
+- 已有 admin / viewer token 分级：viewer 只读浏览，admin 才能导出 Wiki Markdown。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

@@ -264,6 +264,7 @@ export FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1
 export FEISHU_MEMORY_COPILOT_ADMIN_HOST=127.0.0.1
 export FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765
 export FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=change-me-local-token
+export FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN=change-me-readonly-token
 ```
 
 如果只是本机调试，不启动 OpenClaw / Feishu listener，也可以手动运行 fallback 脚本：
@@ -278,13 +279,13 @@ python3 scripts/start_copilot_admin.py
 python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8766
 ```
 
-如果绑定到非本机地址，必须设置 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN` 或传 `--admin-token`；否则启动脚本会拒绝运行。设置 token 后，所有 `/api/*` 请求需要 `Authorization: Bearer <token>`，页面会在首次加载数据时提示输入 token。
+如果绑定到非本机地址，必须设置 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN` / `FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN`，或传 `--admin-token` / `--viewer-token`；否则启动脚本会拒绝运行。admin token 可读取 `/api/*` 并导出 Wiki Markdown；viewer token 只能读取 `/api/*`，访问 `/api/wiki/export` 会返回 `403`。页面会在首次加载数据时提示输入 token。
 
 主要只读 API：
 
 ```text
 /api/wiki                active curated memory 编译视图，不包含 raw events，不写飞书
-/api/wiki/export?scope=  指定 scope 的 Markdown Wiki 导出，仍走 admin token 和只读 SQLite
+/api/wiki/export?scope=  指定 scope 的 Markdown Wiki 导出，只接受 admin token，仍只读 SQLite
 /api/graph               知识图谱节点/关系视图
 /api/memories            memory ledger 和 evidence
 /api/audit               权限、治理和工具调用审计
@@ -296,7 +297,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 
 ```bash
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
-python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" --strict --min-wiki-cards 1
+python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" --viewer-token "$FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" --strict --min-wiki-cards 1
 ```
 
 如需生成可放到受控内网或反向代理后的静态知识站包：

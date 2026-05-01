@@ -149,8 +149,9 @@ class CopilotAdminTest(unittest.TestCase):
 
         live = service.live_overview()
         self.assertIn("msg_admin", {item["source_id"] for item in live["recent_raw_events"]})
-        self.assertIn("[REDACTED]", live["recent_raw_events"][0]["content"])
-        self.assertNotIn("demo-secret", live["recent_raw_events"][0]["content"])
+        raw_contents = "\n".join(item["content"] for item in live["recent_raw_events"])
+        self.assertIn("[REDACTED]", raw_contents)
+        self.assertNotIn("demo-secret", raw_contents)
         self.assertEqual(2, live["knowledge_graph"]["node_total"])
         self.assertEqual(1, live["knowledge_graph"]["edge_total"])
         self.assertIn("wiki", live)
@@ -252,7 +253,13 @@ class CopilotAdminTest(unittest.TestCase):
 
     def test_http_admin_api_requires_bearer_token_when_configured(self) -> None:
         self._seed_rows()
-        server = create_admin_server("127.0.0.1", 0, self.tmp.name, auth_token="test-token")
+        server = create_admin_server(
+            "127.0.0.1",
+            0,
+            self.tmp.name,
+            auth_token="test-token",
+            viewer_token="viewer-token",
+        )
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -279,6 +286,20 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(2, payload["data"]["memory_total"])
 
+            request = Request(f"{base_url}/api/summary", headers={"Authorization": "Bearer viewer-token"})
+            with urlopen(request, timeout=5) as response:
+                viewer_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(viewer_payload["ok"])
+            self.assertEqual(2, viewer_payload["data"]["memory_total"])
+
+            request = Request(
+                f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
+                headers={"Authorization": "Bearer viewer-token"},
+            )
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(request, timeout=5)
+            self.assertEqual(403, raised.exception.code)
+
             request = Request(
                 f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
                 headers={"Authorization": "Bearer test-token"},
@@ -291,6 +312,9 @@ class CopilotAdminTest(unittest.TestCase):
             with urlopen(request, timeout=5) as response:
                 health = json.loads(response.read().decode("utf-8"))
             self.assertEqual("enabled", health["data"]["auth"])
+            self.assertTrue(health["data"]["access_policy"]["admin_token_configured"])
+            self.assertTrue(health["data"]["access_policy"]["viewer_token_configured"])
+            self.assertFalse(health["data"]["access_policy"]["viewer_token_can_export"])
         finally:
             server.shutdown()
             server.server_close()
@@ -343,7 +367,7 @@ class CopilotAdminTest(unittest.TestCase):
         )
 
         self.assertEqual(2, result.returncode)
-        self.assertIn("non-loopback host without an admin token", result.stderr)
+        self.assertIn("non-loopback host without an access token", result.stderr)
 
     def test_admin_readiness_strict_mode_requires_auth_wiki_and_graph(self) -> None:
         self._seed_rows()
@@ -357,6 +381,7 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertTrue(strict_ok["ok"])
         self.assertEqual("pass", strict_ok["checks"]["wiki"]["status"])
         self.assertEqual("pass", strict_ok["checks"]["graph"]["status"])
+        self.assertEqual("pass", strict_ok["checks"]["access_policy"]["status"])
 
         missing_auth = run_admin_readiness(
             db_path=Path(self.tmp.name),
@@ -366,6 +391,17 @@ class CopilotAdminTest(unittest.TestCase):
         )
         self.assertFalse(missing_auth["ok"])
         self.assertEqual("fail", missing_auth["checks"]["remote_bind_auth"]["status"])
+
+        viewer_only = run_admin_readiness(
+            db_path=Path(self.tmp.name),
+            host="0.0.0.0",
+            admin_token=None,
+            viewer_token="viewer-token",
+            strict=True,
+        )
+        self.assertFalse(viewer_only["ok"])
+        self.assertEqual("pass", viewer_only["checks"]["remote_bind_auth"]["status"])
+        self.assertEqual("fail", viewer_only["checks"]["access_policy"]["status"])
 
         too_few_cards = run_admin_readiness(
             db_path=Path(self.tmp.name),

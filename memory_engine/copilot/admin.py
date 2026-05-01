@@ -22,6 +22,7 @@ from memory_engine.repository import MemoryRepository
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
 ADMIN_TOKEN_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_TOKEN", "COPILOT_ADMIN_TOKEN")
+ADMIN_VIEWER_TOKEN_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN", "COPILOT_ADMIN_VIEWER_TOKEN")
 MAX_LIMIT = 200
 
 
@@ -55,11 +56,12 @@ def start_embedded_admin(
     db_path: str | Path | None = None,
     enabled: bool = True,
     auth_token: str | None = None,
+    viewer_token: str | None = None,
 ) -> EmbeddedAdminRuntime:
     if not enabled:
         return EmbeddedAdminRuntime(enabled=False, reason="disabled")
     try:
-        server = create_admin_server(host, port, db_path, auth_token=auth_token)
+        server = create_admin_server(host, port, db_path, auth_token=auth_token, viewer_token=viewer_token)
     except OSError as exc:
         return EmbeddedAdminRuntime(enabled=False, reason=f"bind_failed: {exc}")
 
@@ -657,6 +659,7 @@ class AdminQueryService:
 class CopilotAdminServer(ThreadingHTTPServer):
     db_path: str
     auth_token: str | None
+    viewer_token: str | None
 
 
 def create_admin_server(
@@ -665,24 +668,29 @@ def create_admin_server(
     db_path: str | Path | None = None,
     *,
     auth_token: str | None = None,
+    viewer_token: str | None = None,
 ) -> CopilotAdminServer:
     resolved_db_path = str(db_path or db_path_from_env())
     resolved_auth_token = auth_token if auth_token is not None else _admin_token_from_env()
+    resolved_viewer_token = viewer_token if viewer_token is not None else _admin_viewer_token_from_env()
 
     class Handler(CopilotAdminHandler):
         pass
 
     Handler.db_path = resolved_db_path
     Handler.auth_token = resolved_auth_token
+    Handler.viewer_token = resolved_viewer_token
     server = CopilotAdminServer((host, port), Handler)
     server.db_path = resolved_db_path
     server.auth_token = resolved_auth_token
+    server.viewer_token = resolved_viewer_token
     return server
 
 
 class CopilotAdminHandler(BaseHTTPRequestHandler):
     db_path = str(db_path_from_env())
     auth_token: str | None = None
+    viewer_token: str | None = None
     server_version = "FeishuMemoryCopilotAdmin/0.1"
 
     def do_GET(self) -> None:
@@ -708,7 +716,16 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
 
     def _handle_get(self, *, send_body: bool) -> None:
         parsed = urlparse(self.path)
+        auth_role = self._auth_role(parsed.query) if parsed.path.startswith("/api/") else "public"
         try:
+            if parsed.path.startswith("/api/") and auth_role is None:
+                self._send_json(
+                    {"ok": False, "error": {"code": "admin_auth_required", "message": "Admin token required."}},
+                    status=HTTPStatus.UNAUTHORIZED,
+                    send_body=send_body,
+                    headers={"WWW-Authenticate": 'Bearer realm="Feishu Memory Copilot Admin"'},
+                )
+                return
             if parsed.path == "/":
                 self._send_html(_index_html(), send_body=send_body)
                 return
@@ -719,14 +736,6 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/healthz":
                 self._send_json({"ok": True, "service": "copilot_admin"}, send_body=send_body)
-                return
-            if parsed.path.startswith("/api/") and not self._authorized(parsed.query):
-                self._send_json(
-                    {"ok": False, "error": {"code": "admin_auth_required", "message": "Admin token required."}},
-                    status=HTTPStatus.UNAUTHORIZED,
-                    send_body=send_body,
-                    headers={"WWW-Authenticate": 'Bearer realm="Feishu Memory Copilot Admin"'},
-                )
                 return
             if parsed.path == "/api/summary":
                 self._send_json(self._api_summary(), send_body=send_body)
@@ -748,6 +757,19 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 self._send_json(self._api_audit(parsed.query), send_body=send_body)
                 return
             if parsed.path == "/api/wiki/export":
+                if auth_role != "admin":
+                    self._send_json(
+                        {
+                            "ok": False,
+                            "error": {
+                                "code": "admin_export_forbidden",
+                                "message": "Wiki export requires an admin token.",
+                            },
+                        },
+                        status=HTTPStatus.FORBIDDEN,
+                        send_body=send_body,
+                    )
+                    return
                 self._send_text(
                     self._api_wiki_export(parsed.query),
                     content_type="text/markdown; charset=utf-8",
@@ -798,7 +820,13 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 "db_path": self.db_path,
                 "data": {
                     "database": "readable",
-                    "auth": "enabled" if self.auth_token else "disabled_local_only",
+                    "auth": "enabled" if self.auth_token or self.viewer_token else "disabled_local_only",
+                    "access_policy": {
+                        "admin_token_configured": bool(self.auth_token),
+                        "viewer_token_configured": bool(self.viewer_token),
+                        "viewer_token_can_export": False,
+                        "wiki_export_requires_admin_token": bool(self.viewer_token or self.auth_token),
+                    },
                     "read_only": True,
                     "wiki_ready": bool(wiki.get("generation_policy"))
                     and wiki["generation_policy"].get("source") == "active_curated_memory_only",
@@ -931,17 +959,24 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             send_body=True,
         )
 
-    def _authorized(self, query_string: str) -> bool:
-        if not self.auth_token:
-            return True
+    def _auth_role(self, query_string: str) -> str | None:
+        if not self.auth_token and not self.viewer_token:
+            return "admin"
         header = self.headers.get("Authorization", "")
         if header.lower().startswith("bearer "):
             token = header[7:].strip()
-            if hmac.compare_digest(token, self.auth_token):
-                return True
+            if self.auth_token and hmac.compare_digest(token, self.auth_token):
+                return "admin"
+            if self.viewer_token and hmac.compare_digest(token, self.viewer_token):
+                return "viewer"
         params = parse_qs(query_string)
         query_token = _param(params, "admin_token")
-        return bool(query_token and hmac.compare_digest(query_token, self.auth_token))
+        if query_token and self.auth_token and hmac.compare_digest(query_token, self.auth_token):
+            return "admin"
+        viewer_query_token = _param(params, "viewer_token")
+        if viewer_query_token and self.viewer_token and hmac.compare_digest(viewer_query_token, self.viewer_token):
+            return "viewer"
+        return None
 
 
 def _open_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
@@ -953,6 +988,14 @@ def _open_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
 
 def _admin_token_from_env() -> str | None:
     for name in ADMIN_TOKEN_ENV_NAMES:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _admin_viewer_token_from_env() -> str | None:
+    for name in ADMIN_VIEWER_TOKEN_ENV_NAMES:
         value = os.environ.get(name)
         if value:
             return value
