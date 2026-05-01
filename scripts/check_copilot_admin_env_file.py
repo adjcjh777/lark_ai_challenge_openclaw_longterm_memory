@@ -19,6 +19,7 @@ PLACEHOLDER_TOKENS = {
 SECRET_KEY_FRAGMENTS = ("SECRET", "ACCESS_TOKEN", "OPENAI_API_KEY", "RIGHTCODE", "LLM_API_KEY", "APP_SECRET")
 REQUIRED_KEYS = (
     "MEMORY_DB_PATH",
+    "FEISHU_MEMORY_COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST",
     "FEISHU_MEMORY_COPILOT_ADMIN_HOST",
     "FEISHU_MEMORY_COPILOT_ADMIN_PORT",
     "FEISHU_MEMORY_COPILOT_ADMIN_TOKEN",
@@ -80,6 +81,7 @@ def check_admin_env_file(path: Path, *, expect_example: bool = False) -> dict[st
         "required_keys": _check_required_keys(env),
         "port": _check_port(env),
         "host": _check_host(env, expect_example=expect_example),
+        "production_evidence_manifest": _check_production_evidence_manifest(env, expect_example=expect_example),
         "tokens": _check_tokens(env, expect_example=expect_example),
         "sso": _check_sso(env),
         "secret_hygiene": _check_secret_hygiene(env),
@@ -151,6 +153,18 @@ def _check_host(env: dict[str, str], *, expect_example: bool) -> dict[str, Any]:
         "description": "Example binds loopback; runtime may bind remote only with admin token.",
         "host_class": "loopback" if is_loopback else "remote_or_unspecified",
         "requires_token_for_remote": not is_loopback,
+    }
+
+
+def _check_production_evidence_manifest(env: dict[str, str], *, expect_example: bool) -> dict[str, Any]:
+    value = env.get("FEISHU_MEMORY_COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST", "")
+    is_example_path = value.endswith("deploy/copilot-admin.production-evidence.example.json")
+    ok = bool(value) and ("__CHANGE_ME" not in value) and (is_example_path if expect_example else not is_example_path)
+    return {
+        "status": "pass" if ok else "fail",
+        "description": "Admin runtime declares the production evidence manifest path explicitly.",
+        "path_state": "example_manifest" if is_example_path else "runtime_manifest" if value else "missing",
+        "runtime_requires_non_example_manifest": not expect_example,
     }
 
 

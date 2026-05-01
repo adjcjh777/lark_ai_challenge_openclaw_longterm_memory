@@ -72,6 +72,7 @@ CHECKS = (
         description="Sanitized admin.env example documents required runtime settings without real credentials.",
         required_patterns=(
             "MEMORY_DB_PATH=/opt/feishu_ai_challenge/data/memory.sqlite",
+            "FEISHU_MEMORY_COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST=/opt/feishu_ai_challenge/deploy/copilot-admin.production-evidence.example.json",
             "FEISHU_MEMORY_COPILOT_ADMIN_HOST=127.0.0.1",
             "FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765",
             "FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=__CHANGE_ME_ADMIN_TOKEN__",

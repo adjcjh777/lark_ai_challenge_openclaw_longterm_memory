@@ -79,6 +79,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `check_copilot_admin_env_file.py --expect-example` 检查仓库里的 env 示例仍是安全占位符；替换本机 runtime 文件后，使用 `python3 scripts/check_copilot_admin_env_file.py --env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 校验 token 已替换、admin/viewer token 不同、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
 
+真实 runtime 的 `admin.env` 必须显式设置 `FEISHU_MEMORY_COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST`，并指向复制后填好的 production evidence manifest；`--expect-runtime` 会拒绝继续使用仓库里的 example manifest，避免受控服务误以为已经读到真实生产证据。
+
 `check_copilot_knowledge_site_export.py` 使用临时 SQLite 导出一个只读静态 LLM Wiki / Knowledge Graph 站点，并校验 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json`、`wiki/*.md`、Graph detail UI、read-only boundary 和 secret-like 文本脱敏。它只证明静态 artifact 可生成和可分享，不代表生产域名部署、真实 SSO 或长期 live 已完成。
 
 `check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json`，确认生产证据 manifest 结构完整且不含密钥明文；示例文件的预期输出是 `ok=true`、`production_ready=false`。真实上线验收时，复制该 manifest 到受控环境，填入真实 DB / IdP / TLS / monitoring / long-run 证据后运行 `python3 scripts/check_copilot_admin_production_evidence.py --manifest <path> --require-production-ready --json`。
