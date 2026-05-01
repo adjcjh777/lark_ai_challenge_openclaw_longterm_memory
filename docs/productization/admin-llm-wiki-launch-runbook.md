@@ -151,7 +151,7 @@ data/graph.json
 wiki/project_feishu_ai_challenge.md
 ```
 
-`index.html` 是只读 Wiki + Graph 静态入口；`manifest.json` 里必须保留 `no production deployment` 边界。该导出包可作为受控内网静态 artifact，但仍不代表生产部署、SSO 或 productized live 已完成。
+`index.html` 是只读 Wiki + Graph 静态入口，应能搜索卡片/节点，并能点击图谱节点或关系边查看 tenant、organization、visibility、observation 和 metadata 详情；`manifest.json` 里必须保留 `no production deployment` 边界。该导出包可作为受控内网静态 artifact，但仍不代表生产部署、SSO 或 productized live 已完成。
 
 ## 5. 回滚
 
