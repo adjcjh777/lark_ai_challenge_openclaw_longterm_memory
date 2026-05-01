@@ -118,8 +118,18 @@ curl -fsS \
    - `raw events = excluded`
    - `requires evidence = required`
    - `writes_feishu = no`
-4. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
-5. 进入 `Audit`，确认权限和工具调用审计可读。
+4. 在 `LLM Wiki` 点击 `导出 Markdown`，或用 API 验证指定 scope 的静态 Wiki 导出：
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" \
+  "http://127.0.0.1:8765/api/wiki/export?scope=project:feishu_ai_challenge" \
+  | head
+```
+
+导出内容应以 `# 项目记忆卡册：...` 开头，只包含 active curated memory 和 evidence，不包含 raw events。
+5. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
+6. 进入 `Audit`，确认权限和工具调用审计可读。
 
 ## 5. 回滚
 
@@ -135,7 +145,7 @@ curl -fsS \
 可以说：
 
 - 已完成本地 / staging 只读 LLM Wiki 和知识图谱后台。
-- 已有 token gate、只读 API、healthz、readiness gate 和敏感字段脱敏。
+- 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出和敏感字段脱敏。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

@@ -283,12 +283,13 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 主要只读 API：
 
 ```text
-/api/wiki     active curated memory 编译视图，不包含 raw events，不写飞书
-/api/graph    知识图谱节点/关系视图
-/api/memories memory ledger 和 evidence
-/api/audit    权限、治理和工具调用审计
-/api/health   带认证的后台 readiness 摘要
-/healthz      不含敏感数据的进程 liveness 探活
+/api/wiki                active curated memory 编译视图，不包含 raw events，不写飞书
+/api/wiki/export?scope=  指定 scope 的 Markdown Wiki 导出，仍走 admin token 和只读 SQLite
+/api/graph               知识图谱节点/关系视图
+/api/memories            memory ledger 和 evidence
+/api/audit               权限、治理和工具调用审计
+/api/health              带认证的后台 readiness 摘要
+/healthz                 不含敏感数据的进程 liveness 探活
 ```
 
 上线前或共享给评委/队友前，先跑只读后台 readiness gate：

@@ -170,6 +170,10 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual(1, wiki["card_count"])
         self.assertEqual(self.active_id, wiki["cards"][0]["id"])
         self.assertIn("后台服务", wiki["cards"][0]["evidence"]["quote"])
+        wiki_export = service.wiki_export_markdown(scope="project:admin_demo")
+        self.assertIn("# 项目记忆卡册：project:admin_demo", wiki_export)
+        self.assertIn("后台服务默认只绑定", wiki_export)
+        self.assertIn("不包含 raw events", wiki_export)
 
         graph = service.graph_workspace(query="Reviewer")
         self.assertEqual(1, len(graph["nodes"]))
@@ -214,6 +218,13 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertEqual(1, wiki_payload["data"]["card_count"])
             self.assertFalse(wiki_payload["data"]["generation_policy"]["writes_feishu"])
 
+            with urlopen(f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo", timeout=5) as response:
+                wiki_export = response.read().decode("utf-8")
+                content_type = response.getheader("Content-Type")
+            self.assertTrue(content_type.startswith("text/markdown"))
+            self.assertIn("# 项目记忆卡册：project:admin_demo", wiki_export)
+            self.assertIn("后台服务默认只绑定", wiki_export)
+
             with urlopen(f"{base_url}/api/graph?q=Reviewer", timeout=5) as response:
                 graph_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(graph_payload["ok"])
@@ -250,6 +261,10 @@ class CopilotAdminTest(unittest.TestCase):
                 urlopen(f"{base_url}/api/summary", timeout=5)
             self.assertEqual(401, raised.exception.code)
 
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo", timeout=5)
+            self.assertEqual(401, raised.exception.code)
+
             with urlopen(f"{base_url}/healthz", timeout=5) as response:
                 healthz = json.loads(response.read().decode("utf-8"))
             self.assertTrue(healthz["ok"])
@@ -259,6 +274,14 @@ class CopilotAdminTest(unittest.TestCase):
                 payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(payload["ok"])
             self.assertEqual(2, payload["data"]["memory_total"])
+
+            request = Request(
+                f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
+                headers={"Authorization": "Bearer test-token"},
+            )
+            with urlopen(request, timeout=5) as response:
+                wiki_export = response.read().decode("utf-8")
+            self.assertIn("# 项目记忆卡册：project:admin_demo", wiki_export)
 
             request = Request(f"{base_url}/api/health", headers={"Authorization": "Bearer test-token"})
             with urlopen(request, timeout=5) as response:

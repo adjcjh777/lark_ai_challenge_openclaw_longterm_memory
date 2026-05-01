@@ -92,6 +92,7 @@ def run_admin_readiness(
             checks["database"] = {"status": "pass", "path": str(db_path)}
             checks["storage_schema"] = _storage_schema_check(conn)
             checks["wiki"] = _wiki_check(service, min_cards=required_wiki_cards)
+            checks["wiki_export"] = _wiki_export_check(service, require_export=strict or required_wiki_cards > 0)
             checks["graph"] = _graph_check(service, require_compiled_memory=strict)
             checks["read_only_api"] = {
                 "status": "pass",
@@ -163,6 +164,30 @@ def _wiki_check(service: AdminQueryService, *, min_cards: int) -> dict[str, Any]
         "next_step": ""
         if card_count >= max(1, min_cards)
         else f"Confirm at least {max(1, min_cards)} active memories with evidence before launch.",
+    }
+
+
+def _wiki_export_check(service: AdminQueryService, *, require_export: bool) -> dict[str, Any]:
+    wiki = service.wiki_overview(limit=20)
+    scopes = wiki.get("scopes") or []
+    if not scopes:
+        return {
+            "status": "fail" if require_export else "warning",
+            "scope": None,
+            "next_step": "Confirm active memories with evidence before exporting a Wiki page.",
+        }
+    scope = str(scopes[0]["scope"])
+    markdown = service.wiki_export_markdown(scope=scope)
+    has_expected_shape = (
+        markdown.startswith(f"# 项目记忆卡册：{scope}")
+        and "active curated memory" in markdown
+        and "不包含 raw events" in markdown
+    )
+    return {
+        "status": "pass" if has_expected_shape else "fail",
+        "scope": scope,
+        "markdown_bytes": len(markdown.encode("utf-8")),
+        "next_step": "" if has_expected_shape else "Inspect /api/wiki/export output before sharing the admin site.",
     }
 
 

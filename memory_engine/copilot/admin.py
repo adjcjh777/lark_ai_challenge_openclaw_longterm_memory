@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from memory_engine.copilot.knowledge_pages import compile_project_memory_cards
 from memory_engine.db import db_path_from_env
+from memory_engine.repository import MemoryRepository
 
 
 DEFAULT_ADMIN_HOST = "127.0.0.1"
@@ -198,6 +200,13 @@ class AdminQueryService:
                 "writes_feishu": False,
             },
         }
+
+    def wiki_export_markdown(self, *, scope: str) -> str:
+        scope = scope.strip()
+        if not scope:
+            raise ValueError("scope is required for wiki export")
+        compiled = compile_project_memory_cards(MemoryRepository(self.conn), scope=scope)
+        return _redact_sensitive_text(str(compiled["markdown"]))
 
     def graph_workspace(
         self,
@@ -738,6 +747,14 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/audit":
                 self._send_json(self._api_audit(parsed.query), send_body=send_body)
                 return
+            if parsed.path == "/api/wiki/export":
+                self._send_text(
+                    self._api_wiki_export(parsed.query),
+                    content_type="text/markdown; charset=utf-8",
+                    send_body=send_body,
+                    headers={"Content-Disposition": 'attachment; filename="copilot-memory-wiki.md"'},
+                )
+                return
             if parsed.path == "/api/wiki":
                 self._send_json(self._api_wiki(parsed.query), send_body=send_body)
                 return
@@ -837,6 +854,14 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             )
         return {"ok": True, "data": data}
 
+    def _api_wiki_export(self, query_string: str) -> str:
+        params = parse_qs(query_string)
+        scope = _param(params, "scope")
+        if not scope:
+            raise ValueError("scope is required for wiki export")
+        with _open_readonly_connection(self.db_path) as conn:
+            return AdminQueryService(conn).wiki_export_markdown(scope=scope)
+
     def _api_graph(self, query_string: str) -> dict[str, Any]:
         params = parse_qs(query_string)
         with _open_readonly_connection(self.db_path) as conn:
@@ -857,6 +882,25 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        if send_body:
+            self.wfile.write(encoded)
+
+    def _send_text(
+        self,
+        body: str,
+        *,
+        content_type: str,
+        send_body: bool,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        encoded = body.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(encoded)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         if send_body:
             self.wfile.write(encoded)
@@ -1353,6 +1397,13 @@ def _index_html() -> str:
       color: var(--muted);
       font-size: 12px;
     }}
+    .action-row {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 12px;
+    }}
     .wiki-card {{
       border: 1px solid var(--line);
       background: #fffdf8;
@@ -1541,6 +1592,24 @@ def _index_html() -> str:
 	      return payload.data;
 	    }}
 
+    async function getText(path) {{
+      const token = sessionStorage.getItem("copilotAdminToken") || "";
+      const headers = {{ "Accept": "text/markdown" }};
+      if (token) headers.Authorization = `Bearer ${{token}}`;
+      let response = await fetch(path, {{ headers }});
+      if (response.status === 401) {{
+        const entered = window.prompt("Admin token required");
+        if (!entered) throw new Error("admin auth required");
+        sessionStorage.setItem("copilotAdminToken", entered);
+        response = await fetch(path, {{ headers: {{ "Accept": "text/markdown", "Authorization": `Bearer ${{entered}}` }} }});
+      }}
+      if (!response.ok) {{
+        const text = await response.text();
+        throw new Error(text || `request failed: ${{response.status}}`);
+      }}
+      return response.text();
+    }}
+
     async function loadSummary() {{
       const data = await getJson("/api/summary");
       $("summary").innerHTML = [
@@ -1666,6 +1735,8 @@ def _index_html() -> str:
 
 	    function renderWiki(data) {{
 	      const policy = data.generation_policy || {{}};
+	      const exportScope = $("scope").value.trim() || (data.scopes[0] && data.scopes[0].scope) || "";
+	      const exportDisabled = exportScope ? "" : "disabled";
 	      const scopeRows = data.scopes.map(item => `<span class="tag">${{esc(item.scope)}} · ${{esc(item.count)}}</span>`).join("");
 	      const openRows = data.open_questions_by_scope.map(item => `<span class="tag warn">${{esc(item.scope)}} · open ${{esc(item.count)}}</span>`).join("");
 	      const cards = data.cards.map(item => {{
@@ -1694,6 +1765,10 @@ def _index_html() -> str:
 	              <span>证据要求</span><strong>${{esc(policy.requires_evidence ? "required" : "optional")}}</strong>
 	              <span>写入飞书</span><strong>${{esc(policy.writes_feishu ? "yes" : "no")}}</strong>
 	            </div>
+	            <div class="action-row">
+	              <button type="button" id="wiki-export" data-scope="${{esc(exportScope)}}" ${{exportDisabled}}>导出 Markdown</button>
+	              <span class="feed-meta mono">${{esc(exportScope || "select a scope")}}</span>
+	            </div>
 	            <div class="tag-row">${{scopeRows || `<span class="tag">no active scope</span>`}}</div>
 	            <div class="tag-row">${{openRows || `<span class="tag">no open question</span>`}}</div>
 	          </section>
@@ -1703,6 +1778,20 @@ def _index_html() -> str:
 	          </section>
 	        </div>`;
 	    }}
+
+    async function downloadWikiExport(scope) {{
+      if (!scope) throw new Error("select a scope before export");
+      const markdown = await getText(`/api/wiki/export?scope=${{encodeURIComponent(scope)}}`);
+      const blob = new Blob([markdown], {{ type: "text/markdown;charset=utf-8" }});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `copilot-memory-wiki-${{scope.replace(/[^a-zA-Z0-9._-]+/g, "_")}}.md`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }}
 
 	    function renderGraph(data) {{
 	      const nodes = data.nodes || [];
@@ -1789,6 +1878,15 @@ def _index_html() -> str:
     }}
 
     $("filters").addEventListener("submit", event => {{ event.preventDefault(); loadView(); }});
+    document.addEventListener("click", event => {{
+      const target = event.target;
+      if (target && target.id === "wiki-export") {{
+        event.preventDefault();
+        downloadWikiExport(target.dataset.scope || "").catch(error => {{
+          $("panel").insertAdjacentHTML("afterbegin", `<div class="error">${{esc(error.message)}}</div>`);
+        }});
+      }}
+    }});
     document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", event => {{
       event.preventDefault();
       document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
