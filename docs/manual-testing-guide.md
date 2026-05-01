@@ -234,6 +234,15 @@ python3 scripts/prepare_feishu_live_evidence_run.py \
 前置条件：
 
 - 已通过“Feishu websocket 单监听检查”。
+- 已运行只读 event subscription 诊断，且未启动第二个 listener：
+
+```bash
+python3 scripts/check_feishu_event_subscription_diagnostics.py \
+  --planned-listener openclaw-websocket \
+  --json
+```
+
+该诊断只调用 `lark-cli event status/list/schema`，不会执行 `event consume`，不会消费同一个 bot。若 warning 提示 schema scopes 未列出 group message readonly，需要去飞书开发者后台核对普通群消息事件和权限。
 - 当前测试群已通过 reviewer/admin `/enable_memory` 启用群策略，或你只是做事件投递诊断并明确不创建 candidate。
 - 不要在消息里 `@Bot`。
 
