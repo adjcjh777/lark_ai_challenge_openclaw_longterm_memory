@@ -239,10 +239,11 @@ python3 scripts/prepare_feishu_live_evidence_run.py \
 ```bash
 python3 scripts/check_feishu_event_subscription_diagnostics.py \
   --planned-listener openclaw-websocket \
+  --require-group-message-scope \
   --json
 ```
 
-该诊断只调用 `lark-cli event status/list/schema`，不会执行 `event consume`，不会消费同一个 bot。若 warning 提示 schema scopes 未列出 group message readonly，需要去飞书开发者后台核对普通群消息事件和权限。
+该诊断只调用 `lark-cli event status/list/schema`，不会执行 `event consume`，不会消费同一个 bot。真实非 @ 群消息扩样必须带 `--require-group-message-scope`；如果返回 `message_schema_group_message_scope=fail`，例如 schema scopes 只列出 `im:message.p2p_msg:readonly`，先去飞书开发者后台启用/确认 `im:message.group_msg:readonly` 或 `im:message:readonly` 以及 `im.message.receive_v1` 事件订阅，不要继续发送 live 证据消息。
 - 当前测试群已通过 reviewer/admin `/enable_memory` 启用群策略，或你只是做事件投递诊断并明确不创建 candidate。
 - 不要在消息里 `@Bot`。
 
@@ -262,6 +263,8 @@ python3 scripts/check_feishu_event_subscription_diagnostics.py \
 python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/feishu-events.ndjson --json
 ```
 
+生成 completion audit 时，把这一步的诊断 JSON 作为 `--feishu-event-diagnostics` 输入；否则 audit 只能根据旧日志提示“只看到 @Bot 消息”，不能指出当前真正的 scope blocker。
+
 通过标准：
 
 - `ok=true`
@@ -275,6 +278,55 @@ python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/
 | `reaction_only_no_passive_message_event` | 当前只证明 reaction 可达，普通群文本没有进入 listener | 查 Feishu app 事件订阅和普通群消息权限，不要用单测结果 overclaim live |
 | `only_at_mention_group_messages_seen` | 只证明 @Bot 消息可达 | 重新发一条不 @Bot 的普通群文本 |
 | `expected_chat_not_seen` | 捕获事件不是目标群 | 核对日志来源和测试群 chat id |
+
+## 4.2 九项 completion audit 和 Cognee sampler status
+
+目的：把 Feishu live packet、Feishu event diagnostics、Cognee sampler status 和最终 Cognee long-run evidence 放进同一个审计入口，避免把“正在收集证据”误写成“完成”。
+
+当前推荐命令：
+
+```bash
+python3 scripts/check_feishu_event_subscription_diagnostics.py \
+  --planned-listener openclaw-websocket \
+  --require-group-message-scope \
+  --json > /tmp/feishu-event-diagnostics.json
+
+python3 scripts/check_cognee_embedding_sampler_status.py \
+  --embedding-sample-log logs/cognee-embedding-long-run/2026-05-02-sampler/embedding-samples.ndjson \
+  --pid-file logs/cognee-embedding-long-run/2026-05-02-sampler/sampler.pid \
+  --json > /tmp/cognee-sampler-status.json
+
+python3 scripts/check_openclaw_feishu_productization_completion.py \
+  --feishu-event-diagnostics /tmp/feishu-event-diagnostics.json \
+  --cognee-sampler-status /tmp/cognee-sampler-status.json \
+  --json
+```
+
+如果已有四类真实 Feishu/OpenClaw live 日志，先生成 packet 再审计：
+
+```bash
+python3 scripts/collect_feishu_live_evidence_packet.py \
+  --passive-event-log /path/to/01-passive-non-at-message.ndjson \
+  --routing-event-log /path/to/02-first-class-routing.ndjson \
+  --permission-event-log /path/to/03-non-reviewer-deny.ndjson \
+  --review-event-log /path/to/04-review-dm-card.ndjson \
+  --output /tmp/feishu-live-evidence-packet.json \
+  --json
+
+python3 scripts/check_openclaw_feishu_productization_completion.py \
+  --feishu-live-evidence-packet /tmp/feishu-live-evidence-packet.json \
+  --feishu-event-diagnostics /tmp/feishu-event-diagnostics.json \
+  --cognee-sampler-status /tmp/cognee-sampler-status.json \
+  --cognee-long-run-evidence /tmp/cognee-embedding-long-run-evidence.json \
+  --json
+```
+
+通过标准：
+
+- `goal_complete=true` 才能关闭九项任务。
+- `message_schema_group_message_scope_missing` 表示还没到发送非 @ 群消息取证阶段。
+- `cognee_sampler_running_but_window_incomplete` 表示 sampler 仍在收集 24h evidence，不代表长期 embedding 服务完成。
+- `cognee_sampler_ready_but_long_run_evidence_missing` 表示 sample 窗口已满足，但还需要运行 `collect_cognee_embedding_long_run_evidence.py` 生成最终 completion audit 输入。
 
 ## 5. 真实飞书互动卡片点击测试
 
