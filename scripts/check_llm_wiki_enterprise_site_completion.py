@@ -90,6 +90,17 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Admin UI optimization",
+        evidence="CI runs Admin UI smoke, visual baseline update, visual baseline compare, and uploads baseline artifacts.",
+        path=".github/workflows/ci.yml",
+        contains=(
+            "Admin UI Smoke",
+            "--update-visual-baseline",
+            "--visual-baseline-dir /tmp/copilot-admin-ui-baseline",
+            "/tmp/copilot-admin-ui-baseline/visual-baseline.json",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Admin UI optimization",
         evidence="Static site UI exposes graph detail and search/filter surface.",
         path="memory_engine/copilot/knowledge_site.py",
         contains=("graphDetail", "search", "nodeDetail", "edgeDetail"),

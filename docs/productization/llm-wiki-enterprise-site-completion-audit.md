@@ -62,7 +62,7 @@
 | Python 编译 | `python3 -m compileall memory_engine scripts` | 覆盖 Python 语法和导入编译 |
 | 单元测试 | `python3 -m unittest tests.test_copilot_admin tests.test_copilot_knowledge_site tests.test_copilot_knowledge_pages` | 覆盖 admin API、静态站导出、Wiki 页面编译 |
 | 空白检查 | `git diff --check` | 避免 trailing whitespace 等提交问题 |
-| UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Graph 详情、Tenants readiness、缺失生产能力清单、Deerflow attribution、横向溢出和截图像素完整性；可选 `--visual-baseline-dir` 比较固定 PNG 基线，`--update-visual-baseline` 刷新基线和 `visual-baseline.json` |
+| UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json`、`.github/workflows/ci.yml` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Graph 详情、Tenants readiness、缺失生产能力清单、Deerflow attribution、横向溢出和截图像素完整性；可选 `--visual-baseline-dir` 比较固定 PNG 基线，`--update-visual-baseline` 刷新基线和 `visual-baseline.json`；CI 的 Admin UI Smoke job 会同时跑普通 smoke、baseline update 和 baseline compare，并上传 PNG / manifest artifacts |
 | 本地模型占用检查 | `ollama ps` | 确认没有残留 embedding/model runtime |
 
 ## 3. 当前已推送里程碑
@@ -154,12 +154,12 @@ static-site-mobile.png
 3. 生产 DB 部署未完成。当前 runbook 覆盖本地 / staging SQLite admin，不覆盖生产数据库运维。
 4. 长期 productized live 未完成。当前不能声明真实 Feishu DM 稳定路由到 first-class `memory.*` 工具或长期线上运行。
 5. 监控告警未完成。已有 health/readiness，但没有生产级 uptime、延迟、错误率、审计异常告警。
-6. UI 视觉回归已有 CI smoke，覆盖 Graph、Tenants、Launch、静态站关键 DOM、详情面板、readiness 文案、横向溢出、截图像素完整性，以及可选固定截图基线 / sampled pixel diff 阈值 gate；但还没有长期维护的人工审核截图基线库或设计系统级组件抽象。
+6. UI 视觉回归已有 CI smoke，覆盖 Graph、Tenants、Launch、静态站关键 DOM、详情面板、readiness 文案、横向溢出、截图像素完整性，以及 CI 中执行的 baseline update / sampled pixel diff compare gate；但还没有长期维护的人工审核截图基线库或设计系统级组件抽象。
 
 ## 6. 下一步建议
 
 1. 明确目标部署方式：内网静态 artifact、受控 staging admin、还是真实生产服务。
 2. 选定企业认证边界：Feishu SSO、oauth2-proxy、Nginx `auth_request`，或其他 IdP。
 3. 将 tenant policy editor 接入真实企业目录、审批发布流程和权限矩阵执行链路。
-4. 建立长期维护的 admin UI screenshot baseline 流程，并继续扩大 dashboard tab 覆盖。
+4. 如进入正式前端迭代，建立人工审核并版本化的 admin UI screenshot baseline 流程，继续扩大 dashboard tab 覆盖。
 5. 建立 productized live 运行证据：启动命令、日志窗口、健康探活、真实受控消息链路、回滚记录。
