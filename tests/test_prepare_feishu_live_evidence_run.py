@@ -112,6 +112,13 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("--feishu-event-diagnostics", instructions)
         packet_step = next(step for step in result["manual_steps"] if step["title"] == "Build sanitized Feishu live packet")
         self.assertIn("--feishu-event-diagnostics", packet_step["instruction"])
+        live_steps = [
+            step for step in result["manual_steps"] if step["phase"] in {"live_capture", "post_capture"}
+        ]
+        self.assertTrue(live_steps)
+        self.assertTrue(all(step["requires_ready_to_capture_live_logs"] for step in live_steps))
+        preflight_step = next(step for step in result["manual_steps"] if step["phase"] == "preflight")
+        self.assertFalse(preflight_step["requires_ready_to_capture_live_logs"])
         self.assertIn("Save the listener/OpenClaw log", instructions)
         self.assertNotIn("lark-cli im +messages-send", instructions)
         self.assertNotIn("lark-cli event consume", instructions)

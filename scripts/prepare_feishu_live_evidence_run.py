@@ -200,7 +200,9 @@ def format_report(result: dict[str, Any]) -> str:
             lines.append(f"  - {step}")
     lines.append("manual_steps:")
     for step in result["manual_steps"]:
-        lines.append(f"  {step['id']}. {step['title']}")
+        ready_marker = " requires_ready" if step.get("requires_ready_to_capture_live_logs") else ""
+        phase = f" [{step.get('phase')}]" if step.get("phase") else ""
+        lines.append(f"  {step['id']}. {step['title']}{phase}{ready_marker}")
         lines.append(f"     {step['instruction']}")
     return "\n".join(lines)
 
@@ -308,7 +310,7 @@ def _manual_steps(
     controlled_chat_id: str,
     non_reviewer_open_id: str,
     planned_listener: PlannedListener,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
     cognee_arg = f" --cognee-long-run-evidence {cognee_long_run_evidence}" if cognee_long_run_evidence else ""
@@ -322,6 +324,8 @@ def _manual_steps(
         {
             "id": "1",
             "title": "Run read-only event subscription diagnostics",
+            "phase": "preflight",
+            "requires_ready_to_capture_live_logs": False,
             "instruction": (
                 "python3 scripts/check_feishu_event_subscription_diagnostics.py "
                 f"--planned-listener {planned_listener} --require-group-message-scope --json "
@@ -331,6 +335,8 @@ def _manual_steps(
         {
             "id": "2",
             "title": "Send non-@ group text",
+            "phase": "live_capture",
+            "requires_ready_to_capture_live_logs": True,
             "instruction": (
                 "In the controlled enabled group, send exactly this as a normal user without mentioning the bot: "
                 "决定：非 @ 群消息 live gate 测试，今天只验证事件投递。 Save the listener/OpenClaw log to "
@@ -340,6 +346,8 @@ def _manual_steps(
         {
             "id": "3",
             "title": "Trigger first-class fmc tools",
+            "phase": "live_capture",
+            "requires_ready_to_capture_live_logs": True,
             "instruction": (
                 "In Feishu DM or the controlled group, ask OpenClaw to run fmc_memory_search and fmc_memory_prefetch "
                 "through the Feishu path. Save successful bridge result logs to "
@@ -349,6 +357,8 @@ def _manual_steps(
         {
             "id": "4",
             "title": "Ask second non-reviewer to enable memory",
+            "phase": "live_capture",
+            "requires_ready_to_capture_live_logs": True,
             "instruction": (
                 "From the second real non-reviewer account, send @Bot /enable_memory in the controlled group. "
                 f"Save the live result log to {log_paths['permission_event_log']}."
@@ -357,6 +367,8 @@ def _manual_steps(
         {
             "id": "5",
             "title": "Run review DM/card E2E",
+            "phase": "live_capture",
+            "requires_ready_to_capture_live_logs": True,
             "instruction": (
                 "Create a fresh candidate, send /review as reviewer, click one card action, and preserve private DM "
                 f"delivery plus update_card result logs in {log_paths['review_event_log']}."
@@ -365,6 +377,8 @@ def _manual_steps(
         {
             "id": "6",
             "title": "Build sanitized Feishu live packet",
+            "phase": "post_capture",
+            "requires_ready_to_capture_live_logs": True,
             "instruction": (
                 "python3 scripts/collect_feishu_live_evidence_packet.py "
                 f"--passive-event-log {log_paths['passive_event_log']} "
@@ -377,6 +391,8 @@ def _manual_steps(
         {
             "id": "7",
             "title": "Run focused gates with filters",
+            "phase": "post_capture",
+            "requires_ready_to_capture_live_logs": True,
             "instruction": (
                 f"python3 scripts/check_feishu_passive_message_event_gate.py --event-log {log_paths['passive_event_log']}{chat_filter} --json && "
                 f"python3 scripts/check_feishu_permission_negative_gate.py --event-log {log_paths['permission_event_log']}{chat_filter}{actor_filter} --json"
@@ -390,6 +406,8 @@ def _manual_steps(
             {
                 "id": str(next_id),
                 "title": "Check Cognee embedding sampler status",
+                "phase": "cognee",
+                "requires_ready_to_capture_live_logs": False,
                 "instruction": (
                     "python3 scripts/check_cognee_embedding_sampler_status.py "
                     f"--embedding-sample-log {embedding_sample_log}{pid_arg} --json "
@@ -402,6 +420,8 @@ def _manual_steps(
         {
             "id": str(next_id),
             "title": "Run completion audit",
+            "phase": "audit",
+            "requires_ready_to_capture_live_logs": False,
             "instruction": (
                 "python3 scripts/check_openclaw_feishu_productization_completion.py "
                 f"--feishu-live-evidence-packet {packet_output}{event_diagnostics_arg}{sampler_status_arg}{cognee_arg} "
