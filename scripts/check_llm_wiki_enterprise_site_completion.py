@@ -189,6 +189,19 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Launch evidence bundle exporter writes fixed JSON artifacts for Wiki, Graph, Audit, deploy, production evidence, and completion audit.",
+        path="scripts/export_copilot_admin_launch_evidence.py",
+        contains=(
+            "export_launch_evidence_bundle",
+            "copilot_admin_launch_evidence/v1",
+            "graph_quality",
+            "audit_readonly_gate",
+            "completion_audit",
+            "production_blockers",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Prometheus alert-rule verifier exists for staging alerts.",
         path="scripts/check_prometheus_alert_rules.py",
         contains=("CopilotWikiCardsMissing", "CopilotGraphNodesMissing"),

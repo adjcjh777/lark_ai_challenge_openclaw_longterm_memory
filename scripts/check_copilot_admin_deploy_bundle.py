@@ -136,6 +136,18 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="launch_evidence_bundle_export",
+        path="scripts/export_copilot_admin_launch_evidence.py",
+        description="Launch evidence exporter writes local/staging Wiki, Graph, Audit, and blocker JSON artifacts.",
+        required_patterns=(
+            "export_launch_evidence_bundle",
+            "copilot_admin_launch_evidence/v1",
+            "graph_quality",
+            "audit_readonly_gate",
+            "production_blockers",
+        ),
+    ),
+    BundleCheck(
         name="completion_audit_gate",
         path="scripts/check_llm_wiki_enterprise_site_completion.py",
         description="Completion audit maps the user objective to artifacts and keeps production blockers explicit.",
@@ -180,6 +192,7 @@ CHECKS = (
             "本地 / staging",
             "check_copilot_admin_sso_gate.py",
             "check_copilot_audit_readonly_gate.py",
+            "export_copilot_admin_launch_evidence.py",
             "真实企业 IdP",
             "productized live",
         ),

@@ -74,6 +74,7 @@ python3 scripts/check_copilot_admin_env_file.py --expect-example --json
 python3 scripts/check_copilot_knowledge_site_export.py --json
 python3 scripts/check_copilot_admin_production_evidence.py --json
 python3 scripts/check_copilot_admin_deploy_bundle.py --json
+python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sqlite --output-dir /tmp/copilot-admin-launch-evidence --scope project:feishu_ai_challenge --tenant-id tenant:demo --organization-id org:demo --audit-min-events 1 --json
 ```
 
 `check_copilot_admin_env_file.py --expect-example` 检查仓库里的 env 示例仍是安全占位符；替换本机 runtime 文件后，使用 `python3 scripts/check_copilot_admin_env_file.py --env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 校验 token 已替换、admin/viewer token 不同、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
@@ -83,6 +84,8 @@ python3 scripts/check_copilot_admin_deploy_bundle.py --json
 `check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json`，确认生产证据 manifest 结构完整且不含密钥明文；示例文件的预期输出是 `ok=true`、`production_ready=false`。真实上线验收时，复制该 manifest 到受控环境，填入真实 DB / IdP / TLS / monitoring / long-run 证据后运行 `python3 scripts/check_copilot_admin_production_evidence.py --manifest <path> --require-production-ready --json`。
 
 `check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
+
+`export_copilot_admin_launch_evidence.py` 会把当前本地/staging admin 状态导出为固定 JSON bundle：`summary.json`、`wiki.json`、`graph.json`、`graph-quality.json`、`audit.json`、`audit-readonly-gate.json`、`launch-readiness.json`、`deploy-bundle.json`、`production-evidence.json`、`completion-audit.json` 和 `manifest.json`。manifest 保留 `goal_complete=false`、`production_blocked=true` 和 production blockers；它是交付证据包，不是生产上线证明。
 
 可选企业 SSO header gate：
 
