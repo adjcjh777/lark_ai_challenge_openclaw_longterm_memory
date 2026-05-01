@@ -23,6 +23,21 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertFalse(result["message_event_schema"]["has_group_message_scope"])
         self.assertEqual(["message_schema_scope_does_not_list_group_msg_readonly"], [item["id"] for item in result["warnings"]])
 
+    def test_can_require_group_message_scope_for_passive_live_preflight(self) -> None:
+        result = run_feishu_event_subscription_diagnostics(
+            planned_listener="openclaw-websocket",
+            require_group_message_scope=True,
+            runner=_runner(
+                status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
+                schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
+            ),
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertTrue(result["require_group_message_scope"])
+        self.assertIn("message_schema_group_message_scope", result["failed_checks"])
+
     def test_fails_when_lark_cli_bus_is_running_but_openclaw_is_planned_owner(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
             planned_listener="openclaw-websocket",

@@ -7,11 +7,17 @@ from pathlib import Path
 from scripts.prepare_feishu_live_evidence_run import prepare_live_evidence_run
 
 
-def _event_diagnostics(*, ok: bool = True, warnings: list[dict[str, str]] | None = None) -> dict[str, object]:
+def _event_diagnostics(
+    *,
+    ok: bool = True,
+    warnings: list[dict[str, str]] | None = None,
+    failed_checks: list[str] | None = None,
+) -> dict[str, object]:
     warning_items = warnings or []
+    failed = failed_checks if failed_checks is not None else ([] if ok else ["message_event_registered"])
     return {
         "ok": ok,
-        "failed_checks": [] if ok else ["message_event_registered"],
+        "failed_checks": failed,
         "warnings": warning_items,
         "checks": {
             "event_status_readable": {"status": "pass"},
@@ -70,6 +76,8 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
                 output_dir=Path(temp_dir),
                 process_rows=[],
                 event_subscription_diagnostics=_event_diagnostics(
+                    ok=False,
+                    failed_checks=["message_schema_group_message_scope"],
                     warnings=[
                         {
                             "id": "message_schema_scope_does_not_list_group_msg_readonly",
@@ -80,10 +88,11 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
             )
 
         instructions = "\n".join(step["instruction"] for step in result["manual_steps"])
-        self.assertTrue(result["ok"], result)
-        self.assertEqual("warning", result["checks"]["event_subscription"]["status"])
-        self.assertIn("event_subscription", result["warnings"])
+        self.assertFalse(result["ok"], result)
+        self.assertEqual("fail", result["checks"]["event_subscription"]["status"])
+        self.assertIn("event_subscription", result["blocking_failures"])
         self.assertIn("check_feishu_event_subscription_diagnostics.py", instructions)
+        self.assertIn("--require-group-message-scope", instructions)
         self.assertIn("collect_feishu_live_evidence_packet.py", instructions)
         self.assertIn("check_openclaw_feishu_productization_completion.py", instructions)
         self.assertIn("Save the listener/OpenClaw log", instructions)

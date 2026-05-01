@@ -32,10 +32,18 @@ def main() -> int:
         choices=("openclaw-websocket", "copilot-lark-cli", "legacy-lark-cli", "none"),
         default="openclaw-websocket",
     )
+    parser.add_argument(
+        "--require-group-message-scope",
+        action="store_true",
+        help="Fail if the message event schema does not list a group-message readonly scope.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    report = run_feishu_event_subscription_diagnostics(planned_listener=args.planned_listener)
+    report = run_feishu_event_subscription_diagnostics(
+        planned_listener=args.planned_listener,
+        require_group_message_scope=args.require_group_message_scope,
+    )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
@@ -46,6 +54,7 @@ def main() -> int:
 def run_feishu_event_subscription_diagnostics(
     *,
     planned_listener: str = "openclaw-websocket",
+    require_group_message_scope: bool = False,
     runner: Runner | None = None,
 ) -> dict[str, Any]:
     run = runner or _run_lark_cli
@@ -80,8 +89,11 @@ def run_feishu_event_subscription_diagnostics(
         "message_schema_bot_auth": _check("bot" in auth_types),
         "listener_mode_consistent": _check(listener_ok),
     }
+    has_group_scope = _has_group_message_scope(scopes)
+    if require_group_message_scope:
+        checks["message_schema_group_message_scope"] = _check(has_group_scope)
     warnings = []
-    if not _has_group_message_scope(scopes):
+    if not has_group_scope:
         warnings.append(
             {
                 "id": "message_schema_scope_does_not_list_group_msg_readonly",
@@ -105,6 +117,7 @@ def run_feishu_event_subscription_diagnostics(
         "boundary": BOUNDARY,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "planned_listener": planned_listener,
+        "require_group_message_scope": require_group_message_scope,
         "checks": checks,
         "failed_checks": failed,
         "warnings": warnings,
@@ -118,7 +131,7 @@ def run_feishu_event_subscription_diagnostics(
             "auth_types": auth_types,
             "scopes": scopes,
             "required_console_events": required_events,
-            "has_group_message_scope": _has_group_message_scope(scopes),
+            "has_group_message_scope": has_group_scope,
         },
         "next_step": ""
         if not failed

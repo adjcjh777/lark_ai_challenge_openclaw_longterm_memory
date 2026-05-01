@@ -201,7 +201,7 @@ def _manual_steps(
             "title": "Run read-only event subscription diagnostics",
             "instruction": (
                 "python3 scripts/check_feishu_event_subscription_diagnostics.py "
-                f"--planned-listener {planned_listener} --json"
+                f"--planned-listener {planned_listener} --require-group-message-scope --json"
             ),
         },
         {
@@ -276,7 +276,10 @@ def _event_subscription_check(
     diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     try:
-        report = diagnostics or run_feishu_event_subscription_diagnostics(planned_listener=planned_listener)
+        report = diagnostics or run_feishu_event_subscription_diagnostics(
+            planned_listener=planned_listener,
+            require_group_message_scope=True,
+        )
     except Exception as exc:  # pragma: no cover - defensive shell/environment boundary.
         return {
             "status": "fail",
