@@ -52,7 +52,7 @@
 | 群级设置卡片 | 已完成只读设置卡：`/settings` / `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和 no-overclaim 边界；不提供写入动作 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
 | Limited Feishu ingestion | 已完成本地受控 ingestion 底座，支持文档、任务、会议、Bitable，以及 allowlist 群里被动探测或显式路由到 `memory.create_candidate` 的飞书消息；当前新增 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选仍需人工确认；这不是被动全量群聊摄入 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/review_policy.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_review_policy.py` |
 | 真实 Feishu API 拉取入口 | 已完成任务、会议、Bitable 读取 fetcher、Feishu live `/task` / `/meeting` / `/bitable` 路由和 fetch 前 fail-closed 权限门控；结果进入 `memory.create_candidate` 后由 review policy 决定自动确认或人工审核 | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、`memory_engine/copilot/review_policy.py`、`tests/test_feishu_fetchers.py`、`tests/test_copilot_review_policy.py` |
-| 审计查询、告警和运维面 | 已完成本地审计查询/导出、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口和 embedding fallback 可观测字段 | `scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
+| 审计查询、告警和运维面 | 已完成本地审计查询/导出、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口、embedding fallback 可观测字段，以及 staging Prometheus alert-rule artifact / verifier；这仍不是生产级 Prometheus/Grafana 长期监控 | `scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、`scripts/check_prometheus_alert_rules.py`、`deploy/monitoring/copilot-admin-alerts.yml`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`tests/test_prometheus_alert_rules.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
 | Productized live 长期运行方案 | 已完成方案和上线 gate，覆盖部署拓扑、单监听、存储、监控告警、权限后台、审计 UI、停写回滚和 no-overclaim 边界；尚未实施生产长期运行 | `docs/productization/productized-live-long-run-plan.md`、`docs/productization/handoffs/productized-live-long-run-plan-handoff.md` |
 | OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
@@ -310,6 +310,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" --viewer-token "$FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" --strict --min-wiki-cards 1
 python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --scope project:feishu_ai_challenge --output-dir /tmp/copilot-admin-ui-smoke --json
+python3 scripts/check_prometheus_alert_rules.py --json
 ```
 
 如需生成可放到受控内网或反向代理后的静态知识站包：
@@ -323,7 +324,7 @@ open reports/copilot-knowledge-site/index.html
 
 详细启动、探活、验收和回滚步骤见 [LLM Wiki / Graph Admin Launch Runbook](docs/productization/admin-llm-wiki-launch-runbook.md)。
 当前目标完成度、证据清单和生产缺口见 [LLM Wiki Enterprise Knowledge Site Completion Audit](docs/productization/llm-wiki-enterprise-site-completion-audit.md)。
-受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
+受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`，staging Prometheus alert rules 见 `deploy/monitoring/copilot-admin-alerts.yml`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
 这个后台的知识视图只读；唯一写接口是 admin-only 的 `/api/tenant-policies`，用于本地/pre-production 租户策略配置和审计。它是本机运维/调试入口，不代表生产部署、真实企业 IdP SSO 验收、生产 DB 运维或 productized live。
 
@@ -676,5 +677,5 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 - 多租户企业后台。
 - 真实权限后台。
 - 生产级长期在线 embedding 服务（本地 Ollama 已集成，非生产级）。
-- 生产级 Prometheus/Grafana 长期监控和自动回滚。
+- 生产级 Prometheus/Grafana 长期监控、告警投递和自动回滚；当前只有 `/metrics`、staging alert rules artifact 和本地 verifier。
 - 真实 Feishu DM 稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路；当前只有一次受控 DM allow-path live E2E 证据。

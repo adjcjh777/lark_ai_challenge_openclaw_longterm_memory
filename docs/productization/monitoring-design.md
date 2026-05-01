@@ -4,7 +4,7 @@
 状态：方案设计（未完成生产上线）
 适用范围：监控指标、采集方案、告警通道、Dashboard、SLA 定义
 
-> 2026-04-29 校准：本文是 Prometheus/Grafana 生产监控设计，不是已实现的生产监控。当前已实现的是 `check_copilot_health.py`、`query_audit_events.py`、`check_audit_alerts.py` 和 OpenClaw websocket staging checker；进入 L2 前才需要把本文设计落成 exporter / dashboard。
+> 2026-05-01 校准：本文是 Prometheus/Grafana 生产监控设计，不是已实现的生产监控。当前已实现的是 `check_copilot_health.py`、`query_audit_events.py`、`check_audit_alerts.py`、OpenClaw websocket staging checker、admin `/metrics` endpoint，以及 `deploy/monitoring/copilot-admin-alerts.yml` staging alert-rule artifact / `scripts/check_prometheus_alert_rules.py` verifier。进入 L2 前仍需要把生产 Prometheus/Grafana、Alertmanager 投递和 on-call 流程落地验证。
 
 ---
 

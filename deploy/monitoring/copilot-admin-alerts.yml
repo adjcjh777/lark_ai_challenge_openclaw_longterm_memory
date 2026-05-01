@@ -1,0 +1,98 @@
+groups:
+  - name: feishu-memory-copilot-admin
+    rules:
+      - alert: CopilotAdminMetricsDown
+        expr: absent(up{job="copilot-admin"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+          stage: staging
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot admin metrics scrape is down"
+          description: "Prometheus cannot scrape the authenticated /metrics endpoint for the copilot-admin job."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotLaunchStagingNotReady
+        expr: copilot_admin_launch_staging_ok == 0
+        for: 10m
+        labels:
+          severity: warning
+          stage: staging
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot admin staging gates are not ready"
+          description: "At least one LLM Wiki, graph, tenant, policy, or audit staging gate is not passing."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotWikiCardsMissing
+        expr: copilot_admin_wiki_card_count < 1
+        for: 15m
+        labels:
+          severity: warning
+          stage: staging
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot LLM Wiki has no evidence-backed cards"
+          description: "The LLM Wiki should have at least one active curated memory card before sharing the admin site."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotGraphNodesMissing
+        expr: copilot_admin_graph_workspace_node_count < 1
+        for: 15m
+        labels:
+          severity: warning
+          stage: staging
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot graph workspace has no nodes"
+          description: "The admin graph has no visible storage or compiled-memory graph nodes."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotTenantPolicyMissing
+        expr: copilot_admin_tenant_policy_count < 1
+        for: 30m
+        labels:
+          severity: warning
+          stage: staging
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot tenant policy is not configured"
+          description: "Save at least one staging tenant policy before sharing a tenant-scoped admin surface."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotAuditLedgerEmpty
+        expr: copilot_admin_audit_total < 1
+        for: 30m
+        labels:
+          severity: warning
+          stage: staging
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot audit ledger has no events"
+          description: "Run a candidate, review, permission deny, or tenant policy action to prove audit writeback."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotProductionStillBlocked
+        expr: copilot_admin_launch_production_blocked == 1
+        for: 1h
+        labels:
+          severity: info
+          stage: production-readiness
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Copilot production launch remains blocked"
+          description: "Production blockers are still present. This alert preserves the no-overclaim boundary."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
+
+      - alert: CopilotProductionMonitoringBlocker
+        expr: copilot_admin_launch_production_blocker{blocker="production_monitoring_alerts"} == 1
+        for: 1h
+        labels:
+          severity: info
+          stage: production-readiness
+          service: feishu-memory-copilot
+        annotations:
+          summary: "Production monitoring blocker is still open"
+          description: "The staging alert rules exist, but production monitoring and alert delivery are not validated."
+          runbook_url: "docs/productization/admin-llm-wiki-launch-runbook.md#prometheus-alert-rules"
