@@ -27,8 +27,17 @@ class CogneeEmbeddingLongRunEvidenceTest(unittest.TestCase):
                 _embedding_sample("2026-05-01T12:30:00+00:00"),
                 _embedding_sample("2026-05-02T00:30:00+00:00"),
             ],
-            store_reopened=True,
-            reopened_search_ok=True,
+            store_reopened=False,
+            reopened_search_ok=False,
+            persistent_readback_report={
+                "ok": True,
+                "matched_memory": True,
+                "search_result_count": 2,
+                "checks": {
+                    "store_reopened": {"status": "pass"},
+                    "reopened_search_ok": {"status": "pass"},
+                },
+            },
             service_unit="cognee-embedding.service",
             oncall_owner="memory-copilot-oncall",
             evidence_refs=["ops/cognee-embedding-long-run-20260502"],
@@ -40,6 +49,8 @@ class CogneeEmbeddingLongRunEvidenceTest(unittest.TestCase):
         self.assertEqual("pass", evidence["cognee_sync"]["status"])
         self.assertTrue(evidence["persistence"]["store_reopened"])
         self.assertTrue(evidence["persistence"]["reopened_search_ok"])
+        self.assertTrue(evidence["persistence"]["readback_report_ok"])
+        self.assertEqual(2, evidence["persistence"]["readback_result_count"])
         self.assertEqual(3, evidence["embedding_service"]["healthcheck_sample_count"])
         self.assertGreaterEqual(evidence["embedding_service"]["window_hours"], 24)
 

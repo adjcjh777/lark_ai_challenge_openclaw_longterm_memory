@@ -35,6 +35,12 @@ def main() -> int:
     )
     parser.add_argument("--store-reopened", action="store_true", help="Set only after reopening the persistent store.")
     parser.add_argument("--reopened-search-ok", action="store_true", help="Set only after search/readback passes post-reopen.")
+    parser.add_argument(
+        "--persistent-readback-report",
+        type=Path,
+        default=None,
+        help="Optional JSON from check_cognee_persistent_readback.py. Prefer this over manual reopen flags.",
+    )
     parser.add_argument("--service-unit", default="", help="Embedding/Cognee service unit or deployment id.")
     parser.add_argument("--oncall-owner", default="", help="Human owner for the long-run window.")
     parser.add_argument("--evidence-ref", action="append", default=[], help="Non-secret evidence ref, e.g. ops log URL/path.")
@@ -49,6 +55,7 @@ def main() -> int:
         embedding_samples=list(_read_embedding_samples(args.embedding_sample_log)),
         store_reopened=args.store_reopened,
         reopened_search_ok=args.reopened_search_ok,
+        persistent_readback_report=_read_optional_json_object(args.persistent_readback_report),
         service_unit=args.service_unit,
         oncall_owner=args.oncall_owner,
         evidence_refs=args.evidence_ref,
@@ -72,6 +79,7 @@ def collect_cognee_embedding_long_run_evidence(
     embedding_samples: list[dict[str, Any]],
     store_reopened: bool,
     reopened_search_ok: bool,
+    persistent_readback_report: dict[str, Any] | None = None,
     service_unit: str = "",
     oncall_owner: str = "",
     evidence_refs: list[str] | None = None,
@@ -86,6 +94,17 @@ def collect_cognee_embedding_long_run_evidence(
     cognee_sync_pass = isinstance(cognee_sync, dict) and cognee_sync.get("status") == "pass" and not cognee_sync.get(
         "fallback"
     )
+    readback = persistent_readback_report or {}
+    readback_checks = readback.get("checks") if isinstance(readback.get("checks"), dict) else {}
+    verified_store_reopened = bool(
+        store_reopened or readback.get("ok") or _check_status(readback_checks.get("store_reopened")) == "pass"
+    )
+    verified_reopened_search = bool(
+        reopened_search_ok
+        or readback.get("ok")
+        or readback.get("matched_memory")
+        or _check_status(readback_checks.get("reopened_search_ok")) == "pass"
+    )
     checks = {
         "curated_sync_pass": _check(
             cognee_sync_pass,
@@ -94,11 +113,11 @@ def collect_cognee_embedding_long_run_evidence(
             fallback=cognee_sync.get("fallback") if isinstance(cognee_sync, dict) else None,
         ),
         "persistent_store_reopened": _check(
-            bool(store_reopened),
+            verified_store_reopened,
             "Persistent Cognee store was reopened after the initial sync.",
         ),
         "reopened_search_ok": _check(
-            bool(reopened_search_ok),
+            verified_reopened_search,
             "Post-reopen search/readback found the synced curated memory.",
         ),
         "embedding_successful_samples": _check(
@@ -130,10 +149,12 @@ def collect_cognee_embedding_long_run_evidence(
             "memory_id": curated_sync_report.get("memory_id"),
         },
         "persistence": {
-            "store_reopened": bool(store_reopened),
-            "reopened_search_ok": bool(reopened_search_ok),
+            "store_reopened": verified_store_reopened,
+            "reopened_search_ok": verified_reopened_search,
             "data_root": curated_sync_report.get("data_root"),
             "system_root": curated_sync_report.get("system_root"),
+            "readback_report_ok": readback.get("ok") if readback else None,
+            "readback_result_count": readback.get("search_result_count") if readback else None,
         },
         "embedding_service": {
             "service_unit": service_unit,
@@ -212,6 +233,12 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _read_optional_json_object(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    return _read_json_object(path)
+
+
 def _parse_json_object(text: str) -> Any:
     parsed = _parse_json(text)
     if isinstance(parsed, dict):
@@ -275,6 +302,12 @@ def _valid_evidence_refs(refs: list[str]) -> bool:
 
 def _contains_secret_like(value: str) -> bool:
     return any(marker in value for marker in SECRET_VALUE_MARKERS)
+
+
+def _check_status(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("status") or "")
+    return ""
 
 
 def _number(value: Any) -> int:
