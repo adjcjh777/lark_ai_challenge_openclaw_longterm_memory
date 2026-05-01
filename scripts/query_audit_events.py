@@ -57,6 +57,7 @@ def query_events(
     action: str | None = None,
     actor_id: str | None = None,
     tenant_id: str | None = None,
+    organization_id: str | None = None,
     permission_decision: str | None = None,
     since: str | None = None,
     until: str | None = None,
@@ -79,6 +80,9 @@ def query_events(
     if tenant_id:
         conditions.append("tenant_id = ?")
         params.append(tenant_id)
+    if organization_id:
+        conditions.append("organization_id = ?")
+        params.append(organization_id)
     if permission_decision:
         conditions.append("permission_decision = ?")
         params.append(permission_decision)
@@ -113,6 +117,7 @@ def count_events(
     action: str | None = None,
     actor_id: str | None = None,
     tenant_id: str | None = None,
+    organization_id: str | None = None,
     permission_decision: str | None = None,
     since: str | None = None,
     until: str | None = None,
@@ -133,6 +138,9 @@ def count_events(
     if tenant_id:
         conditions.append("tenant_id = ?")
         params.append(tenant_id)
+    if organization_id:
+        conditions.append("organization_id = ?")
+        params.append(organization_id)
     if permission_decision:
         conditions.append("permission_decision = ?")
         params.append(permission_decision)
@@ -240,6 +248,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
                 d[key] = json.loads(d[key])
             except (json.JSONDecodeError, TypeError):
                 pass
+    d["source_context"] = _redact_sensitive_payload(d.get("source_context"))
     # Convert timestamp to ISO string for readability
     if "created_at" in d and isinstance(d["created_at"], int):
         from datetime import datetime, timezone
@@ -247,6 +256,32 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         dt = datetime.fromtimestamp(d["created_at"] / 1000, tz=timezone.utc)
         d["created_at_iso"] = dt.isoformat()
     return d
+
+
+def _redact_sensitive_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).lower()
+            if any(marker in normalized_key for marker in ("token", "secret", "api_key", "apikey", "authorization")):
+                redacted[str(key)] = "[REDACTED]"
+            else:
+                redacted[str(key)] = _redact_sensitive_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_sensitive_payload(item) for item in value]
+    if isinstance(value, str):
+        redacted = value
+        for marker in ("app_secret", "access_token", "refresh_token", "token", "api_key"):
+            redacted = _redact_assignment(redacted, marker)
+        return redacted
+    return value
+
+
+def _redact_assignment(value: str, marker: str) -> str:
+    import re
+
+    return re.sub(rf"(?i)({re.escape(marker)}\s*=\s*)[^\s,;]+", r"\1[REDACTED]", value)
 
 
 def _iso_to_ms(iso_str: str) -> int:
@@ -280,6 +315,7 @@ def main() -> None:
     parser.add_argument("--action", help="Filter by action")
     parser.add_argument("--actor-id", help="Filter by actor_id")
     parser.add_argument("--tenant-id", help="Filter by tenant_id")
+    parser.add_argument("--organization-id", help="Filter by organization_id")
     parser.add_argument("--permission-decision", help="Filter by permission_decision")
     parser.add_argument("--since", help="Start time (ISO 8601)")
     parser.add_argument("--until", help="End time (ISO 8601)")
@@ -328,6 +364,7 @@ def main() -> None:
                 action=args.action,
                 actor_id=args.actor_id,
                 tenant_id=args.tenant_id,
+                organization_id=args.organization_id,
                 permission_decision=args.permission_decision,
                 since=args.since,
                 until=args.until,
@@ -343,6 +380,7 @@ def main() -> None:
                 action=args.action,
                 actor_id=args.actor_id,
                 tenant_id=args.tenant_id,
+                organization_id=args.organization_id,
                 permission_decision=args.permission_decision,
                 since=args.since,
                 until=args.until,

@@ -177,6 +177,18 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Audit read-only live gate verifies CLI/API audit filtering, redaction, CSV export, and no-write boundary.",
+        path="scripts/check_copilot_audit_readonly_gate.py",
+        contains=(
+            "run_audit_readonly_gate",
+            "organization_id",
+            "source_context_redaction",
+            "admin_api_readonly",
+            "POST writes",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Prometheus alert-rule verifier exists for staging alerts.",
         path="scripts/check_prometheus_alert_rules.py",
         contains=("CopilotWikiCardsMissing", "CopilotGraphNodesMissing"),

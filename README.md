@@ -52,7 +52,7 @@
 | 群级设置卡片 | 已完成只读设置卡：`/settings` / `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和 no-overclaim 边界；不提供写入动作 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
 | Limited Feishu ingestion | 已完成本地受控 ingestion 底座，支持文档、任务、会议、Bitable，以及 allowlist 群里被动探测或显式路由到 `memory.create_candidate` 的飞书消息；当前新增 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选仍需人工确认；这不是被动全量群聊摄入 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/review_policy.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_review_policy.py` |
 | 真实 Feishu API 拉取入口 | 已完成任务、会议、Bitable 读取 fetcher、Feishu live `/task` / `/meeting` / `/bitable` 路由和 fetch 前 fail-closed 权限门控；结果进入 `memory.create_candidate` 后由 review policy 决定自动确认或人工审核 | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、`memory_engine/copilot/review_policy.py`、`tests/test_feishu_fetchers.py`、`tests/test_copilot_review_policy.py` |
-| 审计查询、告警和运维面 | 已完成本地审计查询/导出、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口、embedding fallback 可观测字段，以及 staging Prometheus alert-rule artifact / verifier；这仍不是生产级 Prometheus/Grafana 长期监控 | `scripts/query_audit_events.py`、`scripts/check_audit_alerts.py`、`scripts/check_prometheus_alert_rules.py`、`deploy/monitoring/copilot-admin-alerts.yml`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`tests/test_prometheus_alert_rules.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
+| 审计查询、告警和运维面 | 已完成本地审计查询/导出、audit read-only live gate、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口、embedding fallback 可观测字段，以及 staging Prometheus alert-rule artifact / verifier；这仍不是生产级 Prometheus/Grafana 长期监控 | `scripts/query_audit_events.py`、`scripts/check_copilot_audit_readonly_gate.py`、`scripts/check_audit_alerts.py`、`scripts/check_prometheus_alert_rules.py`、`deploy/monitoring/copilot-admin-alerts.yml`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`tests/test_prometheus_alert_rules.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
 | Productized live 长期运行方案 | 已完成方案和上线 gate，覆盖部署拓扑、单监听、存储、监控告警、权限后台、审计 UI、停写回滚和 no-overclaim 边界；尚未实施生产长期运行 | `docs/productization/productized-live-long-run-plan.md`、`docs/productization/handoffs/productized-live-long-run-plan-handoff.md` |
 | OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
@@ -314,6 +314,7 @@ python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --
 python3 scripts/check_copilot_admin_env_file.py --expect-example --json
 python3 scripts/check_copilot_admin_deploy_bundle.py --json
 python3 scripts/check_copilot_admin_sso_gate.py --json
+python3 scripts/check_copilot_audit_readonly_gate.py --json
 python3 scripts/check_copilot_admin_production_evidence.py --json
 python3 scripts/check_copilot_knowledge_site_export.py --json
 python3 scripts/check_copilot_graph_quality.py --json

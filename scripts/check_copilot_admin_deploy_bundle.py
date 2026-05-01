@@ -125,6 +125,17 @@ CHECKS = (
         required_patterns=("no_header_denied", "viewer_export_forbidden", "not_real_enterprise_idp"),
     ),
     BundleCheck(
+        name="audit_readonly_gate",
+        path="scripts/check_copilot_audit_readonly_gate.py",
+        description="Audit read-only verifier covers tenant/org filters, redaction, CSV export, and no-write API policy.",
+        required_patterns=(
+            "run_audit_readonly_gate",
+            "source_context_redaction",
+            "admin_api_readonly",
+            "POST writes",
+        ),
+    ),
+    BundleCheck(
         name="completion_audit_gate",
         path="scripts/check_llm_wiki_enterprise_site_completion.py",
         description="Completion audit maps the user objective to artifacts and keeps production blockers explicit.",
@@ -165,7 +176,13 @@ CHECKS = (
         name="launch_runbook",
         path="docs/productization/admin-llm-wiki-launch-runbook.md",
         description="Launch runbook documents staging scope, deployment checks, and no-overclaim boundaries.",
-        required_patterns=("本地 / staging", "check_copilot_admin_sso_gate.py", "真实企业 IdP", "productized live"),
+        required_patterns=(
+            "本地 / staging",
+            "check_copilot_admin_sso_gate.py",
+            "check_copilot_audit_readonly_gate.py",
+            "真实企业 IdP",
+            "productized live",
+        ),
     ),
 )
 

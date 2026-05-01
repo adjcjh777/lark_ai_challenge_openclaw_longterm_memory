@@ -2156,7 +2156,7 @@ def _audit_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
     for key in ("actor_roles", "visible_fields", "redacted_fields"):
         payload[key] = _loads_json(payload.get(key), [])
-    payload["source_context"] = _loads_json(payload.get("source_context"), {})
+    payload["source_context"] = _redact_sensitive_payload(_loads_json(payload.get("source_context"), {}))
     payload["created_at_iso"] = _ms_to_iso(payload.get("created_at"))
     return payload
 
@@ -2173,6 +2173,21 @@ def _redact_sensitive_text(value: Any) -> Any:
     for pattern in patterns:
         redacted = re.sub(pattern, r"\1[REDACTED]", redacted)
     return redacted
+
+
+def _redact_sensitive_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized_key = str(key).lower()
+            if any(marker in normalized_key for marker in ("token", "secret", "api_key", "apikey", "authorization")):
+                redacted[str(key)] = "[REDACTED]"
+            else:
+                redacted[str(key)] = _redact_sensitive_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_sensitive_payload(item) for item in value]
+    return _redact_sensitive_text(value)
 
 
 def _graph_node_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ from scripts.check_audit_alerts import (
     check_consecutive_denies,
     check_ingestion_failure_rate,
 )
+from scripts.check_copilot_audit_readonly_gate import run_audit_readonly_gate
 from scripts.query_audit_events import (
     count_events,
     format_csv,
@@ -47,6 +49,7 @@ class AuditOpsScriptsTest(unittest.TestCase):
                 action=action,
                 actor_id=actor_id,
                 tenant_id=tenant_id,
+                organization_id="org:demo" if tenant_id == "tenant:demo" else "org:other",
                 scope="project:feishu_ai_challenge",
                 permission_decision=permission_decision,
                 reason_code=reason_code,
@@ -84,6 +87,40 @@ class AuditOpsScriptsTest(unittest.TestCase):
         csv_output = format_csv(events)
         self.assertIn("audit_id,event_type", csv_output)
         self.assertIn("ingestion_failed", csv_output)
+
+    def test_query_events_filters_org_and_redacts_source_context(self) -> None:
+        self._record(event_type="permission_denied", action="memory.search", permission_decision="deny")
+        self.repo.record_audit_event(
+            event_type="ingestion_failed",
+            action="memory.create_candidate",
+            actor_id="u_secret",
+            tenant_id="tenant:demo",
+            organization_id="org:demo",
+            scope="project:feishu_ai_challenge",
+            permission_decision="withhold",
+            reason_code="feishu_fetch_failed",
+            source_context={
+                "access_token": "demo-secret",
+                "nested": {"authorization": "raw-admin-token", "note": "app_secret=demo-secret"},
+            },
+            created_at=self.now,
+        )
+
+        events = query_events(self.conn, tenant_id="tenant:demo", organization_id="org:demo", limit=10)
+        serialized = json.dumps(events, ensure_ascii=False)
+
+        self.assertEqual(2, len(events))
+        self.assertIn("[REDACTED]", serialized)
+        self.assertNotIn("demo-secret", serialized)
+        self.assertNotIn("raw-admin-token", serialized)
+
+    def test_audit_readonly_gate_passes_on_seeded_db(self) -> None:
+        report = run_audit_readonly_gate()
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("pass", report["checks"]["admin_api_readonly"]["status"])
+        self.assertEqual("pass", report["checks"]["source_context_redaction"]["status"])
+        self.assertEqual("pass", report["checks"]["tenant_org_filter"]["status"])
 
     def test_alerts_use_explicit_ingestion_failed_event(self) -> None:
         self._record(event_type="limited_ingestion_candidate", action="memory.create_candidate")
