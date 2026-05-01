@@ -558,6 +558,8 @@ async function checkAdminLaunch(browser, viewport, label) {
   await page.click('[data-view="launch"]');
   await page.waitForSelector("text=Launch Readiness");
   await page.waitForSelector("text=Production Evidence");
+  await page.waitForSelector("text=Graph Quality");
+  await page.waitForSelector("text=compiled_memory_graph");
   await page.waitForSelector("text=production_ready=false");
   await page.waitForSelector("text=production=blocked");
   await page.waitForSelector("text=Real enterprise IdP");
@@ -569,6 +571,9 @@ async function checkAdminLaunch(browser, viewport, label) {
   }
   if (!panelText.includes("production_evidence_manifest") || !panelText.includes("productized_live_long_run")) {
     throw new Error(`admin launch ${label} missing production evidence manifest status`);
+  }
+  if (!panelText.includes("orphan_ratio") || !panelText.includes("compiled_memory_graph")) {
+    throw new Error(`admin launch ${label} missing graph quality status`);
   }
   const file = path.join(config.outputDir, `admin-launch-${label}.png`);
   await page.screenshot({ path: file, fullPage: true });

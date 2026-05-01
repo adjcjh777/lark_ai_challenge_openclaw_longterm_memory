@@ -216,6 +216,11 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertGreaterEqual(compiled_graph["workspace_node_count"], 4)
         self.assertIn("memory", {node["node_type"] for node in compiled_graph["nodes"]})
         self.assertIn("grounded_by", {edge["edge_type"] for edge in compiled_graph["edges"]})
+        graph_quality = service.graph_quality()
+        self.assertTrue(graph_quality["ok"])
+        self.assertEqual("pass", graph_quality["status"])
+        self.assertEqual("pass", graph_quality["checks"]["compiled_memory_graph"]["status"])
+        self.assertEqual("pass", graph_quality["checks"]["orphan_ratio"]["status"])
         tenant_graph = service.graph_workspace(tenant_id="tenant:demo", organization_id="org:demo", status="active")
         self.assertGreaterEqual(tenant_graph["workspace_node_count"], 4)
         self.assertEqual({"tenant:demo"}, {node["tenant_id"] for node in tenant_graph["nodes"]})
@@ -278,6 +283,8 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual("blocked", launch["production_status"])
         self.assertIn("enterprise_idp_sso_validation", {item["id"] for item in launch["production_blockers"]})
         self.assertIn("tenant_policy_editor", {item["id"] for item in launch["checks"]})
+        self.assertIn("graph_quality", {item["id"] for item in launch["checks"]})
+        self.assertEqual("pass", launch["graph_quality"]["check_status"]["compiled_memory_graph"])
 
     def test_http_admin_is_read_only_and_serves_json_api(self) -> None:
         self._seed_rows()
@@ -309,6 +316,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(health["data"]["read_only_knowledge_surfaces"])
             self.assertTrue(health["data"]["tenant_policy_write_api"])
             self.assertTrue(health["data"]["wiki_ready"])
+            self.assertEqual("pass", health["data"]["graph_quality_status"])
 
             with urlopen(f"{base_url}/api/live", timeout=5) as response:
                 live_payload = json.loads(response.read().decode("utf-8"))
@@ -320,7 +328,9 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(launch_payload["ok"])
             self.assertEqual("blocked", launch_payload["data"]["production_status"])
             self.assertIn("llm_wiki", {item["id"] for item in launch_payload["data"]["checks"]})
+            self.assertIn("graph_quality", {item["id"] for item in launch_payload["data"]["checks"]})
             self.assertIn("production_evidence_manifest", {item["id"] for item in launch_payload["data"]["checks"]})
+            self.assertEqual("pass", launch_payload["data"]["graph_quality"]["check_status"]["compiled_memory_graph"])
             self.assertFalse(launch_payload["data"]["production_evidence"]["production_ready"])
             self.assertIn(
                 "productized_live_long_run",
@@ -359,6 +369,12 @@ class CopilotAdminTest(unittest.TestCase):
                 graph_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(graph_payload["ok"])
             self.assertEqual(1, len(graph_payload["data"]["nodes"]))
+
+            with urlopen(f"{base_url}/api/graph-quality", timeout=5) as response:
+                graph_quality_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(graph_quality_payload["ok"])
+            self.assertEqual("pass", graph_quality_payload["data"]["checks"]["compiled_memory_graph"]["status"])
+            self.assertEqual("pass", graph_quality_payload["data"]["checks"]["orphan_ratio"]["status"])
 
             with urlopen(f"{base_url}/api/graph?tenant_id=tenant%3Anone", timeout=5) as response:
                 other_tenant_graph = json.loads(response.read().decode("utf-8"))

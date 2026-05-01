@@ -32,7 +32,7 @@ python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --s
 git diff --check
 ```
 
-Graph quality gate 会复用 Admin Graph backend，检查可见 workspace 中是否有 `memory -> grounded_by -> evidence_source` 编译图谱、边端点完整性、tenant/org 覆盖、孤立节点比例和敏感字符串泄漏。它证明本地/staging 图谱展示质量，不代表生产级图谱治理或长期增量图谱服务。
+Graph quality gate 会复用 Admin Graph backend，检查可见 workspace 中是否有 `memory -> grounded_by -> evidence_source` 编译图谱、边端点完整性、tenant/org 覆盖、孤立节点比例和敏感字符串泄漏。结果同时暴露在 `python3 scripts/check_copilot_graph_quality.py --json`、`/api/graph-quality` 和 Launch 页 Graph Quality 区块。它证明本地/staging 图谱展示质量，不代表生产级图谱治理或长期增量图谱服务。
 
 UI smoke 会启动本机 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、Tenants tab、Launch tab、节点/边详情、租户 readiness 计数、admin-only tenant policy editor、缺失生产能力清单、静态站 Deerflow attribution、横向溢出和截图像素完整性。需要固定视觉基线时，先运行 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续复用同一个 `--visual-baseline-dir` 会按截图逐张执行采样 pixel diff。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
 GitHub Actions 的 `Admin UI Smoke` job 会运行同一脚本，并额外在 CI 临时目录执行 baseline update / compare，最后上传普通截图、baseline PNG、`visual-baseline.json` 和 compare 截图 artifact。

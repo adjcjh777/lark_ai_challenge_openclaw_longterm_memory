@@ -18,7 +18,6 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository, now_ms
 
 DEFAULT_SCOPE = "project:graph_quality_gate"
-FORBIDDEN_SUBSTRINGS = ("app_secret=", "access_token=", "refresh_token=", "demo-secret")
 
 
 def main() -> int:
@@ -118,40 +117,20 @@ def _run_with_db(
         if seed_demo_data:
             _seed_demo_data(conn, scope=scope)
         service = AdminQueryService(conn)
-        graph = service.graph_workspace(
+        quality = service.graph_quality(
             tenant_id=tenant_id,
             organization_id=organization_id,
-            limit=200,
-        )
-        checks = _quality_checks(
-            graph,
             min_nodes=min_nodes,
             min_edges=min_edges,
             max_orphan_ratio=max_orphan_ratio,
         )
     finally:
         conn.close()
-    failed = {name: check for name, check in checks.items() if check["status"] != "pass"}
     return {
-        "ok": not failed,
+        "ok": bool(quality.get("ok")),
         "db_path": str(db_path),
         "temporary_db": temporary_db,
-        "filters": {
-            "tenant_id": tenant_id,
-            "organization_id": organization_id,
-        },
-        "summary": {
-            "workspace_node_count": graph.get("workspace_node_count"),
-            "workspace_edge_count": graph.get("workspace_edge_count"),
-            "nodes_by_type": graph.get("nodes_by_type"),
-            "edges_by_type": graph.get("edges_by_type"),
-        },
-        "checks": checks,
-        "failed_checks": sorted(failed),
-        "boundary": "local/staging graph quality gate only; no production graph governance or long-running live claim",
-        "next_step": ""
-        if not failed
-        else "Inspect graph endpoints, tenant coverage, and compiled memory evidence edges.",
+        **quality,
     }
 
 
@@ -257,72 +236,6 @@ def _seed_demo_data(conn: sqlite3.Connection, *, scope: str) -> None:
                 2,
             ),
         )
-
-
-def _quality_checks(
-    graph: dict[str, Any],
-    *,
-    min_nodes: int,
-    min_edges: int,
-    max_orphan_ratio: float,
-) -> dict[str, dict[str, Any]]:
-    nodes = list(graph.get("nodes") or [])
-    edges = list(graph.get("edges") or [])
-    node_ids = {str(node.get("id")) for node in nodes}
-    edge_endpoints = {
-        str(edge.get(endpoint))
-        for edge in edges
-        for endpoint in ("source_node_id", "target_node_id")
-        if edge.get(endpoint)
-    }
-    missing_endpoints = sorted(endpoint for endpoint in edge_endpoints if endpoint not in node_ids)
-    orphan_nodes = sorted(node_id for node_id in node_ids if node_id not in edge_endpoints)
-    orphan_ratio = (len(orphan_nodes) / len(node_ids)) if node_ids else 1.0
-    node_types = {str(node.get("node_type")) for node in nodes}
-    edge_types = {str(edge.get("edge_type")) for edge in edges}
-    missing_tenancy = [
-        str(node.get("id"))
-        for node in nodes
-        if not str(node.get("tenant_id") or "").strip() or not str(node.get("organization_id") or "").strip()
-    ]
-    serialized = json.dumps({"nodes": nodes, "edges": edges}, ensure_ascii=False).lower()
-    leaked = sorted(token for token in FORBIDDEN_SUBSTRINGS if token.lower() in serialized)
-    return {
-        "workspace_size": _check(
-            len(nodes) >= min_nodes and len(edges) >= min_edges,
-            f"{len(nodes)} nodes / {len(edges)} edges",
-            {"min_nodes": min_nodes, "min_edges": min_edges},
-        ),
-        "compiled_memory_graph": _check(
-            "memory" in node_types and "evidence_source" in node_types and "grounded_by" in edge_types,
-            "compiled memory -> grounded_by -> evidence_source graph present",
-            {"node_types": sorted(node_types), "edge_types": sorted(edge_types)},
-        ),
-        "edge_endpoints": _check(
-            not missing_endpoints,
-            "all visible edge endpoints are present in visible nodes",
-            {"missing_endpoints": missing_endpoints},
-        ),
-        "tenant_coverage": _check(
-            not missing_tenancy,
-            "all visible nodes include tenant_id and organization_id",
-            {"missing_node_ids": missing_tenancy},
-        ),
-        "orphan_ratio": _check(
-            orphan_ratio <= max_orphan_ratio,
-            f"orphan_ratio={orphan_ratio:.4f}",
-            {"orphan_node_ids": orphan_nodes, "max_orphan_ratio": max_orphan_ratio},
-        ),
-        "secret_redaction": _check(
-            not leaked,
-            "graph payload has no known secret-like substrings",
-            {"forbidden_substrings_found": leaked},
-        ),
-    }
-
-
-def _check(ok: bool, message: str, extra: dict[str, Any]) -> dict[str, Any]:
-    return {"status": "pass" if ok else "fail", "message": message, **extra}
 
 
 if __name__ == "__main__":

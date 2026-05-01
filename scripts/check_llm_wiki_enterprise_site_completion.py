@@ -59,21 +59,24 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Knowledge graph integration",
+        evidence="Live admin exposes graph quality API and Launch readiness graph quality rollup.",
+        path="memory_engine/copilot/admin.py",
+        contains=("def graph_quality", "/api/graph-quality", "Graph Quality", "compiled_memory_graph"),
+    ),
+    EvidenceCheck(
+        requirement="Knowledge graph integration",
         evidence="Storage graph contract is documented with node and edge tables.",
         path="docs/productization/contracts/storage-contract.md",
         contains=("knowledge_graph_nodes", "knowledge_graph_edges"),
     ),
     EvidenceCheck(
         requirement="Knowledge graph integration",
-        evidence="Graph quality gate checks compiled memory graph, edge endpoint integrity, tenant coverage, orphan ratio, and secret-like payload leaks.",
+        evidence="Graph quality CLI delegates to the shared AdminQueryService graph quality gate.",
         path="scripts/check_copilot_graph_quality.py",
         contains=(
             "run_graph_quality_check",
-            "compiled_memory_graph",
-            "edge_endpoints",
-            "tenant_coverage",
-            "orphan_ratio",
-            "secret_redaction",
+            "service.graph_quality",
+            "max_orphan_ratio",
         ),
     ),
     EvidenceCheck(
@@ -92,7 +95,7 @@ STAGING_CHECKS = (
         requirement="Visible knowledge graph backend",
         evidence="Admin API and graph behavior have unit coverage.",
         path="tests/test_copilot_admin.py",
-        contains=("graph_workspace", "api/graph", "tenant_id"),
+        contains=("graph_workspace", "api/graph", "api/graph-quality", "tenant_id"),
     ),
     EvidenceCheck(
         requirement="Admin UI optimization",

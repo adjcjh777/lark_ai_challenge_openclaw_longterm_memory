@@ -292,6 +292,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 /api/wiki                active curated memory 编译视图，不包含 raw events，不写飞书
 /api/wiki/export?scope=  指定 scope 的 Markdown Wiki 导出，只接受 admin token，仍只读 SQLite
 /api/graph               知识图谱节点/关系视图
+/api/graph-quality       图谱质量 gate：compiled memory graph、边端点、tenant 覆盖、孤立节点和敏感字段泄漏
 /api/tenants             ledger + tenant policy 派生的 tenant / organization readiness 概览
 /api/tenant-policies     GET 读取租户策略；POST 仅 admin 可 upsert 本地/pre-production 租户策略
 /api/memories            memory ledger 和 evidence

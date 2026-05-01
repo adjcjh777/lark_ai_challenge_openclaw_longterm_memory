@@ -43,6 +43,7 @@ ADMIN_PRODUCTION_EVIDENCE_MANIFEST_ENV_NAMES = (
     "COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST",
 )
 MAX_LIMIT = 200
+GRAPH_QUALITY_FORBIDDEN_SUBSTRINGS = ("app_secret=", "access_token=", "refresh_token=", "demo-secret")
 
 
 @dataclass(frozen=True)
@@ -165,6 +166,7 @@ class AdminQueryService:
         summary = self.summary()
         wiki = self.wiki_overview(limit=20)
         graph = self.graph_workspace(limit=80)
+        graph_quality = self.graph_quality()
         tenants = self.tenant_overview(limit=80)
         policies = self.tenant_policies(limit=80)
         checks = [
@@ -181,6 +183,17 @@ class AdminQueryService:
                 "pass" if int(graph.get("workspace_node_count") or 0) > 0 else "fail",
                 f"{int(graph.get('workspace_node_count') or 0)} nodes / {int(graph.get('workspace_edge_count') or 0)} edges",
                 "Ingest graph context or confirm evidence-backed memories.",
+            ),
+            _launch_check(
+                "graph_quality",
+                "Graph Quality",
+                "pass" if graph_quality.get("ok") else "fail",
+                (
+                    f"{graph_quality.get('status')} quality; "
+                    f"failed={len(graph_quality.get('failed_checks') or [])}; "
+                    f"orphan_ratio={graph_quality.get('summary', {}).get('orphan_ratio')}"
+                ),
+                "Inspect graph endpoints, tenant coverage, compiled memory evidence edges, and orphan nodes.",
             ),
             _launch_check(
                 "tenant_inventory",
@@ -242,9 +255,11 @@ class AdminQueryService:
                 "wiki_card_count": wiki.get("card_count"),
                 "graph_node_count": graph.get("workspace_node_count"),
                 "graph_edge_count": graph.get("workspace_edge_count"),
+                "graph_quality_status": graph_quality.get("status"),
                 "tenant_count": tenants.get("tenant_count"),
                 "tenant_policy_count": policies.get("total"),
             },
+            "graph_quality": _compact_graph_quality(graph_quality),
             "boundary": (
                 "staging launch readiness only; production remains blocked until real IdP, "
                 "production DB ops, monitoring, and long-run live evidence are complete."
@@ -700,6 +715,54 @@ class AdminQueryService:
             },
             "nodes": nodes,
             "edges": edges,
+        }
+
+    def graph_quality(
+        self,
+        *,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
+        min_nodes: int = 2,
+        min_edges: int = 1,
+        max_orphan_ratio: float = 0.35,
+    ) -> dict[str, Any]:
+        graph = self.graph_workspace(
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            limit=MAX_LIMIT,
+        )
+        checks = _graph_quality_checks(
+            graph,
+            min_nodes=min_nodes,
+            min_edges=min_edges,
+            max_orphan_ratio=max_orphan_ratio,
+        )
+        failed = {name: check for name, check in checks.items() if check["status"] != "pass"}
+        incident_node_ids = _graph_incident_node_ids(graph)
+        node_count = int(graph.get("workspace_node_count") or 0)
+        orphan_count = max(0, node_count - len(incident_node_ids))
+        orphan_ratio = 0.0 if node_count == 0 else orphan_count / node_count
+        return {
+            "ok": not failed,
+            "status": "pass" if not failed else "fail",
+            "filters": {
+                "tenant_id": tenant_id,
+                "organization_id": organization_id,
+            },
+            "summary": {
+                "workspace_node_count": graph.get("workspace_node_count"),
+                "workspace_edge_count": graph.get("workspace_edge_count"),
+                "nodes_by_type": graph.get("nodes_by_type"),
+                "edges_by_type": graph.get("edges_by_type"),
+                "orphan_node_count": orphan_count,
+                "orphan_ratio": round(orphan_ratio, 4),
+            },
+            "checks": checks,
+            "failed_checks": sorted(failed),
+            "boundary": "local/staging graph quality gate only; no production graph governance or long-running live claim",
+            "next_step": ""
+            if not failed
+            else "Inspect graph endpoints, tenant coverage, compiled memory evidence edges, and orphan nodes.",
         }
 
     def _append_compiled_memory_graph(
@@ -1427,6 +1490,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/graph":
                 self._send_json(self._api_graph(parsed.query), send_body=send_body)
                 return
+            if parsed.path == "/api/graph-quality":
+                self._send_json(self._api_graph_quality(parsed.query), send_body=send_body)
+                return
             if parsed.path == "/api/tables":
                 self._send_json(self._api_tables(), send_body=send_body)
                 return
@@ -1504,6 +1570,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             service = AdminQueryService(conn)
             wiki = service.wiki_overview(limit=1)
             graph = service.graph_workspace(limit=10)
+            graph_quality = service.graph_quality()
             policies = service.tenant_policies(limit=1)
             launch = service.launch_readiness()
             return {
@@ -1535,6 +1602,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                     "wiki_ready": bool(wiki.get("generation_policy"))
                     and wiki["generation_policy"].get("source") == "active_curated_memory_only",
                     "graph_ready": int(graph.get("workspace_node_count") or 0) >= 0,
+                    "graph_quality_status": graph_quality.get("status"),
                     "wiki_card_count": int(wiki.get("card_count") or 0),
                     "graph_workspace_node_count": int(graph.get("workspace_node_count") or 0),
                     "launch_readiness": {
@@ -1702,6 +1770,18 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 limit=_int_param(params, "limit", 80),
             )
         return {"ok": True, "data": data}
+
+    def _api_graph_quality(self, query_string: str) -> dict[str, Any]:
+        params = parse_qs(query_string)
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).graph_quality(
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
+                min_nodes=_int_param(params, "min_nodes", 2),
+                min_edges=_int_param(params, "min_edges", 1),
+                max_orphan_ratio=_float_param(params, "max_orphan_ratio", 0.35),
+            )
+        return {"ok": bool(data.get("ok")), "data": data}
 
     def _api_tables(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
@@ -2163,6 +2243,92 @@ def _count_items_by(items: list[dict[str, Any]], key: str) -> dict[str, int]:
     return dict(sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])))
 
 
+def _graph_quality_checks(
+    graph: dict[str, Any],
+    *,
+    min_nodes: int,
+    min_edges: int,
+    max_orphan_ratio: float,
+) -> dict[str, dict[str, Any]]:
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    edges = [edge for edge in graph.get("edges") or [] if isinstance(edge, dict)]
+    node_ids = {str(node.get("id")) for node in nodes if node.get("id")}
+    edge_endpoints = {
+        str(edge.get(endpoint_key))
+        for edge in edges
+        for endpoint_key in ("source_node_id", "target_node_id")
+        if edge.get(endpoint_key)
+    }
+    missing_endpoints = sorted(endpoint for endpoint in edge_endpoints if endpoint not in node_ids)
+    tenant_values = {str(node.get("tenant_id")) for node in nodes if node.get("tenant_id")}
+    org_values = {str(node.get("organization_id")) for node in nodes if node.get("organization_id")}
+    compiled_memory_nodes = [node for node in nodes if node.get("node_type") == "memory"]
+    compiled_evidence_nodes = [node for node in nodes if node.get("node_type") == "evidence_source"]
+    grounded_edges = [edge for edge in edges if edge.get("edge_type") == "grounded_by"]
+    incident_node_ids = _graph_incident_node_ids(graph)
+    orphan_count = max(0, len(nodes) - len(incident_node_ids))
+    orphan_ratio = 0.0 if not nodes else orphan_count / len(nodes)
+    serialized = json.dumps(graph, ensure_ascii=False, sort_keys=True)
+    leaked_markers = [marker for marker in GRAPH_QUALITY_FORBIDDEN_SUBSTRINGS if marker in serialized]
+    return {
+        "workspace_size": _quality_check(
+            len(nodes) >= min_nodes and len(edges) >= min_edges,
+            f"{len(nodes)} nodes / {len(edges)} edges visible",
+            {"min_nodes": min_nodes, "min_edges": min_edges},
+        ),
+        "compiled_memory_graph": _quality_check(
+            bool(compiled_memory_nodes and compiled_evidence_nodes and grounded_edges),
+            (
+                f"{len(compiled_memory_nodes)} memory nodes / {len(compiled_evidence_nodes)} evidence nodes / "
+                f"{len(grounded_edges)} grounded_by edges"
+            ),
+            {},
+        ),
+        "edge_endpoints": _quality_check(
+            not missing_endpoints,
+            "all visible edge endpoints resolve to visible nodes"
+            if not missing_endpoints
+            else f"{len(missing_endpoints)} missing endpoints",
+            {"missing_endpoints": missing_endpoints[:10]},
+        ),
+        "tenant_coverage": _quality_check(
+            bool(tenant_values and org_values),
+            f"{len(tenant_values)} tenants / {len(org_values)} orgs represented",
+            {"tenant_count": len(tenant_values), "organization_count": len(org_values)},
+        ),
+        "orphan_ratio": _quality_check(
+            orphan_ratio <= max_orphan_ratio,
+            f"{orphan_count} orphan nodes; ratio={orphan_ratio:.4f}",
+            {"max_orphan_ratio": max_orphan_ratio, "orphan_node_count": orphan_count},
+        ),
+        "secret_redaction": _quality_check(
+            not leaked_markers,
+            "no forbidden secret-like markers found"
+            if not leaked_markers
+            else f"forbidden markers found: {', '.join(leaked_markers)}",
+            {
+                "forbidden_markers": leaked_markers,
+                "forbidden_substrings_found": leaked_markers,
+            },
+        ),
+    }
+
+
+def _graph_incident_node_ids(graph: dict[str, Any]) -> set[str]:
+    node_ids = {str(node.get("id")) for node in graph.get("nodes") or [] if isinstance(node, dict) and node.get("id")}
+    return {
+        str(edge.get(endpoint_key))
+        for edge in graph.get("edges") or []
+        if isinstance(edge, dict)
+        for endpoint_key in ("source_node_id", "target_node_id")
+        if edge.get(endpoint_key) and str(edge.get(endpoint_key)) in node_ids
+    }
+
+
+def _quality_check(ok: bool, message: str, extra: dict[str, Any]) -> dict[str, Any]:
+    return {"status": "pass" if ok else "fail", "message": message, **extra}
+
+
 def _launch_check(
     check_id: str,
     label: str,
@@ -2190,6 +2356,23 @@ def _rollup_status(checks: list[dict[str, Any]]) -> str:
 
 def _metric_label_value(value: Any) -> str:
     return str(value or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _compact_graph_quality(result: dict[str, Any]) -> dict[str, Any]:
+    checks = result.get("checks") if isinstance(result.get("checks"), dict) else {}
+    return {
+        "ok": bool(result.get("ok")),
+        "status": result.get("status"),
+        "summary": result.get("summary") or {},
+        "failed_checks": result.get("failed_checks") or [],
+        "check_status": {
+            name: check.get("status")
+            for name, check in checks.items()
+            if isinstance(name, str) and isinstance(check, dict)
+        },
+        "boundary": result.get("boundary"),
+        "next_step": result.get("next_step"),
+    }
 
 
 def _compact_production_evidence(result: dict[str, Any]) -> dict[str, Any]:
@@ -2232,6 +2415,13 @@ def _int_param(params: dict[str, list[str]], name: str, default: int) -> int:
     if value is None:
         return default
     return int(value)
+
+
+def _float_param(params: dict[str, list[str]], name: str, default: float) -> float:
+    value = _param(params, name)
+    if value is None:
+        return default
+    return float(value)
 
 
 def _clamp_limit(value: int) -> int:
@@ -3223,6 +3413,9 @@ def _index_html() -> str:
       const summary = data.summary || {{}};
       const evidence = data.production_evidence || {{}};
       const evidenceStatus = evidence.section_status || {{}};
+      const graphQuality = data.graph_quality || {{}};
+      const graphQualitySummary = graphQuality.summary || {{}};
+      const graphQualityStatus = graphQuality.check_status || {{}};
       const rows = checks.map(item => `
         <tr>
           <td><span class="status ${{esc(item.status)}}">${{esc(item.status)}}</span></td>
@@ -3232,6 +3425,9 @@ def _index_html() -> str:
         </tr>`).join("");
       const blockerRows = blockers.map(item => `<span class="tag warn">${{esc(item.label || item.id)}}</span>`).join("");
       const evidenceRows = Object.entries(evidenceStatus).map(([name, status]) => `
+        <tr><td class="mono">${{esc(name)}}</td><td><span class="status ${{esc(status)}}">${{esc(status)}}</span></td></tr>
+      `).join("");
+      const graphQualityRows = Object.entries(graphQualityStatus).map(([name, status]) => `
         <tr><td class="mono">${{esc(name)}}</td><td><span class="status ${{esc(status)}}">${{esc(status)}}</span></td></tr>
       `).join("");
       $("panel").innerHTML = `
@@ -3247,6 +3443,14 @@ def _index_html() -> str:
               <span>Boundary</span><strong>${{esc(data.boundary)}}</strong>
             </div>
             <div class="tag-row">${{blockerRows}}</div>
+            <div class="section-title"><h2>Graph Quality</h2><span>${{esc(graphQuality.status)}} / failed=${{esc((graphQuality.failed_checks || []).length)}}</span></div>
+            <div class="kv">
+              <span>Workspace</span><strong>${{esc(graphQualitySummary.workspace_node_count)}} nodes / ${{esc(graphQualitySummary.workspace_edge_count)}} edges</strong>
+              <span>Orphan ratio</span><strong>${{esc(graphQualitySummary.orphan_ratio)}}</strong>
+              <span>Failed checks</span><strong class="mono">${{esc((graphQuality.failed_checks || []).join(", ") || "none")}}</strong>
+              <span>Boundary</span><strong>${{esc(graphQuality.boundary)}}</strong>
+            </div>
+            <table><thead><tr><th>Quality check</th><th>Status</th></tr></thead><tbody>${{graphQualityRows}}</tbody></table>
             <div class="section-title"><h2>Production Evidence</h2><span>production_ready=${{esc(evidence.production_ready)}}</span></div>
             <div class="kv">
               <span>Manifest</span><strong class="mono">${{esc(evidence.manifest_path)}}</strong>
