@@ -154,6 +154,10 @@ python3 scripts/check_copilot_health.py --json | jq '.checks.cognee_adapter'
 # 检查 OpenClaw websocket 状态
 python3 scripts/check_openclaw_feishu_websocket.py
 
+# 如果要验证非 @ 群消息，先在已启用群策略的测试群发送一条普通文本，不要 @Bot；
+# 再把 lark-cli/OpenClaw 捕获的 NDJSON/JSON 事件日志传给 gate。
+python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/feishu-events.ndjson --json
+
 # 重启 websocket
 # 方式 1: 通过 start 脚本
 bash scripts/start_copilot_feishu_live.sh
@@ -166,6 +170,31 @@ lark-cli event +subscribe --as bot --event-types "im.message.receive_v1,card.act
 ```
 
 **需要停机重启**：websocket 断开需要重新建立连接。
+
+### 3.3.1 非 @ 群消息只看到 reaction
+
+**症状**：测试群里发送普通非 `@Bot` 文本后，Copilot / OpenClaw 日志只看到 reaction 事件，没有看到 `im.message.receive_v1` 的 group text message。
+
+**影响**：
+- passive 静默筛选代码不会被真实触发。
+- 本地单测通过也不能证明真实 Feishu 非 @ 群消息 live 投递完成。
+
+**诊断操作**：
+```bash
+python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/feishu-events.ndjson --json
+```
+
+通过标准：
+- `ok=true`
+- `summary.passive_group_text_messages >= 1`
+- `reason=passive_group_message_seen`
+
+失败含义：
+- `reaction_only_no_passive_message_event`：当前捕获只证明 reaction 事件可达，应检查 Feishu app 事件订阅和普通群消息权限。
+- `only_at_mention_group_messages_seen`：当前只证明 @Bot 群消息可达，需要重新发送不 @Bot 的普通群文本。
+- `expected_chat_not_seen`：日志来源或测试群 chat id 不匹配。
+
+这个 gate 只证明捕获到的事件形态，不等于生产长期运行，也不替代单监听检查。
 
 ### 3.4 数据库损坏
 

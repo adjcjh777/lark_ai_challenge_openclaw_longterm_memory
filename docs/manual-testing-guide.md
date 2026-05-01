@@ -212,6 +212,46 @@ trace_id=trace_manual_dm_search_YYYYMMDD_HHMM。
 | 回复没有 request_id / trace_id | 用户答案可见，但工程审计字段不足 | 可读性通过，排障性不足 | 查 session / audit，并记录缺口 |
 | MiMo / RightCode 卡住 | provider 或 LLM 调用慢 | 不是 Copilot 权限逻辑失败 | 记录 provider、run id 和时间 |
 
+## 4.1 非 @ 群消息事件投递 gate
+
+目的：区分“passive 静默筛选代码没触发”和“真实 Feishu 根本没有把普通群消息投递给当前 listener”。这一步只验证事件投递形态，不创建生产结论。
+
+前置条件：
+
+- 已通过“Feishu websocket 单监听检查”。
+- 当前测试群已通过 reviewer/admin `/enable_memory` 启用群策略，或你只是做事件投递诊断并明确不创建 candidate。
+- 不要在消息里 `@Bot`。
+
+操作：
+
+1. 在测试群发送一条普通文本，例如：
+
+```text
+决定：非 @ 群消息 live gate 测试，今天只验证事件投递。
+```
+
+2. 导出或保存当前 lark-cli / OpenClaw 捕获的 NDJSON/JSON 事件日志到本地临时文件。
+
+3. 执行：
+
+```bash
+python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/feishu-events.ndjson --json
+```
+
+通过标准：
+
+- `ok=true`
+- `reason=passive_group_message_seen`
+- `summary.passive_group_text_messages >= 1`
+
+失败判断：
+
+| 现象 | 说明 | 下一步 |
+|---|---|---|
+| `reaction_only_no_passive_message_event` | 当前只证明 reaction 可达，普通群文本没有进入 listener | 查 Feishu app 事件订阅和普通群消息权限，不要用单测结果 overclaim live |
+| `only_at_mention_group_messages_seen` | 只证明 @Bot 消息可达 | 重新发一条不 @Bot 的普通群文本 |
+| `expected_chat_not_seen` | 捕获事件不是目标群 | 核对日志来源和测试群 chat id |
+
 ## 5. 真实飞书互动卡片点击测试
 
 目的：确认 Feishu live interactive 回复不是“文本伪卡片”，而是真实可点击的候选审核卡；点击动作仍按当前操作者权限进入 `handle_tool_request()` / `CopilotService`，不会把按钮里的旧上下文当成权限来源。
