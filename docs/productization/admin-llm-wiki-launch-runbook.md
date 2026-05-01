@@ -87,6 +87,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `collect_copilot_production_db_evidence.py` 用于规范真实 PostgreSQL / managed PostgreSQL 证据：它接收迁移时间、PITR 开关、恢复演练时间和非密钥 evidence ref，输出可填入 production evidence manifest 的 `production_db` patch。它不会创建、连接、迁移、备份或恢复生产数据库；真实生产 DB gate 仍必须由托管数据库控制台、迁移日志、PITR 配置和恢复演练日志提供外部证据。
 
+`check_copilot_production_db_probe.py` 用于真实生产 PostgreSQL DSN 已经配置到受控环境后的 live probe：它只从 `DATABASE_URL` 或 `--dsn-env` 指定环境变量读取 DSN，使用 `pg_isready` 和只读 `psql` 查询验证已存在 endpoint 可达、可认证和版本满足 PostgreSQL 15+，并输出可合并到 `production_db` 的 manifest patch。它不会打印 DSN，不会创建数据库、执行迁移、启用 PITR、备份、恢复或证明 24 小时 productized live。
+
 `collect_copilot_external_production_evidence.py` 用于规范真实企业 IdP / SSO、生产域名 TLS 和生产监控投递证据：它接收登录测试、viewer 导出拒绝、证书有效期、HSTS、Prometheus scrape、Grafana dashboard、Alertmanager route 和告警投递测试时间，输出 `enterprise_idp_sso`、`production_domain_tls`、`production_monitoring` manifest patch。它不会执行真实登录、签发证书、配置 Grafana 或发送告警；真实生产 gate 仍必须由外部系统日志、截图或运维记录支撑。
 
 `check_copilot_admin_tls_probe.py` 用于真实生产域名已经可访问后的 live probe：它连接 `https://...`，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并到 `production_domain_tls` 的 manifest patch。它不会签发证书、配置 DNS、证明企业 IdP、生产监控、生产 DB 或 24 小时 productized live；失败时不要手填通过结果。
@@ -217,6 +219,24 @@ python3 scripts/collect_copilot_production_db_evidence.py \
 ```
 
 这个命令只生成 `production_manifest_patch.production_db`。不要把它的通过结果写成生产 DB 已部署；必须把真实托管 PostgreSQL / PITR / restore drill 的外部证据一起交给 `check_copilot_admin_production_evidence.py --require-production-ready`。
+
+生产 DB live probe 示例：
+
+```bash
+export DATABASE_URL="postgresql://..."
+
+python3 scripts/check_copilot_production_db_probe.py \
+  --dsn-env DATABASE_URL \
+  --engine managed_postgresql \
+  --migration-applied-at 2026-05-01T10:00:00+08:00 \
+  --pitr-enabled \
+  --backup-restore-drill-at 2026-05-01T11:00:00+08:00 \
+  --evidence-ref ops/db-migration-20260501 \
+  --evidence-ref ops/pitr-restore-drill-20260501 \
+  --json
+```
+
+这个命令只证明当前环境能用 DSN 连接并执行只读版本查询，不会输出 DSN，也不能替代托管数据库控制台、PITR 配置和恢复演练外部证据。
 
 外部入口证据 patch 生成示例：
 

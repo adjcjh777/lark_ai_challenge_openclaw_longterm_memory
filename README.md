@@ -328,13 +328,15 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_admin_env_file.py` 默认校验 `deploy/copilot-admin.env.example` 是否保持安全占位符；传 `--env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 可校验本机真实 runtime env 是否替换 token、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
 
-`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、TLS live probe、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
+`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、DB / TLS / monitoring live probe、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
 
 `export_copilot_admin_launch_evidence.py` 会导出一个固定 JSON evidence bundle，包含 summary、Wiki、Graph、Graph Quality、Audit、Audit read-only gate、Launch readiness、deploy bundle、production evidence 和 completion audit。它只生成本地/staging launch evidence，manifest 仍会保留 `goal_complete=false` 和 production blockers，不代表生产上线完成。
 
 `check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json` 的结构和密钥脱敏，预期 `ok=true`、`production_ready=false`；真实上线时传入已填好的 manifest 并加 `--require-production-ready`，才会要求生产 DB、真实 IdP SSO、域名/TLS、生产监控和 24 小时 long-run 证据全部通过。
 
 `collect_copilot_production_db_evidence.py` 会把真实 PostgreSQL / managed PostgreSQL 迁移、PITR 和恢复演练证据规范成 production evidence manifest 的 `production_db` patch；它只校验 evidence ref、时间戳和报告摘要，不创建或连接生产数据库。
+
+`check_copilot_production_db_probe.py` 会从 `DATABASE_URL` 或显式 `--dsn-env` 指定的环境变量读取生产 PostgreSQL DSN，使用 `pg_isready` 和只读 `psql` 查询验证已存在端点可达、可认证和版本满足 PostgreSQL 15+，并输出可合并进 `production_db` 的 manifest patch；它不会打印 DSN，不创建数据库、不迁移、不启用 PITR、不备份或恢复，也不证明长期 live。
 
 `collect_copilot_external_production_evidence.py` 会把真实企业 IdP / SSO、生产域名 TLS、Prometheus/Grafana/Alertmanager 投递证据规范成 production evidence manifest patch；它不执行真实登录、证书签发、Prometheus scrape 或告警投递。
 

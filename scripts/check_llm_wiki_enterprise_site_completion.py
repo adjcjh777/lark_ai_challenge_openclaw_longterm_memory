@@ -202,6 +202,18 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Production DB live probe validates an existing PostgreSQL endpoint through a DSN env var.",
+        path="scripts/check_copilot_production_db_probe.py",
+        contains=(
+            "run_production_db_probe",
+            "production_db",
+            "pg_isready",
+            "production_db_live_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="External production evidence collector emits IdP, TLS, and monitoring manifest patches.",
         path="scripts/collect_copilot_external_production_evidence.py",
         contains=(
