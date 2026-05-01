@@ -18,6 +18,9 @@ from memory_engine.feishu_listener_guard import (  # noqa: E402
     assert_single_feishu_listener,
     listener_report,
 )
+from scripts.check_feishu_event_subscription_diagnostics import (  # noqa: E402
+    run_feishu_event_subscription_diagnostics,
+)
 
 BOUNDARY = (
     "feishu_live_evidence_run_preflight_only; validates single-listener state and emits manual test steps, "
@@ -78,6 +81,7 @@ def prepare_live_evidence_run(
     cognee_long_run_evidence: Path | None = None,
     create_dirs: bool = False,
     process_rows: Iterable[str] | None = None,
+    event_subscription_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence_dir = (output_dir or DEFAULT_OUTPUT_ROOT / run_id).expanduser()
@@ -105,14 +109,21 @@ def prepare_live_evidence_run(
             ],
             "report": str(exc),
         }
+    event_subscription = _event_subscription_check(
+        planned_listener=planned_listener,
+        diagnostics=event_subscription_diagnostics,
+    )
     checks = {
         "single_listener": singleton,
+        "event_subscription": event_subscription,
         "controlled_chat_id": _presence_check(controlled_chat_id, "Required for expected-chat-id filters."),
         "non_reviewer_open_id": _presence_check(non_reviewer_open_id, "Required for expected-actor-id filter."),
         "reviewer_open_id": _presence_check(reviewer_open_id, "Useful for /review DM target readback."),
         "cognee_long_run_evidence": _file_check(cognee_long_run_evidence),
     }
-    blocking_failures = [name for name in ("single_listener",) if checks[name]["status"] != "pass"]
+    blocking_failures = [
+        name for name in ("single_listener", "event_subscription") if checks[name]["status"] == "fail"
+    ]
     warnings = [name for name, check in checks.items() if check["status"] == "warning"]
     packet_output = evidence_dir / "feishu-live-evidence-packet.json"
     completion_output = evidence_dir / "completion-audit.json"
@@ -123,6 +134,7 @@ def prepare_live_evidence_run(
         cognee_long_run_evidence=cognee_long_run_evidence,
         controlled_chat_id=controlled_chat_id,
         non_reviewer_open_id=non_reviewer_open_id,
+        planned_listener=planned_listener,
     )
     return {
         "ok": not blocking_failures,
@@ -148,6 +160,7 @@ def format_report(result: dict[str, Any]) -> str:
         f"boundary: {result['boundary']}",
         f"evidence_dir: {result['evidence_dir']}",
         f"single_listener: {result['checks']['single_listener']['status']}",
+        f"event_subscription: {result['checks']['event_subscription']['status']}",
     ]
     if result["warnings"]:
         lines.append(f"warnings: {', '.join(result['warnings'])}")
@@ -177,6 +190,7 @@ def _manual_steps(
     cognee_long_run_evidence: Path | None,
     controlled_chat_id: str,
     non_reviewer_open_id: str,
+    planned_listener: PlannedListener,
 ) -> list[dict[str, str]]:
     chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
@@ -184,6 +198,14 @@ def _manual_steps(
     return [
         {
             "id": "1",
+            "title": "Run read-only event subscription diagnostics",
+            "instruction": (
+                "python3 scripts/check_feishu_event_subscription_diagnostics.py "
+                f"--planned-listener {planned_listener} --json"
+            ),
+        },
+        {
+            "id": "2",
             "title": "Send non-@ group text",
             "instruction": (
                 "In the controlled enabled group, send exactly this as a normal user without mentioning the bot: "
@@ -192,7 +214,7 @@ def _manual_steps(
             ),
         },
         {
-            "id": "2",
+            "id": "3",
             "title": "Trigger first-class fmc tools",
             "instruction": (
                 "In Feishu DM or the controlled group, ask OpenClaw to run fmc_memory_search and fmc_memory_prefetch "
@@ -201,7 +223,7 @@ def _manual_steps(
             ),
         },
         {
-            "id": "3",
+            "id": "4",
             "title": "Ask second non-reviewer to enable memory",
             "instruction": (
                 "From the second real non-reviewer account, send @Bot /enable_memory in the controlled group. "
@@ -209,7 +231,7 @@ def _manual_steps(
             ),
         },
         {
-            "id": "4",
+            "id": "5",
             "title": "Run review DM/card E2E",
             "instruction": (
                 "Create a fresh candidate, send /review as reviewer, click one card action, and preserve private DM "
@@ -217,7 +239,7 @@ def _manual_steps(
             ),
         },
         {
-            "id": "5",
+            "id": "6",
             "title": "Build sanitized Feishu live packet",
             "instruction": (
                 "python3 scripts/collect_feishu_live_evidence_packet.py "
@@ -229,7 +251,7 @@ def _manual_steps(
             ),
         },
         {
-            "id": "6",
+            "id": "7",
             "title": "Run focused gates with filters",
             "instruction": (
                 f"python3 scripts/check_feishu_passive_message_event_gate.py --event-log {log_paths['passive_event_log']}{chat_filter} --json && "
@@ -237,7 +259,7 @@ def _manual_steps(
             ),
         },
         {
-            "id": "7",
+            "id": "8",
             "title": "Run completion audit",
             "instruction": (
                 "python3 scripts/check_openclaw_feishu_productization_completion.py "
@@ -246,6 +268,38 @@ def _manual_steps(
             ),
         },
     ]
+
+
+def _event_subscription_check(
+    *,
+    planned_listener: PlannedListener,
+    diagnostics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    try:
+        report = diagnostics or run_feishu_event_subscription_diagnostics(planned_listener=planned_listener)
+    except Exception as exc:  # pragma: no cover - defensive shell/environment boundary.
+        return {
+            "status": "fail",
+            "detail": f"Unable to run read-only Feishu event subscription diagnostics: {exc}",
+            "diagnostics": None,
+        }
+    failed = report.get("failed_checks") if isinstance(report.get("failed_checks"), list) else []
+    warning_items = report.get("warnings") if isinstance(report.get("warnings"), list) else []
+    if not report.get("ok"):
+        status = "fail"
+    elif warning_items:
+        status = "warning"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "detail": (
+            "read-only event diagnostics passed"
+            if status == "pass"
+            else f"failed_checks={failed}; warnings={[item.get('id') for item in warning_items if isinstance(item, dict)]}"
+        ),
+        "diagnostics": report,
+    }
 
 
 def _presence_check(value: str, detail: str) -> dict[str, str]:
