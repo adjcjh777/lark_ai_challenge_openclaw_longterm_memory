@@ -299,7 +299,7 @@ python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --
 ```
 
 详细启动、探活、验收和回滚步骤见 [LLM Wiki / Graph Admin Launch Runbook](docs/productization/admin-llm-wiki-launch-runbook.md)。
-受控 systemd 模板见 `deploy/copilot-admin.service.example`，需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
+受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
 这个后台只开放 `GET` / `HEAD` 查询接口，写请求会返回 `405`。它是本机运维/调试入口，不代表生产部署或完整多租户企业后台。
 

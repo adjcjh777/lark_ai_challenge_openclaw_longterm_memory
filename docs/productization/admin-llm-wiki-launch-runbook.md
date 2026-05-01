@@ -14,7 +14,6 @@
 不覆盖：
 
 - 生产 DB 部署。
-- TLS / 反向代理证书。
 - 企业 SSO。
 - 完整多租户权限后台。
 - productized live 长期运行。
@@ -82,6 +81,17 @@ sudo systemctl daemon-reload
 sudo systemctl start copilot-admin
 sudo systemctl status copilot-admin --no-pager
 ```
+
+如果要通过 Nginx 暴露给受控测试用户，从模板开始：
+
+```bash
+sudo cp deploy/copilot-admin.nginx.example /etc/nginx/sites-available/copilot-admin
+sudo ln -sf /etc/nginx/sites-available/copilot-admin /etc/nginx/sites-enabled/copilot-admin
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+模板只代理到本机 `127.0.0.1:8765`。正式使用前必须替换域名和证书路径，并确保后台 API token 已启用。
 
 ## 4. 探活和验收
 
