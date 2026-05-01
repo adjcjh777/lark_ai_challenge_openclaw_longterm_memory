@@ -95,6 +95,12 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Admin env lint validates example/runtime files without leaking token values.",
+        path="scripts/check_copilot_admin_env_file.py",
+        contains=("check_admin_env_file", "redacted_summary", "no token values printed"),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Reverse-proxy SSO header gate has executable staging verifier.",
         path="scripts/check_copilot_admin_sso_gate.py",
         contains=("no_header_denied", "viewer_export_forbidden", "not_real_enterprise_idp"),

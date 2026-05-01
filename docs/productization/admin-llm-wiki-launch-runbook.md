@@ -59,10 +59,13 @@ readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown expor
 部署包静态 verifier：
 
 ```bash
+python3 scripts/check_copilot_admin_env_file.py --expect-example --json
 python3 scripts/check_copilot_admin_deploy_bundle.py --json
 ```
 
-该 verifier 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
+`check_copilot_admin_env_file.py --expect-example` 检查仓库里的 env 示例仍是安全占位符；替换本机 runtime 文件后，使用 `python3 scripts/check_copilot_admin_env_file.py --env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 校验 token 已替换、admin/viewer token 不同、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
+
+`check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
 
 可选企业 SSO header gate：
 
@@ -112,6 +115,7 @@ systemd 受控部署可从模板开始：
 sudo install -d -m 0750 /etc/feishu-memory-copilot
 sudo install -m 0640 deploy/copilot-admin.env.example /etc/feishu-memory-copilot/admin.env
 sudo editor /etc/feishu-memory-copilot/admin.env
+python3 scripts/check_copilot_admin_env_file.py --env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json
 sudo cp deploy/copilot-admin.service.example /etc/systemd/system/copilot-admin.service
 sudo systemctl daemon-reload
 sudo systemctl start copilot-admin

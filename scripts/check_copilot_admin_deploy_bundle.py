@@ -83,6 +83,17 @@ CHECKS = (
         forbidden_patterns=("app_secret=", "access_token=", "Bearer ", "sk-", "rightcode_"),
     ),
     BundleCheck(
+        name="admin_env_lint",
+        path="scripts/check_copilot_admin_env_file.py",
+        description="admin.env lint validates example/runtime files without printing secret values.",
+        required_patterns=(
+            "check_admin_env_file",
+            "redacted_summary",
+            "no token values printed",
+            "DEFAULT_EXAMPLE_PATH",
+        ),
+    ),
+    BundleCheck(
         name="systemd_hardening",
         path="deploy/copilot-admin.service.example",
         description="systemd template includes basic process hardening and restart behavior.",
