@@ -344,7 +344,7 @@ def _manual_steps(
                 f"--passive-event-log {log_paths['passive_event_log']} "
                 f"--routing-event-log {log_paths['routing_event_log']} "
                 f"--permission-event-log {log_paths['permission_event_log']} "
-                f"--review-event-log {log_paths['review_event_log']} "
+                f"--review-event-log {log_paths['review_event_log']}{event_diagnostics_arg} "
                 f"--output {packet_output} --json"
             ),
         },
