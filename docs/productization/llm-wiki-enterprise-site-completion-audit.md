@@ -17,7 +17,7 @@
 | 要求 | 当前判定 | 证据 | 缺口 |
 | --- | --- | --- | --- |
 | LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`scripts/check_copilot_knowledge_site_export.py --json`、`tests/test_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site_export_check.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
-| 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
+| 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板、`scripts/check_copilot_graph_quality.py --json` 图谱质量 gate | 还没有生产级图谱治理后台或长期 live 增量质量证据 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
 | 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格；UI smoke 已加入截图像素完整性检查，并支持固定截图基线 / sampled pixel diff 阈值 gate | 还缺设计系统级组件抽象和人工维护的长期截图基线库 |
 | 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、`deploy/copilot-admin.production-evidence.example.json`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_env_file.py --expect-runtime --json`、`scripts/check_copilot_admin_deploy_bundle.py --json`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_copilot_admin_production_evidence.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成；production evidence manifest 目前只有示例模板 |
@@ -54,6 +54,7 @@
 | executable completion audit | `scripts/check_llm_wiki_enterprise_site_completion.py`、`tests/test_llm_wiki_enterprise_site_completion.py` | 把 objective 拆成 LLM Wiki、Knowledge Graph、后台图谱 UI、UI optimization、Launch gates 和 no-overclaim boundary；当前应输出 `staging_ok=true`、`goal_complete=false` 和生产 blocker 列表 |
 | staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、Launch readiness、tenant policy editor availability、restricted write API、access policy |
 | static knowledge site export gate | `python3 scripts/check_copilot_knowledge_site_export.py --json` | 生成临时静态 LLM Wiki / Knowledge Graph 包并验证文件、UI marker、raw event 排除和脱敏 |
+| graph quality gate | `python3 scripts/check_copilot_graph_quality.py --json`、`.github/workflows/ci.yml` | 检查 Admin Graph workspace 中的 compiled memory graph、边端点完整性、tenant/org 覆盖、孤立节点比例和 secret-like payload 泄漏；CI integration job 会运行同一 gate |
 | production evidence gate | `python3 scripts/check_copilot_admin_production_evidence.py --json` | 检查生产证据 manifest 模板；真实 manifest 需用 `--require-production-ready` 才能消除生产 blocker |
 | staging alert rules gate | `python3 scripts/check_prometheus_alert_rules.py --json` | 校验 alert rules 文件存在、必需 alert、指标引用、severity、runbook annotation 和敏感词 |
 | SQLite backup gate | `python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json` | 备份当前 SQLite，运行 integrity check 和 storage readiness 检查，写 manifest |
@@ -154,7 +155,8 @@ static-site-mobile.png
 3. 生产 DB 部署未完成。当前 runbook 覆盖本地 / staging SQLite admin，不覆盖生产数据库运维。
 4. 长期 productized live 未完成。当前不能声明真实 Feishu DM 稳定路由到 first-class `memory.*` 工具或长期线上运行。
 5. 监控告警未完成。已有 health/readiness，但没有生产级 uptime、延迟、错误率、审计异常告警。
-6. UI 视觉回归已有 CI smoke，覆盖 Graph、Tenants、Launch、静态站关键 DOM、详情面板、readiness 文案、横向溢出、截图像素完整性，以及 CI 中执行的 baseline update / sampled pixel diff compare gate；但还没有长期维护的人工审核截图基线库或设计系统级组件抽象。
+6. 图谱质量已有本地/CI gate，覆盖 compiled memory graph、边端点完整性、tenant/org 覆盖、孤立节点比例和 secret-like payload 泄漏；但还没有生产级图谱治理后台或长期 live 增量质量证据。
+7. UI 视觉回归已有 CI smoke，覆盖 Graph、Tenants、Launch、静态站关键 DOM、详情面板、readiness 文案、横向溢出、截图像素完整性，以及 CI 中执行的 baseline update / sampled pixel diff compare gate；但还没有长期维护的人工审核截图基线库或设计系统级组件抽象。
 
 ## 6. 下一步建议
 

@@ -64,6 +64,25 @@ STAGING_CHECKS = (
         contains=("knowledge_graph_nodes", "knowledge_graph_edges"),
     ),
     EvidenceCheck(
+        requirement="Knowledge graph integration",
+        evidence="Graph quality gate checks compiled memory graph, edge endpoint integrity, tenant coverage, orphan ratio, and secret-like payload leaks.",
+        path="scripts/check_copilot_graph_quality.py",
+        contains=(
+            "run_graph_quality_check",
+            "compiled_memory_graph",
+            "edge_endpoints",
+            "tenant_coverage",
+            "orphan_ratio",
+            "secret_redaction",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Knowledge graph integration",
+        evidence="CI runs the graph quality gate as part of integration checks.",
+        path=".github/workflows/ci.yml",
+        contains=("Admin graph quality gate", "check_copilot_graph_quality.py --json"),
+    ),
+    EvidenceCheck(
         requirement="Visible knowledge graph backend",
         evidence="Admin UI has a Graph tab and graph detail panel.",
         path="memory_engine/copilot/admin.py",
