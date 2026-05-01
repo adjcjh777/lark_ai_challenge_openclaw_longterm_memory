@@ -226,6 +226,18 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Enterprise IdP entrypoint probe validates Admin unauthenticated guard and external IdP evidence refs.",
+        path="scripts/check_copilot_admin_idp_probe.py",
+        contains=(
+            "run_idp_probe",
+            "enterprise_idp_sso",
+            "unauthenticated_guard",
+            "enterprise_idp_entrypoint_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Live TLS probe validates an existing HTTPS endpoint, certificate hostname/expiry, and HSTS.",
         path="scripts/check_copilot_admin_tls_probe.py",
         contains=(

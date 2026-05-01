@@ -328,7 +328,7 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_admin_env_file.py` 默认校验 `deploy/copilot-admin.env.example` 是否保持安全占位符；传 `--env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 可校验本机真实 runtime env 是否替换 token、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
 
-`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、DB / TLS / monitoring live probe、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
+`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、DB / IdP / TLS / monitoring live probe、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
 
 `export_copilot_admin_launch_evidence.py` 会导出一个固定 JSON evidence bundle，包含 summary、Wiki、Graph、Graph Quality、Audit、Audit read-only gate、Launch readiness、deploy bundle、production evidence 和 completion audit。它只生成本地/staging launch evidence，manifest 仍会保留 `goal_complete=false` 和 production blockers，不代表生产上线完成。
 
@@ -339,6 +339,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 `check_copilot_production_db_probe.py` 会从 `DATABASE_URL` 或显式 `--dsn-env` 指定的环境变量读取生产 PostgreSQL DSN，使用 `pg_isready` 和只读 `psql` 查询验证已存在端点可达、可认证和版本满足 PostgreSQL 15+，并输出可合并进 `production_db` 的 manifest patch；它不会打印 DSN，不创建数据库、不迁移、不启用 PITR、不备份或恢复，也不证明长期 live。
 
 `collect_copilot_external_production_evidence.py` 会把真实企业 IdP / SSO、生产域名 TLS、Prometheus/Grafana/Alertmanager 投递证据规范成 production evidence manifest patch；它不执行真实登录、证书签发、Prometheus scrape 或告警投递。
+
+`check_copilot_admin_idp_probe.py` 会对已经运行的生产 Admin URL 做 unauthenticated entrypoint probe，确认未登录访问 `/api/summary` 不会直接公开，并把真实 IdP 登录、admin 通过、viewer 导出拒绝、allowed domain 和证据 ref 规范成 `enterprise_idp_sso` manifest patch；它不执行交互式 IdP 登录，也不证明 DB、TLS、监控或长期 live。
 
 `check_copilot_admin_tls_probe.py` 会对已经运行的生产 HTTPS URL 做 live probe，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并进 `production_domain_tls` 的 manifest patch；它不签发证书、不配置 DNS，也不证明 IdP、监控、DB 或 24 小时 productized live。
 

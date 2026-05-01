@@ -201,6 +201,18 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="production_idp_entrypoint_probe",
+        path="scripts/check_copilot_admin_idp_probe.py",
+        description="Enterprise IdP entrypoint probe validates Admin unauthenticated guard and external IdP evidence refs.",
+        required_patterns=(
+            "run_idp_probe",
+            "enterprise_idp_sso",
+            "unauthenticated_guard",
+            "enterprise_idp_entrypoint_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="production_tls_live_probe",
         path="scripts/check_copilot_admin_tls_probe.py",
         description="TLS live probe validates an existing HTTPS endpoint, certificate hostname/expiry, and HSTS.",

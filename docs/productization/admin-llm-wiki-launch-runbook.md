@@ -91,6 +91,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `collect_copilot_external_production_evidence.py` 用于规范真实企业 IdP / SSO、生产域名 TLS 和生产监控投递证据：它接收登录测试、viewer 导出拒绝、证书有效期、HSTS、Prometheus scrape、Grafana dashboard、Alertmanager route 和告警投递测试时间，输出 `enterprise_idp_sso`、`production_domain_tls`、`production_monitoring` manifest patch。它不会执行真实登录、签发证书、配置 Grafana 或发送告警；真实生产 gate 仍必须由外部系统日志、截图或运维记录支撑。
 
+`check_copilot_admin_idp_probe.py` 用于真实生产 Admin URL 已经接入企业 IdP 后的 entrypoint probe：它未登录访问 `/api/summary`，确认入口不会直接公开，同时校验真实登录测试时间、admin 登录通过、viewer 导出拒绝、allowed domain 和 evidence refs，并输出可合并到 `enterprise_idp_sso` 的 manifest patch。它不会执行交互式 IdP 登录，也不能替代浏览器登录截图、IdP 日志或安全审计记录。
+
 `check_copilot_admin_tls_probe.py` 用于真实生产域名已经可访问后的 live probe：它连接 `https://...`，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并到 `production_domain_tls` 的 manifest patch。它不会签发证书、配置 DNS、证明企业 IdP、生产监控、生产 DB 或 24 小时 productized live；失败时不要手填通过结果。
 
 `check_copilot_admin_monitoring_probe.py` 用于真实生产 Admin URL 已经可访问后的 monitoring live probe：它请求 `/metrics`，校验核心 Copilot Prometheus metrics、Grafana dashboard URL、Alertmanager route、告警投递测试时间和 evidence refs，并输出可合并到 `production_monitoring` 的 manifest patch。它不会配置 Prometheus、Grafana、Alertmanager，也不证明生产 DB、IdP、TLS 或 24 小时 productized live；失败时不要手填通过结果。
@@ -263,6 +265,23 @@ python3 scripts/collect_copilot_external_production_evidence.py \
 ```
 
 这个命令只生成 `enterprise_idp_sso`、`production_domain_tls` 和 `production_monitoring` patch。不要把它的通过结果写成真实 IdP、TLS 或生产监控已完成；仍需要外部系统证据和 `check_copilot_admin_production_evidence.py --require-production-ready` 统一验收。
+
+真实企业 IdP entrypoint live probe 示例：
+
+```bash
+python3 scripts/check_copilot_admin_idp_probe.py \
+  --base-url https://memory.company.internal \
+  --provider feishu_sso \
+  --login-tested-at 2026-05-01T12:00:00+08:00 \
+  --admin-login-passed \
+  --viewer-export-denied \
+  --allowed-domain company.internal \
+  --idp-evidence-ref ops/idp-login-20260501 \
+  --idp-evidence-ref ops/viewer-export-denial-20260501 \
+  --json
+```
+
+这个命令只证明生产入口未登录不公开，并规范外部 IdP 证据字段；它不会自动完成真实用户登录。
 
 真实生产域名 TLS live probe 示例：
 
