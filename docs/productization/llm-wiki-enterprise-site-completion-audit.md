@@ -37,6 +37,7 @@
 | live admin `/api/tenants` | `memory_engine/copilot/admin.py` | ledger + tenant policy 派生的 tenant / organization readiness，显示 memory、open review、graph、audit、policy editor 状态和缺失生产能力 |
 | live admin `/api/tenant-policies` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | GET 可读租户策略；POST 仅 admin 可 upsert 本地/pre-production tenant policy，并写 `tenant_policy_upserted` 审计 |
 | live admin `/api/launch-readiness` | `memory_engine/copilot/admin.py`、`scripts/check_copilot_admin_readiness.py` | staging gates 与 production blockers 分开展示，明确 production 仍 blocked |
+| live admin `/metrics` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | Prometheus text metrics；共享环境下要求 admin/viewer token 或 SSO |
 | tenant/org 过滤 | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | `/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 可按 `tenant_id` / `organization_id` 收敛结果 |
 | Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata |
 | restricted write gate | `tests/test_copilot_admin.py` | 非 tenant policy 写请求返回 `405`；tenant policy POST 要求 admin |
@@ -108,6 +109,7 @@ static site mobile graph detail and horizontal overflow
 viewer token: GET /api/summary -> 200
 viewer token: GET /api/wiki/export?scope=... -> 403 admin_export_forbidden
 viewer token: POST /api/tenant-policies -> 403 admin_policy_forbidden
+viewer token: GET /metrics -> Prometheus text metrics
 admin token: GET /api/wiki/export?scope=... -> Markdown
 admin token: POST /api/tenant-policies -> tenant_policy_upserted audit
 ```

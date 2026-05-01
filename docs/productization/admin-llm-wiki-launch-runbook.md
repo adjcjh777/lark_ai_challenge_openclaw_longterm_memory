@@ -142,6 +142,14 @@ curl -fsS \
   http://127.0.0.1:8765/api/launch-readiness
 ```
 
+Prometheus text metrics，同样走 admin/viewer token 或 SSO：
+
+```bash
+curl -fsS \
+  -H "Authorization: Bearer $FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" \
+  http://127.0.0.1:8765/metrics
+```
+
 核心页面验收：
 
 1. 打开 `/`。
@@ -222,6 +230,7 @@ wiki/project_feishu_ai_challenge.md
 - 已有可选 reverse-proxy SSO header gate：admin allowlist 可导出，allowed domain viewer 只能浏览；直接远程绑定仍需 bearer token。
 - 已有 tenant / organization 过滤、Tenants readiness 概览和本地/pre-production tenant policy editor，可用于 staging 下检查租户边界展示与上线缺口。
 - 已有 Launch readiness 面板和 `/api/launch-readiness`，把 staging gate 与 production blocker 分开展示。
+- 已有受认证 `/metrics` Prometheus text endpoint，可供 staging 监控试点抓取；这不是生产告警完成。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

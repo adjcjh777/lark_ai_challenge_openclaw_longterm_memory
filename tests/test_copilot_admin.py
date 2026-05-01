@@ -295,6 +295,13 @@ class CopilotAdminTest(unittest.TestCase):
                 healthz = json.loads(response.read().decode("utf-8"))
             self.assertTrue(healthz["ok"])
 
+            with urlopen(f"{base_url}/metrics", timeout=5) as response:
+                metrics = response.read().decode("utf-8")
+                metrics_type = response.getheader("Content-Type")
+            self.assertTrue(metrics_type.startswith("text/plain"))
+            self.assertIn("copilot_admin_memory_total 3", metrics)
+            self.assertIn("copilot_admin_launch_production_blocked 1", metrics)
+
             with urlopen(f"{base_url}/api/health", timeout=5) as response:
                 health = json.loads(response.read().decode("utf-8"))
             self.assertTrue(health["ok"])
@@ -412,6 +419,10 @@ class CopilotAdminTest(unittest.TestCase):
                 urlopen(f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo", timeout=5)
             self.assertEqual(401, raised.exception.code)
 
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(f"{base_url}/metrics", timeout=5)
+            self.assertEqual(401, raised.exception.code)
+
             with urlopen(f"{base_url}/healthz", timeout=5) as response:
                 healthz = json.loads(response.read().decode("utf-8"))
             self.assertTrue(healthz["ok"])
@@ -427,6 +438,12 @@ class CopilotAdminTest(unittest.TestCase):
                 viewer_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(viewer_payload["ok"])
             self.assertEqual(3, viewer_payload["data"]["memory_total"])
+
+            request = Request(f"{base_url}/metrics", headers={"Authorization": "Bearer viewer-token"})
+            with urlopen(request, timeout=5) as response:
+                metrics = response.read().decode("utf-8")
+            self.assertIn("copilot_admin_tenant_count", metrics)
+            self.assertIn('copilot_admin_launch_production_blocker{blocker="production_monitoring_alerts"} 1', metrics)
 
             policy_body = json.dumps(
                 {

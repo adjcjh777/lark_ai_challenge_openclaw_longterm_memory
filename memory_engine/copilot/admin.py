@@ -239,6 +239,50 @@ class AdminQueryService:
             ),
         }
 
+    def prometheus_metrics(self) -> str:
+        summary = self.summary()
+        wiki = self.wiki_overview(limit=1)
+        graph = self.graph_workspace(limit=10)
+        tenants = self.tenant_overview(limit=80)
+        policies = self.tenant_policies(limit=1)
+        launch = self.launch_readiness()
+        lines = [
+            "# HELP copilot_admin_memory_total Total memories in the local ledger.",
+            "# TYPE copilot_admin_memory_total gauge",
+            f"copilot_admin_memory_total {int(summary.get('memory_total') or 0)}",
+            "# HELP copilot_admin_audit_total Total audit events in the local ledger.",
+            "# TYPE copilot_admin_audit_total gauge",
+            f"copilot_admin_audit_total {int(summary.get('audit_total') or 0)}",
+            "# HELP copilot_admin_wiki_card_count Active evidence-backed LLM Wiki cards.",
+            "# TYPE copilot_admin_wiki_card_count gauge",
+            f"copilot_admin_wiki_card_count {int(wiki.get('card_count') or 0)}",
+            "# HELP copilot_admin_graph_workspace_node_count Visible admin graph workspace nodes.",
+            "# TYPE copilot_admin_graph_workspace_node_count gauge",
+            f"copilot_admin_graph_workspace_node_count {int(graph.get('workspace_node_count') or 0)}",
+            "# HELP copilot_admin_tenant_count Tenant count visible to the admin inventory.",
+            "# TYPE copilot_admin_tenant_count gauge",
+            f"copilot_admin_tenant_count {int(tenants.get('tenant_count') or 0)}",
+            "# HELP copilot_admin_tenant_policy_count Tenant policies configured in the local admin backend.",
+            "# TYPE copilot_admin_tenant_policy_count gauge",
+            f"copilot_admin_tenant_policy_count {int(policies.get('total') or 0)}",
+            "# HELP copilot_admin_launch_staging_ok Staging launch readiness rollup, 1 when pass.",
+            "# TYPE copilot_admin_launch_staging_ok gauge",
+            f"copilot_admin_launch_staging_ok {1 if launch.get('staging_status') == 'pass' else 0}",
+            "# HELP copilot_admin_launch_production_blocked Production launch blocker rollup, 1 when blocked.",
+            "# TYPE copilot_admin_launch_production_blocked gauge",
+            f"copilot_admin_launch_production_blocked {1 if launch.get('production_status') == 'blocked' else 0}",
+        ]
+        for status, count in sorted((summary.get("memory_by_status") or {}).items()):
+            lines.append(f'copilot_admin_memory_by_status{{status="{_metric_label_value(status)}"}} {int(count or 0)}')
+        for blocker in launch.get("production_blockers") or []:
+            if not isinstance(blocker, dict):
+                continue
+            lines.append(
+                f'copilot_admin_launch_production_blocker{{blocker="{_metric_label_value(blocker.get("id"))}"}} 1'
+            )
+        lines.append("")
+        return "\n".join(lines)
+
     def tenant_overview(
         self,
         *,
@@ -1276,9 +1320,10 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
 
     def _handle_get(self, *, send_body: bool) -> None:
         parsed = urlparse(self.path)
-        auth_role = self._auth_role(parsed.query) if parsed.path.startswith("/api/") else "public"
+        requires_auth = parsed.path.startswith("/api/") or parsed.path == "/metrics"
+        auth_role = self._auth_role(parsed.query) if requires_auth else "public"
         try:
-            if parsed.path.startswith("/api/") and auth_role is None:
+            if requires_auth and auth_role is None:
                 self._send_json(
                     {"ok": False, "error": {"code": "admin_auth_required", "message": "Admin token required."}},
                     status=HTTPStatus.UNAUTHORIZED,
@@ -1296,6 +1341,13 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/healthz":
                 self._send_json({"ok": True, "service": "copilot_admin"}, send_body=send_body)
+                return
+            if parsed.path == "/metrics":
+                self._send_text(
+                    self._metrics_text(),
+                    content_type="text/plain; version=0.0.4; charset=utf-8",
+                    send_body=send_body,
+                )
                 return
             if parsed.path == "/api/summary":
                 self._send_json(self._api_summary(), send_body=send_body)
@@ -1508,6 +1560,10 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             "tenant_policy_write_requires_admin": True,
         }
         return {"ok": True, "db_path": self.db_path, "data": data}
+
+    def _metrics_text(self) -> str:
+        with _open_readonly_connection(self.db_path) as conn:
+            return AdminQueryService(conn).prometheus_metrics()
 
     def _api_tenants(self, query_string: str) -> dict[str, Any]:
         params = parse_qs(query_string)
@@ -2078,6 +2134,10 @@ def _rollup_status(checks: list[dict[str, Any]]) -> str:
     if "warning" in statuses:
         return "warning"
     return "pass"
+
+
+def _metric_label_value(value: Any) -> str:
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def _param(params: dict[str, list[str]], name: str) -> str | None:
