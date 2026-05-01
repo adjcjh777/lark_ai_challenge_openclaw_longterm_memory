@@ -1605,7 +1605,7 @@ def _index_html() -> str:
       .title-row {{ display: block; }}
       .boundary {{ text-align: left; margin-top: 8px; }}
       main {{ padding: 12px; }}
-      .toolbar {{ grid-template-columns: 1fr 1fr; }}
+      .toolbar {{ grid-template-columns: 1fr 1fr; position: static; }}
       .summary {{ grid-template-columns: repeat(2, minmax(110px, 1fr)); }}
       .home-grid {{ grid-template-columns: 1fr; }}
       .split-view {{ grid-template-columns: 1fr; min-width: 0; }}

@@ -25,8 +25,11 @@ python3 scripts/check_openclaw_version.py
 python3 scripts/check_agent_harness.py
 python3 -m compileall memory_engine scripts
 python3 -m unittest tests.test_copilot_admin tests.test_copilot_knowledge_pages
+python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --scope project:feishu_ai_challenge --output-dir /tmp/copilot-admin-ui-smoke --json
 git diff --check
 ```
+
+UI smoke 会启动本机只读 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、节点/边详情、静态站 Deerflow attribution 和横向溢出。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
 
 如果要绑定到非本机地址，必须设置后台 token：
 

@@ -298,6 +298,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 ```bash
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" --viewer-token "$FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" --strict --min-wiki-cards 1
+python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --scope project:feishu_ai_challenge --output-dir /tmp/copilot-admin-ui-smoke --json
 ```
 
 如需生成可放到受控内网或反向代理后的静态知识站包：
