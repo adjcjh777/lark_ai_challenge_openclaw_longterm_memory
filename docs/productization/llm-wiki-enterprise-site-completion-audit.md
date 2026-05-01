@@ -20,7 +20,7 @@
 | 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
 | 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格 | 还缺设计系统级组件抽象和完整视觉回归流水线 |
-| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_deploy_bundle.py --json`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成 |
+| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_deploy_bundle.py --json`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成 |
 
 ## 2. Prompt-to-Artifact Checklist
 
@@ -39,7 +39,7 @@
 | live admin `/api/launch-readiness` | `memory_engine/copilot/admin.py`、`scripts/check_copilot_admin_readiness.py` | staging gates 与 production blockers 分开展示，明确 production 仍 blocked |
 | live admin `/metrics` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | Prometheus text metrics；共享环境下要求 admin/viewer token 或 SSO |
 | staging Prometheus alert rules | `deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_prometheus_alert_rules.py`、`tests/test_prometheus_alert_rules.py` | 覆盖 admin scrape、staging gates、Wiki、Graph、tenant policy、audit ledger 和 production blocker；只证明 staging alert-rule artifact，不证明生产告警投递 |
-| staging deploy bundle verifier | `scripts/check_copilot_admin_deploy_bundle.py`、`tests/test_copilot_admin_deploy_bundle.py` | 静态检查 systemd、Nginx TLS / loopback proxy、SSO header、monitoring、backup、readiness、SSO 和 completion audit gates；预期 `staging_bundle_ok=true`、`production_blocked=true` |
+| staging deploy bundle verifier | `scripts/check_copilot_admin_deploy_bundle.py`、`tests/test_copilot_admin_deploy_bundle.py` | 静态检查 systemd、sanitized `admin.env` 示例、Nginx TLS / loopback proxy、SSO header、monitoring、backup、readiness、SSO 和 completion audit gates；预期 `staging_bundle_ok=true`、`production_blocked=true` |
 | SQLite staging backup / restore drill | `memory_engine/storage_backup.py`、`scripts/backup_copilot_storage.py`、`tests/test_storage_backup.py` | 生成带 manifest 的 SQLite 备份，支持 verify 和 restore-to；只覆盖 staging 回滚演练，不替代生产 PostgreSQL / PITR |
 | tenant/org 过滤 | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | `/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 可按 `tenant_id` / `organization_id` 收敛结果 |
 | Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata |

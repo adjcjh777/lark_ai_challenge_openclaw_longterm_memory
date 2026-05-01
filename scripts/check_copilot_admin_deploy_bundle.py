@@ -67,6 +67,22 @@ CHECKS = (
         forbidden_patterns=("FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=", "COPILOT_ADMIN_TOKEN="),
     ),
     BundleCheck(
+        name="admin_env_example",
+        path="deploy/copilot-admin.env.example",
+        description="Sanitized admin.env example documents required runtime settings without real credentials.",
+        required_patterns=(
+            "MEMORY_DB_PATH=/opt/feishu_ai_challenge/data/memory.sqlite",
+            "FEISHU_MEMORY_COPILOT_ADMIN_HOST=127.0.0.1",
+            "FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765",
+            "FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=__CHANGE_ME_ADMIN_TOKEN__",
+            "FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN=__CHANGE_ME_VIEWER_TOKEN__",
+            "FEISHU_MEMORY_COPILOT_ADMIN_SSO_ENABLED=0",
+            "FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS=example.com",
+            "not real enterprise IdP production validation",
+        ),
+        forbidden_patterns=("app_secret=", "access_token=", "Bearer ", "sk-", "rightcode_"),
+    ),
+    BundleCheck(
         name="systemd_hardening",
         path="deploy/copilot-admin.service.example",
         description="systemd template includes basic process hardening and restart behavior.",

@@ -333,7 +333,7 @@ open reports/copilot-knowledge-site/index.html
 
 详细启动、探活、验收和回滚步骤见 [LLM Wiki / Graph Admin Launch Runbook](docs/productization/admin-llm-wiki-launch-runbook.md)。
 当前目标完成度、证据清单和生产缺口见 [LLM Wiki Enterprise Knowledge Site Completion Audit](docs/productization/llm-wiki-enterprise-site-completion-audit.md)。
-受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`，staging Prometheus alert rules 见 `deploy/monitoring/copilot-admin-alerts.yml`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
+受控 systemd 模板见 `deploy/copilot-admin.service.example`，env 示例见 `deploy/copilot-admin.env.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`，staging Prometheus alert rules 见 `deploy/monitoring/copilot-admin-alerts.yml`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
 这个后台的知识视图只读；唯一写接口是 admin-only 的 `/api/tenant-policies`，用于本地/pre-production 租户策略配置和审计。它是本机运维/调试入口，不代表生产部署、真实企业 IdP SSO 验收、生产 DB 运维或 productized live。
 

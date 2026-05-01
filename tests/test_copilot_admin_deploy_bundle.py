@@ -16,6 +16,7 @@ class CopilotAdminDeployBundleTest(unittest.TestCase):
         self.assertEqual([], result["failed_checks"])
         self.assertIn("nginx_tls_reverse_proxy", {check["name"] for check in result["checks"]})
         self.assertIn("systemd_hardening", {check["name"] for check in result["checks"]})
+        self.assertIn("admin_env_example", {check["name"] for check in result["checks"]})
         self.assertIn("completion_audit_gate", {check["name"] for check in result["checks"]})
         self.assertTrue(all(check["status"] == "pass" for check in result["checks"]))
         self.assertIn("real_enterprise_idp", {blocker["id"] for blocker in result["production_blockers"]})

@@ -110,18 +110,15 @@ systemd 受控部署可从模板开始：
 
 ```bash
 sudo install -d -m 0750 /etc/feishu-memory-copilot
-sudo tee /etc/feishu-memory-copilot/admin.env >/dev/null <<'EOF'
-MEMORY_DB_PATH=/opt/feishu_ai_challenge/data/memory.sqlite
-FEISHU_MEMORY_COPILOT_ADMIN_HOST=0.0.0.0
-FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765
-FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=<redacted-token>
-FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN=<redacted-viewer-token>
-EOF
+sudo install -m 0640 deploy/copilot-admin.env.example /etc/feishu-memory-copilot/admin.env
+sudo editor /etc/feishu-memory-copilot/admin.env
 sudo cp deploy/copilot-admin.service.example /etc/systemd/system/copilot-admin.service
 sudo systemctl daemon-reload
 sudo systemctl start copilot-admin
 sudo systemctl status copilot-admin --no-pager
 ```
+
+`deploy/copilot-admin.env.example` 默认把 Python 后端绑定到 `127.0.0.1`，适合放在 Nginx / SSO reverse proxy 后。真实 token、企业 IdP secret、生产 DB credentials 必须只写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交进仓库。
 
 如果要通过 Nginx 暴露给受控测试用户，从模板开始：
 

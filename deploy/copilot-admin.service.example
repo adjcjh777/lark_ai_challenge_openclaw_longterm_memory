@@ -7,6 +7,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/feishu_ai_challenge
+# Copy deploy/copilot-admin.env.example to /etc/feishu-memory-copilot/admin.env
+# and replace placeholders locally. Do not commit real tokens or production DB credentials.
 # admin.env should include MEMORY_DB_PATH and bind host/port.
 # For shared access, configure either distinct admin/viewer bearer tokens, or bind to
 # 127.0.0.1 behind a reverse proxy SSO gate and set the SSO env vars documented in
