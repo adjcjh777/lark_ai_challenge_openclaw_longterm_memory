@@ -65,6 +65,8 @@ Feishu workspace
 | L2 limited workspace pilot | 指定 workspace / 项目群 | 指定群聊、文档、任务、会议、Bitable 记录 | source_context 不越权，source revoke 生效，PostgreSQL 备份恢复演练通过 | 冻结 ingestion，只保留 read/search 或完全停用 |
 | L3 production candidate | 可申请生产上线 | 仍需租户管理员批准和安全审查 | SLO、监控、权限后台、审计 UI、数据保留、应急值班都齐备 | 不进入生产，维持 pilot |
 
+L0 / L1 之前可用 `python3 scripts/check_copilot_admin_sso_gate.py --json` 验证 admin 后台 reverse-proxy SSO header gate：无 header 拒绝、allowed-domain viewer 只读、admin identity 可导出 Wiki、metrics 需要认证、health 读回 SSO policy。该 gate 只覆盖 loopback staging header auth，不替代真实企业 IdP / Feishu SSO 生产验收。
+
 ## 复赛后优先改进：生产级图谱存储
 
 当前 `knowledge_graph_nodes` / `knowledge_graph_edges` 落在 SQLite，适合初赛、demo、L0 local staging 和单机受控 sandbox；它证明群、用户、消息、关系边、权限和审计模型成立，但不应作为上线产品的长期知识图谱主库。

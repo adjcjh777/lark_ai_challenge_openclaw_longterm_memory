@@ -69,6 +69,14 @@ export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS=example.com
 
 SSO 命中的 allowed domain 默认是 viewer，只能浏览 `/api/*`；只有 `FEISHU_MEMORY_COPILOT_ADMIN_SSO_ADMIN_USERS` 命中的用户可以导出 Wiki Markdown。SSO header gate 是反向代理后的 staging / enterprise auth 接入点，不等于已接入真实 Feishu workspace SSO 或企业 IdP 生产验收。
 
+独立 staging verifier：
+
+```bash
+python3 scripts/check_copilot_admin_sso_gate.py --json
+```
+
+该 verifier 默认用临时 SQLite 和 loopback admin server，不改 `data/memory.sqlite`；它覆盖 no-header `401`、allowed-domain viewer `/api/summary` `200`、viewer `/api/wiki/export` `403`、admin Wiki export `200`、未认证 `/metrics` `401`、viewer `/metrics` `200` 和 `/api/health` SSO policy 读回。它仍只证明 reverse-proxy SSO header gate，不证明真实企业 IdP / Feishu SSO production validation。
+
 ## 3. 启动
 
 本机调试：
