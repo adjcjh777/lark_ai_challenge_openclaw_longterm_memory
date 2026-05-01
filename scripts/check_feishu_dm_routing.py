@@ -20,10 +20,18 @@ import argparse
 import json
 import subprocess
 from pathlib import Path
+from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
-BOUNDARY = (
-    "Local/staging Feishu DM routing readiness only; does not prove stable long-running real Feishu routing."
+BOUNDARY = "Local/staging Feishu DM routing readiness only; does not prove stable long-running real Feishu routing."
+LIVE_EVIDENCE_BOUNDARY = (
+    "Captured Feishu/OpenClaw first-class routing evidence only; requires fmc_* bridge results, "
+    "but still does not prove stable long-running real Feishu routing."
+)
+DEFAULT_REQUIRED_LIVE_TOOLS = (
+    "fmc_memory_search",
+    "fmc_memory_create_candidate",
+    "fmc_memory_prefetch",
 )
 
 
@@ -182,6 +190,89 @@ def check_feishu_dm_routing() -> dict:
     }
 
 
+def check_live_routing_events(
+    text: str,
+    *,
+    required_tools: Iterable[str] = DEFAULT_REQUIRED_LIVE_TOOLS,
+    min_first_class_results: int = 1,
+) -> dict[str, Any]:
+    payloads = list(_payloads_from_text(text))
+    required = tuple(tool.strip() for tool in required_tools if tool.strip())
+    summary = {
+        "total_payloads": len(payloads),
+        "first_class_fmc_results": 0,
+        "successful_first_class_results": 0,
+        "failed_first_class_results": 0,
+        "allowed_first_class_results": 0,
+        "denied_first_class_results": 0,
+        "internal_memory_results": 0,
+        "unsupported_payloads": 0,
+    }
+    first_class_tools: dict[str, int] = {}
+    internal_tools: dict[str, int] = {}
+    examples: list[dict[str, Any]] = []
+
+    for payload in payloads:
+        result = _result_payload(payload)
+        if result is None:
+            summary["unsupported_payloads"] += 1
+            continue
+        bridge = _bridge_payload(result)
+        bridge_tool = str(bridge.get("tool") or "").strip()
+        result_tool = str(result.get("tool") or "").strip()
+        tool = bridge_tool or result_tool
+        if bridge_tool.startswith("fmc_"):
+            summary["first_class_fmc_results"] += 1
+            first_class_tools[bridge_tool] = first_class_tools.get(bridge_tool, 0) + 1
+            decision = _permission_decision(bridge)
+            if _result_successful(result):
+                summary["successful_first_class_results"] += 1
+            else:
+                summary["failed_first_class_results"] += 1
+            if decision == "deny":
+                summary["denied_first_class_results"] += 1
+            elif decision == "allow":
+                summary["allowed_first_class_results"] += 1
+            if len(examples) < 5:
+                examples.append(
+                    {
+                        "tool": bridge_tool,
+                        "result_tool": result_tool,
+                        "message_id": _redacted_id(str(result.get("message_id") or "")),
+                        "permission_decision": decision,
+                        "request_id_present": bool(bridge.get("request_id")),
+                        "trace_id_present": bool(bridge.get("trace_id")),
+                        "publish_mode": _publish_mode(result),
+                    }
+                )
+        elif result_tool.startswith("memory.") or tool.startswith("memory."):
+            summary["internal_memory_results"] += 1
+            internal_tools[tool] = internal_tools.get(tool, 0) + 1
+        else:
+            summary["unsupported_payloads"] += 1
+
+    missing_required = [tool for tool in required if first_class_tools.get(tool, 0) <= 0]
+    ok = summary["successful_first_class_results"] >= min_first_class_results and not missing_required
+    reason = "first_class_live_routing_evidence_seen" if ok else _live_failure_reason(summary, missing_required)
+    return {
+        "ok": ok,
+        "gate": "feishu_first_class_routing_evidence",
+        "boundary": LIVE_EVIDENCE_BOUNDARY,
+        "required": {
+            "required_tools": list(required),
+            "min_first_class_results": min_first_class_results,
+        },
+        "summary": summary,
+        "first_class_tools": first_class_tools,
+        "internal_tools": internal_tools,
+        "missing_required_tools": missing_required,
+        "examples": examples,
+        "reason": reason,
+        "next_step": "" if ok else _live_next_step(reason, missing_required),
+        "stable_live_routing_claim": False,
+    }
+
+
 def format_human_result(result: dict) -> str:
     lines = [
         f"Feishu DM Routing Readiness Check: {result['summary']}",
@@ -197,15 +288,205 @@ def format_human_result(result: dict) -> str:
             "Local/staging readiness checks passed. Do not claim stable live Feishu routing without captured live result evidence."
         )
     else:
-        lines.append("Some readiness checks failed. Fix the issues above before collecting live Feishu routing evidence.")
+        lines.append(
+            "Some readiness checks failed. Fix the issues above before collecting live Feishu routing evidence."
+        )
     return "\n".join(lines)
+
+
+def format_live_evidence_result(result: dict[str, Any]) -> str:
+    lines = [
+        f"Feishu First-class Routing Evidence: ok={str(result['ok']).lower()}",
+        f"reason: {result['reason']}",
+        f"Boundary: {result.get('boundary') or LIVE_EVIDENCE_BOUNDARY}",
+        f"summary: {json.dumps(result['summary'], ensure_ascii=False, sort_keys=True)}",
+        f"first_class_tools: {json.dumps(result['first_class_tools'], ensure_ascii=False, sort_keys=True)}",
+    ]
+    if result.get("missing_required_tools"):
+        lines.append(f"missing_required_tools: {', '.join(result['missing_required_tools'])}")
+    if result.get("next_step"):
+        lines.append(f"next_step: {result['next_step']}")
+    return "\n".join(lines)
+
+
+def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
+    stripped = text.strip()
+    if not stripped:
+        return []
+    parsed = _parse_json(stripped)
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("lines"), list):
+            return [_payload_from_log_line(item) for item in parsed["lines"] if isinstance(item, dict)]
+        return [_payload_from_log_line(parsed)]
+
+    payloads: list[dict[str, Any]] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        parsed_line = _parse_json(line)
+        if isinstance(parsed_line, dict):
+            payloads.append(_payload_from_log_line(parsed_line))
+        else:
+            payloads.append({"log_message": line})
+    return payloads
+
+
+def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
+    if "result" in line or "tool" in line or "tool_result" in line:
+        return line
+    raw_line = line.get("raw_line")
+    if isinstance(raw_line, str):
+        parsed = _parse_json(raw_line)
+        if isinstance(parsed, dict):
+            return parsed
+    for key in ("payload", "data", "raw", "message", "1"):
+        value = line.get(key)
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            parsed = _parse_json(value)
+            if isinstance(parsed, dict):
+                return parsed
+            embedded = _parse_embedded_json(value)
+            if isinstance(embedded, dict):
+                return embedded
+    return line
+
+
+def _result_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    result = payload.get("result") if isinstance(payload.get("result"), dict) else None
+    if result and ("tool" in result or "tool_result" in result or "bridge" in result):
+        return result
+    if "tool" in payload or "tool_result" in payload or "bridge" in payload:
+        return payload
+    for key in ("payload", "data", "message", "raw", "1"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            nested = _result_payload(value)
+            if nested is not None:
+                return nested
+        if isinstance(value, str):
+            parsed = _parse_json(value)
+            if not isinstance(parsed, dict):
+                parsed = _parse_embedded_json(value)
+            if isinstance(parsed, dict):
+                nested = _result_payload(parsed)
+                if nested is not None:
+                    return nested
+    return None
+
+
+def _bridge_payload(result: dict[str, Any]) -> dict[str, Any]:
+    bridge = result.get("bridge") if isinstance(result.get("bridge"), dict) else None
+    if bridge is not None:
+        return bridge
+    tool_result = result.get("tool_result") if isinstance(result.get("tool_result"), dict) else {}
+    bridge = tool_result.get("bridge") if isinstance(tool_result.get("bridge"), dict) else {}
+    return bridge
+
+
+def _permission_decision(bridge: dict[str, Any]) -> str:
+    decision = bridge.get("permission_decision")
+    if isinstance(decision, dict):
+        return str(decision.get("decision") or "").strip()
+    return ""
+
+
+def _result_successful(result: dict[str, Any]) -> bool:
+    if result.get("ok") is False:
+        return False
+    tool_result = result.get("tool_result") if isinstance(result.get("tool_result"), dict) else {}
+    if tool_result.get("ok") is False:
+        return False
+    return True
+
+
+def _publish_mode(result: dict[str, Any]) -> str:
+    publish = result.get("publish") if isinstance(result.get("publish"), dict) else {}
+    return str(publish.get("mode") or "").strip()
+
+
+def _live_failure_reason(summary: dict[str, int], missing_required: list[str]) -> str:
+    if summary["first_class_fmc_results"] == 0 and summary["internal_memory_results"]:
+        return "only_internal_memory_results_seen"
+    if summary["first_class_fmc_results"] == 0:
+        return "first_class_fmc_result_missing"
+    if summary["allowed_first_class_results"] == 0 and summary["denied_first_class_results"]:
+        return "only_denied_first_class_results_seen"
+    if summary["successful_first_class_results"] == 0:
+        return "first_class_live_routing_without_successful_result"
+    if missing_required:
+        return "missing_required_first_class_tools"
+    return "first_class_live_routing_evidence_incomplete"
+
+
+def _live_next_step(reason: str, missing_required: list[str]) -> str:
+    if reason == "only_internal_memory_results_seen":
+        return "当前日志只证明 Python 内部 memory.* 结果；需要 OpenClaw first-class fmc_* bridge result。"
+    if reason == "only_denied_first_class_results_seen":
+        return "当前只看到 first-class deny-path；需要至少一条 allow-path，并补齐关键工具动作。"
+    if reason == "first_class_live_routing_without_successful_result":
+        return "当前看到 first-class bridge，但没有成功 tool result；需要真实 Feishu/OpenClaw allow-path 成功结果。"
+    if reason == "missing_required_first_class_tools":
+        return f"继续在真实 Feishu/OpenClaw 路径触发并导出这些工具结果：{', '.join(missing_required)}。"
+    return "导出真实 Feishu/OpenClaw gateway result log，并确认包含 fmc_* bridge tool、request_id、trace_id 和 permission_decision。"
+
+
+def _parse_json(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _parse_embedded_json(text: str) -> Any:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    return _parse_json(text[start : end + 1])
+
+
+def _redacted_id(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check Feishu DM routing status")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--timeout", type=int, default=60, help="Timeout in seconds")
+    parser.add_argument(
+        "--event-log",
+        type=Path,
+        default=None,
+        help="Audit captured NDJSON/JSON/OpenClaw log evidence for first-class fmc_* routing.",
+    )
+    parser.add_argument(
+        "--required-tools",
+        default=",".join(DEFAULT_REQUIRED_LIVE_TOOLS),
+        help="Comma-separated fmc_* tools required in --event-log mode.",
+    )
+    parser.add_argument("--min-first-class-results", type=int, default=1)
     args = parser.parse_args()
+
+    if args.event_log:
+        result = check_live_routing_events(
+            args.event_log.read_text(encoding="utf-8"),
+            required_tools=args.required_tools.split(","),
+            min_first_class_results=args.min_first_class_results,
+        )
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(format_live_evidence_result(result))
+        return 0 if result["ok"] else 1
 
     result = check_feishu_dm_routing()
 

@@ -24,7 +24,7 @@ from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.tools import supported_tool_names
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
-from scripts.check_feishu_dm_routing import BOUNDARY, format_human_result
+from scripts.check_feishu_dm_routing import BOUNDARY, check_live_routing_events, format_human_result
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / "agent_adapters" / "openclaw" / "plugin"
@@ -47,6 +47,88 @@ class FeishuDMRoutingTest(unittest.TestCase):
         self.assertIn("Local/staging", output)
         self.assertIn("Do not claim stable live Feishu routing", output)
         self.assertNotIn("working correctly", output)
+
+    def test_live_routing_event_gate_passes_when_required_fmc_tools_are_seen(self) -> None:
+        text = "\n".join(
+            json.dumps(
+                {
+                    "event": "copilot_live_event_result",
+                    "result": {
+                        "ok": True,
+                        "message_id": f"om_{tool}",
+                        "tool": tool.replace("fmc_memory_", "memory.").replace("fmc_heartbeat_", "heartbeat."),
+                        "bridge": {
+                            "entrypoint": "openclaw_tool",
+                            "tool": tool,
+                            "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+                            "request_id": f"req_{tool}",
+                            "trace_id": f"trace_{tool}",
+                        },
+                        "publish": {"mode": "reply_text"},
+                    },
+                },
+                ensure_ascii=False,
+            )
+            for tool in ("fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_prefetch")
+        )
+
+        report = check_live_routing_events(text)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("first_class_live_routing_evidence_seen", report["reason"])
+        self.assertEqual(3, report["summary"]["first_class_fmc_results"])
+        self.assertEqual([], report["missing_required_tools"])
+
+    def test_live_routing_event_gate_fails_on_internal_memory_only(self) -> None:
+        text = json.dumps(
+            {
+                "result": {
+                    "ok": True,
+                    "message_id": "om_internal",
+                    "tool": "memory.search",
+                    "bridge": {
+                        "entrypoint": "openclaw_tool",
+                        "tool": "memory.search",
+                        "permission_decision": {"decision": "allow"},
+                    },
+                }
+            },
+            ensure_ascii=False,
+        )
+
+        report = check_live_routing_events(text)
+
+        self.assertFalse(report["ok"])
+        self.assertEqual("only_internal_memory_results_seen", report["reason"])
+        self.assertEqual(0, report["summary"]["first_class_fmc_results"])
+        self.assertEqual(1, report["summary"]["internal_memory_results"])
+
+    def test_live_routing_event_gate_reads_openclaw_embedded_json_log_lines(self) -> None:
+        embedded = json.dumps(
+            {
+                "ok": False,
+                "tool_result": {
+                    "ok": False,
+                    "error": {"code": "permission_denied"},
+                    "bridge": {
+                        "entrypoint": "openclaw_tool",
+                        "tool": "fmc_memory_confirm",
+                        "permission_decision": {"decision": "deny", "reason_code": "review_role_required"},
+                        "request_id": "req_card_action",
+                        "trace_id": "trace_card_action",
+                    },
+                },
+            },
+            ensure_ascii=False,
+        )
+        text = json.dumps({"1": f"feishu[default]: card-action intercept helper failed: {embedded}"})
+
+        report = check_live_routing_events(text, required_tools=("fmc_memory_confirm",))
+
+        self.assertFalse(report["ok"])
+        self.assertEqual("only_denied_first_class_results_seen", report["reason"])
+        self.assertEqual(1, report["summary"]["first_class_fmc_results"])
+        self.assertEqual(1, report["summary"]["denied_first_class_results"])
 
     def test_plugin_tools_registered_with_fmc_names(self) -> None:
         """Verify plugin tools use fmc_xxx naming convention."""
@@ -214,7 +296,9 @@ class FeishuDMRoutingTest(unittest.TestCase):
             conn = connect(tmp.name)
             init_db(conn)
             repo = MemoryRepository(conn)
-            repo.remember(SCOPE, "Copilot live sandbox 验收口径：真实 DM 必须调用 fmc_memory_search", source_type="test")
+            repo.remember(
+                SCOPE, "Copilot live sandbox 验收口径：真实 DM 必须调用 fmc_memory_search", source_type="test"
+            )
             conn.close()
 
             response = run_envelope(
@@ -250,7 +334,7 @@ class FeishuDMRoutingTest(unittest.TestCase):
                     "payload": {
                         "query": "test",
                         "scope": SCOPE,
-                        "current_context": "{\"scope\":",
+                        "current_context": '{"scope":',
                     },
                 }
             )

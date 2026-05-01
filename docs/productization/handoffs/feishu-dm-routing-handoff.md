@@ -93,6 +93,25 @@ $ python3 scripts/check_feishu_dm_routing.py --json
 }
 ```
 
+2026-05-02 追加：同一脚本新增 captured-log evidence gate，用来区分本地 readiness 和真实 Feishu/OpenClaw first-class routing 证据：
+
+```bash
+python3 scripts/check_feishu_dm_routing.py \
+  --event-log logs/feishu-copilot-live-test/feishu-listen-20260429_202445.ndjson \
+  --json
+```
+
+当前 available live log 结果为 `missing_required_first_class_tools`：只看到 `fmc_memory_create_candidate` bridge result，仍缺 `fmc_memory_search` / `fmc_memory_prefetch` 扩样成功证据。
+
+```bash
+python3 scripts/check_feishu_dm_routing.py \
+  --event-log /tmp/openclaw/openclaw-2026-04-30.log \
+  --required-tools fmc_memory_confirm \
+  --json
+```
+
+当前 OpenClaw card-action log 结果为 `first_class_live_routing_without_successful_result`：能看到 `fmc_memory_confirm` bridge、request_id、trace_id 和 permission_decision，但没有 successful tool result。该 gate 不能证明稳定路由；它的作用是防止把内部 `memory.*` result、失败结果或 deny-path 冒称成真实 first-class live routing。
+
 ### 2.5 测试套件
 
 ```bash
