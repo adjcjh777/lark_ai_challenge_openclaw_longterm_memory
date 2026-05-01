@@ -309,6 +309,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 ```bash
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" --viewer-token "$FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" --strict --min-wiki-cards 1
+python3 scripts/check_copilot_admin_deploy_bundle.py --json
 python3 scripts/check_copilot_admin_sso_gate.py --json
 python3 scripts/check_llm_wiki_enterprise_site_completion.py --json
 python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --scope project:feishu_ai_challenge --output-dir /tmp/copilot-admin-ui-smoke --json
@@ -316,6 +317,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 ```
 
 `check_copilot_admin_sso_gate.py` 会在 loopback 上启动临时 admin server，验证无 header 拒绝、allowed-domain viewer 只读、admin SSO 身份可导出 Wiki、`/metrics` 需要认证、`/api/health` 报告 SSO policy。它只证明反向代理 header gate 的 staging 行为，不等于真实企业 IdP / Feishu SSO 生产验收。
+
+`check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
 
 `check_llm_wiki_enterprise_site_completion.py` 会把 LLM Wiki、知识图谱后台、UI smoke、上线 gate 和 no-overclaim 边界映射到具体 artifact；当前预期输出是 `staging_ok=true` 且 `goal_complete=false`，因为生产 DB、真实 IdP SSO、域名证书、生产监控和 productized live 长期运行仍未完成。
 

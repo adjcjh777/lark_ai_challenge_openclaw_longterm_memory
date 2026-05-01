@@ -56,6 +56,14 @@ python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 
 readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown export、compiled Graph、Tenants readiness、本地 tenant policy editor 表/API 能力、Launch readiness、知识只读面和 access policy；Tenants / Launch check 不代表已完成生产 DB、真实企业 IdP SSO 或完整企业权限后台。
 
+部署包静态 verifier：
+
+```bash
+python3 scripts/check_copilot_admin_deploy_bundle.py --json
+```
+
+该 verifier 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
+
 可选企业 SSO header gate：
 
 ```bash

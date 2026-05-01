@@ -89,6 +89,12 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Deploy bundle verifier exists and preserves production-blocked boundary.",
+        path="scripts/check_copilot_admin_deploy_bundle.py",
+        contains=("staging_bundle_ok", "production_blocked", "not_production_domain_tls"),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Reverse-proxy SSO header gate has executable staging verifier.",
         path="scripts/check_copilot_admin_sso_gate.py",
         contains=("no_header_denied", "viewer_export_forbidden", "not_real_enterprise_idp"),
