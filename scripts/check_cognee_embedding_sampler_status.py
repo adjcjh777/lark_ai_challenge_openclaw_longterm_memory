@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -125,6 +126,7 @@ def check_cognee_embedding_sampler_status(
         "first_sample_at": first_sample_at,
         "last_sample_at": last_sample_at,
         "estimated_ready_at": estimated_ready_at,
+        "collector_command_template": _collector_command_template(embedding_sample_log),
         "next_step": _next_step(
             completion_ready=completion_ready,
             sampler_alive=sampler_alive,
@@ -153,6 +155,8 @@ def format_report(result: dict[str, Any]) -> str:
         lines.append(f"warning_checks: {', '.join(result['warning_checks'])}")
     if result["next_step"]:
         lines.append(f"next_step: {result['next_step']}")
+    if result.get("collector_command_template"):
+        lines.append(f"collector_command_template: {result['collector_command_template']}")
     return "\n".join(lines)
 
 
@@ -230,6 +234,21 @@ def _next_step(
             missing.append("the required time window")
         return f"Leave the sampler running until it collects {' and '.join(missing)}."
     return "Restart the embedding sampler before claiming long-run Cognee/embedding evidence."
+
+
+def _collector_command_template(embedding_sample_log: Path) -> str:
+    sample_arg = shlex.quote(str(embedding_sample_log.expanduser()))
+    return (
+        "python3 scripts/collect_cognee_embedding_long_run_evidence.py "
+        "--curated-sync-report <cognee-curated-sync.json> "
+        f"--embedding-sample-log {sample_arg} "
+        "--persistent-readback-report <cognee-persistent-readback.json> "
+        "--service-unit <service-or-supervisor-id> "
+        "--oncall-owner <owner-or-team> "
+        "--evidence-ref <non-secret-ops-log-or-path> "
+        "--output <cognee-embedding-long-run-evidence.json> "
+        "--json"
+    )
 
 
 if __name__ == "__main__":

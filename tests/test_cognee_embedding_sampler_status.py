@@ -28,6 +28,8 @@ class CogneeEmbeddingSamplerStatusTest(unittest.TestCase):
         self.assertEqual("warning", result["checks"]["embedding_successful_samples"]["status"])
         self.assertEqual("warning", result["checks"]["embedding_window"]["status"])
         self.assertIn("more successful samples", result["next_step"])
+        self.assertIn("collect_cognee_embedding_long_run_evidence.py", result["collector_command_template"])
+        self.assertIn(str(sample_log), result["collector_command_template"])
 
     def test_dead_sampler_with_incomplete_evidence_fails(self) -> None:
         with tempfile.TemporaryDirectory(prefix="cognee_sampler_status_") as temp_dir:
@@ -74,6 +76,7 @@ class CogneeEmbeddingSamplerStatusTest(unittest.TestCase):
         self.assertEqual([], result["failed_checks"])
         self.assertEqual("pass", result["checks"]["sampler_process_alive"]["status"])
         self.assertEqual("2026-05-02T00:00:00+00:00", result["estimated_ready_at"])
+        self.assertIn("--persistent-readback-report", result["collector_command_template"])
 
 
 def _sample(sampled_at: str) -> dict[str, object]:
