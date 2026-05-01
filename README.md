@@ -312,6 +312,7 @@ python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --
 python3 scripts/check_copilot_admin_env_file.py --expect-example --json
 python3 scripts/check_copilot_admin_deploy_bundle.py --json
 python3 scripts/check_copilot_admin_sso_gate.py --json
+python3 scripts/check_copilot_admin_production_evidence.py --json
 python3 scripts/check_copilot_knowledge_site_export.py --json
 python3 scripts/check_llm_wiki_enterprise_site_completion.py --json
 python3 scripts/check_copilot_admin_ui_smoke.py --db-path data/memory.sqlite --scope project:feishu_ai_challenge --output-dir /tmp/copilot-admin-ui-smoke --json
@@ -323,6 +324,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 `check_copilot_admin_env_file.py` 默认校验 `deploy/copilot-admin.env.example` 是否保持安全占位符；传 `--env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 可校验本机真实 runtime env 是否替换 token、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
 
 `check_copilot_admin_deploy_bundle.py` 会检查 systemd / Nginx / TLS 模板、SSO header 边界、monitoring alert artifact、backup gate、readiness gate 和 completion audit gate；当前预期输出是 `staging_bundle_ok=true` 且 `production_blocked=true`。
+
+`check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json` 的结构和密钥脱敏，预期 `ok=true`、`production_ready=false`；真实上线时传入已填好的 manifest 并加 `--require-production-ready`，才会要求生产 DB、真实 IdP SSO、域名/TLS、生产监控和 24 小时 long-run 证据全部通过。
 
 `check_copilot_knowledge_site_export.py` 会导出一个临时静态知识站，并校验 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json`、`wiki/*.md`、Graph detail UI、read-only boundary 和 secret-like 文本脱敏。
 

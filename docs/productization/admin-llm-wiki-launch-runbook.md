@@ -61,12 +61,15 @@ readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown expor
 ```bash
 python3 scripts/check_copilot_admin_env_file.py --expect-example --json
 python3 scripts/check_copilot_knowledge_site_export.py --json
+python3 scripts/check_copilot_admin_production_evidence.py --json
 python3 scripts/check_copilot_admin_deploy_bundle.py --json
 ```
 
 `check_copilot_admin_env_file.py --expect-example` 检查仓库里的 env 示例仍是安全占位符；替换本机 runtime 文件后，使用 `python3 scripts/check_copilot_admin_env_file.py --env-file /etc/feishu-memory-copilot/admin.env --expect-runtime --json` 校验 token 已替换、admin/viewer token 不同、端口合法、远程绑定有 token、SSO 配置完整。报告只输出 redacted state，不输出 token 明文。
 
 `check_copilot_knowledge_site_export.py` 使用临时 SQLite 导出一个只读静态 LLM Wiki / Knowledge Graph 站点，并校验 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json`、`wiki/*.md`、Graph detail UI、read-only boundary 和 secret-like 文本脱敏。它只证明静态 artifact 可生成和可分享，不代表生产域名部署、真实 SSO 或长期 live 已完成。
+
+`check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json`，确认生产证据 manifest 结构完整且不含密钥明文；示例文件的预期输出是 `ok=true`、`production_ready=false`。真实上线验收时，复制该 manifest 到受控环境，填入真实 DB / IdP / TLS / monitoring / long-run 证据后运行 `python3 scripts/check_copilot_admin_production_evidence.py --manifest <path> --require-production-ready --json`。
 
 `check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
 

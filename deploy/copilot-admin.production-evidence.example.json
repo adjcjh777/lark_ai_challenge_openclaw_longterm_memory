@@ -1,0 +1,59 @@
+{
+  "schema_version": "copilot_admin_production_evidence/v1",
+  "example": true,
+  "generated_at": "2026-05-01T00:00:00+08:00",
+  "environment": "production",
+  "owner": "chengjunhao",
+  "boundary": "Example manifest only. Replace every placeholder with real production evidence before claiming production readiness.",
+  "production_db": {
+    "engine": "__FILL_POSTGRESQL_OR_MANAGED_DB__",
+    "migration_applied_at": "__FILL_ISO8601__",
+    "pitr_enabled": false,
+    "backup_restore_drill_at": "__FILL_ISO8601__",
+    "evidence_refs": [
+      "__FILL_DB_MIGRATION_RUNBOOK_OR_LOG__"
+    ]
+  },
+  "enterprise_idp_sso": {
+    "provider": "__FILL_FEISHU_SSO_OR_ENTERPRISE_IDP__",
+    "production_login_tested_at": "__FILL_ISO8601__",
+    "admin_login_passed": false,
+    "viewer_export_denied": false,
+    "allowed_domains": [
+      "__FILL_COMPANY_DOMAIN__"
+    ],
+    "evidence_refs": [
+      "__FILL_SSO_TEST_LOG_OR_SCREENSHOT__"
+    ]
+  },
+  "production_domain_tls": {
+    "url": "https://__FILL_PRODUCTION_DOMAIN__",
+    "tls_validated_at": "__FILL_ISO8601__",
+    "certificate_subject": "__FILL_CERT_SUBJECT__",
+    "certificate_expires_at": "__FILL_ISO8601__",
+    "hsts_enabled": false,
+    "evidence_refs": [
+      "__FILL_TLS_CHECK_OUTPUT__"
+    ]
+  },
+  "production_monitoring": {
+    "prometheus_scrape_proven": false,
+    "grafana_dashboard_url": "__FILL_GRAFANA_DASHBOARD_URL__",
+    "alertmanager_route": "__FILL_ALERT_ROUTE__",
+    "alert_delivery_tested_at": "__FILL_ISO8601__",
+    "evidence_refs": [
+      "__FILL_ALERT_DELIVERY_LOG__"
+    ]
+  },
+  "productized_live_long_run": {
+    "service_unit": "__FILL_SERVICE_UNIT_OR_DEPLOYMENT_ID__",
+    "started_at": "__FILL_ISO8601__",
+    "evidence_window_hours": 0,
+    "healthcheck_sample_count": 0,
+    "oncall_owner": "__FILL_ONCALL_OWNER__",
+    "rollback_drill_at": "__FILL_ISO8601__",
+    "evidence_refs": [
+      "__FILL_LONG_RUN_LOG_OR_DASHBOARD__"
+    ]
+  }
+}

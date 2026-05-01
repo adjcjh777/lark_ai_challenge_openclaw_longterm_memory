@@ -131,6 +131,31 @@ CHECKS = (
         required_patterns=("staging_ok", "goal_complete", "production_blockers"),
     ),
     BundleCheck(
+        name="production_evidence_gate",
+        path="scripts/check_copilot_admin_production_evidence.py",
+        description="Production evidence manifest gate validates external DB, SSO, TLS, monitoring, and long-run proof.",
+        required_patterns=(
+            "run_production_evidence_check",
+            "production_ready",
+            "productized_live_long_run",
+            "does not create production DB",
+        ),
+    ),
+    BundleCheck(
+        name="production_evidence_manifest_example",
+        path="deploy/copilot-admin.production-evidence.example.json",
+        description="Example manifest lists required production evidence without real secrets.",
+        required_patterns=(
+            "copilot_admin_production_evidence/v1",
+            "production_db",
+            "enterprise_idp_sso",
+            "production_domain_tls",
+            "production_monitoring",
+            "productized_live_long_run",
+        ),
+        forbidden_patterns=("app_secret=", "access_token=", "Bearer ", "sk-", "rightcode_"),
+    ),
+    BundleCheck(
         name="backup_restore_gate",
         path="scripts/backup_copilot_storage.py",
         description="SQLite staging backup verifier supports manifest, integrity check, and restore path.",

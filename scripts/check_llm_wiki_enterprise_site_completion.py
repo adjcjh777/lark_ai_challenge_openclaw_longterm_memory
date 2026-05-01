@@ -101,6 +101,24 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Production evidence manifest gate exists for real DB, IdP, TLS, monitoring, and long-run proof.",
+        path="scripts/check_copilot_admin_production_evidence.py",
+        contains=("run_production_evidence_check", "production_ready", "productized_live_long_run"),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
+        evidence="Production evidence manifest example documents required proof without real secrets.",
+        path="deploy/copilot-admin.production-evidence.example.json",
+        contains=(
+            "copilot_admin_production_evidence/v1",
+            "production_db",
+            "enterprise_idp_sso",
+            "production_domain_tls",
+            "production_monitoring",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Admin env lint validates example/runtime files without leaking token values.",
         path="scripts/check_copilot_admin_env_file.py",
         contains=("check_admin_env_file", "redacted_summary", "no token values printed"),
