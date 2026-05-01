@@ -19,7 +19,7 @@
 | LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`scripts/check_copilot_knowledge_site_export.py --json`、`tests/test_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site_export_check.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
 | 知识图谱结合 | staging 已完成 | `/api/graph`、`/api/graph-quality`、Launch 页 Graph Quality 区块、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板、`scripts/check_copilot_graph_quality.py --json` 图谱质量 gate | 还没有生产级图谱治理后台或长期 live 增量质量证据 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、节点/边详情、Relationship Focus 邻接路径面板、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
-| 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、Relationship Focus evidence path、移动端无横向溢出；静态站 Graph 稳定网格、节点/边详情和 Relationship Focus evidence path；UI smoke 已加入截图像素完整性检查，并支持固定截图基线 / sampled pixel diff 阈值 gate | 还缺设计系统级组件抽象和人工维护的长期截图基线库 |
+| 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、Relationship Focus evidence path、移动端无横向溢出；静态站 Graph 稳定网格、节点/边详情、Relationship Focus evidence path 和 Graph quality 摘要；UI smoke 已加入截图像素完整性检查，并支持固定截图基线 / sampled pixel diff 阈值 gate | 还缺设计系统级组件抽象和人工维护的长期截图基线库 |
 | 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、`deploy/copilot-admin.production-evidence.example.json`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_env_file.py --expect-runtime --json`、`scripts/check_copilot_admin_deploy_bundle.py --json`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_copilot_audit_readonly_gate.py --json`、`scripts/export_copilot_admin_launch_evidence.py --json`、`scripts/check_copilot_admin_production_evidence.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成；production evidence manifest 目前只有示例模板 |
 
 ## 2. Prompt-to-Artifact Checklist
@@ -30,8 +30,9 @@
 | `data/manifest.json` | `memory_engine/copilot/knowledge_site.py` | 保留 `no production deployment` 边界 |
 | `data/wiki.json` | `memory_engine/copilot/knowledge_site.py` | 来源为 active curated memory，不包含 raw events |
 | `data/graph.json` | `memory_engine/copilot/knowledge_site.py` | 包含 storage graph 和 compiled memory graph |
+| `data/graph-quality.json` | `memory_engine/copilot/knowledge_site.py` | 包含 static export 使用的 graph quality、compiled graph 和 orphan ratio 摘要 |
 | `wiki/*.md` | `AdminQueryService.wiki_export_markdown()` | Markdown Wiki 导出，敏感字段脱敏 |
-| static knowledge site export gate | `scripts/check_copilot_knowledge_site_export.py`、`tests/test_copilot_knowledge_site_export_check.py` | 临时导出并校验 `index.html`、data manifest、Wiki JSON、Graph JSON、Markdown、Graph detail / Relationship Focus UI、read-only boundary 和 secret-like 文本脱敏；只证明静态 artifact |
+| static knowledge site export gate | `scripts/check_copilot_knowledge_site_export.py`、`tests/test_copilot_knowledge_site_export_check.py` | 临时导出并校验 `index.html`、data manifest、Wiki JSON、Graph JSON、Graph quality JSON、Markdown、Graph detail / Relationship Focus / Graph quality UI、read-only boundary 和 secret-like 文本脱敏；只证明静态 artifact |
 | live admin `/api/wiki` | `memory_engine/copilot/admin.py` | 只读 LLM Wiki 编译视图 |
 | live admin `/api/wiki/export` | `memory_engine/copilot/admin.py` | 只接受 admin token；viewer token 返回 `403` |
 | live admin `/api/graph` | `memory_engine/copilot/admin.py` | 节点、边、metadata、tenant/org/visibility 字段可查 |

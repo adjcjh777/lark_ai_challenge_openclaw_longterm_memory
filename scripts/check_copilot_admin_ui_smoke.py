@@ -603,6 +603,10 @@ async function checkStaticSite(browser, viewport, label) {
   if (!focus.includes("Relationship Focus") || !focus.includes("Evidence paths")) {
     throw new Error(`static ${label} relationship focus missing node evidence paths`);
   }
+  const bodyText = await page.locator("body").innerText();
+  if (!bodyText.includes("Graph quality") || !bodyText.includes("compiled graph")) {
+    throw new Error(`static ${label} missing graph quality summary`);
+  }
   const file = path.join(config.outputDir, `static-site-${label}.png`);
   await page.screenshot({ path: file, fullPage: true });
   screenshots[`static_${label}`] = file;
@@ -625,9 +629,9 @@ async function checkStaticSite(browser, viewport, label) {
     await checkAdminLaunch(browser, { width: 390, height: 844 }, "mobile");
     pass("admin_mobile_launch", "Mobile Launch tab renders readiness gates without horizontal overflow.");
     await checkStaticSite(browser, { width: 1440, height: 1000 }, "desktop");
-    pass("static_desktop_site", "Static site renders graph detail, relationship focus, and Deerflow attribution.");
+    pass("static_desktop_site", "Static site renders graph detail, relationship focus, graph quality, and Deerflow attribution.");
     await checkStaticSite(browser, { width: 390, height: 844 }, "mobile");
-    pass("static_mobile_site", "Mobile static site renders graph detail and relationship focus without horizontal overflow.");
+    pass("static_mobile_site", "Mobile static site renders graph detail, relationship focus, and graph quality without horizontal overflow.");
     assertVisualBaseline();
   } catch (error) {
     fail("playwright", error.message);

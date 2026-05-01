@@ -73,6 +73,7 @@ class CopilotKnowledgeSiteTest(unittest.TestCase):
                 self.assertTrue((output_dir / "data" / "manifest.json").exists())
                 self.assertTrue((output_dir / "data" / "wiki.json").exists())
                 self.assertTrue((output_dir / "data" / "graph.json").exists())
+                self.assertTrue((output_dir / "data" / "graph-quality.json").exists())
                 self.assertTrue((output_dir / "wiki" / "project_admin_demo.md").exists())
 
                 index_html = (output_dir / "index.html").read_text(encoding="utf-8")
@@ -86,6 +87,8 @@ class CopilotKnowledgeSiteTest(unittest.TestCase):
                 self.assertIn("data-edge-id", index_html)
                 self.assertIn("Relationship Focus", index_html)
                 self.assertIn("Evidence paths", index_html)
+                self.assertIn("Graph quality", index_html)
+                self.assertIn("compiled graph", index_html)
                 self.assertIn("Related edges", index_html)
                 self.assertIn("detail-grid", index_html)
                 self.assertIn("window.COPILOT_KNOWLEDGE_SITE", index_html)
@@ -102,9 +105,15 @@ class CopilotKnowledgeSiteTest(unittest.TestCase):
                 self.assertIn("grounded_by", {edge["edge_type"] for edge in graph["edges"]})
                 self.assertNotIn("demo-secret", json.dumps(graph, ensure_ascii=False))
 
+                graph_quality = json.loads((output_dir / "data" / "graph-quality.json").read_text(encoding="utf-8"))
+                self.assertIn(graph_quality["status"], {"pass", "fail"})
+                self.assertEqual("pass", graph_quality["checks"]["compiled_memory_graph"]["status"])
+                self.assertNotIn("demo-secret", json.dumps(graph_quality, ensure_ascii=False))
+
                 manifest = json.loads((output_dir / "data" / "manifest.json").read_text(encoding="utf-8"))
                 self.assertTrue(manifest["read_only"])
                 self.assertIn("no production deployment", manifest["boundary"])
+                self.assertEqual(graph_quality["status"], manifest["graph_quality_status"])
 
 
 if __name__ == "__main__":

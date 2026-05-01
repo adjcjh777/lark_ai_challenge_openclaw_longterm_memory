@@ -22,6 +22,7 @@ class CopilotKnowledgeSiteExportCheckTest(unittest.TestCase):
         self.assertTrue(all(check["status"] == "pass" for check in result["checks"].values()))
         self.assertTrue(result["manifest_summary"]["read_only"])
         self.assertGreaterEqual(result["manifest_summary"]["wiki_card_count"], 1)
+        self.assertIn(result["checks"]["graph_quality"]["graph_quality_status"], {"pass", "fail"})
         self.assertIn("no production deployment", result["manifest_summary"]["boundary"])
 
     def test_existing_empty_db_fails_wiki_and_manifest_checks(self) -> None:

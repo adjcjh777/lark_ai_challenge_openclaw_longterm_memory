@@ -37,6 +37,7 @@ def export_knowledge_site(
         summary = _redact_payload(service.summary())
         wiki = _redact_payload(service.wiki_overview(scope=scope, limit=limit))
         graph = _redact_payload(service.graph_workspace(limit=limit))
+        graph_quality = _redact_payload(_static_graph_quality_payload(service.graph_quality()))
         scopes = [scope] if scope else [str(item["scope"]) for item in wiki.get("scopes", [])]
         wiki_files = _write_scope_markdown(service, wiki_dir=wiki_dir, scopes=scopes)
 
@@ -52,12 +53,15 @@ def export_knowledge_site(
         "wiki_card_count": int(wiki.get("card_count") or 0),
         "graph_node_count": int(graph.get("workspace_node_count") or 0),
         "graph_edge_count": int(graph.get("workspace_edge_count") or 0),
+        "graph_quality_status": graph_quality.get("status"),
+        "graph_orphan_ratio": (graph_quality.get("summary") or {}).get("orphan_ratio"),
         "generation_policy": wiki.get("generation_policy") or {},
         "files": {
             "index": "index.html",
             "manifest": "data/manifest.json",
             "wiki": "data/wiki.json",
             "graph": "data/graph.json",
+            "graph_quality": "data/graph-quality.json",
             "summary": "data/summary.json",
             "scope_markdown": [item["path"] for item in wiki_files],
         },
@@ -67,6 +71,7 @@ def export_knowledge_site(
         "summary": summary,
         "wiki": wiki,
         "graph": graph,
+        "graph_quality": graph_quality,
         "wiki_files": wiki_files,
     }
 
@@ -74,6 +79,7 @@ def export_knowledge_site(
     _write_json(data_dir / "summary.json", summary)
     _write_json(data_dir / "wiki.json", wiki)
     _write_json(data_dir / "graph.json", graph)
+    _write_json(data_dir / "graph-quality.json", graph_quality)
     (output / "index.html").write_text(_render_index_html(site_payload), encoding="utf-8")
     return {
         "ok": True,
@@ -118,6 +124,22 @@ def _redact_payload(value: Any) -> Any:
     if isinstance(value, dict):
         return {key: _redact_payload(item) for key, item in value.items()}
     return value
+
+
+def _static_graph_quality_payload(graph_quality: dict[str, Any]) -> dict[str, Any]:
+    checks = graph_quality.get("checks") if isinstance(graph_quality.get("checks"), dict) else {}
+    return {
+        "ok": bool(graph_quality.get("ok")),
+        "status": graph_quality.get("status"),
+        "summary": graph_quality.get("summary") if isinstance(graph_quality.get("summary"), dict) else {},
+        "checks": {
+            str(name): {"status": check.get("status") if isinstance(check, dict) else "unknown"}
+            for name, check in checks.items()
+        },
+        "failed_checks": [str(item) for item in graph_quality.get("failed_checks") or []],
+        "boundary": graph_quality.get("boundary"),
+        "next_step": graph_quality.get("next_step"),
+    }
 
 
 def _safe_slug(value: str) -> str:
@@ -474,11 +496,16 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       const wiki = site.wiki || {{}};
       const summary = site.summary || {{}};
       const policy = wiki.generation_policy || {{}};
+      const graphQuality = site.graph_quality || {{}};
+      const graphQualitySummary = graphQuality.summary || {{}};
+      const graphChecks = graphQuality.checks || {{}};
       $("boundary").textContent = manifest.boundary || "";
       $("metrics").innerHTML = [
         metric("Active cards", manifest.wiki_card_count),
         metric("Graph nodes", manifest.graph_node_count),
         metric("Graph edges", manifest.graph_edge_count),
+        metric("Graph quality", graphQuality.status || manifest.graph_quality_status),
+        metric("Orphan ratio", graphQualitySummary.orphan_ratio ?? manifest.graph_orphan_ratio),
         metric("Memories", summary.memory_total),
         metric("Audit", summary.audit_total)
       ].join("");
@@ -486,7 +513,9 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
         tag(policy.source || "unknown"),
         tag(policy.raw_events_included ? "raw events included" : "raw events excluded"),
         tag(policy.requires_evidence ? "evidence required" : "evidence optional"),
-        tag(policy.writes_feishu ? "writes Feishu" : "read-only")
+        tag(policy.writes_feishu ? "writes Feishu" : "read-only"),
+        tag(`graph quality ${{graphQuality.status || "unknown"}}`, graphQuality.status === "pass" ? "" : "warn"),
+        tag(`compiled graph ${{graphChecks.compiled_memory_graph?.status || "unknown"}}`, graphChecks.compiled_memory_graph?.status === "pass" ? "" : "warn")
       ].join("");
       $("policyKv").innerHTML = `
         <span>Generated</span><strong class="mono">${{esc(manifest.generated_at)}}</strong>

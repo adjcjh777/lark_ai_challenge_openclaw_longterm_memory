@@ -192,6 +192,7 @@ def _verify_export(*, output_dir: Path, scope: str) -> dict[str, dict[str, Any]]
         "manifest": output_dir / "data" / "manifest.json",
         "wiki": output_dir / "data" / "wiki.json",
         "graph": output_dir / "data" / "graph.json",
+        "graph_quality": output_dir / "data" / "graph-quality.json",
         "summary": output_dir / "data" / "summary.json",
         "markdown": output_dir / "wiki" / f"{_safe_slug(scope)}.md",
     }
@@ -201,6 +202,7 @@ def _verify_export(*, output_dir: Path, scope: str) -> dict[str, dict[str, Any]]
     manifest = _read_json(paths["manifest"]) if paths["manifest"].exists() else {}
     wiki = _read_json(paths["wiki"]) if paths["wiki"].exists() else {}
     graph = _read_json(paths["graph"]) if paths["graph"].exists() else {}
+    graph_quality = _read_json(paths["graph_quality"]) if paths["graph_quality"].exists() else {}
     index_text = paths["index"].read_text(encoding="utf-8") if paths["index"].exists() else ""
     markdown = paths["markdown"].read_text(encoding="utf-8") if paths["markdown"].exists() else ""
     combined = "\n".join(
@@ -210,11 +212,13 @@ def _verify_export(*, output_dir: Path, scope: str) -> dict[str, dict[str, Any]]
             json.dumps(manifest, ensure_ascii=False),
             json.dumps(wiki, ensure_ascii=False),
             json.dumps(graph, ensure_ascii=False),
+            json.dumps(graph_quality, ensure_ascii=False),
         ]
     )
     checks["manifest"] = _check_manifest(manifest, scope=scope)
     checks["wiki"] = _check_wiki_payload(wiki)
     checks["graph"] = _check_graph_payload(graph)
+    checks["graph_quality"] = _check_graph_quality_payload(graph_quality)
     checks["index_ui"] = _check_index_ui(index_text)
     checks["markdown"] = _check_markdown(markdown, scope=scope)
     checks["redaction"] = _check_redaction(combined)
@@ -243,6 +247,8 @@ def _check_manifest(manifest: dict[str, Any], *, scope: str) -> dict[str, Any]:
         and files.get("index") == "index.html"
         and files.get("wiki") == "data/wiki.json"
         and files.get("graph") == "data/graph.json"
+        and files.get("graph_quality") == "data/graph-quality.json"
+        and manifest.get("graph_quality_status") in {"pass", "fail"}
         and policy.get("raw_events_included") is False
         and policy.get("writes_feishu") is False
     )
@@ -251,6 +257,7 @@ def _check_manifest(manifest: dict[str, Any], *, scope: str) -> dict[str, Any]:
         "description": "Manifest preserves read-only staging boundary and expected file map.",
         "wiki_card_count": manifest.get("wiki_card_count"),
         "graph_node_count": manifest.get("graph_node_count"),
+        "graph_quality_status": manifest.get("graph_quality_status"),
     }
 
 
@@ -281,6 +288,23 @@ def _check_graph_payload(graph: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _check_graph_quality_payload(graph_quality: dict[str, Any]) -> dict[str, Any]:
+    checks = graph_quality.get("checks") if isinstance(graph_quality.get("checks"), dict) else {}
+    summary = graph_quality.get("summary") if isinstance(graph_quality.get("summary"), dict) else {}
+    ok = (
+        graph_quality.get("status") in {"pass", "fail"}
+        and isinstance(graph_quality.get("ok"), bool)
+        and (checks.get("compiled_memory_graph") or {}).get("status") == "pass"
+        and summary.get("orphan_ratio") is not None
+    )
+    return {
+        "status": "pass" if ok else "fail",
+        "description": "Graph quality JSON carries compiled graph and orphan-ratio checks into the static site.",
+        "graph_quality_status": graph_quality.get("status"),
+        "orphan_ratio": summary.get("orphan_ratio"),
+    }
+
+
 def _check_index_ui(index_text: str) -> dict[str, Any]:
     required = (
         "Feishu Memory Copilot Knowledge Site",
@@ -291,6 +315,8 @@ def _check_index_ui(index_text: str) -> dict[str, Any]:
         "data-edge-id",
         "Relationship Focus",
         "Evidence paths",
+        "Graph quality",
+        "compiled graph",
         "window.COPILOT_KNOWLEDGE_SITE",
     )
     missing = [item for item in required if item not in index_text]
