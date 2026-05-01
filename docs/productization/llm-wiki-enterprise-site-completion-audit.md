@@ -20,7 +20,7 @@
 | 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
 | 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格 | 还缺设计系统级组件抽象和完整视觉回归流水线 |
-| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成 |
+| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成 |
 
 ## 2. Prompt-to-Artifact Checklist
 
@@ -46,6 +46,7 @@
 | admin/viewer token gate | `tests/test_copilot_admin.py`、`scripts/check_copilot_admin_readiness.py` | admin 可导出和保存 tenant policy；viewer 只读；token 相同被启动脚本拒绝 |
 | reverse-proxy SSO header gate | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py`、`deploy/copilot-admin.nginx.example` | 本机反向代理注入 `X-Forwarded-Email` 后，admin allowlist 可导出，allowed domain viewer 只能浏览；非生产 IdP 验收 |
 | staging SSO header gate verifier | `scripts/check_copilot_admin_sso_gate.py`、`tests/test_copilot_admin_sso_gate.py` | 在 loopback 临时 admin server 上验证 no-header `401`、viewer read `200`、viewer export `403`、admin export `200`、metrics auth 和 `/api/health` SSO policy；只证明 reverse-proxy header gate，不证明真实企业 IdP / Feishu SSO 生产验收 |
+| executable completion audit | `scripts/check_llm_wiki_enterprise_site_completion.py`、`tests/test_llm_wiki_enterprise_site_completion.py` | 把 objective 拆成 LLM Wiki、Knowledge Graph、后台图谱 UI、UI optimization、Launch gates 和 no-overclaim boundary；当前应输出 `staging_ok=true`、`goal_complete=false` 和生产 blocker 列表 |
 | staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、Launch readiness、tenant policy editor availability、restricted write API、access policy |
 | staging alert rules gate | `python3 scripts/check_prometheus_alert_rules.py --json` | 校验 alert rules 文件存在、必需 alert、指标引用、severity、runbook annotation 和敏感词 |
 | SQLite backup gate | `python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json` | 备份当前 SQLite，运行 integrity check 和 storage readiness 检查，写 manifest |
@@ -84,6 +85,7 @@ python3 -m unittest tests.test_copilot_admin tests.test_copilot_knowledge_site t
 python3 -m compileall memory_engine scripts
 python3 scripts/check_copilot_admin_readiness.py --db-path /tmp/copilot-admin-ui.sqlite --host 0.0.0.0 --admin-token admin-token --viewer-token viewer-token --strict --min-wiki-cards 1 --json
 python3 scripts/check_copilot_admin_sso_gate.py --json
+python3 scripts/check_llm_wiki_enterprise_site_completion.py --json
 python3 scripts/check_openclaw_version.py
 python3 scripts/check_agent_harness.py
 git diff --check
