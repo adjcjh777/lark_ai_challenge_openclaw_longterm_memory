@@ -35,6 +35,12 @@ def main() -> int:
     parser.add_argument("--routing-event-log", required=True, type=Path)
     parser.add_argument("--permission-event-log", required=True, type=Path)
     parser.add_argument("--review-event-log", required=True, type=Path)
+    parser.add_argument(
+        "--feishu-event-diagnostics",
+        type=Path,
+        default=None,
+        help="Optional JSON from check_feishu_event_subscription_diagnostics.py or prepare_feishu_live_evidence_run.py.",
+    )
     parser.add_argument("--output", default="", help="Optional JSON packet output path.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -44,6 +50,7 @@ def main() -> int:
         routing_event_log=args.routing_event_log,
         permission_event_log=args.permission_event_log,
         review_event_log=args.review_event_log,
+        feishu_event_diagnostics=args.feishu_event_diagnostics,
     )
     if args.output:
         output = Path(args.output).expanduser()
@@ -62,6 +69,7 @@ def collect_feishu_live_evidence_packet(
     routing_event_log: Path,
     permission_event_log: Path,
     review_event_log: Path,
+    feishu_event_diagnostics: Path | None = None,
 ) -> dict[str, Any]:
     reports = {
         "passive_group_message": _run_log_gate(passive_event_log, check_passive_message_events),
@@ -72,6 +80,9 @@ def collect_feishu_live_evidence_packet(
         "permission_negative": _run_log_gate(permission_event_log, check_permission_negative_events),
         "review_delivery": _run_log_gate(review_event_log, check_review_delivery_log_events),
     }
+    diagnostics = {}
+    if feishu_event_diagnostics is not None:
+        diagnostics["event_subscription"] = _load_event_diagnostics(feishu_event_diagnostics)
     failed = sorted(name for name, report in reports.items() if not report.get("ok"))
     return {
         "ok": not failed,
@@ -80,6 +91,7 @@ def collect_feishu_live_evidence_packet(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "required_routing_tools": list(REQUIRED_ROUTING_TOOLS),
         "reports": reports,
+        "diagnostics": diagnostics,
         "failed_reports": failed,
         "next_step": ""
         if not failed
@@ -123,6 +135,30 @@ def _run_log_gate(path: Path, gate: Callable[[str], dict[str, Any]]) -> dict[str
         "failures": report.get("failures"),
         "next_step": report.get("next_step"),
     }
+
+
+def _load_event_diagnostics(path: Path) -> dict[str, Any]:
+    resolved = path.expanduser()
+    if not resolved.exists():
+        return {"ok": False, "path": str(resolved), "reason": "event_diagnostics_file_missing"}
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except OSError:
+        return {"ok": False, "path": str(resolved), "reason": "event_diagnostics_file_unreadable"}
+    except json.JSONDecodeError:
+        return {"ok": False, "path": str(resolved), "reason": "event_diagnostics_invalid_json"}
+    if not isinstance(payload, dict):
+        return {"ok": False, "path": str(resolved), "reason": "event_diagnostics_must_be_json_object"}
+    diagnostics = _extract_event_diagnostics(payload)
+    diagnostics["path"] = str(resolved)
+    return diagnostics
+
+
+def _extract_event_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+    event_subscription = checks.get("event_subscription") if isinstance(checks.get("event_subscription"), dict) else {}
+    nested = event_subscription.get("diagnostics") if isinstance(event_subscription.get("diagnostics"), dict) else None
+    return dict(nested if nested is not None else payload)
 
 
 if __name__ == "__main__":

@@ -111,6 +111,8 @@ def build_completion_audit(
 ) -> dict[str, Any]:
     live_packet = _load_live_packet(feishu_live_evidence_packet) if feishu_live_evidence_packet else None
     event_diagnostics = _load_event_diagnostics(feishu_event_diagnostics) if feishu_event_diagnostics else None
+    if event_diagnostics is None and live_packet is not None:
+        event_diagnostics = _packet_event_diagnostics(live_packet)
     items = [
         _passive_group_message_item(
             passive_event_log=passive_event_log,
@@ -628,6 +630,20 @@ def _load_live_packet(path: Path) -> dict[str, Any]:
     if not isinstance(payload.get("reports"), dict):
         return {"ok": False, "path": str(path), "reason": "live_evidence_packet_reports_missing", "reports": {}}
     return payload
+
+
+def _packet_event_diagnostics(packet: dict[str, Any]) -> dict[str, Any] | None:
+    diagnostics = packet.get("diagnostics") if isinstance(packet.get("diagnostics"), dict) else {}
+    event_diagnostics = (
+        diagnostics.get("event_subscription")
+        if isinstance(diagnostics.get("event_subscription"), dict)
+        else None
+    )
+    if event_diagnostics is None:
+        return None
+    result = _extract_event_diagnostics(event_diagnostics)
+    result.setdefault("path", f"{packet.get('path', '')}#diagnostics.event_subscription")
+    return result
 
 
 def _load_event_diagnostics(path: Path) -> dict[str, Any]:

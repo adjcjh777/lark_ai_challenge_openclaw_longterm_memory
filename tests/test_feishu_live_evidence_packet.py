@@ -31,12 +31,17 @@ class FeishuLiveEvidencePacketTest(unittest.TestCase):
                 routing_event_log=routing_log,
                 permission_event_log=permission_log,
                 review_event_log=review_log,
+                feishu_event_diagnostics=_write_json(
+                    root / "feishu-event-diagnostics.json",
+                    _missing_group_scope_diagnostics(),
+                ),
             )
 
         self.assertTrue(packet["ok"], packet)
         self.assertEqual([], packet["failed_reports"])
         self.assertEqual("passive_group_message_seen", packet["reports"]["passive_group_message"]["reason"])
         self.assertEqual("first_class_live_routing_evidence_seen", packet["reports"]["first_class_routing"]["reason"])
+        self.assertFalse(packet["diagnostics"]["event_subscription"]["message_event_schema"]["has_group_message_scope"])
         serialized = json.dumps(packet, ensure_ascii=False)
         self.assertNotIn("决定：非 @ 群消息进入 passive screening。", serialized)
 
@@ -87,6 +92,35 @@ class FeishuLiveEvidencePacketTest(unittest.TestCase):
         self.assertEqual(["review_delivery"], packet["failed_reports"])
         self.assertEqual("evidence_log_missing", packet["reports"]["review_delivery"]["reason"])
 
+    def test_completion_audit_can_use_event_diagnostics_from_packet(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_packet_") as temp_dir:
+            root = Path(temp_dir)
+            packet_path = _write_json(
+                root / "feishu-live-packet.json",
+                {
+                    "ok": False,
+                    "reports": {},
+                    "diagnostics": {"event_subscription": _missing_group_scope_diagnostics()},
+                },
+            )
+
+            report = build_completion_audit(
+                passive_event_log=None,
+                permission_event_log=None,
+                review_event_log=None,
+                routing_event_log=None,
+                feishu_live_evidence_packet=packet_path,
+                cognee_long_run_evidence=None,
+            )
+
+        passive_item = next(entry for entry in report["items"] if entry["name"] == "non_at_group_message_live_delivery")
+        self.assertEqual("message_schema_group_message_scope_missing", passive_item["reason"])
+        self.assertTrue(
+            passive_item["evidence"]["event_subscription_diagnostics"]["remediation"][
+                "requires_external_console_change"
+            ]
+        )
+
 
 def _write_passing_logs(root: Path) -> tuple[Path, Path, Path, Path]:
     passive_log = _write_jsonl(root / "passive.ndjson", [_passive_message()])
@@ -100,6 +134,21 @@ def _write_passing_logs(root: Path) -> tuple[Path, Path, Path, Path]:
         [_routing_result(tool) for tool in ("fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_prefetch")],
     )
     return passive_log, routing_log, permission_log, review_log
+
+
+def _missing_group_scope_diagnostics() -> dict[str, object]:
+    return {
+        "ok": False,
+        "failed_checks": ["message_schema_group_message_scope"],
+        "message_event_schema": {
+            "scopes": ["im:message.p2p_msg:readonly"],
+            "has_group_message_scope": False,
+        },
+        "remediation": {
+            "requires_external_console_change": True,
+            "required_scopes_any_of": ["im:message.group_msg:readonly", "im:message:readonly"],
+        },
+    }
 
 
 if __name__ == "__main__":
