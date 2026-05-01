@@ -236,6 +236,10 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertIn('data-view="home"', html)
             self.assertIn('data-view="wiki"', html)
             self.assertIn('data-view="graph"', html)
+            self.assertIn('id="graph-detail"', html)
+            self.assertIn("data-node-id", html)
+            self.assertIn("data-edge-id", html)
+            self.assertIn("Related edges", html)
 
             request = Request(f"{base_url}/api/memories", method="POST")
             with self.assertRaises(HTTPError) as raised:

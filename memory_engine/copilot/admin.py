@@ -1245,6 +1245,7 @@ def _index_html() -> str:
     }}
     .tabs {{
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin: 0 0 12px;
     }}
@@ -1358,6 +1359,11 @@ def _index_html() -> str:
       gap: 6px 10px;
       font-size: 13px;
       margin-bottom: 12px;
+      min-width: 0;
+    }}
+    .kv * {{
+      min-width: 0;
+      overflow-wrap: anywhere;
     }}
     .kv span:nth-child(odd) {{
       color: var(--muted);
@@ -1383,6 +1389,7 @@ def _index_html() -> str:
     }}
     .section-title {{
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
       justify-content: space-between;
       gap: 14px;
@@ -1453,20 +1460,26 @@ def _index_html() -> str:
         linear-gradient(rgba(15,118,110,.06) 1px, transparent 1px),
         #f8faf7;
       background-size: 34px 34px;
-      position: relative;
-      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+      align-content: start;
+      gap: 14px;
+      padding: 14px;
+      overflow: auto;
     }}
     .graph-node {{
-      position: absolute;
-      width: 136px;
+      width: 100%;
       min-height: 76px;
       border: 1px solid #94aaa1;
       background: rgba(255,253,248,.95);
       border-radius: 8px;
       padding: 9px;
       box-shadow: 0 12px 24px rgba(23, 32, 29, .10);
-      overflow: hidden;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+      text-align: left;
     }}
+    .graph-node.selected {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
     .graph-node strong {{
       display: block;
       font-size: 13px;
@@ -1476,6 +1489,7 @@ def _index_html() -> str:
     .graph-node small {{
       color: var(--muted);
       line-height: 1.25;
+      overflow-wrap: anywhere;
     }}
     .graph-node.feishu_chat {{ border-color: var(--accent); }}
     .graph-node.feishu_user {{ border-color: var(--accent-3); }}
@@ -1494,12 +1508,39 @@ def _index_html() -> str:
       border-bottom: 1px solid var(--line);
       padding: 10px 0;
       font-size: 13px;
+      cursor: pointer;
     }}
+    .edge-item.selected {{ background: #f0eadf; }}
     .edge-type {{
       color: var(--accent);
       font-weight: 700;
       font-size: 12px;
       white-space: nowrap;
+    }}
+    .graph-detail {{
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 7px;
+      padding: 12px;
+      line-height: 1.45;
+    }}
+    .graph-detail h3 {{ margin-bottom: 10px; }}
+    .detail-grid {{
+      display: grid;
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 6px 10px;
+      font-size: 13px;
+    }}
+    .detail-grid span:nth-child(odd) {{ color: var(--muted); }}
+    .detail-json {{
+      margin-top: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      white-space: pre-wrap;
+      max-height: 180px;
+      overflow: auto;
+      font-size: 12px;
     }}
     .footer-mark {{
       margin-top: 18px;
@@ -1525,7 +1566,9 @@ def _index_html() -> str:
       .summary {{ grid-template-columns: repeat(2, minmax(110px, 1fr)); }}
       .home-grid {{ grid-template-columns: 1fr; }}
       .split-view {{ grid-template-columns: 1fr; min-width: 0; }}
-      .graph-board {{ min-height: 620px; }}
+      .graph-board {{ min-height: 620px; grid-template-columns: 1fr; }}
+      .edge-item {{ grid-template-columns: 1fr; gap: 3px; }}
+      .detail-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -1571,7 +1614,8 @@ def _index_html() -> str:
 	    <div class="footer-mark">Created By <a href="https://deerflow.tech" target="_blank" rel="noreferrer">Deerflow</a></div>
 	  </main>
   <script>
-    const state = {{ view: "home" }};
+    const state = {{ view: "home", selectedGraphItem: null }};
+    let currentGraphData = null;
     const $ = (id) => document.getElementById(id);
     const text = (value) => value === null || value === undefined || value === "" ? "-" : String(value);
     const esc = (value) => text(value).replace(/[&<>"']/g, c => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[c]);
@@ -1794,24 +1838,21 @@ def _index_html() -> str:
     }}
 
 	    function renderGraph(data) {{
+	      currentGraphData = data;
 	      const nodes = data.nodes || [];
 	      const edges = data.edges || [];
-	      const width = 760;
-	      const height = 520;
-	      const centerX = width / 2;
-	      const centerY = height / 2;
-	      const radius = Math.max(160, Math.min(230, 70 + nodes.length * 8));
-	      const nodeHtml = nodes.map((node, index) => {{
-	        const angle = nodes.length <= 1 ? 0 : (Math.PI * 2 * index) / nodes.length;
-	        const x = Math.round(centerX + Math.cos(angle) * radius - 68);
-	        const y = Math.round(centerY + Math.sin(angle) * radius - 38);
-	        return `<div class="graph-node ${{esc(node.node_type)}}" style="left:${{x}}px;top:${{y}}px">
+	      if (!state.selectedGraphItem || !graphItemExists(state.selectedGraphItem, nodes, edges)) {{
+	        state.selectedGraphItem = nodes[0] ? {{ type: "node", id: nodes[0].id }} : edges[0] ? {{ type: "edge", id: edges[0].id }} : null;
+	      }}
+	      const nodeHtml = nodes.map(node => {{
+	        const selected = state.selectedGraphItem?.type === "node" && state.selectedGraphItem.id === node.id ? "selected" : "";
+	        return `<div class="graph-node ${{esc(node.node_type)}} ${{selected}}" role="button" tabindex="0" data-node-id="${{esc(node.id)}}">
 	          <strong>${{esc(node.label)}}</strong>
 	          <small class="mono">${{esc(node.node_type)}}<br>${{esc(node.node_key)}}<br>obs=${{esc(node.observation_count)}}</small>
 	        </div>`;
 	      }}).join("");
 	      const edgeRows = edges.map(edge => `
-	        <div class="edge-item">
+	        <div class="edge-item ${{state.selectedGraphItem?.type === "edge" && state.selectedGraphItem.id === edge.id ? "selected" : ""}}" data-edge-id="${{esc(edge.id)}}">
 	          <span>${{esc(edge.source_label || edge.source_node_id)}}</span>
 	          <span class="edge-type">${{esc(edge.edge_type)}} x${{esc(edge.observation_count)}}</span>
 	          <span>${{esc(edge.target_label || edge.target_node_id)}}</span>
@@ -1825,12 +1866,63 @@ def _index_html() -> str:
 	              <span>边类型</span><span class="mono">${{esc(JSON.stringify(data.edges_by_type))}}</span>
 	            </div>
 	            <div class="graph-board">${{nodeHtml || `<div class="empty">暂无 graph node</div>`}}</div>
+	            <div class="graph-detail" id="graph-detail">${{renderGraphDetail(nodes, edges)}}</div>
 	          </section>
 	          <section class="workspace-column">
 	            <div class="section-title"><h2>Relationship Ledger</h2><span>source / edge / target</span></div>
 	            <div class="graph-edge-list">${{edgeRows || `<div class="empty">暂无 graph edge</div>`}}</div>
 	          </section>
 	        </div>`;
+	    }}
+
+	    function graphItemExists(item, nodes, edges) {{
+	      if (item.type === "node") return nodes.some(node => node.id === item.id);
+	      if (item.type === "edge") return edges.some(edge => edge.id === item.id);
+	      return false;
+	    }}
+
+	    function renderGraphDetail(nodes, edges) {{
+	      if (!state.selectedGraphItem) return `<div class="empty">选择节点或关系</div>`;
+	      if (state.selectedGraphItem.type === "edge") {{
+	        const edge = edges.find(item => item.id === state.selectedGraphItem.id);
+	        return edge ? edgeDetail(edge) : `<div class="empty">选择 graph edge</div>`;
+	      }}
+	      const node = nodes.find(item => item.id === state.selectedGraphItem.id);
+	      return node ? nodeDetail(node, edges) : `<div class="empty">选择 graph node</div>`;
+	    }}
+
+	    function nodeDetail(node, edges) {{
+	      const related = edges.filter(edge => edge.source_node_id === node.id || edge.target_node_id === node.id);
+	      return `<h3>${{esc(node.label)}}</h3>
+	        <div class="detail-grid">
+	          <span>Node type</span><strong class="mono">${{esc(node.node_type)}}</strong>
+	          <span>Node key</span><strong class="mono">${{esc(node.node_key || node.id)}}</strong>
+	          <span>Tenant</span><strong class="mono">${{esc(node.tenant_id)}}</strong>
+	          <span>Organization</span><strong class="mono">${{esc(node.organization_id)}}</strong>
+	          <span>Visibility</span><strong>${{esc(node.visibility_policy)}}</strong>
+	          <span>Status</span><strong>${{esc(node.status)}}</strong>
+	          <span>Observations</span><strong>${{esc(node.observation_count)}}</strong>
+	          <span>First seen</span><strong class="mono">${{esc(node.first_seen_at_iso)}}</strong>
+	          <span>Last seen</span><strong class="mono">${{esc(node.last_seen_at_iso)}}</strong>
+	          <span>Related edges</span><strong>${{esc(related.length)}}</strong>
+	        </div>
+	        <pre class="detail-json mono">${{esc(JSON.stringify(node.metadata || {{}}, null, 2))}}</pre>`;
+	    }}
+
+	    function edgeDetail(edge) {{
+	      return `<h3>${{esc(edge.edge_type)}}</h3>
+	        <div class="detail-grid">
+	          <span>Source</span><strong class="mono">${{esc(edge.source_label || edge.source_node_id)}}</strong>
+	          <span>Target</span><strong class="mono">${{esc(edge.target_label || edge.target_node_id)}}</strong>
+	          <span>Source type</span><strong>${{esc(edge.source_type)}}</strong>
+	          <span>Target type</span><strong>${{esc(edge.target_type)}}</strong>
+	          <span>Tenant</span><strong class="mono">${{esc(edge.tenant_id)}}</strong>
+	          <span>Organization</span><strong class="mono">${{esc(edge.organization_id)}}</strong>
+	          <span>Observations</span><strong>${{esc(edge.observation_count)}}</strong>
+	          <span>First seen</span><strong class="mono">${{esc(edge.first_seen_at_iso)}}</strong>
+	          <span>Last seen</span><strong class="mono">${{esc(edge.last_seen_at_iso)}}</strong>
+	        </div>
+	        <pre class="detail-json mono">${{esc(JSON.stringify(edge.metadata || {{}}, null, 2))}}</pre>`;
 	    }}
 
 	    function renderMemories(data) {{
@@ -1886,12 +1978,34 @@ def _index_html() -> str:
           $("panel").insertAdjacentHTML("afterbegin", `<div class="error">${{esc(error.message)}}</div>`);
         }});
       }}
+      if (!(target instanceof Element)) return;
+      const graphNode = target.closest("[data-node-id]");
+      if (graphNode && currentGraphData) {{
+        state.selectedGraphItem = {{ type: "node", id: graphNode.dataset.nodeId }};
+        renderGraph(currentGraphData);
+        return;
+      }}
+      const graphEdge = target.closest("[data-edge-id]");
+      if (graphEdge && currentGraphData) {{
+        state.selectedGraphItem = {{ type: "edge", id: graphEdge.dataset.edgeId }};
+        renderGraph(currentGraphData);
+      }}
+    }});
+    document.addEventListener("keydown", event => {{
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if ((event.key === "Enter" || event.key === " ") && target.dataset?.nodeId && currentGraphData) {{
+        event.preventDefault();
+        state.selectedGraphItem = {{ type: "node", id: target.dataset.nodeId }};
+        renderGraph(currentGraphData);
+      }}
     }});
     document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", event => {{
       event.preventDefault();
       document.querySelectorAll(".tab").forEach(item => item.classList.remove("active"));
       tab.classList.add("active");
       state.view = tab.dataset.view;
+      if (state.view !== "graph") currentGraphData = null;
       loadView();
     }}));
     setInterval(() => {{
