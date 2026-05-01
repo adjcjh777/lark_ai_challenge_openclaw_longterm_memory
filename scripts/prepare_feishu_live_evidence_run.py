@@ -46,6 +46,8 @@ def main() -> int:
     parser.add_argument("--non-reviewer-open-id", default="", help="Optional redacted/local-only second user open_id.")
     parser.add_argument("--reviewer-open-id", default="", help="Optional redacted/local-only reviewer open_id.")
     parser.add_argument("--cognee-long-run-evidence", type=Path, default=None)
+    parser.add_argument("--embedding-sample-log", type=Path, default=None)
+    parser.add_argument("--embedding-sampler-pid-file", type=Path, default=None)
     parser.add_argument("--create-dirs", action="store_true")
     parser.add_argument("--output", default="", help="Optional JSON manifest output path.")
     parser.add_argument("--json", action="store_true")
@@ -58,6 +60,8 @@ def main() -> int:
         non_reviewer_open_id=args.non_reviewer_open_id,
         reviewer_open_id=args.reviewer_open_id,
         cognee_long_run_evidence=args.cognee_long_run_evidence,
+        embedding_sample_log=args.embedding_sample_log,
+        embedding_sampler_pid_file=args.embedding_sampler_pid_file,
         create_dirs=args.create_dirs,
     )
     if args.output:
@@ -79,6 +83,8 @@ def prepare_live_evidence_run(
     non_reviewer_open_id: str = "",
     reviewer_open_id: str = "",
     cognee_long_run_evidence: Path | None = None,
+    embedding_sample_log: Path | None = None,
+    embedding_sampler_pid_file: Path | None = None,
     create_dirs: bool = False,
     process_rows: Iterable[str] | None = None,
     event_subscription_diagnostics: dict[str, Any] | None = None,
@@ -125,13 +131,17 @@ def prepare_live_evidence_run(
         name for name in ("single_listener", "event_subscription") if checks[name]["status"] == "fail"
     ]
     warnings = [name for name, check in checks.items() if check["status"] == "warning"]
+    diagnostic_paths = _diagnostic_paths(evidence_dir)
     packet_output = evidence_dir / "feishu-live-evidence-packet.json"
     completion_output = evidence_dir / "completion-audit.json"
     steps = _manual_steps(
         log_paths=log_paths,
+        diagnostic_paths=diagnostic_paths,
         packet_output=packet_output,
         completion_output=completion_output,
         cognee_long_run_evidence=cognee_long_run_evidence,
+        embedding_sample_log=embedding_sample_log,
+        embedding_sampler_pid_file=embedding_sampler_pid_file,
         controlled_chat_id=controlled_chat_id,
         non_reviewer_open_id=non_reviewer_open_id,
         planned_listener=planned_listener,
@@ -148,6 +158,7 @@ def prepare_live_evidence_run(
         "blocking_failures": blocking_failures,
         "warnings": warnings,
         "log_paths": {name: str(path) for name, path in log_paths.items()},
+        "diagnostic_paths": {name: str(path) for name, path in diagnostic_paths.items()},
         "manual_steps": steps,
         "next_step": "Follow manual_steps and rerun packet/completion audit after real Feishu/OpenClaw logs are captured.",
     }
@@ -182,12 +193,22 @@ def _log_paths(evidence_dir: Path) -> dict[str, Path]:
     }
 
 
+def _diagnostic_paths(evidence_dir: Path) -> dict[str, Path]:
+    return {
+        "feishu_event_diagnostics": evidence_dir / "00-feishu-event-diagnostics.json",
+        "cognee_sampler_status": evidence_dir / "00-cognee-sampler-status.json",
+    }
+
+
 def _manual_steps(
     *,
     log_paths: dict[str, Path],
+    diagnostic_paths: dict[str, Path],
     packet_output: Path,
     completion_output: Path,
     cognee_long_run_evidence: Path | None,
+    embedding_sample_log: Path | None,
+    embedding_sampler_pid_file: Path | None,
     controlled_chat_id: str,
     non_reviewer_open_id: str,
     planned_listener: PlannedListener,
@@ -195,13 +216,20 @@ def _manual_steps(
     chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
     cognee_arg = f" --cognee-long-run-evidence {cognee_long_run_evidence}" if cognee_long_run_evidence else ""
-    return [
+    event_diagnostics_arg = f" --feishu-event-diagnostics {diagnostic_paths['feishu_event_diagnostics']}"
+    sampler_status_arg = (
+        f" --cognee-sampler-status {diagnostic_paths['cognee_sampler_status']}"
+        if embedding_sample_log
+        else ""
+    )
+    steps = [
         {
             "id": "1",
             "title": "Run read-only event subscription diagnostics",
             "instruction": (
                 "python3 scripts/check_feishu_event_subscription_diagnostics.py "
-                f"--planned-listener {planned_listener} --require-group-message-scope --json"
+                f"--planned-listener {planned_listener} --require-group-message-scope --json "
+                f"> {diagnostic_paths['feishu_event_diagnostics']}"
             ),
         },
         {
@@ -258,16 +286,34 @@ def _manual_steps(
                 f"python3 scripts/check_feishu_permission_negative_gate.py --event-log {log_paths['permission_event_log']}{chat_filter}{actor_filter} --json"
             ),
         },
+    ]
+    next_id = 8
+    if embedding_sample_log:
+        pid_arg = f" --pid-file {embedding_sampler_pid_file}" if embedding_sampler_pid_file else ""
+        steps.append(
+            {
+                "id": str(next_id),
+                "title": "Check Cognee embedding sampler status",
+                "instruction": (
+                    "python3 scripts/check_cognee_embedding_sampler_status.py "
+                    f"--embedding-sample-log {embedding_sample_log}{pid_arg} --json "
+                    f"> {diagnostic_paths['cognee_sampler_status']}"
+                ),
+            }
+        )
+        next_id += 1
+    steps.append(
         {
-            "id": "8",
+            "id": str(next_id),
             "title": "Run completion audit",
             "instruction": (
                 "python3 scripts/check_openclaw_feishu_productization_completion.py "
-                f"--feishu-live-evidence-packet {packet_output}{cognee_arg} "
+                f"--feishu-live-evidence-packet {packet_output}{event_diagnostics_arg}{sampler_status_arg}{cognee_arg} "
                 f"--json > {completion_output}"
             ),
         },
-    ]
+    )
+    return steps
 
 
 def _event_subscription_check(

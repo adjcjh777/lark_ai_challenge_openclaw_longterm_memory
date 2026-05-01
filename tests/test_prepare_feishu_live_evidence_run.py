@@ -93,12 +93,36 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("event_subscription", result["blocking_failures"])
         self.assertIn("check_feishu_event_subscription_diagnostics.py", instructions)
         self.assertIn("--require-group-message-scope", instructions)
+        self.assertIn("> ", instructions)
+        self.assertIn("00-feishu-event-diagnostics.json", instructions)
         self.assertIn("collect_feishu_live_evidence_packet.py", instructions)
         self.assertIn("check_openclaw_feishu_productization_completion.py", instructions)
+        self.assertIn("--feishu-event-diagnostics", instructions)
         self.assertIn("Save the listener/OpenClaw log", instructions)
         self.assertNotIn("lark-cli im +messages-send", instructions)
         self.assertNotIn("lark-cli event consume", instructions)
         self.assertIn("controlled_chat_id", result["warnings"])
+
+    def test_preflight_can_include_cognee_sampler_status_in_completion_audit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
+            root = Path(temp_dir)
+            sample_log = root / "embedding-samples.ndjson"
+            pid_file = root / "sampler.pid"
+            result = prepare_live_evidence_run(
+                planned_listener="openclaw-websocket",
+                output_dir=root,
+                process_rows=[],
+                embedding_sample_log=sample_log,
+                embedding_sampler_pid_file=pid_file,
+                event_subscription_diagnostics=_event_diagnostics(),
+            )
+
+        instructions = "\n".join(step["instruction"] for step in result["manual_steps"])
+        self.assertIn("check_cognee_embedding_sampler_status.py", instructions)
+        self.assertIn(f"--embedding-sample-log {sample_log}", instructions)
+        self.assertIn(f"--pid-file {pid_file}", instructions)
+        self.assertIn("00-cognee-sampler-status.json", instructions)
+        self.assertIn("--cognee-sampler-status", instructions)
 
 
 if __name__ == "__main__":
