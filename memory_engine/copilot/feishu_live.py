@@ -30,6 +30,14 @@ from memory_engine.repository import MemoryRepository
 
 from .admin import DEFAULT_ADMIN_HOST, DEFAULT_ADMIN_PORT, start_embedded_admin
 from .graph_context import register_feishu_chat_node, register_feishu_message_context
+from .group_policies import (
+    disable_group_memory,
+    enable_group_memory,
+    ensure_group_policy,
+    get_group_policy,
+    group_policy_allows_passive_memory,
+    record_group_policy_denied,
+)
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID
 from .service import CopilotService
 from .tools import handle_tool_request
@@ -157,8 +165,18 @@ def handle_copilot_message_event(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     scope = _scope(config)
-    chat_allowed = _chat_allowed(event.chat_id)
     tenant_id, organization_id, visibility = _feishu_identity()
+    with conn:
+        group_policy = ensure_group_policy(
+            conn,
+            chat_id=event.chat_id,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            scope=scope,
+            visibility_policy=visibility,
+            actor_id=event.sender_id or "unknown_feishu_actor",
+        )
+    chat_allowed = _chat_allowed(event.chat_id, group_policy=group_policy)
     with conn:
         graph_node = register_feishu_chat_node(
             conn,
@@ -172,6 +190,17 @@ def handle_copilot_message_event(
         ).to_dict()
 
     if not chat_allowed:
+        onboarding_result = _handle_group_policy_invocation(
+            conn,
+            event,
+            publisher,
+            config,
+            scope=scope,
+            group_policy=group_policy,
+            graph_node=graph_node,
+        )
+        if onboarding_result is not None:
+            return onboarding_result
         return {
             "ok": True,
             "ignored": True,
@@ -255,7 +284,13 @@ def handle_copilot_message_event(
         )
 
     if invocation.tool_name == "copilot.group_settings":
-        tool_result = _group_settings_result(scope=scope)
+        tool_result = _group_settings_result(
+            conn,
+            event,
+            scope=scope,
+            group_policy=group_policy,
+            chat_allowed=chat_allowed,
+        )
         reply = _format_group_settings(tool_result)
         publish_result = _publish(
             publisher,
@@ -266,6 +301,19 @@ def handle_copilot_message_event(
             tool_result=tool_result,
         )
         return _event_result(event, scope, invocation, tool_result, publish_result, graph_node, message_graph)
+
+    if invocation.tool_name in {"copilot.group_enable_memory", "copilot.group_disable_memory"}:
+        return _handle_group_policy_command(
+            conn,
+            event,
+            publisher,
+            config,
+            invocation=invocation,
+            scope=scope,
+            group_policy=group_policy,
+            graph_node=graph_node,
+            message_graph=message_graph,
+        )
 
     repo = MemoryRepository(conn)
     if invocation.tool_name == "memory.create_candidate" and repo.has_source_event(SOURCE_TYPE, event.message_id):
@@ -339,6 +387,15 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return _review_inbox_invocation(event, scope, argument, reason="explicit_review_inbox")
     if command_name in {"settings", "group_settings"}:
         return _group_settings_invocation(event, scope, reason="explicit_group_settings")
+    if command_name in {"enable_memory", "memory_on", "enable_group_memory"}:
+        return _group_policy_invocation(event, scope, "copilot.group_enable_memory", reason="explicit_group_memory_enable")
+    if command_name in {"disable_memory", "memory_off", "disable_group_memory"}:
+        return _group_policy_invocation(
+            event,
+            scope,
+            "copilot.group_disable_memory",
+            reason="explicit_group_memory_disable",
+        )
     if command_name in {"versions", "explain"}:
         return _versions_invocation(event, scope, argument, reason="explicit_versions")
     if command_name == "prefetch":
@@ -392,6 +449,8 @@ def format_tool_result(invocation: CopilotFeishuInvocation, result: dict[str, An
         return _format_review_inbox(result)
     if invocation.tool_name == "copilot.group_settings":
         return _format_group_settings(result)
+    if invocation.tool_name in {"copilot.group_enable_memory", "copilot.group_disable_memory"}:
+        return _format_group_policy_result(result)
     if invocation.tool_name == "memory.explain_versions":
         return _format_versions(result)
     if invocation.tool_name == "memory.prefetch":
@@ -574,6 +633,21 @@ def _group_settings_invocation(event: FeishuMessageEvent, scope: str, *, reason:
     return CopilotFeishuInvocation(
         "copilot.group_settings",
         {"scope": scope, "mode": "read_only", "source_chat_id": event.chat_id},
+        event.text,
+        reason,
+    )
+
+
+def _group_policy_invocation(
+    event: FeishuMessageEvent,
+    scope: str,
+    tool_name: str,
+    *,
+    reason: str,
+) -> CopilotFeishuInvocation:
+    return CopilotFeishuInvocation(
+        tool_name,
+        {"scope": scope, "source_chat_id": event.chat_id},
         event.text,
         reason,
     )
@@ -1028,6 +1102,9 @@ def _extend_permission_source_context(context: dict[str, Any], **values: str) ->
 def _roles_for_sender(sender_id: str) -> list[str]:
     base = _csv_env("COPILOT_FEISHU_DEFAULT_ROLES") or ["member"]
     reviewers = _csv_env("COPILOT_FEISHU_REVIEWER_OPEN_IDS")
+    admins = _csv_env("COPILOT_FEISHU_GROUP_POLICY_ADMIN_OPEN_IDS")
+    if "*" in admins or (sender_id and sender_id in admins):
+        return sorted(set(base + ["admin", "reviewer"]))
     if "*" in reviewers or (sender_id and sender_id in reviewers):
         return sorted(set(base + ["reviewer"]))
     return base
@@ -1329,7 +1406,9 @@ def _format_help() -> str:
             "拒绝候选：@Bot /reject <candidate_id>",
             "审核收件箱：@Bot /review，也可以 /review conflicts 或 /review high_risk",
             "撤销审核：@Bot /undo <candidate_id>",
-            "群级设置：@Bot /settings 或 /group_settings（只读，不修改配置）",
+            "群级设置：@Bot /settings 或 /group_settings",
+            "启用当前群静默筛选：@Bot /enable_memory（需要 reviewer/admin 环境授权）",
+            "关闭当前群静默筛选：@Bot /disable_memory（需要 reviewer/admin 环境授权）",
             "版本解释：@Bot /versions <memory_id>",
             "任务预取：@Bot /prefetch 生成今天上线 checklist",
             "健康检查：@Bot /health",
@@ -1341,21 +1420,152 @@ def _format_help() -> str:
     )
 
 
-def _group_settings_result(*, scope: str) -> dict[str, Any]:
-    _tenant_id, _organization_id, visibility = _feishu_identity()
+def _handle_group_policy_invocation(
+    conn,
+    event: FeishuMessageEvent,
+    publisher,
+    config: FeishuConfig,
+    *,
+    scope: str,
+    group_policy: dict[str, Any] | None,
+    graph_node: dict[str, Any],
+) -> dict[str, Any] | None:
+    if event.ignore_reason is not None or _interaction_mode(event) != "active_interaction":
+        return None
+    invocation = invocation_from_event(event, scope=scope)
+    if invocation.tool_name == "copilot.group_settings":
+        tool_result = _group_settings_result(
+            conn,
+            event,
+            scope=scope,
+            group_policy=group_policy,
+            chat_allowed=False,
+        )
+        reply = _format_group_settings(tool_result)
+        publish_result = _publish(publisher, event, reply, config, invocation=invocation, tool_result=tool_result)
+        return _event_result(event, scope, invocation, tool_result, publish_result, graph_node, None)
+    if invocation.tool_name in {"copilot.group_enable_memory", "copilot.group_disable_memory"}:
+        return _handle_group_policy_command(
+            conn,
+            event,
+            publisher,
+            config,
+            invocation=invocation,
+            scope=scope,
+            group_policy=group_policy,
+            graph_node=graph_node,
+            message_graph=None,
+        )
+    return None
+
+
+def _handle_group_policy_command(
+    conn,
+    event: FeishuMessageEvent,
+    publisher,
+    config: FeishuConfig,
+    *,
+    invocation: CopilotFeishuInvocation,
+    scope: str,
+    group_policy: dict[str, Any] | None,
+    graph_node: dict[str, Any] | None,
+    message_graph: dict[str, Any] | None,
+) -> dict[str, Any]:
+    tenant_id, organization_id, visibility = _feishu_identity()
+    actor_roles = _roles_for_sender(event.sender_id)
+    if not _can_manage_group_policy(event.sender_id, actor_roles, group_policy):
+        with conn:
+            record_group_policy_denied(
+                conn,
+                chat_id=event.chat_id,
+                tenant_id=tenant_id,
+                organization_id=organization_id,
+                scope=scope,
+                actor_id=event.sender_id or "unknown_feishu_actor",
+                actor_roles=actor_roles,
+                action=invocation.tool_name,
+            )
+        tool_result = {
+            "ok": False,
+            "tool": invocation.tool_name,
+            "status": "permission_denied",
+            "error": {"code": "permission_denied", "reason_code": "reviewer_or_admin_required"},
+            "group_policy": _safe_group_policy_payload(group_policy),
+            "production_boundary": "受控 live sandbox / pre-production；不是生产长期运行。",
+        }
+    else:
+        with conn:
+            if invocation.tool_name == "copilot.group_enable_memory":
+                updated_policy = enable_group_memory(
+                    conn,
+                    chat_id=event.chat_id,
+                    tenant_id=tenant_id,
+                    organization_id=organization_id,
+                    scope=scope,
+                    visibility_policy=visibility,
+                    actor_id=event.sender_id or "unknown_feishu_actor",
+                    actor_roles=actor_roles,
+                    reviewer_open_ids=_csv_env("COPILOT_FEISHU_REVIEWER_OPEN_IDS"),
+                )
+                status = "enabled"
+            else:
+                updated_policy = disable_group_memory(
+                    conn,
+                    chat_id=event.chat_id,
+                    tenant_id=tenant_id,
+                    organization_id=organization_id,
+                    scope=scope,
+                    visibility_policy=visibility,
+                    actor_id=event.sender_id or "unknown_feishu_actor",
+                    actor_roles=actor_roles,
+                )
+                status = "disabled"
+        tool_result = {
+            "ok": True,
+            "tool": invocation.tool_name,
+            "status": status,
+            "mode": "write",
+            "group_policy": _safe_group_policy_payload(updated_policy),
+            "production_boundary": "受控 live sandbox / pre-production；不是生产长期运行。",
+        }
+    reply = _format_group_policy_result(tool_result)
+    publish_result = _publish(publisher, event, reply, config, invocation=invocation, tool_result=tool_result)
+    return _event_result(event, scope, invocation, tool_result, publish_result, graph_node, message_graph)
+
+
+def _group_settings_result(
+    conn,
+    event: FeishuMessageEvent,
+    *,
+    scope: str,
+    group_policy: dict[str, Any] | None,
+    chat_allowed: bool,
+) -> dict[str, Any]:
+    tenant_id, organization_id, visibility = _feishu_identity()
+    if group_policy is None:
+        group_policy = get_group_policy(conn, chat_id=event.chat_id, tenant_id=tenant_id, organization_id=organization_id)
     allowlist_summary = _env_list_summary("COPILOT_FEISHU_ALLOWED_CHAT_IDS")
+    safe_policy = _safe_group_policy_payload(group_policy)
     return {
         "ok": True,
         "tool": "copilot.group_settings",
         "mode": "read_only",
         "scope": scope,
         "visibility_policy": visibility,
+        "chat_policy": safe_policy,
+        "chat_status": safe_policy.get("status") or "pending_onboarding",
+        "passive_memory_enabled": bool(safe_policy.get("passive_memory_enabled")),
+        "chat_allowed": chat_allowed,
         "allowlist_summary": allowlist_summary,
-        "silent_screening": _group_silent_screening_status(allowlist_summary),
+        "silent_screening": _group_silent_screening_status(allowlist_summary, group_policy),
         "review_delivery": "DM/private 定向给相关 owner/reviewer；本卡不修改实际投递路由。",
         "auto_confirm_policy": (
             "低风险、低重要性、无冲突可自动确认；"
             "项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核。"
+        ),
+        "onboarding_policy": (
+            "新群默认 pending_onboarding，只登记群节点和群策略；"
+            "执行 /enable_memory 后才对非 @ 消息做静默候选筛选。"
         ),
         "production_boundary": "受控 live sandbox / pre-production；不是生产长期运行。",
     }
@@ -1365,18 +1575,53 @@ def _format_group_settings(result: dict[str, Any]) -> str:
     return _reply(
         "群级记忆设置（只读）。",
         [
+            f"当前群状态：{result.get('chat_status')}；passive_memory_enabled={str(bool(result.get('passive_memory_enabled'))).lower()}",
             f"allowlist 群静默筛选：{result.get('silent_screening')}；allowlist={result.get('allowlist_summary')}",
             f"审核投递方式：{result.get('review_delivery')}",
             f"auto-confirm policy：{result.get('auto_confirm_policy')}",
+            f"onboarding policy：{result.get('onboarding_policy')}",
             f"scope：{result.get('scope')}",
             f"visibility：{result.get('visibility_policy')}",
             f"运行边界：{result.get('production_boundary')}",
-            "写入动作：无。本入口不修改设置、不写入配置。",
+            "写入动作：/enable_memory 启用当前群静默筛选；/disable_memory 关闭。写入需要 reviewer/admin 授权。",
         ],
     )
 
 
-def _group_silent_screening_status(allowlist_summary: str) -> str:
+def _format_group_policy_result(result: dict[str, Any]) -> str:
+    if not result.get("ok"):
+        return _reply(
+            "群级记忆设置未修改。",
+            [
+                "状态：permission_denied",
+                "原因：需要 reviewer/admin 授权才能修改群级记忆策略。",
+                "当前边界：不会对这个群做静默候选筛选，也不会写入消息内容。",
+                f"运行边界：{result.get('production_boundary')}",
+            ],
+        )
+    policy = result.get("group_policy") if isinstance(result.get("group_policy"), dict) else {}
+    if result.get("status") == "enabled":
+        title = "当前群已启用静默候选筛选。"
+        next_step = "后续非 @ 群消息只有命中企业记忆信号时才进入 candidate/review policy。"
+    else:
+        title = "当前群已关闭静默候选筛选。"
+        next_step = "后续非 @ 群消息不会进入 candidate；@Bot 主动查询和设置命令仍可用。"
+    return _reply(
+        title,
+        [
+            f"群策略状态：{policy.get('status')}",
+            f"passive_memory_enabled：{str(bool(policy.get('passive_memory_enabled'))).lower()}",
+            f"scope：{policy.get('scope')}",
+            f"visibility：{policy.get('visibility_policy')}",
+            f"下一步：{next_step}",
+            f"运行边界：{result.get('production_boundary')}",
+        ],
+    )
+
+
+def _group_silent_screening_status(allowlist_summary: str, group_policy: dict[str, Any] | None = None) -> str:
+    if group_policy_allows_passive_memory(group_policy):
+        return "enabled_for_current_group_policy"
     if allowlist_summary.startswith("configured"):
         return "enabled_for_allowlist_groups"
     if allowlist_summary == "wildcard (*)":
@@ -1538,6 +1783,12 @@ def _message_disposition(invocation: CopilotFeishuInvocation, tool_result: dict[
             "candidate_path": "read_only",
             "reason_code": invocation.reason,
         }
+    if invocation.tool_name in {"copilot.group_enable_memory", "copilot.group_disable_memory"}:
+        return {
+            "memory_path": "group_policy_write",
+            "candidate_path": str(tool_result.get("status") or "unknown"),
+            "reason_code": invocation.reason,
+        }
     return {
         "memory_path": invocation.tool_name,
         "candidate_path": "not_applicable",
@@ -1558,9 +1809,54 @@ def _silent_publish_result(event: FeishuMessageEvent) -> dict[str, Any]:
     }
 
 
-def _chat_allowed(chat_id: str) -> bool:
+def _safe_group_policy_payload(policy: dict[str, Any] | None) -> dict[str, Any]:
+    if not policy:
+        return {}
+    return {
+        "id": policy.get("id"),
+        "tenant_id": policy.get("tenant_id"),
+        "organization_id": policy.get("organization_id"),
+        "chat_id_redacted": _redacted_id(str(policy.get("chat_id") or "")),
+        "scope": policy.get("scope"),
+        "visibility_policy": policy.get("visibility_policy"),
+        "status": policy.get("status"),
+        "passive_memory_enabled": bool(policy.get("passive_memory_enabled")),
+        "reviewer_count": len(policy.get("reviewer_open_ids") or []),
+        "owner_count": len(policy.get("owner_open_ids") or []),
+        "created_at": policy.get("created_at"),
+        "updated_at": policy.get("updated_at"),
+        "last_enabled_at": policy.get("last_enabled_at"),
+        "disabled_at": policy.get("disabled_at"),
+    }
+
+
+def _can_manage_group_policy(
+    sender_id: str,
+    actor_roles: list[str],
+    group_policy: dict[str, Any] | None,
+) -> bool:
+    if "admin" in actor_roles or "reviewer" in actor_roles:
+        return True
+    admins = _csv_env("COPILOT_FEISHU_GROUP_POLICY_ADMIN_OPEN_IDS")
+    if "*" in admins or (sender_id and sender_id in admins):
+        return True
+    owners = group_policy.get("owner_open_ids") if isinstance(group_policy, dict) else []
+    return bool(sender_id and sender_id in owners and group_policy_allows_passive_memory(group_policy))
+
+
+def _redacted_id(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _chat_allowed(chat_id: str, *, group_policy: dict[str, Any] | None = None) -> bool:
+    if group_policy_allows_passive_memory(group_policy):
+        return True
     allowed = _csv_env("COPILOT_FEISHU_ALLOWED_CHAT_IDS")
-    return not allowed or chat_id in allowed
+    return not allowed or "*" in allowed or chat_id in allowed
 
 
 def _feishu_identity() -> tuple[str, str, str]:

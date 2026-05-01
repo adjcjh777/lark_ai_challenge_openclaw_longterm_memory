@@ -122,6 +122,34 @@ class CopilotAdminTest(unittest.TestCase):
                     2,
                 ),
             )
+            self.conn.execute(
+                """
+                INSERT INTO feishu_group_policies (
+                  id, tenant_id, organization_id, chat_id, scope, visibility_policy,
+                  status, passive_memory_enabled, reviewer_open_ids, owner_open_ids,
+                  notes, created_by, updated_by, created_at, updated_at, last_enabled_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "fgp_admin_chat",
+                    "tenant:demo",
+                    "org:demo",
+                    "oc_admin_group_sensitive",
+                    "project:admin_demo",
+                    "team",
+                    "active",
+                    1,
+                    json.dumps(["ou_admin"]),
+                    json.dumps(["ou_owner"]),
+                    "Admin test group policy",
+                    "ou_admin",
+                    "ou_admin",
+                    event_time,
+                    event_time,
+                    event_time,
+                ),
+            )
             self.repo.record_audit_event(
                 event_type="candidate_created",
                 action="memory.create_candidate",
@@ -169,6 +197,7 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual(3, summary["memory_total"])
         self.assertEqual({"active": 2, "candidate": 1}, summary["memory_by_status"])
         self.assertEqual(1, summary["audit_total"])
+        self.assertEqual(1, summary["feishu_group_policy_total"])
 
         live = service.live_overview()
         self.assertIn("msg_admin", {item["source_id"] for item in live["recent_raw_events"]})
@@ -179,6 +208,13 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual(1, live["knowledge_graph"]["edge_total"])
         self.assertIn("wiki", live)
         self.assertFalse(live["wiki"]["generation_policy"]["raw_events_included"])
+        self.assertEqual(1, live["feishu_group_policies"]["total"])
+        self.assertEqual("oc_a...tive", live["feishu_group_policies"]["items"][0]["chat_id_redacted"])
+
+        group_policies = service.feishu_group_policies(status="active")
+        self.assertEqual(1, group_policies["total"])
+        self.assertTrue(group_policies["items"][0]["passive_memory_enabled"])
+        self.assertNotIn("chat_id", group_policies["items"][0])
 
         candidates = service.list_memories(status="candidate", query="review", limit=10)
         self.assertEqual(1, candidates["total"])
@@ -308,6 +344,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(metrics_type.startswith("text/plain"))
             self.assertIn("copilot_admin_memory_total 3", metrics)
             self.assertIn("copilot_admin_launch_production_blocked 1", metrics)
+            self.assertIn("copilot_admin_feishu_group_policy_count 1", metrics)
 
             with urlopen(f"{base_url}/api/health", timeout=5) as response:
                 health = json.loads(response.read().decode("utf-8"))
@@ -315,6 +352,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertFalse(health["data"]["read_only"])
             self.assertTrue(health["data"]["read_only_knowledge_surfaces"])
             self.assertTrue(health["data"]["tenant_policy_write_api"])
+            self.assertTrue(health["data"]["feishu_group_policy_table_available"])
             self.assertTrue(health["data"]["wiki_ready"])
             self.assertEqual("pass", health["data"]["graph_quality_status"])
 
@@ -322,6 +360,7 @@ class CopilotAdminTest(unittest.TestCase):
                 live_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(live_payload["ok"])
             self.assertIn("msg_admin", {item["source_id"] for item in live_payload["data"]["recent_raw_events"]})
+            self.assertEqual(1, live_payload["data"]["feishu_group_policies"]["total"])
 
             with urlopen(f"{base_url}/api/launch-readiness", timeout=5) as response:
                 launch_payload = json.loads(response.read().decode("utf-8"))
@@ -407,6 +446,12 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(policies_payload["ok"])
             self.assertTrue(policies_payload["data"]["available"])
 
+            with urlopen(f"{base_url}/api/group-policies?status=active", timeout=5) as response:
+                group_policies_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(group_policies_payload["ok"])
+            self.assertEqual(1, group_policies_payload["data"]["total"])
+            self.assertNotIn("chat_id", group_policies_payload["data"]["items"][0])
+
             with urlopen(base_url, timeout=5) as response:
                 html = response.read().decode("utf-8")
             self.assertLess(html.index("<th>Updated</th>"), html.index("<th>Status</th>"))
@@ -414,6 +459,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertIn('data-view="wiki"', html)
             self.assertIn('data-view="graph"', html)
             self.assertIn('data-view="tenants"', html)
+            self.assertIn('data-view="groups"', html)
             self.assertIn('data-view="launch"', html)
             self.assertIn('data-design-system="copilot-admin-ui/v1"', html)
             self.assertIn("--radius-panel", html)

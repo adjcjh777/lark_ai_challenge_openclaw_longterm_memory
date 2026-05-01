@@ -322,6 +322,138 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("chat not in COPILOT_FEISHU_ALLOWED_CHAT_IDS", result["reason"])
         self.assertNotIn("publish", result)
 
+    def test_non_allowlist_group_settings_returns_onboarding_status(self) -> None:
+        new_chat_id = "oc_new_onboarding_group"
+        event = message_event_from_payload(payload("om_live_group_onboarding_settings", "/settings", chat_id=new_chat_id))
+        self.assertIsNotNone(event)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
+            result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_settings", result["tool"])
+        self.assertEqual("pending_onboarding", result["tool_result"]["chat_status"])
+        self.assertFalse(result["tool_result"]["passive_memory_enabled"])
+        self.assertIn("新群默认 pending_onboarding", self.reply_text(result))
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM raw_events").fetchone()["count"]
+        )
+        self.assertEqual(
+            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"]
+        )
+
+    def test_reviewer_can_enable_non_allowlist_group_for_passive_candidates(self) -> None:
+        new_chat_id = "oc_productized_any_group"
+        enable_event = message_event_from_payload(
+            payload("om_live_enable_any_group", "/enable_memory", chat_id=new_chat_id)
+        )
+        self.assertIsNotNone(enable_event)
+
+        with patch.dict(
+            os.environ,
+            {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID, "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "ou_live_user"},
+            clear=False,
+        ):
+            enabled = handle_copilot_message_event(self.conn, enable_event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(enabled["ok"])
+        self.assertEqual("copilot.group_enable_memory", enabled["tool"])
+        self.assertEqual("enabled", enabled["tool_result"]["status"])
+        self.assertTrue(enabled["tool_result"]["group_policy"]["passive_memory_enabled"])
+
+        passive_event = message_event_from_payload(
+            payload(
+                "om_live_any_group_passive",
+                "上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。",
+                chat_id=new_chat_id,
+                mention_bot=False,
+            )
+        )
+        self.assertIsNotNone(passive_event)
+        with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
+            result = handle_copilot_message_event(self.conn, passive_event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("passive_candidate_probe", result["routing_reason"])
+        self.assertEqual("candidate", result["tool_result"]["candidate"]["status"])
+        audit = self.conn.execute(
+            "SELECT event_type, permission_decision FROM memory_audit_events WHERE event_type = 'feishu_group_policy_enabled'"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("allow", audit["permission_decision"])
+
+    def test_member_cannot_enable_non_allowlist_group(self) -> None:
+        new_chat_id = "oc_denied_any_group"
+        event = message_event_from_payload(payload("om_live_enable_denied", "/enable_memory", chat_id=new_chat_id))
+        self.assertIsNotNone(event)
+
+        with patch.dict(
+            os.environ,
+            {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID, "COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""},
+            clear=False,
+        ):
+            denied = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertFalse(denied["ok"])
+        self.assertEqual("copilot.group_enable_memory", denied["tool"])
+        self.assertEqual("permission_denied", denied["tool_result"]["status"])
+        self.assertIn("需要 reviewer/admin 授权", self.reply_text(denied))
+        policy = self.conn.execute(
+            "SELECT status, passive_memory_enabled FROM feishu_group_policies WHERE chat_id = ?",
+            (new_chat_id,),
+        ).fetchone()
+        self.assertIsNotNone(policy)
+        self.assertEqual("pending_onboarding", policy["status"])
+        self.assertEqual(0, policy["passive_memory_enabled"])
+        audit = self.conn.execute(
+            "SELECT permission_decision, reason_code FROM memory_audit_events WHERE event_type = 'feishu_group_policy_denied'"
+        ).fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual("deny", audit["permission_decision"])
+
+    def test_disable_group_policy_stops_passive_candidates_outside_allowlist(self) -> None:
+        new_chat_id = "oc_disable_any_group"
+        with patch.dict(
+            os.environ,
+            {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID, "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "ou_live_user"},
+            clear=False,
+        ):
+            handle_copilot_message_event(
+                self.conn,
+                message_event_from_payload(payload("om_live_enable_before_disable", "/enable_memory", chat_id=new_chat_id)),
+                DryRunPublisher(),
+                self.config,
+                dry_run=True,
+            )
+            disabled = handle_copilot_message_event(
+                self.conn,
+                message_event_from_payload(payload("om_live_disable_any_group", "/disable_memory", chat_id=new_chat_id)),
+                DryRunPublisher(),
+                self.config,
+                dry_run=True,
+            )
+
+        self.assertTrue(disabled["ok"])
+        self.assertEqual("copilot.group_disable_memory", disabled["tool"])
+        self.assertEqual("disabled", disabled["tool_result"]["group_policy"]["status"])
+
+        passive_event = message_event_from_payload(
+            payload(
+                "om_live_passive_after_disable",
+                "上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。",
+                chat_id=new_chat_id,
+                mention_bot=False,
+            )
+        )
+        self.assertIsNotNone(passive_event)
+        with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
+            ignored = handle_copilot_message_event(self.conn, passive_event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(ignored["ignored"])
+        self.assertEqual("chat not in COPILOT_FEISHU_ALLOWED_CHAT_IDS", ignored["reason"])
+        self.assertNotIn("publish", ignored)
+
     def test_new_disallowed_group_is_discovered_as_graph_node_without_ingesting_content(self) -> None:
         new_chat_id = "oc_new_product_group"
         event = message_event_from_payload(

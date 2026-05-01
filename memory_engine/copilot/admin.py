@@ -142,6 +142,8 @@ class AdminQueryService:
             "audit_total": self._count("memory_audit_events"),
             "audit_by_event_type": self._count_by("memory_audit_events", "event_type"),
             "audit_by_permission_decision": self._count_by("memory_audit_events", "permission_decision"),
+            "feishu_group_policy_total": self._count("feishu_group_policies"),
+            "feishu_group_policy_by_status": self._count_by("feishu_group_policies", "status"),
         }
 
     def live_overview(self) -> dict[str, Any]:
@@ -149,6 +151,7 @@ class AdminQueryService:
         recent_audit = self.list_audit(limit=15)["items"]
         graph = self._knowledge_graph_overview(limit=12)
         wiki = self.wiki_overview(limit=8)
+        group_policies = self.feishu_group_policies(limit=12)
         return {
             "bot_activity": {
                 "latest_raw_event_at": recent_raw_events[0]["event_time_iso"] if recent_raw_events else None,
@@ -160,6 +163,7 @@ class AdminQueryService:
             "knowledge_graph": graph,
             "wiki": wiki,
             "knowledge_cards": wiki["cards"],
+            "feishu_group_policies": group_policies,
         }
 
     def launch_readiness(self) -> dict[str, Any]:
@@ -272,6 +276,7 @@ class AdminQueryService:
         graph = self.graph_workspace(limit=10)
         tenants = self.tenant_overview(limit=80)
         policies = self.tenant_policies(limit=1)
+        group_policies = self.feishu_group_policies(limit=1)
         launch = self.launch_readiness()
         lines = [
             "# HELP copilot_admin_memory_total Total memories in the local ledger.",
@@ -292,6 +297,9 @@ class AdminQueryService:
             "# HELP copilot_admin_tenant_policy_count Tenant policies configured in the local admin backend.",
             "# TYPE copilot_admin_tenant_policy_count gauge",
             f"copilot_admin_tenant_policy_count {int(policies.get('total') or 0)}",
+            "# HELP copilot_admin_feishu_group_policy_count Feishu group policies configured in the local admin backend.",
+            "# TYPE copilot_admin_feishu_group_policy_count gauge",
+            f"copilot_admin_feishu_group_policy_count {int(group_policies.get('total') or 0)}",
             "# HELP copilot_admin_launch_staging_ok Staging launch readiness rollup, 1 when pass.",
             "# TYPE copilot_admin_launch_staging_ok gauge",
             f"copilot_admin_launch_staging_ok {1 if launch.get('staging_status') == 'pass' else 0}",
@@ -336,6 +344,8 @@ class AdminQueryService:
         ]
         if _table_exists(self.conn, "tenant_admin_policies"):
             tenant_sources.append("SELECT tenant_id, organization_id FROM tenant_admin_policies")
+        if _table_exists(self.conn, "feishu_group_policies"):
+            tenant_sources.append("SELECT tenant_id, organization_id FROM feishu_group_policies")
         rows = self.conn.execute(
             f"""
             SELECT tenant_id, COALESCE(organization_id, '-') AS organization_id
@@ -409,6 +419,53 @@ class AdminQueryService:
             "total": total,
             "limit": limit,
             "items": [_tenant_policy_row_to_dict(row) for row in rows],
+        }
+
+    def feishu_group_policies(
+        self,
+        *,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
+        status: str | None = None,
+        limit: int = 80,
+    ) -> dict[str, Any]:
+        if not _table_exists(self.conn, "feishu_group_policies"):
+            return {"available": False, "items": [], "total": 0, "limit": _clamp_limit(limit)}
+        limit = _clamp_limit(limit)
+        conditions: list[str] = []
+        params: list[Any] = []
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
+        if organization_id:
+            conditions.append("organization_id = ?")
+            params.append(organization_id)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        total = int(self.conn.execute(f"SELECT COUNT(*) FROM feishu_group_policies {where}", params).fetchone()[0])
+        rows = self.conn.execute(
+            f"""
+            SELECT id, tenant_id, organization_id, chat_id, scope, visibility_policy,
+                   status, passive_memory_enabled, reviewer_open_ids, owner_open_ids,
+                   notes, created_by, updated_by, created_at, updated_at, last_enabled_at, disabled_at
+            FROM feishu_group_policies
+            {where}
+            ORDER BY updated_at DESC, tenant_id ASC, organization_id ASC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+        return {
+            "available": True,
+            "total": total,
+            "limit": limit,
+            "items": [_group_policy_row_to_dict(row) for row in rows],
+            "boundary": (
+                "Local/pre-production group policy inventory. pending_onboarding groups are discovered only; "
+                "passive memory starts only when status=active and passive_memory_enabled=true."
+            ),
         }
 
     def upsert_tenant_policy(self, payload: dict[str, Any], *, actor_id: str) -> dict[str, Any]:
@@ -1453,6 +1510,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/tenant-policies":
                 self._send_json(self._api_tenant_policies(parsed.query), send_body=send_body)
                 return
+            if parsed.path == "/api/group-policies":
+                self._send_json(self._api_group_policies(parsed.query), send_body=send_body)
+                return
             if parsed.path == "/api/memories":
                 self._send_json(self._api_memories(parsed.query), send_body=send_body)
                 return
@@ -1572,6 +1632,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             graph = service.graph_workspace(limit=10)
             graph_quality = service.graph_quality()
             policies = service.tenant_policies(limit=1)
+            group_policies = service.feishu_group_policies(limit=1)
             launch = service.launch_readiness()
             return {
                 "ok": True,
@@ -1599,6 +1660,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                     "read_only_knowledge_surfaces": True,
                     "tenant_policy_write_api": True,
                     "tenant_policy_table_available": bool(policies.get("available")),
+                    "feishu_group_policy_table_available": bool(group_policies.get("available")),
                     "wiki_ready": bool(wiki.get("generation_policy"))
                     and wiki["generation_policy"].get("source") == "active_curated_memory_only",
                     "graph_ready": int(graph.get("workspace_node_count") or 0) >= 0,
@@ -1694,6 +1756,17 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             data = AdminQueryService(conn).tenant_policies(
                 tenant_id=_param(params, "tenant_id"),
                 organization_id=_param(params, "organization_id"),
+                limit=_int_param(params, "limit", 80),
+            )
+        return {"ok": True, "data": data}
+
+    def _api_group_policies(self, query_string: str) -> dict[str, Any]:
+        params = parse_qs(query_string)
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).feishu_group_policies(
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
+                status=_param(params, "status"),
                 limit=_int_param(params, "limit", 80),
             )
         return {"ok": True, "data": data}
@@ -2074,6 +2147,20 @@ def _tenant_policy_row_to_dict(row: sqlite3.Row | None) -> dict[str, Any]:
     return payload
 
 
+def _group_policy_row_to_dict(row: sqlite3.Row | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    payload = dict(row)
+    payload["passive_memory_enabled"] = bool(payload.get("passive_memory_enabled"))
+    payload["reviewer_open_ids"] = _loads_json(payload.get("reviewer_open_ids"), [])
+    payload["owner_open_ids"] = _loads_json(payload.get("owner_open_ids"), [])
+    payload["chat_id_redacted"] = _redact_identifier(payload.get("chat_id"))
+    payload.pop("chat_id", None)
+    for key in ("created_at", "updated_at", "last_enabled_at", "disabled_at"):
+        payload[f"{key}_iso"] = _ms_to_iso(payload.get(key))
+    return payload
+
+
 def _memory_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
     payload["current_value"] = _redact_sensitive_text(payload.get("current_value"))
@@ -2173,6 +2260,15 @@ def _redact_sensitive_text(value: Any) -> Any:
     for pattern in patterns:
         redacted = re.sub(pattern, r"\1[REDACTED]", redacted)
     return redacted
+
+
+def _redact_identifier(value: Any) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    if len(text) <= 8:
+        return "***"
+    return f"{text[:4]}...{text[-4:]}"
 
 
 def _redact_sensitive_payload(value: Any) -> Any:
@@ -3039,6 +3135,7 @@ def _index_html() -> str:
       <button class="tab" data-view="wiki">LLM Wiki</button>
       <button class="tab" data-view="graph">Graph</button>
       <button class="tab" data-view="tenants">Tenants</button>
+      <button class="tab" data-view="groups">Groups</button>
       <button class="tab" data-view="launch">Launch</button>
       <button class="tab" data-view="memories">Ledger</button>
       <button class="tab" data-view="audit">Audit</button>
@@ -3115,6 +3212,7 @@ def _index_html() -> str:
         metric("Active", data.memory_by_status.active || 0),
         metric("Candidate", data.memory_by_status.candidate || 0),
         metric("Audit", data.audit_total),
+        metric("Groups", data.feishu_group_policy_total || 0),
         metric("Raw Events", data.raw_event_total),
         metric("Evidence", data.evidence_total)
       ].join("");
@@ -3139,6 +3237,8 @@ def _index_html() -> str:
         if (scope) params.set("scope", scope);
       }} else if (view === "graph") {{
         if (status) params.set("status", status);
+      }} else if (view === "groups") {{
+        if (status) params.set("status", status);
       }} else if (view === "memories") {{
         if (status) params.set("status", status);
         if (scope) params.set("scope", scope);
@@ -3156,6 +3256,7 @@ def _index_html() -> str:
         if (state.view === "wiki") return renderWiki(await getJson(`/api/wiki?${{paramsFor("wiki")}}`));
         if (state.view === "graph") return renderGraph(await getJson(`/api/graph?${{paramsFor("graph")}}`));
         if (state.view === "tenants") return renderTenants(await getJson(`/api/tenants?${{paramsFor("tenants")}}`));
+        if (state.view === "groups") return renderGroups(await getJson(`/api/group-policies?${{paramsFor("groups")}}`));
         if (state.view === "launch") return renderLaunch(await getJson("/api/launch-readiness"));
         if (state.view === "memories") return renderMemories(await getJson(`/api/memories?${{paramsFor("memories")}}`));
         if (state.view === "audit") return renderAudit(await getJson(`/api/audit?${{paramsFor("audit")}}`));
@@ -3503,6 +3604,38 @@ def _index_html() -> str:
           <section class="workspace-column">
             <div class="section-title"><h2>Tenant / Organization Readiness</h2><span>counts are scoped by tenant_id and organization_id</span></div>
             ${{rows ? `<table><thead><tr><th>Tenant / Org</th><th>Memory</th><th>Graph</th><th>Audit</th><th>Scopes</th><th>Readiness</th><th>Latest Activity</th></tr></thead><tbody>${{rows}}</tbody></table>` : `<div class="empty">暂无 tenant / organization ledger</div>`}}
+          </section>
+        </div>`;
+    }}
+
+    function renderGroups(data) {{
+      const rows = (data.items || []).map(item => `
+        <tr>
+          <td><span class="status ${{esc(item.status)}}">${{esc(item.status)}}</span></td>
+          <td class="mono">${{esc(item.chat_id_redacted)}}<br>${{esc(item.tenant_id)}} / ${{esc(item.organization_id)}}</td>
+          <td class="mono">${{esc(item.scope)}}<br>${{esc(item.visibility_policy)}}</td>
+          <td>${{esc(item.passive_memory_enabled ? "enabled" : "off")}}</td>
+          <td>${{esc((item.owner_open_ids || []).length)}} owners<br>${{esc((item.reviewer_open_ids || []).length)}} reviewers</td>
+          <td class="mono">${{esc(item.updated_at_iso)}}<br>${{esc(item.last_enabled_at_iso || item.disabled_at_iso || "-")}}</td>
+          <td class="content-cell">${{esc(item.notes || "-")}}</td>
+        </tr>`).join("");
+      $("panel").innerHTML = `
+        <div class="split-view">
+          <section class="workspace-column">
+            <div class="section-title"><h2>Feishu Group Policies</h2><span>${{esc(data.total || 0)}} groups</span></div>
+            <div class="kv">
+              <span>Table</span><strong>${{esc(data.available ? "available" : "missing")}}</strong>
+              <span>Boundary</span><strong>${{esc(data.boundary || "local/pre-production group policy inventory")}}</strong>
+            </div>
+            ${{rows ? `<table><thead><tr><th>Status</th><th>Group</th><th>Scope</th><th>Passive</th><th>Reviewers</th><th>Updated</th><th>Notes</th></tr></thead><tbody>${{rows}}</tbody></table>` : `<div class="empty">暂无群级策略。新群会先进入 pending_onboarding，启用后才做静默候选筛选。</div>`}}
+          </section>
+          <section class="workspace-column">
+            <div class="section-title"><h2>Policy Boundary</h2><span>no workspace-wide ingestion claim</span></div>
+            <div class="kv">
+              <span>pending_onboarding</span><strong>仅发现群，不记录消息内容</strong>
+              <span>active + passive=true</span><strong>非 @ 消息只做候选筛选</strong>
+              <span>disabled</span><strong>停止静默候选筛选</strong>
+            </div>
           </section>
         </div>`;
     }}

@@ -8,7 +8,7 @@ DEFAULT_DB_PATH = Path("data/memory.sqlite")
 DEFAULT_TENANT_ID = "tenant:demo"
 DEFAULT_ORGANIZATION_ID = "org:demo"
 DEFAULT_VISIBILITY_POLICY = "team"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 SCHEMA = """
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS memories (
   owner_id TEXT,
   created_by TEXT,
   updated_by TEXT,
-  schema_version INTEGER NOT NULL DEFAULT 4,
+  schema_version INTEGER NOT NULL DEFAULT 5,
   source_event_id TEXT,
   active_version_id TEXT,
   created_at INTEGER NOT NULL,
@@ -181,6 +181,27 @@ CREATE TABLE IF NOT EXISTS tenant_admin_policies (
   UNIQUE(tenant_id, organization_id)
 );
 
+CREATE TABLE IF NOT EXISTS feishu_group_policies (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'tenant:demo',
+  organization_id TEXT NOT NULL DEFAULT 'org:demo',
+  chat_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  visibility_policy TEXT NOT NULL DEFAULT 'team',
+  status TEXT NOT NULL DEFAULT 'pending_onboarding',
+  passive_memory_enabled INTEGER NOT NULL DEFAULT 0,
+  reviewer_open_ids TEXT NOT NULL DEFAULT '[]',
+  owner_open_ids TEXT NOT NULL DEFAULT '[]',
+  notes TEXT,
+  created_by TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  last_enabled_at INTEGER,
+  disabled_at INTEGER,
+  UNIQUE(tenant_id, organization_id, chat_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_raw_events_scope_time
   ON raw_events(scope_type, scope_id, event_time);
 
@@ -204,6 +225,9 @@ CREATE INDEX IF NOT EXISTS idx_kg_edges_tenant_org_type
 
 CREATE INDEX IF NOT EXISTS idx_tenant_admin_policies_tenant_org
   ON tenant_admin_policies(tenant_id, organization_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_feishu_group_policies_tenant_org_status
+  ON feishu_group_policies(tenant_id, organization_id, status, passive_memory_enabled);
 """
 
 
@@ -226,7 +250,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("owner_id", "TEXT"),
         ("created_by", "TEXT"),
         ("updated_by", "TEXT"),
-        ("schema_version", "INTEGER NOT NULL DEFAULT 4"),
+        ("schema_version", "INTEGER NOT NULL DEFAULT 5"),
         ("source_visibility_revoked_at", "INTEGER"),
     ],
     "memory_versions": [

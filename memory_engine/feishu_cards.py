@@ -552,17 +552,23 @@ def build_review_inbox_card(inbox_response: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_group_settings_card(settings_response: dict[str, Any]) -> dict[str, Any]:
-    """Build a read-only group settings card for the current Feishu sandbox."""
+    """Build a group settings card for the current Feishu sandbox."""
 
     fields = [
+        (
+            "当前群状态",
+            f"{settings_response.get('chat_status') or 'pending_onboarding'}；"
+            f"passive={str(bool(settings_response.get('passive_memory_enabled'))).lower()}",
+        ),
         ("allowlist 群静默筛选", _group_silent_screening_label(settings_response)),
         ("审核投递方式", str(settings_response.get("review_delivery") or "DM/private")),
         ("auto-confirm policy", str(settings_response.get("auto_confirm_policy") or "")),
+        ("onboarding policy", str(settings_response.get("onboarding_policy") or "")),
         ("scope", str(settings_response.get("scope") or "")),
         ("visibility", _visibility_label(settings_response.get("visibility_policy"))),
         ("运行边界", str(settings_response.get("production_boundary") or "受控 live sandbox，不是生产长期运行。")),
     ]
-    fields.append(("写入动作", "只读展示；本卡不修改群设置、不写入任何配置。"))
+    fields.append(("写入动作", "/enable_memory 启用；/disable_memory 关闭。需要 reviewer/admin 授权。"))
     return {
         "config": {"wide_screen_mode": True, "update_multi": False},
         "header": {
@@ -1118,6 +1124,8 @@ def _visibility_label(value: Any) -> str:
 def _group_silent_screening_label(settings_response: dict[str, Any]) -> str:
     allowlist = str(settings_response.get("allowlist_summary") or "not configured")
     status = str(settings_response.get("silent_screening") or "")
+    if status == "enabled_for_current_group_policy":
+        return f"开启，当前群策略已启用；allowlist={allowlist}"
     if status == "enabled_for_allowlist_groups":
         return f"开启，仅限 allowlist 群；allowlist={allowlist}"
     if status == "enabled_for_wildcard_groups":

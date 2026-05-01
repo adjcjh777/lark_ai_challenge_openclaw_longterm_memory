@@ -16,10 +16,10 @@
 
 ### 当前真实 Feishu 使用边界
 
-按当前代码，本项目已经进入“**allowlist 群里的被动候选识别 + @Bot / 私聊主动交互**”阶段，但还不是全量 workspace ingestion。当前稳定边界是：
+按当前代码，本项目已经进入“**allowlist 群 + 已启用群策略的被动候选识别 + @Bot / 私聊主动交互**”阶段，但还不是全量 workspace ingestion。当前稳定边界是：
 
 - `scripts/start_copilot_feishu_live.sh` 默认启动的是 **allowlist 测试群** 的 `copilot-feishu listen` 入口，不是全量 workspace ingestion。
-- 不在 allowlist 的 chat 会被直接忽略。
+- 不在 allowlist 且未启用群策略的 chat 不会记录消息内容；系统只登记最小群节点和 `pending_onboarding` 群策略，`@Bot /settings` 可查看状态，`@Bot /enable_memory` 需要 reviewer/admin 授权后才会启用当前群静默候选筛选。
 - allowlist 群里：
   - **不 `@Bot`** 的消息会做静默 candidate probe；命中企业级记忆信号时进入 `memory.create_candidate`，再由 review policy 判断低风险自动确认或私聊人工审核，默认不回群消息。
   - **`@Bot`** 的消息仍走主动交互路径：搜索、候选确认、版本解释、prefetch 等。
@@ -27,7 +27,7 @@
 - OpenClaw gateway 旁路脚本已补本地 `route_gateway_message()` 静默筛选入口：allowlist 群里未 `@Bot` 的低信号/问句会静默忽略，命中企业记忆信号才进入 `handle_tool_request("memory.create_candidate")` / `CopilotService`；这仍是本地受控入口，不等于真实 gateway 长期运行已完成。
 - 普通问句不会因为命中了“部署 / 负责人 / 截止”这类主题词就自动变成 candidate。
 - 真实飞书来源不再“一律 candidate-only”：低重要性、无冲突、无敏感风险的候选可以由 policy 自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容仍必须停在 candidate，优先通过 DM/private 定向推给相关 reviewer / owner 确认。当前已完成 publisher 层定向 DM 发送和本地测试；真实飞书长期运行仍不宣称完成。
-- 群级设置已有只读卡片入口：`/settings` 或 `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和生产边界；当前不提供设置写入动作。
+- 群级设置已有受控入口：`/settings` 或 `/group_settings` 展示 allowlist / 当前群策略、审核投递、auto-confirm policy、scope/visibility 和生产边界；`/enable_memory` / `/disable_memory` 可写本地/pre-production 群策略，但要求 reviewer/admin 授权，并写入审计。
 - OpenClaw websocket 下的受控真实 DM 是另一条验收路径；它证明过一次 `fmc_memory_search` allow-path，不等于“所有真实飞书对话都已经稳定进入本项目工具链路”。
 - OpenClaw 对外工具名一律使用 `fmc_*`；`memory.*` 只保留为 Python 内部服务名，避免和 OpenClaw 内置 `memory_search` 语义混淆。
 
@@ -46,11 +46,11 @@
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
 | 存储迁移和备份恢复 | 已完成本地 migration dry-run / apply、索引检查，以及 SQLite staging backup / verify / restore drill；这不是生产 PostgreSQL / PITR | `scripts/migrate_copilot_storage.py`、`scripts/backup_copilot_storage.py`、`tests/test_copilot_storage_migration.py`、`tests/test_storage_backup.py` |
 | 企业图谱群/用户/消息拓扑 | 已完成本地 Feishu 群节点发现与授权消息拓扑：新群会登记为同企业下的 `feishu_chat` 图谱节点；未在 allowlist 的群只记录 org/chat 最小元数据；授权群会把同一用户建模为 tenant/org 内唯一 `feishu_user` 节点，并用 membership/message 边表达其在不同群里的上下文；消息正文仍只进入 `raw_events` / candidate evidence，不写入图谱节点 | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/feishu-group-graph-node-handoff.md` |
-| LLM Wiki / Graph Admin | 已完成本地 / staging 后台：active curated memory 编译成 LLM Wiki，Graph tab 展示 storage graph + compiled memory graph，Tenants tab 支持 tenant/org 过滤、readiness、admin-only tenant policy editor 和 `tenant_policy_upserted` 审计；这不是生产 DB、真实企业 IdP SSO 或完整多租户权限后台 | `memory_engine/copilot/admin.py`、`memory_engine/db.py`、`scripts/check_copilot_admin_readiness.py`、`scripts/check_copilot_admin_ui_smoke.py`、`tests/test_copilot_admin.py`、`docs/productization/admin-llm-wiki-launch-runbook.md` |
+| LLM Wiki / Graph Admin | 已完成本地 / staging 后台：active curated memory 编译成 LLM Wiki，Graph tab 展示 storage graph + compiled memory graph，Tenants tab 支持 tenant/org 过滤、readiness、admin-only tenant policy editor 和 `tenant_policy_upserted` 审计；Groups tab/API 展示 Feishu 群策略的 pending/active/disabled 与 passive 筛选状态；这不是生产 DB、真实企业 IdP SSO 或完整多租户权限后台 | `memory_engine/copilot/admin.py`、`memory_engine/db.py`、`scripts/check_copilot_admin_readiness.py`、`scripts/check_copilot_admin_ui_smoke.py`、`tests/test_copilot_admin.py`、`docs/productization/admin-llm-wiki-launch-runbook.md` |
 | Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
-| Feishu live sandbox | 已完成受控测试群联调；当前稳定路径是 allowlist 测试群，群内非 `@Bot` 消息可静默探测 candidate，`@Bot` / 私聊走主动交互 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py` |
-| 群级设置卡片 | 已完成只读设置卡：`/settings` / `/group_settings` 展示 allowlist 静默筛选、审核投递、auto-confirm policy、scope/visibility 和 no-overclaim 边界；不提供写入动作 | `memory_engine/copilot/feishu_live.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
-| Limited Feishu ingestion | 已完成本地受控 ingestion 底座，支持文档、任务、会议、Bitable，以及 allowlist 群里被动探测或显式路由到 `memory.create_candidate` 的飞书消息；当前新增 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选仍需人工确认；这不是被动全量群聊摄入 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/review_policy.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_review_policy.py` |
+| Feishu live sandbox | 已完成受控测试群联调和本地/pre-production 群策略 onboarding；当前稳定路径是 allowlist 测试群或显式 `/enable_memory` 启用的群，群内非 `@Bot` 消息可静默探测 candidate，`@Bot` / 私聊走主动交互 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py` |
+| 群级设置和启停 | 已完成群级设置卡和策略写入：`/settings` / `/group_settings` 展示 allowlist 与当前群策略；`/enable_memory` / `/disable_memory` 需要 reviewer/admin 授权后写 `feishu_group_policies`，并写审计；新群默认 `pending_onboarding`，不会自动记录消息内容 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/group_policies.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
+| Limited Feishu ingestion | 已完成本地受控 ingestion 底座，支持文档、任务、会议、Bitable，以及 allowlist / 已启用群策略中被动探测或显式路由到 `memory.create_candidate` 的飞书消息；当前新增 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选仍需人工确认；这不是被动全量群聊摄入 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/review_policy.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_review_policy.py` |
 | 真实 Feishu API 拉取入口 | 已完成任务、会议、Bitable 读取 fetcher、Feishu live `/task` / `/meeting` / `/bitable` 路由和 fetch 前 fail-closed 权限门控；结果进入 `memory.create_candidate` 后由 review policy 决定自动确认或人工审核 | `memory_engine/feishu_task_fetcher.py`、`memory_engine/feishu_meeting_fetcher.py`、`memory_engine/feishu_bitable_fetcher.py`、`memory_engine/copilot/tools.py`、`memory_engine/copilot/review_policy.py`、`tests/test_feishu_fetchers.py`、`tests/test_copilot_review_policy.py` |
 | 审计查询、告警和运维面 | 已完成本地审计查询/导出、audit read-only live gate、告警脚本、ingestion failure 显式审计、healthcheck websocket 运维入口、embedding fallback 可观测字段，以及 staging Prometheus alert-rule artifact / verifier；这仍不是生产级 Prometheus/Grafana 长期监控 | `scripts/query_audit_events.py`、`scripts/check_copilot_audit_readonly_gate.py`、`scripts/check_audit_alerts.py`、`scripts/check_prometheus_alert_rules.py`、`deploy/monitoring/copilot-admin-alerts.yml`、`memory_engine/document_ingestion.py`、`memory_engine/copilot/healthcheck.py`、`tests/test_audit_ops_scripts.py`、`tests/test_prometheus_alert_rules.py`、`docs/productization/handoffs/audit-ops-observability-handoff.md` |
 | Productized live 长期运行方案 | 已完成方案和上线 gate，覆盖部署拓扑、单监听、存储、监控告警、权限后台、审计 UI、停写回滚和 no-overclaim 边界；尚未实施生产长期运行 | `docs/productization/productized-live-long-run-plan.md`、`docs/productization/handoffs/productized-live-long-run-plan-handoff.md` |

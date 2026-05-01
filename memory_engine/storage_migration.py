@@ -13,6 +13,7 @@ REQUIRED_TABLES = (
     "knowledge_graph_nodes",
     "knowledge_graph_edges",
     "tenant_admin_policies",
+    "feishu_group_policies",
 )
 REQUIRED_INDEXES = {
     "idx_memories_tenant_org_scope_status",
@@ -22,6 +23,7 @@ REQUIRED_INDEXES = {
     "idx_kg_nodes_tenant_org_type_key",
     "idx_kg_edges_tenant_org_type",
     "idx_tenant_admin_policies_tenant_org",
+    "idx_feishu_group_policies_tenant_org_status",
 }
 
 
