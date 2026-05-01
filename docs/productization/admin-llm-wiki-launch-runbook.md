@@ -9,6 +9,7 @@
 
 - LLM Wiki：active curated memory 编译视图。
 - Graph：`knowledge_graph_*` 表节点/边，以及由 active memory 编译出的 `memory -> grounded_by -> evidence_source` 图谱。
+- Tenants：ledger 派生的 tenant / organization readiness、open review、graph/audit 计数和缺失生产能力清单。
 - Ledger / Audit / Tables：只读排障和审计视图。
 
 不覆盖：
@@ -121,7 +122,7 @@ curl -fsS \
 
 1. 打开 `/`。
 2. 输入 token 后确认 Summary 有 Memory / Active / Audit / Evidence 计数。
-3. 在 `tenant_id` / `organization_id` 输入框里填入当前测试租户，确认 `LLM Wiki`、`Graph`、`Ledger`、`Audit` 都会按租户边界收敛结果；这只是只读过滤，不代表完整租户管理后台。
+3. 在 `tenant_id` / `organization_id` 输入框里填入当前测试租户，确认 `LLM Wiki`、`Graph`、`Tenants`、`Ledger`、`Audit` 都会按租户边界收敛结果；这只是只读过滤和 readiness 展示，不代表完整租户管理后台。
 4. 进入 `LLM Wiki`，确认 generation policy 为：
    - `active_curated_memory_only`
    - `raw events = excluded`
@@ -139,7 +140,8 @@ curl -fsS \
 导出内容应以 `# 项目记忆卡册：...` 开头，只包含 active curated memory 和 evidence，不包含 raw events。
 6. 使用 viewer token 访问 `/api/wiki/export?scope=...` 应返回 `403`，确认只读浏览 token 不能批量导出知识卡册。
 7. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
-8. 进入 `Audit`，确认权限和工具调用审计可读。
+8. 进入 `Tenants`，确认每个 tenant / organization 显示 memory、open review、graph、audit 计数，并明确标出 `enterprise_sso`、`tenant_config_editor`、`role_policy_editor`、`production_db_operations` 仍缺失。
+9. 进入 `Audit`，确认权限和工具调用审计可读。
 
 静态知识站导出验收：
 
@@ -179,7 +181,7 @@ wiki/project_feishu_ai_challenge.md
 - 已完成本地 / staging 只读 LLM Wiki 和知识图谱后台。
 - 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出、静态知识站导出和敏感字段脱敏。
 - 已有 admin / viewer token 分级：viewer 只读浏览，admin 才能导出 Wiki Markdown。
-- 已有 tenant / organization 只读过滤，可用于 staging 下检查租户边界展示。
+- 已有 tenant / organization 只读过滤和 Tenants readiness 概览，可用于 staging 下检查租户边界展示与上线缺口。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

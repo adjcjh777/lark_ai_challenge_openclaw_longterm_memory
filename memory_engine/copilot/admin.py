@@ -106,6 +106,59 @@ class AdminQueryService:
             "knowledge_cards": wiki["cards"],
         }
 
+    def tenant_overview(
+        self,
+        *,
+        tenant_id: str | None = None,
+        organization_id: str | None = None,
+        limit: int = 80,
+    ) -> dict[str, Any]:
+        limit = _clamp_limit(limit)
+        conditions: list[str] = ["tenant_id IS NOT NULL", "tenant_id != ''"]
+        params: list[Any] = []
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
+        if organization_id:
+            conditions.append("organization_id = ?")
+            params.append(organization_id)
+        where = "WHERE " + " AND ".join(conditions)
+        rows = self.conn.execute(
+            f"""
+            SELECT tenant_id, COALESCE(organization_id, '-') AS organization_id
+            FROM (
+              SELECT tenant_id, organization_id FROM memories
+              UNION
+              SELECT tenant_id, organization_id FROM raw_events
+              UNION
+              SELECT tenant_id, organization_id FROM memory_audit_events
+              UNION
+              SELECT tenant_id, organization_id FROM knowledge_graph_nodes
+              UNION
+              SELECT tenant_id, organization_id FROM knowledge_graph_edges
+            )
+            {where}
+            ORDER BY tenant_id ASC, organization_id ASC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+        items = [self._tenant_org_overview(str(row["tenant_id"]), str(row["organization_id"])) for row in rows]
+        return {
+            "tenant_count": len({item["tenant_id"] for item in items}),
+            "organization_count": len(items),
+            "items": items,
+            "read_only": True,
+            "source": "ledger_derived_tenant_inventory",
+            "boundary": "tenant inventory and readiness view only; no tenant config write API, SSO, or policy editor.",
+            "missing_capabilities": [
+                "enterprise_sso",
+                "tenant_config_editor",
+                "role_policy_editor",
+                "production_db_operations",
+            ],
+        }
+
     def wiki_overview(
         self,
         *,
@@ -682,6 +735,141 @@ class AdminQueryService:
         ).fetchall()
         return {str(row["group_key"]): int(row["count"]) for row in rows}
 
+    def _count_tenant_rows(
+        self,
+        table: str,
+        *,
+        tenant_id: str,
+        organization_id: str,
+        extra_where: str = "",
+        extra_params: list[Any] | None = None,
+    ) -> int:
+        return int(
+            self.conn.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM {_quote_identifier(table)}
+                WHERE tenant_id = ?
+                  AND COALESCE(organization_id, '-') = ?
+                {extra_where}
+                """,
+                [tenant_id, organization_id, *(extra_params or [])],
+            ).fetchone()[0]
+        )
+
+    def _tenant_org_overview(self, tenant_id: str, organization_id: str) -> dict[str, Any]:
+        active_memory_count = self._count_tenant_rows(
+            "memories",
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            extra_where="AND status = ?",
+            extra_params=["active"],
+        )
+        candidate_memory_count = self._count_tenant_rows(
+            "memories",
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            extra_where="AND status = ?",
+            extra_params=["candidate"],
+        )
+        needs_evidence_memory_count = self._count_tenant_rows(
+            "memories",
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            extra_where="AND status = ?",
+            extra_params=["needs_evidence"],
+        )
+        denied_audit_count = self._count_tenant_rows(
+            "memory_audit_events",
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            extra_where="AND permission_decision = ?",
+            extra_params=["deny"],
+        )
+        scopes = self.conn.execute(
+            """
+            SELECT scope_type || ':' || scope_id AS scope, COUNT(*) AS count
+            FROM memories
+            WHERE tenant_id = ?
+              AND COALESCE(organization_id, '-') = ?
+            GROUP BY scope_type, scope_id
+            ORDER BY count DESC, scope ASC
+            LIMIT 8
+            """,
+            (tenant_id, organization_id),
+        ).fetchall()
+        latest_activity = self.conn.execute(
+            """
+            SELECT MAX(activity_at) AS latest_activity
+            FROM (
+              SELECT updated_at AS activity_at
+              FROM memories
+              WHERE tenant_id = ? AND COALESCE(organization_id, '-') = ?
+              UNION ALL
+              SELECT event_time AS activity_at
+              FROM raw_events
+              WHERE tenant_id = ? AND COALESCE(organization_id, '-') = ?
+              UNION ALL
+              SELECT created_at AS activity_at
+              FROM memory_audit_events
+              WHERE tenant_id = ? AND COALESCE(organization_id, '-') = ?
+              UNION ALL
+              SELECT last_seen_at AS activity_at
+              FROM knowledge_graph_nodes
+              WHERE tenant_id = ? AND COALESCE(organization_id, '-') = ?
+            )
+            """,
+            (
+                tenant_id,
+                organization_id,
+                tenant_id,
+                organization_id,
+                tenant_id,
+                organization_id,
+                tenant_id,
+                organization_id,
+            ),
+        ).fetchone()["latest_activity"]
+        return {
+            "tenant_id": tenant_id,
+            "organization_id": None if organization_id == "-" else organization_id,
+            "memory_total": self._count_tenant_rows("memories", tenant_id=tenant_id, organization_id=organization_id),
+            "active_memory_count": active_memory_count,
+            "candidate_memory_count": candidate_memory_count,
+            "needs_evidence_memory_count": needs_evidence_memory_count,
+            "open_review_count": candidate_memory_count + needs_evidence_memory_count,
+            "raw_event_count": self._count_tenant_rows(
+                "raw_events", tenant_id=tenant_id, organization_id=organization_id
+            ),
+            "graph_node_count": self._count_tenant_rows(
+                "knowledge_graph_nodes",
+                tenant_id=tenant_id,
+                organization_id=organization_id,
+            ),
+            "graph_edge_count": self._count_tenant_rows(
+                "knowledge_graph_edges",
+                tenant_id=tenant_id,
+                organization_id=organization_id,
+            ),
+            "audit_total": self._count_tenant_rows(
+                "memory_audit_events",
+                tenant_id=tenant_id,
+                organization_id=organization_id,
+            ),
+            "denied_audit_count": denied_audit_count,
+            "scopes": [{"scope": str(row["scope"]), "count": int(row["count"])} for row in scopes],
+            "latest_activity_at": latest_activity,
+            "latest_activity_at_iso": _ms_to_iso(latest_activity),
+            "readiness": {
+                "data_isolation": "derived_from_tenant_org_columns",
+                "access_gate": "admin_viewer_token",
+                "sso": "missing",
+                "policy_editor": "missing",
+                "config_write_api": "missing",
+                "production_db": "not_verified",
+            },
+        }
+
     def _recent_raw_events(self, *, limit: int) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             """
@@ -822,6 +1010,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/live":
                 self._send_json(self._api_live(), send_body=send_body)
                 return
+            if parsed.path == "/api/tenants":
+                self._send_json(self._api_tenants(parsed.query), send_body=send_body)
+                return
             if parsed.path == "/api/memories":
                 self._send_json(self._api_memories(parsed.query), send_body=send_body)
                 return
@@ -918,6 +1109,16 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     def _api_live(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).live_overview()}
+
+    def _api_tenants(self, query_string: str) -> dict[str, Any]:
+        params = parse_qs(query_string)
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).tenant_overview(
+                tenant_id=_param(params, "tenant_id"),
+                organization_id=_param(params, "organization_id"),
+                limit=_int_param(params, "limit", 80),
+            )
+        return {"ok": True, "data": data}
 
     def _api_memories(self, query_string: str) -> dict[str, Any]:
         params = parse_qs(query_string)
@@ -1762,6 +1963,7 @@ def _index_html() -> str:
       <button class="tab active" data-view="home">Overview</button>
       <button class="tab" data-view="wiki">LLM Wiki</button>
       <button class="tab" data-view="graph">Graph</button>
+      <button class="tab" data-view="tenants">Tenants</button>
       <button class="tab" data-view="memories">Ledger</button>
       <button class="tab" data-view="audit">Audit</button>
       <button class="tab" data-view="tables">Tables</button>
@@ -1857,6 +2059,7 @@ def _index_html() -> str:
         if (state.view === "home") return renderHome(await getJson("/api/live"));
         if (state.view === "wiki") return renderWiki(await getJson(`/api/wiki?${{paramsFor("wiki")}}`));
         if (state.view === "graph") return renderGraph(await getJson(`/api/graph?${{paramsFor("graph")}}`));
+        if (state.view === "tenants") return renderTenants(await getJson(`/api/tenants?${{paramsFor("tenants")}}`));
         if (state.view === "memories") return renderMemories(await getJson(`/api/memories?${{paramsFor("memories")}}`));
         if (state.view === "audit") return renderAudit(await getJson(`/api/audit?${{paramsFor("audit")}}`));
         return renderTables(await getJson("/api/tables"));
@@ -2101,6 +2304,40 @@ def _index_html() -> str:
         const data = await getJson(`/api/memories/${{encodeURIComponent(btn.dataset.detail)}}`);
         btn.closest("tr").insertAdjacentHTML("afterend", `<tr><td colspan="8"><pre class="detail">${{esc(JSON.stringify(data, null, 2))}}</pre></td></tr>`);
       }}));
+    }}
+
+    function renderTenants(data) {{
+      const capabilityRows = (data.missing_capabilities || []).map(item => `<span class="tag warn">${{esc(item)}}</span>`).join("");
+      const rows = (data.items || []).map(item => {{
+        const scopes = (item.scopes || []).map(scope => `${{scope.scope}}(${{scope.count}})`).join(", ");
+        const readiness = item.readiness || {{}};
+        return `
+          <tr>
+            <td class="mono">${{esc(item.tenant_id)}}<br>${{esc(item.organization_id)}}</td>
+            <td>${{esc(item.memory_total)}} total<br><span class="mono">${{esc(item.active_memory_count)}} active / ${{esc(item.open_review_count)}} open review</span></td>
+            <td>${{esc(item.graph_node_count)}} nodes<br><span class="mono">${{esc(item.graph_edge_count)}} edges</span></td>
+            <td>${{esc(item.audit_total)}} events<br><span class="mono">${{esc(item.denied_audit_count)}} deny</span></td>
+            <td class="content-cell">${{esc(scopes || "-")}}</td>
+            <td class="mono">${{esc(readiness.access_gate)}}<br>SSO=${{esc(readiness.sso)}}<br>Policy=${{esc(readiness.policy_editor)}}</td>
+            <td class="mono">${{esc(item.latest_activity_at_iso)}}</td>
+          </tr>`;
+      }}).join("");
+      $("panel").innerHTML = `
+        <div class="split-view">
+          <section class="workspace-column">
+            <div class="section-title"><h2>Tenant Inventory</h2><span>${{esc(data.tenant_count)}} tenants / ${{esc(data.organization_count)}} orgs</span></div>
+            <div class="kv">
+              <span>Source</span><strong>${{esc(data.source)}}</strong>
+              <span>Read only</span><strong>${{esc(data.read_only ? "yes" : "no")}}</strong>
+              <span>Boundary</span><strong>${{esc(data.boundary)}}</strong>
+            </div>
+            <div class="tag-row">${{capabilityRows || `<span class="tag">no missing capability listed</span>`}}</div>
+          </section>
+          <section class="workspace-column">
+            <div class="section-title"><h2>Tenant / Organization Readiness</h2><span>counts are scoped by tenant_id and organization_id</span></div>
+            ${{rows ? `<table><thead><tr><th>Tenant / Org</th><th>Memory</th><th>Graph</th><th>Audit</th><th>Scopes</th><th>Readiness</th><th>Latest Activity</th></tr></thead><tbody>${{rows}}</tbody></table>` : `<div class="empty">暂无 tenant / organization ledger</div>`}}
+          </section>
+        </div>`;
     }}
 
     function renderAudit(data) {{

@@ -135,6 +135,29 @@ class CopilotAdminTest(unittest.TestCase):
                 trace_id="trace_admin",
                 created_at=now_ms(),
             )
+            other = self.repo.remember(
+                "project:other_admin",
+                "决定：其他租户的后台域名只在独立环境展示。",
+                source_type="lark_doc",
+                source_id="doc_other_admin",
+                created_by="other",
+            )
+            self.conn.execute(
+                "UPDATE memories SET tenant_id = ?, organization_id = ? WHERE id = ?",
+                ("tenant:other", "org:other", other["memory_id"]),
+            )
+            self.conn.execute(
+                "UPDATE memory_versions SET tenant_id = ?, organization_id = ? WHERE memory_id = ?",
+                ("tenant:other", "org:other", other["memory_id"]),
+            )
+            self.conn.execute(
+                "UPDATE memory_evidence SET tenant_id = ?, organization_id = ? WHERE memory_id = ?",
+                ("tenant:other", "org:other", other["memory_id"]),
+            )
+            self.conn.execute(
+                "UPDATE raw_events SET tenant_id = ?, organization_id = ? WHERE source_id = ?",
+                ("tenant:other", "org:other", "doc_other_admin"),
+            )
         self.active_id = active["memory_id"]
         self.candidate_id = candidate["memory_id"]
 
@@ -143,8 +166,8 @@ class CopilotAdminTest(unittest.TestCase):
 
         service = AdminQueryService(self.conn)
         summary = service.summary()
-        self.assertEqual(2, summary["memory_total"])
-        self.assertEqual({"active": 1, "candidate": 1}, summary["memory_by_status"])
+        self.assertEqual(3, summary["memory_total"])
+        self.assertEqual({"active": 2, "candidate": 1}, summary["memory_by_status"])
         self.assertEqual(1, summary["audit_total"])
 
         live = service.live_overview()
@@ -177,7 +200,7 @@ class CopilotAdminTest(unittest.TestCase):
             organization_id="org:demo",
         )
         self.assertEqual(1, tenant_wiki["card_count"])
-        other_tenant_wiki = service.wiki_overview(scope="project:admin_demo", tenant_id="tenant:other")
+        other_tenant_wiki = service.wiki_overview(scope="project:admin_demo", tenant_id="tenant:none")
         self.assertEqual(0, other_tenant_wiki["card_count"])
         wiki_export = service.wiki_export_markdown(scope="project:admin_demo")
         self.assertIn("# 项目记忆卡册：project:admin_demo", wiki_export)
@@ -196,19 +219,31 @@ class CopilotAdminTest(unittest.TestCase):
         tenant_graph = service.graph_workspace(tenant_id="tenant:demo", organization_id="org:demo", status="active")
         self.assertGreaterEqual(tenant_graph["workspace_node_count"], 4)
         self.assertEqual({"tenant:demo"}, {node["tenant_id"] for node in tenant_graph["nodes"]})
-        other_tenant_graph = service.graph_workspace(tenant_id="tenant:other")
+        other_tenant_graph = service.graph_workspace(tenant_id="tenant:none")
         self.assertEqual(0, other_tenant_graph["workspace_node_count"])
         self.assertEqual(0, other_tenant_graph["workspace_edge_count"])
 
         tenant_memories = service.list_memories(tenant_id="tenant:demo", organization_id="org:demo")
         self.assertEqual(2, tenant_memories["total"])
-        other_tenant_memories = service.list_memories(tenant_id="tenant:other")
+        other_tenant_memories = service.list_memories(tenant_id="tenant:none")
         self.assertEqual(0, other_tenant_memories["total"])
 
         tenant_audit = service.list_audit(tenant_id="tenant:demo", organization_id="org:demo")
         self.assertEqual(1, tenant_audit["total"])
         other_org_audit = service.list_audit(organization_id="org:other")
         self.assertEqual(0, other_org_audit["total"])
+
+        tenants = service.tenant_overview()
+        self.assertEqual(2, tenants["tenant_count"])
+        self.assertIn("enterprise_sso", tenants["missing_capabilities"])
+        demo_tenant = next(item for item in tenants["items"] if item["tenant_id"] == "tenant:demo")
+        self.assertEqual("org:demo", demo_tenant["organization_id"])
+        self.assertEqual(2, demo_tenant["memory_total"])
+        self.assertEqual(1, demo_tenant["open_review_count"])
+        self.assertEqual("missing", demo_tenant["readiness"]["sso"])
+        filtered_tenants = service.tenant_overview(tenant_id="tenant:other", organization_id="org:other")
+        self.assertEqual(1, filtered_tenants["tenant_count"])
+        self.assertEqual("tenant:other", filtered_tenants["items"][0]["tenant_id"])
 
     def test_http_admin_is_read_only_and_serves_json_api(self) -> None:
         self._seed_rows()
@@ -220,7 +255,7 @@ class CopilotAdminTest(unittest.TestCase):
             with urlopen(f"{base_url}/api/summary", timeout=5) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(payload["ok"])
-            self.assertEqual(2, payload["data"]["memory_total"])
+            self.assertEqual(3, payload["data"]["memory_total"])
 
             with urlopen(f"{base_url}/healthz", timeout=5) as response:
                 healthz = json.loads(response.read().decode("utf-8"))
@@ -243,7 +278,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertEqual(1, wiki_payload["data"]["card_count"])
             self.assertFalse(wiki_payload["data"]["generation_policy"]["writes_feishu"])
 
-            with urlopen(f"{base_url}/api/wiki?tenant_id=tenant%3Aother", timeout=5) as response:
+            with urlopen(f"{base_url}/api/wiki?tenant_id=tenant%3Anone", timeout=5) as response:
                 other_tenant_wiki = json.loads(response.read().decode("utf-8"))
             self.assertTrue(other_tenant_wiki["ok"])
             self.assertEqual(0, other_tenant_wiki["data"]["card_count"])
@@ -260,15 +295,22 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(graph_payload["ok"])
             self.assertEqual(1, len(graph_payload["data"]["nodes"]))
 
-            with urlopen(f"{base_url}/api/graph?tenant_id=tenant%3Aother", timeout=5) as response:
+            with urlopen(f"{base_url}/api/graph?tenant_id=tenant%3Anone", timeout=5) as response:
                 other_tenant_graph = json.loads(response.read().decode("utf-8"))
             self.assertTrue(other_tenant_graph["ok"])
             self.assertEqual(0, other_tenant_graph["data"]["workspace_node_count"])
 
-            with urlopen(f"{base_url}/api/memories?organization_id=org%3Aother", timeout=5) as response:
+            with urlopen(f"{base_url}/api/memories?organization_id=org%3Anone", timeout=5) as response:
                 other_org_memories = json.loads(response.read().decode("utf-8"))
             self.assertTrue(other_org_memories["ok"])
             self.assertEqual(0, other_org_memories["data"]["total"])
+
+            with urlopen(f"{base_url}/api/tenants?tenant_id=tenant%3Aother", timeout=5) as response:
+                tenants_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(tenants_payload["ok"])
+            self.assertEqual(1, tenants_payload["data"]["tenant_count"])
+            self.assertEqual("tenant:other", tenants_payload["data"]["items"][0]["tenant_id"])
+            self.assertIn("enterprise_sso", tenants_payload["data"]["missing_capabilities"])
 
             with urlopen(base_url, timeout=5) as response:
                 html = response.read().decode("utf-8")
@@ -276,6 +318,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertIn('data-view="home"', html)
             self.assertIn('data-view="wiki"', html)
             self.assertIn('data-view="graph"', html)
+            self.assertIn('data-view="tenants"', html)
             self.assertIn('id="organization"', html)
             self.assertIn('id="graph-detail"', html)
             self.assertIn("data-node-id", html)
@@ -324,13 +367,13 @@ class CopilotAdminTest(unittest.TestCase):
             with urlopen(request, timeout=5) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(payload["ok"])
-            self.assertEqual(2, payload["data"]["memory_total"])
+            self.assertEqual(3, payload["data"]["memory_total"])
 
             request = Request(f"{base_url}/api/summary", headers={"Authorization": "Bearer viewer-token"})
             with urlopen(request, timeout=5) as response:
                 viewer_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(viewer_payload["ok"])
-            self.assertEqual(2, viewer_payload["data"]["memory_total"])
+            self.assertEqual(3, viewer_payload["data"]["memory_total"])
 
             request = Request(
                 f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
@@ -371,7 +414,7 @@ class CopilotAdminTest(unittest.TestCase):
             with urlopen(f"{runtime.url}/api/summary", timeout=5) as response:
                 payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(payload["ok"])
-            self.assertEqual(2, payload["data"]["memory_total"])
+            self.assertEqual(3, payload["data"]["memory_total"])
         finally:
             runtime.stop()
 
@@ -447,7 +490,7 @@ class CopilotAdminTest(unittest.TestCase):
             db_path=Path(self.tmp.name),
             host="127.0.0.1",
             admin_token="test-token",
-            min_wiki_cards=2,
+            min_wiki_cards=3,
         )
         self.assertFalse(too_few_cards["ok"])
         self.assertEqual("fail", too_few_cards["checks"]["wiki"]["status"])

@@ -246,7 +246,7 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 
 ### 2.5 本地只读 LLM Wiki / 知识图谱后台
 
-Dashboard 不是单独的产品服务。它提供本地只读的 LLM Wiki、知识图谱、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Wiki / Graph / Ledger / Audit 支持按 `tenant_id` 和 `organization_id` 收敛展示，但这仍不是完整租户管理控制台。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
+Dashboard 不是单独的产品服务。它提供本地只读的 LLM Wiki、知识图谱、tenant readiness、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Wiki / Graph / Tenants / Ledger / Audit 支持按 `tenant_id` 和 `organization_id` 收敛展示；Tenants tab 会从 ledger 派生租户/组织计数、open review、graph/audit 状态和缺失生产能力，但这仍不是完整租户管理控制台。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
 
 - OpenClaw 加载 `feishu-memory-copilot` 插件时，只有 `FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1` 或 `COPILOT_ADMIN_ENABLED=1` 才会尝试启动本地 dashboard。
 - 仓库内 `python3 -m memory_engine copilot-feishu listen` / `scripts/start_copilot_feishu_live.sh` 启动时，也会带起 dashboard。
@@ -287,13 +287,14 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 /api/wiki                active curated memory 编译视图，不包含 raw events，不写飞书
 /api/wiki/export?scope=  指定 scope 的 Markdown Wiki 导出，只接受 admin token，仍只读 SQLite
 /api/graph               知识图谱节点/关系视图
+/api/tenants             ledger 派生的 tenant / organization readiness 概览，只读，不写租户配置
 /api/memories            memory ledger 和 evidence
 /api/audit               权限、治理和工具调用审计
 /api/health              带认证的后台 readiness 摘要
 /healthz                 不含敏感数据的进程 liveness 探活
 ```
 
-`/api/wiki`、`/api/graph`、`/api/memories`、`/api/audit` 都接受 `tenant_id` / `organization_id` 查询参数，用于受控 staging 下按企业租户边界检查后台展示结果。
+`/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 都接受 `tenant_id` / `organization_id` 查询参数，用于受控 staging 下按企业租户边界检查后台展示结果。
 
 上线前或共享给评委/队友前，先跑只读后台 readiness gate：
 
