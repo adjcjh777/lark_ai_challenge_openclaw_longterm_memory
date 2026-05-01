@@ -71,7 +71,7 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener legacy-lar
 - 直接运行的 `lark-cli event +subscribe`
 - 命令行可识别的 OpenClaw Feishu / Lark websocket 进程
 
-如果只看到 `openclaw-gateway`，单监听脚本会给 warning：进程列表无法判断该 gateway 是否已经启用 Feishu websocket。此时继续运行 `scripts/check_openclaw_feishu_websocket.py`，用 `channels.status`、credential probe 和 Feishu channel logs 判断是否真的 running；如果 OpenClaw 正在接收同一个 bot 的飞书事件，就不要再启动仓库内 lark-cli 监听。
+如果只看到 `openclaw-gateway`，单监听脚本会按 planned listener 分流：repo 内 `copilot-lark-cli` / `legacy-lark-cli` / `none` 默认 fail closed；只有 `--planned-listener openclaw-websocket` 会给 warning 后允许继续。此时继续运行 `scripts/check_openclaw_feishu_websocket.py`，用 `channels.status`、credential probe 和 Feishu channel logs 判断是否真的 running；如果 OpenClaw 正在接收同一个 bot 的飞书事件，就不要再启动仓库内 lark-cli 监听。
 
 ## 推荐测试顺序
 

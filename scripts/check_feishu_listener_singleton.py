@@ -36,7 +36,9 @@ def main() -> int:
     print("Feishu listener singleton check OK.")
     print(f"Planned listener: {args.planned_listener}")
     print(listener_report(active))
-    if any(process.kind == "openclaw-gateway-unknown" for process in active):
+    if args.planned_listener == "openclaw-websocket" and any(
+        process.kind == "openclaw-gateway-unknown" for process in active
+    ):
         print(
             "Note: openclaw-gateway is running, but this process list cannot prove whether its Feishu websocket "
             "channel is active. If OpenClaw owns this bot, do not start lark-cli event +subscribe.",

@@ -37,6 +37,7 @@ class FeishuListenerGuardTest(unittest.TestCase):
             process_rows=[
                 "101 1 python3 -m memory_engine copilot-feishu listen",
                 "102 1 rg lark-cli event +subscribe",
+                "103 1 python3 -m unittest tests.test_openclaw_feishu_websocket_evidence",
             ],
         )
 
@@ -65,9 +66,19 @@ class FeishuListenerGuardTest(unittest.TestCase):
 
         self.assertIn("Only one listener", str(raised.exception))
 
-    def test_generic_openclaw_gateway_is_reported_but_not_blocking(self) -> None:
+    def test_generic_openclaw_gateway_blocks_lark_cli_listener(self) -> None:
+        with self.assertRaises(FeishuListenerConflict) as raised:
+            assert_single_feishu_listener(
+                "copilot-lark-cli",
+                current_pid=1,
+                process_rows=["401 1 openclaw-gateway"],
+            )
+
+        self.assertIn("openclaw-gateway-unknown", str(raised.exception))
+
+    def test_generic_openclaw_gateway_is_allowed_for_openclaw_planned_owner(self) -> None:
         active = assert_single_feishu_listener(
-            "copilot-lark-cli",
+            "openclaw-websocket",
             current_pid=1,
             process_rows=["401 1 openclaw-gateway"],
         )

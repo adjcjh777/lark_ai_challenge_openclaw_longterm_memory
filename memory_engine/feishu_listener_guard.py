@@ -74,6 +74,8 @@ def conflicting_listeners(
     conflicts: list[FeishuListenerProcess] = []
     for process in active:
         if process.kind == "openclaw-gateway-unknown":
+            if planned_listener != "openclaw-websocket":
+                conflicts.append(process)
             continue
         if planned_listener == "none" or process.kind != planned_listener:
             conflicts.append(process)
@@ -90,7 +92,9 @@ def classify_listener_command(command: str) -> ListenerKind | None:
         return "copilot-lark-cli"
     if "memory_engine" in normalized and " feishu " in f" {normalized} " and "listen" in normalized:
         return "legacy-lark-cli"
-    if "openclaw" in normalized and any(token in normalized for token in ("feishu", "lark", "websocket")):
+    if _looks_like_openclaw_command(normalized) and any(
+        token in normalized for token in ("feishu", "lark", "websocket")
+    ):
         return "openclaw-websocket"
     if "openclaw-gateway" in normalized or "openclaw gateway" in normalized:
         return "openclaw-gateway-unknown"
@@ -134,12 +138,22 @@ def _looks_like_search_command(command: str) -> bool:
     )
 
 
+def _looks_like_openclaw_command(command: str) -> bool:
+    tokens = command.split()
+    if not tokens:
+        return False
+    executable = tokens[0].rsplit("/", maxsplit=1)[-1]
+    if executable == "openclaw":
+        return True
+    return any(token.endswith("/openclaw") for token in tokens[:2])
+
+
 def _format_conflict(planned_listener: PlannedListener, processes: list[FeishuListenerProcess]) -> str:
     lines = [
         "Feishu listener singleton check failed.",
         f"Planned listener: {planned_listener}",
         "Only one listener may own the Feishu Memory Engine bot at a time.",
-        "Stop the conflicting process or choose OpenClaw websocket as the only listener.",
+        "Stop the conflicting process or choose OpenClaw websocket as the only Feishu event entrypoint.",
         "Conflicts:",
     ]
     lines.extend(f"- pid={process.pid} kind={process.kind} command={process.command}" for process in processes)

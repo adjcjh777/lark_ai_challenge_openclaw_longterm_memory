@@ -58,7 +58,7 @@ docs/productization/feishu-single-listener-handoff.md
 - OpenClaw schema：`agent_adapters/openclaw/memory_tools.schema.json`，当前 7 个工具。
 - Feishu live sandbox：当前稳定路径是 allowlist 测试群，或本地/pre-production 群策略显式启用的群；新群默认 `pending_onboarding`，只登记最小群节点和群策略，不写 raw_events、不创建 candidate。reviewer/admin 在当前群 `@Bot /enable_memory` 后，该群非 `@Bot` 消息才会先做静默 candidate probe，命中企业级记忆信号时进入 `memory.create_candidate` 和 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选优先通过 DM/private 定向给相关 reviewer / owner 审核，默认不回群消息；`@Bot` / 私聊仍走主动交互路径。普通问句不会因为命中“部署 / 负责人 / 截止”这类主题词就自动变成 candidate。lark-cli live 路径进入 `memory_engine/copilot/feishu_live.py -> handle_tool_request() -> CopilotService`；OpenClaw gateway 旁路已补 `route_gateway_message()` 本地静默筛选入口和群设置/启停入口，命中企业记忆信号时进入 `handle_tool_request("memory.create_candidate")` / `CopilotService`，`/settings`、`/enable_memory`、`/disable_memory` 则进入同一 `feishu_group_policies` 写入/审计路径。这仍不是真实 gateway 长期稳定路由证明。
 - 非 @ 群消息 live 投递：`scripts/check_feishu_passive_message_event_gate.py` 已可检查真实 lark-cli/OpenClaw NDJSON/JSON 事件日志，区分普通非 @ 群文本已到达、只看到 @Bot 消息、只看到 reaction 事件或目标群不匹配。当前还没有新的真实日志通过该 gate；如果结果仍是 `reaction_only_no_passive_message_event`，不能宣称 passive live 投递完成。
-- Feishu 单监听 preflight：`scripts/check_feishu_listener_singleton.py` 会在 repo 内 lark-cli listener 启动前拦截 legacy / copilot / direct lark-cli / 可识别 OpenClaw websocket 冲突；OpenClaw websocket、Copilot lark-cli sandbox、legacy fallback 三选一。
+- Feishu 单监听 preflight：`scripts/check_feishu_listener_singleton.py` 会在 repo 内 lark-cli listener 启动前拦截 legacy / copilot / direct lark-cli / 可识别 OpenClaw websocket 冲突；只看到泛化 `openclaw-gateway` 进程时，repo 内 lark-cli planned listener 也会 fail closed，只有 `--planned-listener openclaw-websocket` 可继续并必须结合 `channels.status` / gateway log 确认 Feishu channel 是否 active。OpenClaw websocket、Copilot lark-cli sandbox、legacy fallback 三选一。
 - Phase B OpenClaw Agent runtime evidence：`openclaw agent --agent main` run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过 `exec` 调用 `scripts/openclaw_runtime_evidence.py`，三条 Copilot flow 全部 `ok=true`，并保留 request_id、trace_id、permission_decision。
 - Phase D live embedding gate：`python3 scripts/check_live_embedding_gate.py --json` 已真实调用 `ollama/qwen3-embedding:0.6b-fp16`，返回 1024 维，并确认清理后无本项目 Ollama 模型驻留；healthcheck 仍保留 configuration-only，不把它写成长期 embedding 服务。
 - Cognee 主路径本地闭环：`memory.confirm` 成功后会把 curated memory fields 和 ledger metadata 通过 adapter add -> cognify 同步给 Cognee；`memory.reject` 会走 adapter withdrawal；Cognee 不可用或同步失败时返回 repository fallback；retrieval 已过滤未匹配本地 ledger 的 Cognee result。2026-05-01 已补当前 Cognee SDK 的 metadata-optional / async 调用兼容，并新增 `scripts/check_cognee_curated_sync_gate.py --json` 作为隔离真实 Cognee store gate；当前本机 LLM 仍会在 Cognee 结构化图谱抽取阶段触发 `InstructorRetryException`，所以长期 embedding 服务仍未完成。详见 [Cognee 主路径 handoff](handoffs/cognee-main-path-handoff.md)。
@@ -189,7 +189,7 @@ docs/productization/feishu-staging-runbook.md
 必须完成：
 
 1. 已完成：新增 `docs/productization/openclaw-runtime-evidence.md`。
-2. 已完成：真实 runtime 验收前先运行 `python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket`，确认没有 legacy `memory_engine feishu listen`、repo 内 `copilot-feishu listen` 或直接 `lark-cli event +subscribe` 同时消费同一个 bot。
+2. 已完成：真实 runtime 验收前先运行 `python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket`，确认没有 legacy `memory_engine feishu listen`、repo 内 `copilot-feishu listen` 或直接 `lark-cli event +subscribe` 同时消费同一个 bot；如果只看到泛化 `openclaw-gateway`，必须继续用 `channels.status` / gateway log 判断 Feishu channel 是否真的 active。
 3. 已完成：在真实 OpenClaw Agent runtime 中至少跑通 3 条：
    - 历史决策召回：Agent 调用 `memory.search`。
    - 候选确认：Agent 调用 `memory.create_candidate` 后再确认或拒绝。
@@ -212,7 +212,7 @@ ollama ps
 - 已完成：runtime evidence 文档可给评委或队友复现。
 - 已完成：至少 3 条 runtime flow 有证据。
 - 已完成：README 不再只依赖 local bridge 表述。
-- 已完成：验收记录能证明同一时间没有 repo 内 lark-cli listener 冲突；如果后续 OpenClaw websocket owns the bot，仍不得同时运行 lark-cli event listener。
+- 已完成：验收记录能证明同一时间没有 repo 内 lark-cli listener 冲突；如果后续 OpenClaw websocket owns the bot，仍不得同时运行 lark-cli event listener；如果泛化 `openclaw-gateway` 正在运行，repo 内 lark-cli planned listener 默认 fail closed。
 
 ## Phase C：Feishu Staging Runbook
 
