@@ -265,9 +265,13 @@ export FEISHU_MEMORY_COPILOT_ADMIN_HOST=127.0.0.1
 export FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765
 export FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=change-me-local-token
 export FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN=change-me-readonly-token
+# Optional reverse-proxy SSO gate; keep backend bound to 127.0.0.1.
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ENABLED=1
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ADMIN_USERS=admin@example.com
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS=example.com
 ```
 
-如果只是本机调试，不启动 OpenClaw / Feishu listener，也可以手动运行 fallback 脚本：
+如果只是本机调试，不启动 OpenClaw / Feishu listener，也可以手动运行 fallback 脚本。SSO header gate 只用于本机反向代理转发场景，直接远程绑定仍需要 bearer token 或会被启动脚本拒绝：
 
 ```bash
 python3 scripts/start_copilot_admin.py

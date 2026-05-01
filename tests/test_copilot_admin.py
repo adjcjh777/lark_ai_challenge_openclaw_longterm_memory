@@ -12,7 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from memory_engine.cli import build_parser
-from memory_engine.copilot.admin import AdminQueryService, create_admin_server, start_embedded_admin
+from memory_engine.copilot.admin import AdminQueryService, AdminSsoConfig, create_admin_server, start_embedded_admin
 from memory_engine.db import init_db
 from memory_engine.repository import MemoryRepository, now_ms
 from scripts.check_copilot_admin_readiness import run_admin_readiness
@@ -403,6 +403,56 @@ class CopilotAdminTest(unittest.TestCase):
             server.server_close()
             thread.join(timeout=5)
 
+    def test_http_admin_api_accepts_sso_headers_from_loopback_proxy(self) -> None:
+        self._seed_rows()
+        sso_config = AdminSsoConfig(
+            enabled=True,
+            admin_users=frozenset({"admin@example.com"}),
+            allowed_domains=frozenset({"example.com"}),
+        )
+        server = create_admin_server("127.0.0.1", 0, self.tmp.name, sso_config=sso_config)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(f"{base_url}/api/summary", timeout=5)
+            self.assertEqual(401, raised.exception.code)
+
+            request = Request(f"{base_url}/api/summary", headers={"X-Forwarded-Email": "reader@example.com"})
+            with urlopen(request, timeout=5) as response:
+                viewer_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(viewer_payload["ok"])
+            self.assertEqual(3, viewer_payload["data"]["memory_total"])
+
+            request = Request(
+                f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
+                headers={"X-Forwarded-Email": "reader@example.com"},
+            )
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(request, timeout=5)
+            self.assertEqual(403, raised.exception.code)
+
+            request = Request(
+                f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
+                headers={"X-Forwarded-Email": "admin@example.com"},
+            )
+            with urlopen(request, timeout=5) as response:
+                wiki_export = response.read().decode("utf-8")
+            self.assertIn("# 项目记忆卡册：project:admin_demo", wiki_export)
+
+            request = Request(f"{base_url}/api/health", headers={"X-Forwarded-Email": "admin@example.com"})
+            with urlopen(request, timeout=5) as response:
+                health = json.loads(response.read().decode("utf-8"))
+            self.assertEqual("enabled", health["data"]["auth"])
+            self.assertTrue(health["data"]["access_policy"]["sso_enabled"])
+            self.assertTrue(health["data"]["access_policy"]["sso_admin_users_configured"])
+            self.assertTrue(health["data"]["access_policy"]["sso_allowed_domains_configured"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
     def test_embedded_admin_starts_with_runtime_and_can_shutdown(self) -> None:
         self._seed_rows()
 
@@ -488,6 +538,36 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertFalse(viewer_only["ok"])
         self.assertEqual("pass", viewer_only["checks"]["remote_bind_auth"]["status"])
         self.assertEqual("fail", viewer_only["checks"]["access_policy"]["status"])
+
+        sso_ok = run_admin_readiness(
+            db_path=Path(self.tmp.name),
+            host="127.0.0.1",
+            admin_token=None,
+            sso_config=AdminSsoConfig(
+                enabled=True,
+                admin_users=frozenset({"admin@example.com"}),
+                allowed_domains=frozenset({"example.com"}),
+            ),
+            strict=True,
+        )
+        self.assertTrue(sso_ok["ok"])
+        self.assertEqual("pass", sso_ok["checks"]["remote_bind_auth"]["status"])
+        self.assertEqual("pass", sso_ok["checks"]["access_policy"]["status"])
+        self.assertTrue(sso_ok["checks"]["access_policy"]["sso_enabled"])
+
+        remote_sso_only = run_admin_readiness(
+            db_path=Path(self.tmp.name),
+            host="0.0.0.0",
+            admin_token=None,
+            sso_config=AdminSsoConfig(
+                enabled=True,
+                admin_users=frozenset({"admin@example.com"}),
+                allowed_domains=frozenset({"example.com"}),
+            ),
+            strict=True,
+        )
+        self.assertFalse(remote_sso_only["ok"])
+        self.assertEqual("fail", remote_sso_only["checks"]["remote_bind_auth"]["status"])
 
         too_few_cards = run_admin_readiness(
             db_path=Path(self.tmp.name),

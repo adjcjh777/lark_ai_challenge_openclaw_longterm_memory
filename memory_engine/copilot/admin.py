@@ -22,7 +22,41 @@ DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
 ADMIN_TOKEN_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_TOKEN", "COPILOT_ADMIN_TOKEN")
 ADMIN_VIEWER_TOKEN_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN", "COPILOT_ADMIN_VIEWER_TOKEN")
+ADMIN_SSO_ENABLED_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_SSO_ENABLED", "COPILOT_ADMIN_SSO_ENABLED")
+ADMIN_SSO_USER_HEADER_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_SSO_USER_HEADER", "COPILOT_ADMIN_SSO_USER_HEADER")
+ADMIN_SSO_EMAIL_HEADER_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_SSO_EMAIL_HEADER", "COPILOT_ADMIN_SSO_EMAIL_HEADER")
+ADMIN_SSO_ADMIN_USERS_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_SSO_ADMIN_USERS", "COPILOT_ADMIN_SSO_ADMIN_USERS")
+ADMIN_SSO_VIEWER_USERS_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_SSO_VIEWER_USERS", "COPILOT_ADMIN_SSO_VIEWER_USERS")
+ADMIN_SSO_ALLOWED_DOMAINS_ENV_NAMES = (
+    "FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS",
+    "COPILOT_ADMIN_SSO_ALLOWED_DOMAINS",
+)
 MAX_LIMIT = 200
+
+
+@dataclass(frozen=True)
+class AdminSsoConfig:
+    enabled: bool = False
+    user_header: str = "X-Forwarded-User"
+    email_header: str = "X-Forwarded-Email"
+    admin_users: frozenset[str] = frozenset()
+    viewer_users: frozenset[str] = frozenset()
+    allowed_domains: frozenset[str] = frozenset()
+
+    def role_for(self, *, user: str | None, email: str | None) -> str | None:
+        if not self.enabled:
+            return None
+        identities = {value.strip().lower() for value in (user, email) if value and value.strip()}
+        if not identities:
+            return None
+        if identities & self.admin_users:
+            return "admin"
+        if identities & self.viewer_users:
+            return "viewer"
+        for identity in identities:
+            if "@" in identity and identity.rsplit("@", 1)[1] in self.allowed_domains:
+                return "viewer"
+        return None
 
 
 @dataclass
@@ -56,11 +90,19 @@ def start_embedded_admin(
     enabled: bool = True,
     auth_token: str | None = None,
     viewer_token: str | None = None,
+    sso_config: AdminSsoConfig | None = None,
 ) -> EmbeddedAdminRuntime:
     if not enabled:
         return EmbeddedAdminRuntime(enabled=False, reason="disabled")
     try:
-        server = create_admin_server(host, port, db_path, auth_token=auth_token, viewer_token=viewer_token)
+        server = create_admin_server(
+            host,
+            port,
+            db_path,
+            auth_token=auth_token,
+            viewer_token=viewer_token,
+            sso_config=sso_config,
+        )
     except OSError as exc:
         return EmbeddedAdminRuntime(enabled=False, reason=f"bind_failed: {exc}")
 
@@ -924,6 +966,7 @@ class CopilotAdminServer(ThreadingHTTPServer):
     db_path: str
     auth_token: str | None
     viewer_token: str | None
+    sso_config: AdminSsoConfig
 
 
 def create_admin_server(
@@ -933,10 +976,12 @@ def create_admin_server(
     *,
     auth_token: str | None = None,
     viewer_token: str | None = None,
+    sso_config: AdminSsoConfig | None = None,
 ) -> CopilotAdminServer:
     resolved_db_path = str(db_path or db_path_from_env())
     resolved_auth_token = auth_token if auth_token is not None else _admin_token_from_env()
     resolved_viewer_token = viewer_token if viewer_token is not None else _admin_viewer_token_from_env()
+    resolved_sso_config = sso_config or admin_sso_config_from_env()
 
     class Handler(CopilotAdminHandler):
         pass
@@ -944,10 +989,12 @@ def create_admin_server(
     Handler.db_path = resolved_db_path
     Handler.auth_token = resolved_auth_token
     Handler.viewer_token = resolved_viewer_token
+    Handler.sso_config = resolved_sso_config
     server = CopilotAdminServer((host, port), Handler)
     server.db_path = resolved_db_path
     server.auth_token = resolved_auth_token
     server.viewer_token = resolved_viewer_token
+    server.sso_config = resolved_sso_config
     return server
 
 
@@ -955,6 +1002,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     db_path = str(db_path_from_env())
     auth_token: str | None = None
     viewer_token: str | None = None
+    sso_config = AdminSsoConfig()
     server_version = "FeishuMemoryCopilotAdmin/0.1"
 
     def do_GET(self) -> None:
@@ -1089,12 +1137,22 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 "db_path": self.db_path,
                 "data": {
                     "database": "readable",
-                    "auth": "enabled" if self.auth_token or self.viewer_token else "disabled_local_only",
+                    "auth": "enabled"
+                    if self.auth_token or self.viewer_token or self.sso_config.enabled
+                    else "disabled_local_only",
                     "access_policy": {
                         "admin_token_configured": bool(self.auth_token),
                         "viewer_token_configured": bool(self.viewer_token),
+                        "sso_enabled": bool(self.sso_config.enabled),
+                        "sso_user_header": self.sso_config.user_header if self.sso_config.enabled else None,
+                        "sso_email_header": self.sso_config.email_header if self.sso_config.enabled else None,
+                        "sso_admin_users_configured": bool(self.sso_config.admin_users),
+                        "sso_viewer_users_configured": bool(self.sso_config.viewer_users),
+                        "sso_allowed_domains_configured": bool(self.sso_config.allowed_domains),
                         "viewer_token_can_export": False,
-                        "wiki_export_requires_admin_token": bool(self.viewer_token or self.auth_token),
+                        "wiki_export_requires_admin_token": bool(
+                            self.viewer_token or self.auth_token or self.sso_config.enabled
+                        ),
                     },
                     "read_only": True,
                     "wiki_ready": bool(wiki.get("generation_policy"))
@@ -1247,7 +1305,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         )
 
     def _auth_role(self, query_string: str) -> str | None:
-        if not self.auth_token and not self.viewer_token:
+        if not self.auth_token and not self.viewer_token and not self.sso_config.enabled:
             return "admin"
         header = self.headers.get("Authorization", "")
         if header.lower().startswith("bearer "):
@@ -1263,7 +1321,19 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         viewer_query_token = _param(params, "viewer_token")
         if viewer_query_token and self.viewer_token and hmac.compare_digest(viewer_query_token, self.viewer_token):
             return "viewer"
+        sso_role = self._sso_auth_role()
+        if sso_role is not None:
+            return sso_role
         return None
+
+    def _sso_auth_role(self) -> str | None:
+        if not self.sso_config.enabled:
+            return None
+        if not _is_loopback_client(self.client_address[0]):
+            return None
+        user = self.headers.get(self.sso_config.user_header)
+        email = self.headers.get(self.sso_config.email_header)
+        return self.sso_config.role_for(user=user, email=email)
 
 
 def _open_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
@@ -1287,6 +1357,41 @@ def _admin_viewer_token_from_env() -> str | None:
         if value:
             return value
     return None
+
+
+def admin_sso_config_from_env() -> AdminSsoConfig:
+    return AdminSsoConfig(
+        enabled=_env_bool(ADMIN_SSO_ENABLED_ENV_NAMES),
+        user_header=_env_first(ADMIN_SSO_USER_HEADER_ENV_NAMES) or "X-Forwarded-User",
+        email_header=_env_first(ADMIN_SSO_EMAIL_HEADER_ENV_NAMES) or "X-Forwarded-Email",
+        admin_users=frozenset(_env_csv(ADMIN_SSO_ADMIN_USERS_ENV_NAMES)),
+        viewer_users=frozenset(_env_csv(ADMIN_SSO_VIEWER_USERS_ENV_NAMES)),
+        allowed_domains=frozenset(_env_csv(ADMIN_SSO_ALLOWED_DOMAINS_ENV_NAMES)),
+    )
+
+
+def _env_bool(names: tuple[str, ...]) -> bool:
+    value = _env_first(names)
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_first(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value.strip()
+    return None
+
+
+def _env_csv(names: tuple[str, ...]) -> list[str]:
+    value = _env_first(names)
+    if not value:
+        return []
+    return [item.strip().lower() for item in value.split(",") if item.strip()]
+
+
+def _is_loopback_client(address: str) -> bool:
+    return address in {"127.0.0.1", "::1", "localhost"} or address.startswith("127.")
 
 
 def _memory_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

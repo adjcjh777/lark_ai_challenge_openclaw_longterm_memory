@@ -15,7 +15,7 @@
 不覆盖：
 
 - 生产 DB 部署。
-- 企业 SSO。
+- 已接真实企业 IdP 的生产 SSO。
 - 完整多租户权限后台。
 - productized live 长期运行。
 
@@ -54,6 +54,19 @@ python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 ```
 
 readiness gate 会检查 SQLite schema、Wiki generation policy、Markdown export、compiled Graph、Tenants readiness、只读 API 和 access policy；Tenants check 只验证 ledger 派生租户清单和缺失生产能力边界，不代表已具备租户配置写入后台。
+
+可选企业 SSO header gate：
+
+```bash
+# 后端必须绑定 127.0.0.1，由 Nginx / oauth2-proxy / Feishu SSO 网关注入身份 header。
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ENABLED=1
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_USER_HEADER=X-Forwarded-User
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_EMAIL_HEADER=X-Forwarded-Email
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ADMIN_USERS=admin@example.com
+export FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS=example.com
+```
+
+SSO 命中的 allowed domain 默认是 viewer，只能浏览 `/api/*`；只有 `FEISHU_MEMORY_COPILOT_ADMIN_SSO_ADMIN_USERS` 命中的用户可以导出 Wiki Markdown。SSO header gate 是反向代理后的 staging / enterprise auth 接入点，不等于已接入真实 Feishu workspace SSO 或企业 IdP 生产验收。
 
 ## 3. 启动
 
@@ -183,6 +196,7 @@ wiki/project_feishu_ai_challenge.md
 - 已完成本地 / staging 只读 LLM Wiki 和知识图谱后台。
 - 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出、静态知识站导出和敏感字段脱敏。
 - 已有 admin / viewer token 分级：viewer 只读浏览，admin 才能导出 Wiki Markdown。
+- 已有可选 reverse-proxy SSO header gate：admin allowlist 可导出，allowed domain viewer 只能浏览；直接远程绑定仍需 bearer token。
 - 已有 tenant / organization 只读过滤和 Tenants readiness 概览，可用于 staging 下检查租户边界展示与上线缺口。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
@@ -190,5 +204,5 @@ wiki/project_feishu_ai_challenge.md
 
 - 已完成生产部署。
 - 已完成完整多租户企业后台。
-- 已完成企业 SSO。
+- 已接入真实企业 IdP / Feishu workspace SSO 并完成生产验收。
 - 已完成 productized live 长期运行。

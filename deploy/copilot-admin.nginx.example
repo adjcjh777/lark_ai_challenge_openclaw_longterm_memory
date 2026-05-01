@@ -25,6 +25,20 @@ server {
     }
 
     location / {
+        # Optional enterprise SSO pattern:
+        # - Put oauth2-proxy, Feishu SSO, or another IdP in front of this location.
+        # - Keep the Python admin backend bound to 127.0.0.1.
+        # - Set FEISHU_MEMORY_COPILOT_ADMIN_SSO_ENABLED=1 and configure
+        #   FEISHU_MEMORY_COPILOT_ADMIN_SSO_ADMIN_USERS /
+        #   FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS.
+        #
+        # Example with an auth_request endpoint that returns identity headers:
+        # auth_request /oauth2/auth;
+        # auth_request_set $sso_user $upstream_http_x_auth_request_user;
+        # auth_request_set $sso_email $upstream_http_x_auth_request_email;
+        # proxy_set_header X-Forwarded-User $sso_user;
+        # proxy_set_header X-Forwarded-Email $sso_email;
+
         proxy_pass http://127.0.0.1:8765;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

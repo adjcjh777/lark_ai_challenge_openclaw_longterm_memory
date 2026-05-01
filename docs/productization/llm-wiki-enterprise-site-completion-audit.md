@@ -16,11 +16,11 @@
 
 | 要求 | 当前判定 | 证据 | 缺口 |
 | --- | --- | --- | --- |
-| LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site.py`、`README.md` 静态导出说明 | 还没有生产域名、SSO、长期运行证据 |
+| LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
 | 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤 | 还不是完整租户管理控制台 |
 | 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格 | 还缺设计系统级组件抽象和完整视觉回归流水线 |
-| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`scripts/check_copilot_admin_readiness.py --strict`、admin/viewer token 分级 | 生产 DB、企业 SSO、域名证书、运行监控、长期 productized live 仍未完成 |
+| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`scripts/check_copilot_admin_readiness.py --strict`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、运行监控、长期 productized live 仍未完成 |
 
 ## 2. Prompt-to-Artifact Checklist
 
@@ -39,6 +39,7 @@
 | Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata |
 | read-only API gate | `tests/test_copilot_admin.py` | `POST` 等写请求返回 `405` |
 | admin/viewer token gate | `tests/test_copilot_admin.py`、`scripts/check_copilot_admin_readiness.py` | admin 可导出；viewer 只读；token 相同被启动脚本拒绝 |
+| reverse-proxy SSO header gate | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py`、`deploy/copilot-admin.nginx.example` | 本机反向代理注入 `X-Forwarded-Email` 后，admin allowlist 可导出，allowed domain viewer 只能浏览；非生产 IdP 验收 |
 | staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、read-only API、access policy |
 | OpenClaw 固定版本 | `python3 scripts/check_openclaw_version.py` | 验证 `2026.4.24` 锁定 |
 | harness contract | `python3 scripts/check_agent_harness.py` | 验证 AGENTS、执行 contract、Cognee adapter 边界 |
@@ -119,8 +120,8 @@ static-site-mobile.png
 
 以下项目仍然阻止“完整版生产上线完成”结论：
 
-1. 企业 SSO 未接入。当前是 admin/viewer bearer token gate，不是 Feishu workspace SSO 或企业 IdP。
-2. 完整多租户企业后台未完成。当前数据结构带 tenant/org 字段，后台展示和 API 支持只读过滤与 Tenants readiness 概览，但没有 tenant 配置写入、租户级策略编辑、角色配置或企业 SSO。
+1. 真实企业 SSO 未完成生产验收。当前新增的是 reverse-proxy SSO header gate，本机反向代理可注入企业用户 header，但还没有接真实 Feishu workspace SSO 或企业 IdP 并完成生产验收。
+2. 完整多租户企业后台未完成。当前数据结构带 tenant/org 字段，后台展示和 API 支持只读过滤与 Tenants readiness 概览，但没有 tenant 配置写入、租户级策略编辑或角色配置。
 3. 生产 DB 部署未完成。当前 runbook 覆盖本地 / staging SQLite 只读 admin，不覆盖生产数据库运维。
 4. 长期 productized live 未完成。当前不能声明真实 Feishu DM 稳定路由到 first-class `memory.*` 工具或长期线上运行。
 5. 监控告警未完成。已有 health/readiness，但没有生产级 uptime、延迟、错误率、审计异常告警。

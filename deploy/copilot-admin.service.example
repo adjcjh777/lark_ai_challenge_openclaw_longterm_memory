@@ -7,8 +7,10 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/feishu_ai_challenge
-# admin.env should include MEMORY_DB_PATH, bind host/port, an admin token for export,
-# and optionally a distinct viewer token for read-only browsing.
+# admin.env should include MEMORY_DB_PATH and bind host/port.
+# For shared access, configure either distinct admin/viewer bearer tokens, or bind to
+# 127.0.0.1 behind a reverse proxy SSO gate and set the SSO env vars documented in
+# docs/productization/admin-llm-wiki-launch-runbook.md.
 EnvironmentFile=/etc/feishu-memory-copilot/admin.env
 ExecStart=/usr/bin/env python3 scripts/start_copilot_admin.py \
   --host ${FEISHU_MEMORY_COPILOT_ADMIN_HOST} \

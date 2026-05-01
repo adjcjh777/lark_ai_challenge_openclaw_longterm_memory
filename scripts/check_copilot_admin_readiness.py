@@ -18,6 +18,8 @@ from memory_engine.copilot.admin import (
     ADMIN_VIEWER_TOKEN_ENV_NAMES,
     DEFAULT_ADMIN_HOST,
     AdminQueryService,
+    AdminSsoConfig,
+    admin_sso_config_from_env,
 )
 from memory_engine.db import db_path_from_env
 
@@ -59,6 +61,7 @@ def main() -> int:
         host=args.host,
         admin_token=args.admin_token or _admin_token_from_env(),
         viewer_token=args.viewer_token or _admin_viewer_token_from_env(),
+        sso_config=admin_sso_config_from_env(),
         strict=args.strict,
         min_wiki_cards=args.min_wiki_cards,
     )
@@ -77,20 +80,24 @@ def run_admin_readiness(
     host: str,
     admin_token: str | None,
     viewer_token: str | None = None,
+    sso_config: AdminSsoConfig | None = None,
     strict: bool = False,
     min_wiki_cards: int | None = None,
 ) -> dict[str, Any]:
     required_wiki_cards = 1 if strict and min_wiki_cards is None else int(min_wiki_cards or 0)
+    resolved_sso_config = sso_config or AdminSsoConfig()
     checks: dict[str, dict[str, Any]] = {
         "remote_bind_auth": _remote_bind_auth_check(
             host=host,
             admin_token=admin_token,
             viewer_token=viewer_token,
+            sso_config=resolved_sso_config,
             require_auth=strict,
         ),
         "access_policy": _access_policy_check(
             admin_token=admin_token,
             viewer_token=viewer_token,
+            sso_config=resolved_sso_config,
             require_export_admin=strict or required_wiki_cards > 0,
         ),
     }
@@ -275,21 +282,33 @@ def _remote_bind_auth_check(
     host: str,
     admin_token: str | None,
     viewer_token: str | None,
+    sso_config: AdminSsoConfig,
     require_auth: bool,
 ) -> dict[str, Any]:
     remote_bind = host not in {"127.0.0.1", "localhost", "::1"}
-    if (remote_bind or require_auth) and not (admin_token or viewer_token):
+    auth_configured = bool(admin_token or viewer_token or sso_config.enabled)
+    if remote_bind and not (admin_token or viewer_token):
         return {
             "status": "fail",
             "host": host,
             "auth": "missing",
-            "next_step": "Set an admin or viewer token before launch.",
+            "sso_enabled": sso_config.enabled,
+            "next_step": "Bind SSO-backed admin to loopback behind a reverse proxy, or set an admin/viewer token.",
+        }
+    if require_auth and not auth_configured:
+        return {
+            "status": "fail",
+            "host": host,
+            "auth": "missing",
+            "sso_enabled": sso_config.enabled,
+            "next_step": "Set an admin/viewer token or enable the SSO header gate before launch.",
         }
     return {
-        "status": "pass" if admin_token or viewer_token else "warning",
+        "status": "pass" if auth_configured else "warning",
         "host": host,
-        "auth": "enabled" if admin_token or viewer_token else "disabled_local_only",
-        "next_step": "" if admin_token or viewer_token else "Set an access token before any shared/staging deployment.",
+        "auth": "enabled" if auth_configured else "disabled_local_only",
+        "sso_enabled": sso_config.enabled,
+        "next_step": "" if auth_configured else "Set an access token before any shared/staging deployment.",
     }
 
 
@@ -297,6 +316,7 @@ def _access_policy_check(
     *,
     admin_token: str | None,
     viewer_token: str | None,
+    sso_config: AdminSsoConfig,
     require_export_admin: bool,
 ) -> dict[str, Any]:
     if admin_token and viewer_token and admin_token == viewer_token:
@@ -307,21 +327,32 @@ def _access_policy_check(
             "viewer_token_can_export": True,
             "next_step": "Use distinct admin and viewer tokens before launch.",
         }
-    if require_export_admin and not admin_token:
+    sso_admin_configured = bool(sso_config.enabled and sso_config.admin_users)
+    sso_viewer_configured = bool(sso_config.enabled and (sso_config.viewer_users or sso_config.allowed_domains))
+    if require_export_admin and not (admin_token or sso_admin_configured):
         return {
             "status": "fail",
             "admin_token_configured": False,
             "viewer_token_configured": bool(viewer_token),
+            "sso_enabled": sso_config.enabled,
+            "sso_admin_users_configured": bool(sso_config.admin_users),
+            "sso_viewer_access_configured": sso_viewer_configured,
             "viewer_token_can_export": False,
-            "next_step": "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN for Wiki export.",
+            "next_step": "Set FEISHU_MEMORY_COPILOT_ADMIN_TOKEN or SSO admin users for Wiki export.",
         }
-    status = "pass" if admin_token else "warning"
+    status = "pass" if admin_token or sso_admin_configured else "warning"
     return {
         "status": status,
         "admin_token_configured": bool(admin_token),
         "viewer_token_configured": bool(viewer_token),
+        "sso_enabled": sso_config.enabled,
+        "sso_admin_users_configured": bool(sso_config.admin_users),
+        "sso_viewer_access_configured": sso_viewer_configured,
+        "sso_allowed_domains_configured": bool(sso_config.allowed_domains),
         "viewer_token_can_export": False,
-        "next_step": "" if admin_token else "Viewer-only mode can browse but cannot export Wiki markdown.",
+        "next_step": ""
+        if admin_token or sso_admin_configured
+        else "Viewer-only mode can browse but cannot export Wiki markdown.",
     }
 
 
