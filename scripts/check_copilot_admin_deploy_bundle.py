@@ -176,6 +176,18 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="external_production_evidence_collector",
+        path="scripts/collect_copilot_external_production_evidence.py",
+        description="External production evidence collector emits IdP, TLS, and monitoring manifest patches.",
+        required_patterns=(
+            "collect_external_production_evidence",
+            "enterprise_idp_sso",
+            "production_domain_tls",
+            "production_monitoring",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="long_run_evidence_collector",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         description="Long-run evidence collector probes a running Admin backend and emits a productized live manifest patch.",
@@ -224,11 +236,11 @@ CHECKS = (
 PRODUCTION_BLOCKERS = (
     {
         "id": "real_domain_tls",
-        "description": "Template has TLS placeholders, but no real production domain or certificate has been validated.",
+        "description": "External evidence collector exists, but no real production domain or certificate evidence is present.",
     },
     {
         "id": "real_enterprise_idp",
-        "description": "SSO is verified only as loopback reverse-proxy header behavior, not real enterprise IdP login.",
+        "description": "External evidence collector exists, but no real enterprise IdP login evidence is present.",
     },
     {
         "id": "production_database",
@@ -236,7 +248,7 @@ PRODUCTION_BLOCKERS = (
     },
     {
         "id": "production_monitoring_delivery",
-        "description": "Alert rules are present, but production Prometheus/Grafana/Alertmanager delivery is not proven.",
+        "description": "External evidence collector exists, but production Prometheus/Grafana/Alertmanager delivery is not proven.",
     },
     {
         "id": "long_running_live_ops",

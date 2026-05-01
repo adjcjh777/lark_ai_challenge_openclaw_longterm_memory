@@ -85,6 +85,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `collect_copilot_production_db_evidence.py` 用于规范真实 PostgreSQL / managed PostgreSQL 证据：它接收迁移时间、PITR 开关、恢复演练时间和非密钥 evidence ref，输出可填入 production evidence manifest 的 `production_db` patch。它不会创建、连接、迁移、备份或恢复生产数据库；真实生产 DB gate 仍必须由托管数据库控制台、迁移日志、PITR 配置和恢复演练日志提供外部证据。
 
+`collect_copilot_external_production_evidence.py` 用于规范真实企业 IdP / SSO、生产域名 TLS 和生产监控投递证据：它接收登录测试、viewer 导出拒绝、证书有效期、HSTS、Prometheus scrape、Grafana dashboard、Alertmanager route 和告警投递测试时间，输出 `enterprise_idp_sso`、`production_domain_tls`、`production_monitoring` manifest patch。它不会执行真实登录、签发证书、配置 Grafana 或发送告警；真实生产 gate 仍必须由外部系统日志、截图或运维记录支撑。
+
 `collect_copilot_admin_long_run_evidence.py` 用于真实运行窗口的证据采集：它会探测正在运行的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，并输出可填入 production evidence manifest 的 `productized_live_long_run` patch。采集器本身不创建生产 DB、IdP、TLS、监控或生产 readiness。
 
 `check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
@@ -205,6 +207,32 @@ python3 scripts/collect_copilot_production_db_evidence.py \
 ```
 
 这个命令只生成 `production_manifest_patch.production_db`。不要把它的通过结果写成生产 DB 已部署；必须把真实托管 PostgreSQL / PITR / restore drill 的外部证据一起交给 `check_copilot_admin_production_evidence.py --require-production-ready`。
+
+外部入口证据 patch 生成示例：
+
+```bash
+python3 scripts/collect_copilot_external_production_evidence.py \
+  --idp-provider feishu_sso \
+  --idp-login-tested-at 2026-05-01T10:00:00+08:00 \
+  --idp-admin-login-passed \
+  --idp-viewer-export-denied \
+  --idp-allowed-domain company.internal \
+  --idp-evidence-ref ops/idp-smoke-20260501 \
+  --tls-url https://memory.company.internal \
+  --tls-validated-at 2026-05-01T11:00:00+08:00 \
+  --tls-certificate-subject CN=memory.company.internal \
+  --tls-certificate-expires-at 2099-01-01T00:00:00+00:00 \
+  --tls-hsts-enabled \
+  --tls-evidence-ref ops/tls-check-20260501 \
+  --prometheus-scrape-proven \
+  --grafana-dashboard-url https://grafana.company.internal/d/copilot-admin \
+  --alertmanager-route team-memory-copilot \
+  --alert-delivery-tested-at 2026-05-01T12:00:00+08:00 \
+  --monitoring-evidence-ref ops/alert-delivery-20260501 \
+  --json
+```
+
+这个命令只生成 `enterprise_idp_sso`、`production_domain_tls` 和 `production_monitoring` patch。不要把它的通过结果写成真实 IdP、TLS 或生产监控已完成；仍需要外部系统证据和 `check_copilot_admin_production_evidence.py --require-production-ready` 统一验收。
 
 本地/staging 长跑采集 smoke：
 

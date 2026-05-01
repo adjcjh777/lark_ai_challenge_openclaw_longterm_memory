@@ -168,6 +168,18 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="External production evidence collector emits IdP, TLS, and monitoring manifest patches.",
+        path="scripts/collect_copilot_external_production_evidence.py",
+        contains=(
+            "collect_external_production_evidence",
+            "enterprise_idp_sso",
+            "production_domain_tls",
+            "production_monitoring",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Long-run evidence collector samples the running Admin backend and emits a productized live manifest patch.",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         contains=(
@@ -279,17 +291,17 @@ PRODUCTION_BLOCKERS = (
     {
         "id": "enterprise_idp_sso",
         "description": "Real enterprise IdP / Feishu SSO production validation is not complete.",
-        "evidence": "SSO verifier covers loopback reverse-proxy headers only.",
+        "evidence": "A collector exists for IdP evidence patches, but real enterprise login evidence is not present.",
     },
     {
         "id": "production_domain_tls",
         "description": "Production domain and TLS certificate delivery are not evidenced.",
-        "evidence": "Deployment templates exist, but no production host/certificate proof is present.",
+        "evidence": "A collector exists for TLS evidence patches, but no production host/certificate proof is present.",
     },
     {
         "id": "production_monitoring",
         "description": "Production Prometheus/Grafana / Alertmanager delivery is not validated.",
-        "evidence": "Alert-rule artifact exists for staging; production scrape/alert delivery is not proven.",
+        "evidence": "A collector exists for monitoring evidence patches, but production scrape/alert delivery is not proven.",
     },
     {
         "id": "productized_live_long_run",

@@ -336,6 +336,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `collect_copilot_production_db_evidence.py` 会把真实 PostgreSQL / managed PostgreSQL 迁移、PITR 和恢复演练证据规范成 production evidence manifest 的 `production_db` patch；它只校验 evidence ref、时间戳和报告摘要，不创建或连接生产数据库。
 
+`collect_copilot_external_production_evidence.py` 会把真实企业 IdP / SSO、生产域名 TLS、Prometheus/Grafana/Alertmanager 投递证据规范成 production evidence manifest patch；它不执行真实登录、证书签发、Prometheus scrape 或告警投递。
+
 `collect_copilot_admin_long_run_evidence.py` 会探测运行中的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，生成可合并到 production evidence manifest 的 `productized_live_long_run` patch；短跑 smoke 只证明采集器可用，不代表 productized live 长期运行完成。
 
 `check_copilot_knowledge_site_export.py` 会导出一个临时静态知识站，并校验 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json`、`data/graph-quality.json`、`wiki/*.md`、Graph detail / Relationship Focus / Graph quality UI、read-only boundary 和 secret-like 文本脱敏。
