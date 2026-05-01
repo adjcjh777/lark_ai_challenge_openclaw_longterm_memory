@@ -310,6 +310,7 @@ open reports/copilot-knowledge-site/index.html
 导出包固定包含 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json` 和 `wiki/*.md`。`index.html` 提供 LLM Wiki、Knowledge Graph、搜索过滤和节点/边详情面板；它只读取 active curated memory、evidence 和知识图谱视图，不读取全部 raw events，也不写 SQLite / Feishu / Bitable。
 
 详细启动、探活、验收和回滚步骤见 [LLM Wiki / Graph Admin Launch Runbook](docs/productization/admin-llm-wiki-launch-runbook.md)。
+当前目标完成度、证据清单和生产缺口见 [LLM Wiki Enterprise Knowledge Site Completion Audit](docs/productization/llm-wiki-enterprise-site-completion-audit.md)。
 受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
 这个后台只开放 `GET` / `HEAD` 查询接口，写请求会返回 `405`。它是本机运维/调试入口，不代表生产部署或完整多租户企业后台。
