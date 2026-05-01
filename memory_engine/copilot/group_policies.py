@@ -96,6 +96,7 @@ def enable_group_memory(
     actor_id: str,
     actor_roles: list[str],
     reviewer_open_ids: list[str] | None = None,
+    source_entrypoint: str = "feishu_test_group",
 ) -> dict[str, Any]:
     now = now_ms()
     existing = ensure_group_policy(
@@ -165,7 +166,7 @@ def enable_group_memory(
         request_id=f"req_{policy_id}_{now}",
         trace_id=f"trace_{policy_id}_{now}",
         visible_fields=["chat_id", "scope", "visibility_policy", "status", "passive_memory_enabled"],
-        source_context={"entrypoint": "feishu_test_group", "chat_id": chat_id},
+        source_context={"entrypoint": source_entrypoint, "chat_id": chat_id},
         created_at=now,
     )
     return get_group_policy(
@@ -186,6 +187,7 @@ def disable_group_memory(
     visibility_policy: str,
     actor_id: str,
     actor_roles: list[str],
+    source_entrypoint: str = "feishu_test_group",
 ) -> dict[str, Any]:
     now = now_ms()
     existing = ensure_group_policy(
@@ -236,7 +238,7 @@ def disable_group_memory(
         request_id=f"req_{policy_id}_{now}",
         trace_id=f"trace_{policy_id}_{now}",
         visible_fields=["chat_id", "scope", "visibility_policy", "status", "passive_memory_enabled"],
-        source_context={"entrypoint": "feishu_test_group", "chat_id": chat_id},
+        source_context={"entrypoint": source_entrypoint, "chat_id": chat_id},
         created_at=now,
     )
     return get_group_policy(
@@ -257,6 +259,7 @@ def record_group_policy_denied(
     actor_id: str,
     actor_roles: list[str],
     action: str,
+    source_entrypoint: str = "feishu_test_group",
 ) -> str:
     now = now_ms()
     policy_id = _policy_id(tenant_id, organization_id, chat_id)
@@ -276,7 +279,7 @@ def record_group_policy_denied(
         request_id=f"req_{policy_id}_{now}",
         trace_id=f"trace_{policy_id}_{now}",
         redacted_fields=["group_policy_write"],
-        source_context={"entrypoint": "feishu_test_group", "chat_id": chat_id},
+        source_context={"entrypoint": source_entrypoint, "chat_id": chat_id},
         created_at=now,
     )
 

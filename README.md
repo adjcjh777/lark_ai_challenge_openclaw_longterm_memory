@@ -24,7 +24,7 @@
   - **不 `@Bot`** 的消息会做静默 candidate probe；命中企业级记忆信号时进入 `memory.create_candidate`，再由 review policy 判断低风险自动确认或私聊人工审核，默认不回群消息。
   - **`@Bot`** 的消息仍走主动交互路径：搜索、候选确认、版本解释、prefetch 等。
   - 当用户主动 `@Bot` 创建 candidate 后，创建者自己会收到可点击的确认卡片；创建者按 owner 身份可以直接确认，不必额外进入 reviewer allowlist。
-- OpenClaw gateway 旁路脚本已补本地 `route_gateway_message()` 静默筛选入口：allowlist 群里未 `@Bot` 的低信号/问句会静默忽略，命中企业记忆信号才进入 `handle_tool_request("memory.create_candidate")` / `CopilotService`；这仍是本地受控入口，不等于真实 gateway 长期运行已完成。
+- OpenClaw gateway 旁路脚本已补本地 `route_gateway_message()` 统一入口：allowlist 群里未 `@Bot` 的低信号/问句会静默忽略，命中企业记忆信号才进入 `handle_tool_request("memory.create_candidate")` / `CopilotService`；`/settings`、`/enable_memory`、`/disable_memory` 也可在 gateway 抢到事件时走同一群策略写入/审计路径，避免回落旧 agent；这仍是本地受控入口，不等于真实 gateway 长期运行已完成。
 - 普通问句不会因为命中了“部署 / 负责人 / 截止”这类主题词就自动变成 candidate。
 - 真实飞书来源不再“一律 candidate-only”：低重要性、无冲突、无敏感风险的候选可以由 policy 自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容仍必须停在 candidate，优先通过 DM/private 定向推给相关 reviewer / owner 确认。当前已完成 publisher 层定向 DM 发送和本地测试；真实飞书长期运行仍不宣称完成。
 - 群级设置已有受控入口：`/settings` 或 `/group_settings` 展示 allowlist / 当前群策略、审核投递、auto-confirm policy、scope/visibility 和生产边界；`/enable_memory` / `/disable_memory` 可写本地/pre-production 群策略，但要求 reviewer/admin 授权，并写入审计。
@@ -35,7 +35,7 @@
 
 | 能力 | 当前状态 | 主要证据 |
 |---|---|---|
-| OpenClaw memory 工具 | 已完成本机 first-class tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw gateway 本地静默候选筛选入口，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`scripts/openclaw_feishu_remember_router.py`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py`、`tests/test_openclaw_feishu_remember_router.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` |
+| OpenClaw memory 工具 | 已完成本机 first-class tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw gateway 本地静默候选筛选和群设置/启停入口，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据 | `agent_adapters/openclaw/plugin/`、`agent_adapters/openclaw/memory_tools.schema.json`、`scripts/openclaw_feishu_remember_router.py`、`tests/test_openclaw_tool_registry.py`、`tests/test_feishu_dm_routing.py`、`tests/test_openclaw_feishu_remember_router.py`、`docs/productization/handoffs/feishu-dm-routing-handoff.md` |
 | Copilot Core | 已完成核心服务层 | `memory_engine/copilot/service.py`、`tools.py`、`governance.py`、`retrieval.py` |
 | 权限门控 | 已完成 fail-closed 本地闭环 | `memory_engine/copilot/permissions.py`、`tests/test_copilot_permissions.py` |
 | 真实飞书权限映射 | 已完成本地权限映射闭环 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/permissions.py`、`docs/productization/handoffs/real-feishu-permission-mapping-handoff.md` |

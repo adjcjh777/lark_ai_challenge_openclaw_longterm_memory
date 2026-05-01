@@ -6,7 +6,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from memory_engine.db import connect, init_db
-from scripts.openclaw_feishu_remember_router import build_remember_payload, route_gateway_message, route_remember_message
+from scripts.openclaw_feishu_remember_router import (
+    build_remember_payload,
+    route_gateway_group_policy,
+    route_gateway_message,
+    route_remember_message,
+)
 
 SCOPE = "project:feishu_ai_challenge"
 CHAT_ID = "oc_openclaw_remember_router_test"
@@ -175,6 +180,158 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertTrue(result["ignored"])
         self.assertIsNone(result["card"])
         self.assertEqual("chat_not_allowlisted", result["message_disposition"]["reason_code"])
+
+    def test_gateway_group_settings_returns_pending_policy_card_without_live_listener(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="/settings",
+                message_id="om_router_settings",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_settings", result["tool"])
+        self.assertEqual("openclaw_gateway_group_settings", result["routing_reason"])
+        self.assertEqual("openclaw_gateway_live", result["source_entrypoint"])
+        self.assertEqual("pending_onboarding", result["tool_result"]["chat_status"])
+        self.assertFalse(result["tool_result"]["passive_memory_enabled"])
+        self.assertIsNotNone(result["card"])
+        self.assertEqual("group_settings", result["message_disposition"]["memory_path"])
+
+    def test_gateway_enable_memory_by_reviewer_writes_group_policy_and_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            with patch.dict("os.environ", {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": SENDER_OPEN_ID}, clear=False):
+                result = route_gateway_group_policy(
+                    text="/enable_memory",
+                    message_id="om_router_enable",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    action="enable",
+                    db_path=str(db_path),
+                )
+
+            conn = connect(db_path)
+            try:
+                policy = conn.execute(
+                    "SELECT status, passive_memory_enabled FROM feishu_group_policies WHERE chat_id = ?",
+                    (CHAT_ID,),
+                ).fetchone()
+                audit = conn.execute(
+                    """
+                    SELECT permission_decision, reason_code, source_context
+                    FROM memory_audit_events
+                    WHERE event_type = 'feishu_group_policy_enabled'
+                    """
+                ).fetchone()
+            finally:
+                conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_enable_memory", result["tool"])
+        self.assertEqual("enabled", result["tool_result"]["status"])
+        self.assertEqual("active", policy["status"])
+        self.assertEqual(1, policy["passive_memory_enabled"])
+        self.assertEqual("allow", audit["permission_decision"])
+        self.assertEqual("authorized_group_memory_enable", audit["reason_code"])
+        self.assertIn("openclaw_gateway_live", audit["source_context"])
+
+    def test_gateway_enable_memory_by_member_is_denied_and_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            with patch.dict("os.environ", {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+                result = route_gateway_message(
+                    text="/enable_memory",
+                    message_id="om_router_enable_denied",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=False,
+                    db_path=str(db_path),
+                )
+
+            conn = connect(db_path)
+            try:
+                active_count = conn.execute(
+                    "SELECT COUNT(*) AS count FROM feishu_group_policies WHERE chat_id = ? AND status = 'active'",
+                    (CHAT_ID,),
+                ).fetchone()["count"]
+                audit = conn.execute(
+                    """
+                    SELECT permission_decision, reason_code, source_context
+                    FROM memory_audit_events
+                    WHERE event_type = 'feishu_group_policy_denied'
+                    """
+                ).fetchone()
+            finally:
+                conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_enable_memory", result["tool"])
+        self.assertFalse(result["tool_result"]["ok"])
+        self.assertEqual("permission_denied", result["tool_result"]["status"])
+        self.assertEqual(0, active_count)
+        self.assertEqual("deny", audit["permission_decision"])
+        self.assertEqual("reviewer_or_admin_required", audit["reason_code"])
+        self.assertIn("openclaw_gateway_live", audit["source_context"])
+
+    def test_gateway_disable_memory_by_reviewer_closes_passive_screening(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            with patch.dict("os.environ", {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": SENDER_OPEN_ID}, clear=False):
+                route_gateway_group_policy(
+                    text="/enable_memory",
+                    message_id="om_router_enable_before_disable",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    action="enable",
+                    db_path=str(db_path),
+                )
+                result = route_gateway_group_policy(
+                    text="/disable_memory",
+                    message_id="om_router_disable",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    action="disable",
+                    db_path=str(db_path),
+                )
+
+            conn = connect(db_path)
+            try:
+                policy = conn.execute(
+                    "SELECT status, passive_memory_enabled FROM feishu_group_policies WHERE chat_id = ?",
+                    (CHAT_ID,),
+                ).fetchone()
+            finally:
+                conn.close()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_disable_memory", result["tool"])
+        self.assertEqual("disabled", result["tool_result"]["status"])
+        self.assertEqual("disabled", policy["status"])
+        self.assertEqual(0, policy["passive_memory_enabled"])
 
 
 if __name__ == "__main__":
