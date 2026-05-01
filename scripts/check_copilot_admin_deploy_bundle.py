@@ -165,6 +165,17 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="production_db_evidence_collector",
+        path="scripts/collect_copilot_production_db_evidence.py",
+        description="Production DB evidence collector emits a PostgreSQL/PITR manifest patch without deploying storage.",
+        required_patterns=(
+            "collect_production_db_evidence",
+            "production_manifest_patch",
+            "production_db",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="long_run_evidence_collector",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         description="Long-run evidence collector probes a running Admin backend and emits a productized live manifest patch.",
@@ -221,7 +232,7 @@ PRODUCTION_BLOCKERS = (
     },
     {
         "id": "production_database",
-        "description": "Bundle still targets SQLite staging storage; production PostgreSQL/PITR is not deployed.",
+        "description": "Production DB evidence collector exists, but real PostgreSQL/PITR deployment evidence is not present.",
     },
     {
         "id": "production_monitoring_delivery",

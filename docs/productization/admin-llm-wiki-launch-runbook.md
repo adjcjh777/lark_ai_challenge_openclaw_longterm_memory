@@ -83,6 +83,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json`，确认生产证据 manifest 结构完整且不含密钥明文；示例文件的预期输出是 `ok=true`、`production_ready=false`。真实上线验收时，复制该 manifest 到受控环境，填入真实 DB / IdP / TLS / monitoring / long-run 证据后运行 `python3 scripts/check_copilot_admin_production_evidence.py --manifest <path> --require-production-ready --json`。
 
+`collect_copilot_production_db_evidence.py` 用于规范真实 PostgreSQL / managed PostgreSQL 证据：它接收迁移时间、PITR 开关、恢复演练时间和非密钥 evidence ref，输出可填入 production evidence manifest 的 `production_db` patch。它不会创建、连接、迁移、备份或恢复生产数据库；真实生产 DB gate 仍必须由托管数据库控制台、迁移日志、PITR 配置和恢复演练日志提供外部证据。
+
 `collect_copilot_admin_long_run_evidence.py` 用于真实运行窗口的证据采集：它会探测正在运行的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，并输出可填入 production evidence manifest 的 `productized_live_long_run` patch。采集器本身不创建生产 DB、IdP、TLS、监控或生产 readiness。
 
 `check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
@@ -188,6 +190,21 @@ curl -fsS \
   -H "Authorization: Bearer $FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" \
   http://127.0.0.1:8765/metrics
 ```
+
+生产 DB 证据 patch 生成示例：
+
+```bash
+python3 scripts/collect_copilot_production_db_evidence.py \
+  --engine managed_postgresql \
+  --migration-applied-at 2026-05-01T10:00:00+08:00 \
+  --pitr-enabled \
+  --backup-restore-drill-at 2026-05-01T11:00:00+08:00 \
+  --evidence-ref ops/db-migration-20260501 \
+  --evidence-ref ops/pitr-restore-drill-20260501 \
+  --json
+```
+
+这个命令只生成 `production_manifest_patch.production_db`。不要把它的通过结果写成生产 DB 已部署；必须把真实托管 PostgreSQL / PITR / restore drill 的外部证据一起交给 `check_copilot_admin_production_evidence.py --require-production-ready`。
 
 本地/staging 长跑采集 smoke：
 

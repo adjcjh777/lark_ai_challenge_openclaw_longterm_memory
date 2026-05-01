@@ -157,6 +157,17 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Production DB evidence collector emits a PostgreSQL/PITR manifest patch without deploying storage.",
+        path="scripts/collect_copilot_production_db_evidence.py",
+        contains=(
+            "collect_production_db_evidence",
+            "production_manifest_patch",
+            "production_db",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Long-run evidence collector samples the running Admin backend and emits a productized live manifest patch.",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         contains=(
@@ -263,7 +274,7 @@ PRODUCTION_BLOCKERS = (
     {
         "id": "production_db",
         "description": "Production DB / PostgreSQL / PITR deployment has not been validated.",
-        "evidence": "Current artifacts cover SQLite staging backup / restore, not production PostgreSQL.",
+        "evidence": "A collector exists for PostgreSQL/PITR manifest patches, but real production DB deployment evidence is not present.",
     },
     {
         "id": "enterprise_idp_sso",
