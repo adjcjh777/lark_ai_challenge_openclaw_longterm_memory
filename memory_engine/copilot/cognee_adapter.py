@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib
+import asyncio
 import os
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -168,10 +170,10 @@ class CogneeMemoryAdapter:
         memory fields plus ledger metadata. Raw event payloads stay in SQLite.
         """
 
-        document = curated_memory_document(memory)
         metadata = _curated_memory_metadata(memory)
+        document = curated_memory_document(memory, metadata=metadata)
         add_result = self.add(scope, document, metadata=metadata)
-        cognify_result = self.cognify(scope)
+        cognify_result = self.cognify_scope(scope)
         return {
             "ok": True,
             "dataset_name": self.dataset_for_scope(scope),
@@ -214,7 +216,12 @@ class CogneeMemoryAdapter:
         return self._call("add", data, dataset_name=self.dataset_for_scope(scope), **kwargs)
 
     def cognify(self, scope: str, **kwargs: Any) -> Any:
-        return self._call("cognify", dataset_name=self.dataset_for_scope(scope), **kwargs)
+        try:
+            return self._call("cognify", dataset_name=self.dataset_for_scope(scope), **kwargs)
+        except TypeError as exc:
+            if _type_error_is_unexpected_keyword(exc, "dataset_name"):
+                return self.cognify_scope(scope, **kwargs)
+            raise
 
     def search(self, scope: str, query: str, **kwargs: Any) -> Any:
         raw_results = self._search(query, **kwargs)
@@ -226,7 +233,14 @@ class CogneeMemoryAdapter:
         self.ensure_client()
         assert self.client is not None  # for type checker
         method = getattr(self.client, method_name)
-        return method(*args, **kwargs)
+        try:
+            return _resolve_awaitable(method(*args, **kwargs))
+        except TypeError as exc:
+            if "metadata" in kwargs and _type_error_is_unexpected_keyword(exc, "metadata"):
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop("metadata", None)
+                return _resolve_awaitable(method(*args, **retry_kwargs))
+            raise
 
     def _search(self, query: str, **kwargs: Any) -> Any:
         self.ensure_client()
@@ -279,12 +293,20 @@ class CogneeMemoryAdapter:
         return self._normalize_search_results(await raw_results)
 
 
-def curated_memory_document(memory: dict[str, Any]) -> str:
+def curated_memory_document(memory: dict[str, Any], *, metadata: dict[str, Any] | None = None) -> str:
     evidence = memory.get("evidence") if isinstance(memory.get("evidence"), dict) else {}
+    metadata = metadata or _curated_memory_metadata(memory)
     parts = [
+        f"memory_id: {metadata.get('memory_id') or ''}",
+        f"version_id: {metadata.get('version_id') or ''}",
+        f"version: {metadata.get('version') or ''}",
+        f"status: {metadata.get('status') or memory.get('status') or ''}",
         f"type: {memory.get('type') or 'unknown'}",
         f"subject: {memory.get('subject') or 'unknown'}",
         f"current_value: {memory.get('current_value') or ''}",
+        f"source_type: {metadata.get('source_type') or ''}",
+        f"source_id: {metadata.get('source_id') or ''}",
+        f"provenance: {metadata.get('provenance') or 'copilot_ledger'}",
     ]
     summary = memory.get("summary") or memory.get("reason")
     if summary:
@@ -293,6 +315,46 @@ def curated_memory_document(memory: dict[str, Any]) -> str:
     if quote:
         parts.append(f"evidence_quote: {quote}")
     return "\n".join(str(part) for part in parts)
+
+
+def _type_error_is_unexpected_keyword(exc: TypeError, keyword: str) -> bool:
+    message = str(exc)
+    return f"unexpected keyword argument '{keyword}'" in message or f"got an unexpected keyword argument '{keyword}'" in message
+
+
+def _resolve_awaitable(value: Any) -> Any:
+    if not hasattr(value, "__await__"):
+        return value
+    if not _event_loop_is_running():
+        return asyncio.run(_await_value(value))
+
+    result: dict[str, Any] = {}
+    error: dict[str, BaseException] = {}
+
+    def runner() -> None:
+        try:
+            result["value"] = asyncio.run(_await_value(value))
+        except BaseException as exc:  # pragma: no cover - re-raised in caller thread
+            error["exc"] = exc
+
+    thread = threading.Thread(target=runner, name="copilot-cognee-adapter-await", daemon=True)
+    thread.start()
+    thread.join()
+    if "exc" in error:
+        raise error["exc"]
+    return result.get("value")
+
+
+def _event_loop_is_running() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+async def _await_value(awaitable: Any) -> Any:
+    return await awaitable
 
 
 def _curated_memory_metadata(memory: dict[str, Any]) -> dict[str, Any]:

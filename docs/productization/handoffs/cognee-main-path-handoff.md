@@ -3,13 +3,16 @@
 日期：2026-04-28
 阶段：后期打磨 P1：让 Cognee 真正进入主路径
 
+2026-05-01 补充：本机真实 Cognee SDK 调用发现当前安装版本的 `add()` 不接受 `metadata=`，且 `add` / `cognify` 会返回 awaitable；已在窄 adapter 内兼容该 SDK 形态，并新增隔离 Cognee store gate 去真实执行 `CopilotService.confirm -> sync_curated_memory -> Cognee add -> cognify`。当前本机 Ollama LLM 在 Cognee 结构化图谱抽取阶段仍可能返回 `InstructorRetryException`，所以该 gate 是 blocker detector，不是长期 embedding 服务完成证据。
+
 ## 本轮完成了什么
 
 本轮把 Cognee 从“adapter / live gate 可用”补成了本地可控、可回退、可观测的 recall substrate：
 
 - `memory.confirm` 成功后会把 active memory 的 curated fields 同步给 Cognee。
-- 同步文本只包含 `type`、`subject`、`current_value`、`summary` 和 `evidence_quote`，不包含 raw event 全量内容。
+- 同步文本只包含 ledger metadata、`type`、`subject`、`current_value`、`summary` 和 `evidence_quote`，不包含 raw event 全量内容。
 - Cognee 同步走 `add -> cognify`，并携带 `memory_id`、`version_id`、`version`、`status`、`source_type`、`source_id`、`quote` 和 `provenance=copilot_ledger`。
+- 对当前 Cognee SDK，如果 `add()` 拒绝 `metadata=`，adapter 会把 ledger metadata 保留在 curated document 中并重试不带 metadata 的 `add()`；如果 SDK 返回 awaitable，adapter 会在同步边界内 resolve，避免 `CopilotService.confirm` 因 coroutine / TypeError 回落 repository ledger。
 - `memory.reject` 成功后会调用 adapter withdrawal，把被拒绝候选从 scoped dataset 撤回。
 - Cognee 不可用或同步失败时，响应里返回 `cognee_sync.status=fallback_used` 或 `skipped`，主流程继续以 repository ledger 为事实源。
 - 检索层继续要求 Cognee result 匹配本地 ledger；未匹配结果只进入 trace note，不进入正式 answer。
@@ -18,10 +21,11 @@
 
 | 文件 | 说明 |
 |---|---|
-| `memory_engine/copilot/cognee_adapter.py` | 新增 curated memory document、`sync_curated_memory()`、`sync_memory_withdrawal()`。 |
+| `memory_engine/copilot/cognee_adapter.py` | curated memory document、`sync_curated_memory()`、`sync_memory_withdrawal()`；兼容 metadata-optional / async Cognee SDK 调用形态。 |
 | `memory_engine/copilot/service.py` | `confirm` / `reject` 后补 `cognee_sync` 状态，失败时 fallback。 |
 | `memory_engine/copilot/governance.py` | confirm / reject 响应携带 version、summary、evidence，供 adapter 同步 curated fields。 |
 | `memory_engine/copilot/retrieval.py` | 已有 ledger ownership 过滤和 async Cognee search 归一化。 |
+| `scripts/check_cognee_curated_sync_gate.py` | 在隔离 Cognee store 中真实执行 `CopilotService.confirm -> Cognee add -> cognify`，不覆盖本地 `.data/cognee`。 |
 | `tests/test_copilot_cognee_adapter.py` | 锁住 dataset、add/cognify、withdrawal 和 curated-only 文本。 |
 | `tests/test_copilot_governance.py` | 锁住 confirm sync、reject withdrawal 和 sync failure fallback。 |
 | `tests/test_copilot_retrieval.py` | 锁住 Cognee result 必须匹配本地 ledger。 |
@@ -51,6 +55,13 @@ ollama ps
 - Cognee adapter / governance / retrieval：32 tests OK。
 - `git diff --check` 通过。
 - Ollama 清理：单独 provider 检查后看到 `qwen3-embedding:0.6b-fp16` 驻留；已运行 `ollama stop qwen3-embedding:0.6b-fp16`，最终 `ollama ps` 为空。
+
+2026-05-01 追加验证：
+
+- `python3 -m unittest tests.test_copilot_cognee_adapter tests.test_copilot_governance tests.test_copilot_retrieval`：45 tests OK。
+- `python3 -m compileall memory_engine scripts`：通过。
+- `python3 scripts/check_cognee_curated_sync_gate.py --json`：本机真实 Cognee / Ollama 隔离 store gate 可运行，但当前默认本地 LLM 仍会在 Cognee `extract_graph_from_data` 阶段出现结构化输出校验失败，结果为 `cognee_sync.status=fallback_used`、reason=`cognee_sync_failed:InstructorRetryException`。
+- 当前仓库 `.data/cognee` 本地 store 曾出现 Cognee 内部 graph UUID TypeError；未自动清理或覆盖该本地状态。需要真实长期服务前，应通过受控 reset/migration 处理 store，而不是把隔离 gate 说成长期持久服务。
 
 ## 边界
 

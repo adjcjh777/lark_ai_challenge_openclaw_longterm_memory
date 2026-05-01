@@ -47,7 +47,7 @@
 | 存储迁移和备份恢复 | 已完成本地 migration dry-run / apply、索引检查，以及 SQLite staging backup / verify / restore drill；这不是生产 PostgreSQL / PITR | `scripts/migrate_copilot_storage.py`、`scripts/backup_copilot_storage.py`、`tests/test_copilot_storage_migration.py`、`tests/test_storage_backup.py` |
 | 企业图谱群/用户/消息拓扑 | 已完成本地 Feishu 群节点发现与授权消息拓扑：新群会登记为同企业下的 `feishu_chat` 图谱节点；未在 allowlist 的群只记录 org/chat 最小元数据；授权群会把同一用户建模为 tenant/org 内唯一 `feishu_user` 节点，并用 membership/message 边表达其在不同群里的上下文；消息正文仍只进入 `raw_events` / candidate evidence，不写入图谱节点 | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/feishu-group-graph-node-handoff.md` |
 | LLM Wiki / Graph Admin | 已完成本地 / staging 后台：active curated memory 编译成 LLM Wiki，Graph tab 展示 storage graph + compiled memory graph，Tenants tab 支持 tenant/org 过滤、readiness、admin-only tenant policy editor 和 `tenant_policy_upserted` 审计；Groups tab/API 展示 Feishu 群策略的 pending/active/disabled 与 passive 筛选状态；这不是生产 DB、真实企业 IdP SSO 或完整多租户权限后台 | `memory_engine/copilot/admin.py`、`memory_engine/db.py`、`scripts/check_copilot_admin_readiness.py`、`scripts/check_copilot_admin_ui_smoke.py`、`tests/test_copilot_admin.py`、`docs/productization/admin-llm-wiki-launch-runbook.md` |
-| Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
+| Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环；当前 SDK metadata-optional / async 形态已兼容，并新增真实 Cognee curated sync gate 用于暴露 provider/model 阻塞；长期 embedding 服务仍未完成 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`scripts/check_cognee_curated_sync_gate.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/handoffs/cognee-main-path-handoff.md` |
 | Feishu live sandbox | 已完成受控测试群联调和本地/pre-production 群策略 onboarding；当前稳定路径是 allowlist 测试群或显式 `/enable_memory` 启用的群，群内非 `@Bot` 消息可静默探测 candidate，`@Bot` / 私聊走主动交互 | `memory_engine/copilot/feishu_live.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py` |
 | 群级设置和启停 | 已完成群级设置卡和策略写入：`/settings` / `/group_settings` 展示 allowlist 与当前群策略；`/enable_memory` / `/disable_memory` 需要 reviewer/admin 授权后写 `feishu_group_policies`，并写审计；新群默认 `pending_onboarding`，不会自动记录消息内容 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/group_policies.py`、`memory_engine/feishu_cards.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_interactive_cards.py` |
 | Limited Feishu ingestion | 已完成本地受控 ingestion 底座，支持文档、任务、会议、Bitable，以及 allowlist / 已启用群策略中被动探测或显式路由到 `memory.create_candidate` 的飞书消息；当前新增 review policy：低重要性安全候选可自动确认，重要/敏感/冲突候选仍需人工确认；这不是被动全量群聊摄入 | `memory_engine/document_ingestion.py`、`memory_engine/copilot/review_policy.py`、`tests/test_document_ingestion.py`、`tests/test_copilot_review_policy.py` |
@@ -168,6 +168,8 @@ python3 scripts/spike_cognee_local.py --dry-run
 # 运行真实 Cognee spike 测试
 python3 scripts/spike_cognee_local.py --scope project:feishu_ai_challenge --query "测试查询"
 ```
+
+2026-05-01 追加：本机当前 Cognee SDK 的 `add()` 不接受 `metadata=` 且部分调用返回 awaitable；`CogneeMemoryAdapter` 已兼容该形态。`scripts/check_cognee_curated_sync_gate.py --json` 会在隔离 store 上真实执行 `CopilotService.confirm -> Cognee add -> cognify`；如果本地 LLM 不能稳定产出 Cognee 要求的结构化图谱，它会明确失败并保留 repository fallback。长期 embedding 服务和生产持久化 Cognee store 仍不要 overclaim。
 
 #### 2.3.4 Cognee 配置说明
 
@@ -696,6 +698,9 @@ python3 scripts/spike_cognee_local.py --dry-run
 
 # 运行真实 Cognee spike 测试
 python3 scripts/spike_cognee_local.py --scope project:feishu_ai_challenge --query "生产部署参数"
+
+# 真实 Cognee SDK + CopilotService.confirm 隔离 gate；失败表示 provider/model 仍需处理
+python3 scripts/check_cognee_curated_sync_gate.py --json
 
 # 检查 embedding 服务状态
 python3 scripts/check_embedding_provider.py

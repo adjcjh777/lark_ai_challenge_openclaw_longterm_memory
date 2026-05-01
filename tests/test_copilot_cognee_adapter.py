@@ -116,11 +116,82 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(["add", "cognify"], [call[0] for call in client.calls])
         add_args, add_kwargs = client.calls[0][1], client.calls[0][2]
+        self.assertIn("memory_id: mem_1", add_args[0])
+        self.assertIn("provenance: copilot_ledger", add_args[0])
         self.assertIn("current_value: 生产部署必须加 --canary", add_args[0])
         self.assertNotIn("raw_json", add_args[0])
         self.assertEqual("mem_1", add_kwargs["metadata"]["memory_id"])
         self.assertEqual("copilot_ledger", add_kwargs["metadata"]["provenance"])
-        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", client.calls[1][2]["dataset_name"])
+        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", client.calls[1][2]["datasets"])
+
+    def test_sync_curated_memory_retries_without_metadata_for_installed_cognee_sdk_shape(self) -> None:
+        class MetadataRejectingCogneeClient(FakeCogneeClient):
+            def add(self, *args: object, **kwargs: object) -> dict[str, object]:
+                if "metadata" in kwargs:
+                    raise TypeError("add() got an unexpected keyword argument 'metadata'")
+                self.calls.append(("add", args, kwargs))
+                return {"ok": True}
+
+        client = MetadataRejectingCogneeClient()
+        adapter = CogneeMemoryAdapter(client=client)
+        memory = {
+            "memory_id": "mem_sdk_shape",
+            "version_id": "ver_sdk_shape",
+            "version": 2,
+            "type": "decision",
+            "subject": "Cognee sync",
+            "current_value": "Confirmed memory must sync without repository fallback.",
+            "summary": "SDK add() does not accept metadata.",
+            "status": "active",
+            "evidence": {
+                "source_type": "unit_test",
+                "source_id": "evt_sdk_shape",
+                "quote": "Confirmed memory must sync without repository fallback.",
+            },
+        }
+
+        result = adapter.sync_curated_memory("project:feishu_ai_challenge", memory)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(["add", "cognify"], [call[0] for call in client.calls])
+        add_args, add_kwargs = client.calls[0][1], client.calls[0][2]
+        self.assertNotIn("metadata", add_kwargs)
+        self.assertIn("memory_id: mem_sdk_shape", add_args[0])
+        self.assertIn("source_id: evt_sdk_shape", add_args[0])
+        self.assertIn("provenance: copilot_ledger", add_args[0])
+        self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", client.calls[1][2]["datasets"])
+
+    def test_sync_curated_memory_resolves_async_sdk_calls(self) -> None:
+        class AsyncCogneeClient(FakeCogneeClient):
+            async def add(self, *args: object, **kwargs: object) -> dict[str, object]:
+                self.calls.append(("add", args, kwargs))
+                return {"ok": True}
+
+            async def cognify(self, *args: object, **kwargs: object) -> dict[str, object]:
+                self.calls.append(("cognify", args, kwargs))
+                return {"ok": True}
+
+        client = AsyncCogneeClient()
+        adapter = CogneeMemoryAdapter(client=client)
+
+        result = adapter.sync_curated_memory(
+            "project:feishu_ai_challenge",
+            {
+                "memory_id": "mem_async_sdk",
+                "version_id": "ver_async_sdk",
+                "version": 1,
+                "type": "decision",
+                "subject": "Cognee async SDK",
+                "current_value": "Async Cognee calls are awaited inside the adapter.",
+                "status": "active",
+                "evidence": {"source_type": "unit_test", "source_id": "evt_async_sdk", "quote": "Async call."},
+            },
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(["add", "cognify"], [call[0] for call in client.calls])
+        self.assertEqual({"ok": True}, result["add_result"])
+        self.assertEqual({"ok": True}, result["cognify_result"])
 
     def test_curated_memory_document_uses_only_curated_fields(self) -> None:
         document = curated_memory_document(
