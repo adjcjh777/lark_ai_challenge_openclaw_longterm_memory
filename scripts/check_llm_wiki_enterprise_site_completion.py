@@ -226,6 +226,18 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Launch gates",
+        evidence="Live monitoring probe validates Admin /metrics and external monitoring refs.",
+        path="scripts/check_copilot_admin_monitoring_probe.py",
+        contains=(
+            "run_monitoring_probe",
+            "production_monitoring",
+            "copilot_admin_launch_production_blocked",
+            "live_monitoring_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Launch gates",
         evidence="Long-run evidence collector samples the running Admin backend and emits a productized live manifest patch.",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         contains=(

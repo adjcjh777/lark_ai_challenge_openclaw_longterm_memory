@@ -340,6 +340,8 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_admin_tls_probe.py` 会对已经运行的生产 HTTPS URL 做 live probe，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并进 `production_domain_tls` 的 manifest patch；它不签发证书、不配置 DNS，也不证明 IdP、监控、DB 或 24 小时 productized live。
 
+`check_copilot_admin_monitoring_probe.py` 会对已经运行的生产 Admin URL 拉取 `/metrics`，校验核心 Copilot metrics、Grafana dashboard URL、Alertmanager route、告警投递测试时间和证据 ref，并输出可合并进 `production_monitoring` 的 manifest patch；它不配置 Prometheus/Grafana/Alertmanager，也不证明 DB、IdP、TLS 或长期 live。
+
 `collect_copilot_admin_long_run_evidence.py` 会探测运行中的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，生成可合并到 production evidence manifest 的 `productized_live_long_run` patch；短跑 smoke 只证明采集器可用，不代表 productized live 长期运行完成。
 
 `merge_copilot_production_evidence.py` 会把各 collector 输出的 `production_manifest_patch` 合并成 production evidence manifest，并立即复用 `check_copilot_admin_production_evidence.py` 验证；它只降低手工拼 JSON 的风险，不创建真实 DB、IdP、TLS、监控或长期运行证据。

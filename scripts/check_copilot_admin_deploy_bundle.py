@@ -201,6 +201,18 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="production_monitoring_live_probe",
+        path="scripts/check_copilot_admin_monitoring_probe.py",
+        description="Monitoring live probe validates Admin /metrics, Grafana URL, alert route, and delivery refs.",
+        required_patterns=(
+            "run_monitoring_probe",
+            "production_monitoring",
+            "copilot_admin_launch_production_blocked",
+            "live_monitoring_probe_only",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="long_run_evidence_collector",
         path="scripts/collect_copilot_admin_long_run_evidence.py",
         description="Long-run evidence collector probes a running Admin backend and emits a productized live manifest patch.",

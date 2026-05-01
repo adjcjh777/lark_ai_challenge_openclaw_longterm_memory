@@ -91,6 +91,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `check_copilot_admin_tls_probe.py` 用于真实生产域名已经可访问后的 live probe：它连接 `https://...`，校验证书主机名、证书有效期和 `Strict-Transport-Security` header，并输出可合并到 `production_domain_tls` 的 manifest patch。它不会签发证书、配置 DNS、证明企业 IdP、生产监控、生产 DB 或 24 小时 productized live；失败时不要手填通过结果。
 
+`check_copilot_admin_monitoring_probe.py` 用于真实生产 Admin URL 已经可访问后的 monitoring live probe：它请求 `/metrics`，校验核心 Copilot Prometheus metrics、Grafana dashboard URL、Alertmanager route、告警投递测试时间和 evidence refs，并输出可合并到 `production_monitoring` 的 manifest patch。它不会配置 Prometheus、Grafana、Alertmanager，也不证明生产 DB、IdP、TLS 或 24 小时 productized live；失败时不要手填通过结果。
+
 `collect_copilot_admin_long_run_evidence.py` 用于真实运行窗口的证据采集：它会探测正在运行的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，并输出可填入 production evidence manifest 的 `productized_live_long_run` patch。采集器本身不创建生产 DB、IdP、TLS、监控或生产 readiness。
 
 `merge_copilot_production_evidence.py` 用于把 `collect_copilot_production_db_evidence.py`、`collect_copilot_external_production_evidence.py` 和 `collect_copilot_admin_long_run_evidence.py` 输出的 `production_manifest_patch` 合并成一个 production evidence manifest，并立即复用 `check_copilot_admin_production_evidence.py` 验证。它会拒绝未知 section、placeholder 和 secret-like patch 值；它不创建真实 DB、IdP、TLS、监控或长期运行证据。
@@ -251,6 +253,20 @@ python3 scripts/check_copilot_admin_tls_probe.py \
 ```
 
 这个命令会实际连接 HTTPS endpoint，检查证书主机名、证书有效期和 HSTS header，并输出 `production_domain_tls` patch。它不能替代真实 IdP、生产 DB、生产监控或 24 小时 productized live 证据。
+
+真实生产监控 live probe 示例：
+
+```bash
+python3 scripts/check_copilot_admin_monitoring_probe.py \
+  --base-url https://memory.company.internal \
+  --grafana-dashboard-url https://grafana.company.internal/d/copilot-admin \
+  --alertmanager-route team-memory-copilot \
+  --alert-delivery-tested-at 2026-05-01T12:00:00+08:00 \
+  --monitoring-evidence-ref ops/alert-delivery-20260501 \
+  --json
+```
+
+这个命令会实际读取 Admin `/metrics` 并检查外部监控证据字段，输出 `production_monitoring` patch。它不能替代真实 DB、IdP、TLS 或 24 小时 productized live 证据。
 
 本地/staging 长跑采集 smoke：
 
