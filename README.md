@@ -244,9 +244,9 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 | endpoint | http://localhost:11434 | Ollama 服务地址 |
 | dimensions | 1024 | 向量维度 |
 
-### 2.5 本地只读后台
+### 2.5 本地只读 LLM Wiki / 知识图谱后台
 
-Dashboard 不是单独的产品服务。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
+Dashboard 不是单独的产品服务。它提供本地只读的 LLM Wiki、知识图谱、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
 
 - OpenClaw 加载 `feishu-memory-copilot` 插件时，只有 `FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1` 或 `COPILOT_ADMIN_ENABLED=1` 才会尝试启动本地 dashboard。
 - 仓库内 `python3 -m memory_engine copilot-feishu listen` / `scripts/start_copilot_feishu_live.sh` 启动时，也会带起 dashboard。
@@ -263,6 +263,7 @@ http://127.0.0.1:8765
 export FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1
 export FEISHU_MEMORY_COPILOT_ADMIN_HOST=127.0.0.1
 export FEISHU_MEMORY_COPILOT_ADMIN_PORT=8765
+export FEISHU_MEMORY_COPILOT_ADMIN_TOKEN=change-me-local-token
 ```
 
 如果只是本机调试，不启动 OpenClaw / Feishu listener，也可以手动运行 fallback 脚本：
@@ -276,6 +277,29 @@ python3 scripts/start_copilot_admin.py
 ```bash
 python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8766
 ```
+
+如果绑定到非本机地址，必须设置 `FEISHU_MEMORY_COPILOT_ADMIN_TOKEN` 或传 `--admin-token`；否则启动脚本会拒绝运行。设置 token 后，所有 `/api/*` 请求需要 `Authorization: Bearer <token>`，页面会在首次加载数据时提示输入 token。
+
+主要只读 API：
+
+```text
+/api/wiki     active curated memory 编译视图，不包含 raw events，不写飞书
+/api/graph    知识图谱节点/关系视图
+/api/memories memory ledger 和 evidence
+/api/audit    权限、治理和工具调用审计
+/api/health   带认证的后台 readiness 摘要
+/healthz      不含敏感数据的进程 liveness 探活
+```
+
+上线前或共享给评委/队友前，先跑只读后台 readiness gate：
+
+```bash
+python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
+python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN"
+```
+
+详细启动、探活、验收和回滚步骤见 [LLM Wiki / Graph Admin Launch Runbook](docs/productization/admin-llm-wiki-launch-runbook.md)。
+受控 systemd 模板见 `deploy/copilot-admin.service.example`，需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
 这个后台只开放 `GET` / `HEAD` 查询接口，写请求会返回 `405`。它是本机运维/调试入口，不代表生产部署或完整多租户企业后台。
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import html
+import hmac
 import json
+import os
+import re
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -16,6 +19,7 @@ from memory_engine.db import db_path_from_env
 
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
+ADMIN_TOKEN_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_TOKEN", "COPILOT_ADMIN_TOKEN")
 MAX_LIMIT = 200
 
 
@@ -48,11 +52,12 @@ def start_embedded_admin(
     port: int = DEFAULT_ADMIN_PORT,
     db_path: str | Path | None = None,
     enabled: bool = True,
+    auth_token: str | None = None,
 ) -> EmbeddedAdminRuntime:
     if not enabled:
         return EmbeddedAdminRuntime(enabled=False, reason="disabled")
     try:
-        server = create_admin_server(host, port, db_path)
+        server = create_admin_server(host, port, db_path, auth_token=auth_token)
     except OSError as exc:
         return EmbeddedAdminRuntime(enabled=False, reason=f"bind_failed: {exc}")
 
@@ -84,7 +89,7 @@ class AdminQueryService:
         recent_raw_events = self._recent_raw_events(limit=20)
         recent_audit = self.list_audit(limit=15)["items"]
         graph = self._knowledge_graph_overview(limit=12)
-        knowledge_cards = self.list_memories(status="active", limit=8)["items"]
+        wiki = self.wiki_overview(limit=8)
         return {
             "bot_activity": {
                 "latest_raw_event_at": recent_raw_events[0]["event_time_iso"] if recent_raw_events else None,
@@ -94,8 +99,262 @@ class AdminQueryService:
             "recent_raw_events": recent_raw_events,
             "recent_audit": recent_audit,
             "knowledge_graph": graph,
-            "knowledge_cards": knowledge_cards,
+            "wiki": wiki,
+            "knowledge_cards": wiki["cards"],
         }
+
+    def wiki_overview(
+        self,
+        *,
+        scope: str | None = None,
+        query: str | None = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        limit = _clamp_limit(limit)
+        conditions = ["m.status = 'active'", "e.quote IS NOT NULL", "TRIM(e.quote) != ''"]
+        params: list[Any] = []
+        if scope:
+            conditions.append("(m.scope_type || ':' || m.scope_id) = ?")
+            params.append(scope)
+        if query:
+            like = f"%{query}%"
+            conditions.append(
+                "(m.id LIKE ? OR m.subject LIKE ? OR m.current_value LIKE ? OR COALESCE(m.summary, '') LIKE ? OR e.quote LIKE ?)"
+            )
+            params.extend([like, like, like, like, like])
+        where = "WHERE " + " AND ".join(conditions)
+        rows = self.conn.execute(
+            f"""
+            SELECT
+              m.id, m.tenant_id, m.organization_id, m.visibility_policy,
+              m.scope_type, m.scope_id, m.type, m.subject, m.current_value,
+              m.summary, m.confidence, m.importance, m.owner_id,
+              m.updated_at, m.active_version_id,
+              v.version_no,
+              e.source_type AS evidence_source_type,
+              e.source_url AS evidence_source_url,
+              e.source_event_id AS evidence_source_event_id,
+              e.quote AS evidence_quote,
+              e.actor_display AS evidence_actor_display,
+              e.event_time AS evidence_event_time,
+              r.source_id AS raw_source_id,
+              r.raw_json AS raw_json,
+              (
+                SELECT COUNT(*)
+                FROM memory_versions old_v
+                WHERE old_v.memory_id = m.id
+                  AND old_v.status = 'superseded'
+              ) AS superseded_version_count
+            FROM memories m
+            LEFT JOIN memory_versions v ON v.id = m.active_version_id
+            LEFT JOIN memory_evidence e
+              ON e.id = (
+                SELECT latest_e.id
+                FROM memory_evidence latest_e
+                WHERE latest_e.memory_id = m.id
+                  AND latest_e.version_id = m.active_version_id
+                ORDER BY latest_e.created_at DESC
+                LIMIT 1
+              )
+            LEFT JOIN raw_events r ON r.id = e.source_event_id
+            {where}
+            ORDER BY m.importance DESC, m.updated_at DESC, m.subject ASC, m.id ASC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+        cards = [_wiki_card_row_to_dict(row) for row in rows]
+        scopes = self.conn.execute(
+            """
+            SELECT scope_type || ':' || scope_id AS scope, COUNT(*) AS count
+            FROM memories
+            WHERE status = 'active'
+            GROUP BY scope_type, scope_id
+            ORDER BY count DESC, scope ASC
+            LIMIT 20
+            """
+        ).fetchall()
+        open_questions = self.conn.execute(
+            """
+            SELECT scope_type || ':' || scope_id AS scope, COUNT(*) AS count
+            FROM memories
+            WHERE status IN ('candidate', 'needs_evidence')
+            GROUP BY scope_type, scope_id
+            ORDER BY count DESC, scope ASC
+            LIMIT 20
+            """
+        ).fetchall()
+        return {
+            "card_count": len(cards),
+            "cards": cards,
+            "scopes": [{"scope": str(row["scope"]), "count": int(row["count"])} for row in scopes],
+            "open_questions_by_scope": [
+                {"scope": str(row["scope"]), "count": int(row["count"])} for row in open_questions
+            ],
+            "generation_policy": {
+                "source": "active_curated_memory_only",
+                "raw_events_included": False,
+                "requires_evidence": True,
+                "writes_feishu": False,
+            },
+        }
+
+    def graph_workspace(
+        self,
+        *,
+        node_type: str | None = None,
+        query: str | None = None,
+        limit: int = 80,
+    ) -> dict[str, Any]:
+        limit = _clamp_limit(limit)
+        conditions: list[str] = []
+        params: list[Any] = []
+        if node_type:
+            conditions.append("node_type = ?")
+            params.append(node_type)
+        if query:
+            like = f"%{query}%"
+            conditions.append("(id LIKE ? OR node_key LIKE ? OR label LIKE ? OR metadata_json LIKE ?)")
+            params.extend([like, like, like, like])
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        node_rows = self.conn.execute(
+            f"""
+            SELECT id, tenant_id, organization_id, node_type, node_key, label,
+                   visibility_policy, status, metadata_json, first_seen_at,
+                   last_seen_at, observation_count
+            FROM knowledge_graph_nodes
+            {where}
+            ORDER BY observation_count DESC, last_seen_at DESC, id DESC
+            LIMIT ?
+            """,
+            [*params, limit],
+        ).fetchall()
+        node_ids = [str(row["id"]) for row in node_rows]
+        edge_rows: list[sqlite3.Row] = []
+        if node_ids:
+            placeholders = ", ".join("?" for _ in node_ids)
+            edge_rows = self.conn.execute(
+                f"""
+                SELECT e.id, e.tenant_id, e.organization_id, e.edge_type,
+                       e.metadata_json, e.first_seen_at, e.last_seen_at,
+                       e.observation_count, e.source_node_id, e.target_node_id,
+                       source.label AS source_label, target.label AS target_label,
+                       source.node_type AS source_type, target.node_type AS target_type
+                FROM knowledge_graph_edges e
+                LEFT JOIN knowledge_graph_nodes source ON source.id = e.source_node_id
+                LEFT JOIN knowledge_graph_nodes target ON target.id = e.target_node_id
+                WHERE e.source_node_id IN ({placeholders})
+                   OR e.target_node_id IN ({placeholders})
+                ORDER BY e.observation_count DESC, e.last_seen_at DESC, e.id DESC
+                LIMIT ?
+                """,
+                [*node_ids, *node_ids, limit],
+            ).fetchall()
+        nodes = [_graph_node_row_to_dict(row) for row in node_rows]
+        edges = [_graph_edge_row_to_dict(row) for row in edge_rows]
+        self._append_compiled_memory_graph(nodes, edges, query=query, limit=limit)
+        return {
+            "node_total": self._count("knowledge_graph_nodes"),
+            "edge_total": self._count("knowledge_graph_edges"),
+            "workspace_node_count": len(nodes),
+            "workspace_edge_count": len(edges),
+            "nodes_by_type": self._count_by("knowledge_graph_nodes", "node_type"),
+            "edges_by_type": self._count_by("knowledge_graph_edges", "edge_type"),
+            "nodes": nodes,
+            "edges": edges,
+        }
+
+    def _append_compiled_memory_graph(
+        self,
+        nodes: list[dict[str, Any]],
+        edges: list[dict[str, Any]],
+        *,
+        query: str | None,
+        limit: int,
+    ) -> None:
+        existing_node_ids = {str(node["id"]) for node in nodes}
+        existing_node_keys = {str(node.get("node_key")) for node in nodes if node.get("node_key")}
+        cards = self.wiki_overview(query=query, limit=max(1, min(30, limit)))["cards"]
+        for card in cards:
+            memory_node_id = f"memory:{card['id']}"
+            if memory_node_id not in existing_node_ids:
+                nodes.append(
+                    {
+                        "id": memory_node_id,
+                        "tenant_id": card["tenant_id"],
+                        "organization_id": card["organization_id"],
+                        "node_type": "memory",
+                        "node_key": card["id"],
+                        "label": card["subject"],
+                        "visibility_policy": card["visibility_policy"],
+                        "status": "active",
+                        "metadata": {
+                            "scope": card["scope"],
+                            "type": card["type"],
+                            "current_value": card["current_value"],
+                            "version": card["version"],
+                            "compiled": True,
+                        },
+                        "first_seen_at": card["updated_at"],
+                        "last_seen_at": card["updated_at"],
+                        "first_seen_at_iso": card["updated_at_iso"],
+                        "last_seen_at_iso": card["updated_at_iso"],
+                        "observation_count": max(1, int(card["superseded_version_count"] or 0) + 1),
+                    }
+                )
+                existing_node_ids.add(memory_node_id)
+            evidence = card.get("evidence") or {}
+            evidence_source_id = evidence.get("source_id")
+            if not evidence_source_id:
+                continue
+            evidence_node_id = f"evidence:{evidence_source_id}"
+            if evidence_source_id not in existing_node_keys and evidence_node_id not in existing_node_ids:
+                nodes.append(
+                    {
+                        "id": evidence_node_id,
+                        "tenant_id": card["tenant_id"],
+                        "organization_id": card["organization_id"],
+                        "node_type": "evidence_source",
+                        "node_key": evidence_source_id,
+                        "label": evidence_source_id,
+                        "visibility_policy": card["visibility_policy"],
+                        "status": "active",
+                        "metadata": {
+                            "source_type": evidence.get("source_type"),
+                            "document_title": evidence.get("document_title"),
+                            "compiled": True,
+                        },
+                        "first_seen_at": card["updated_at"],
+                        "last_seen_at": card["updated_at"],
+                        "first_seen_at_iso": card["updated_at_iso"],
+                        "last_seen_at_iso": card["updated_at_iso"],
+                        "observation_count": 1,
+                    }
+                )
+                existing_node_ids.add(evidence_node_id)
+                existing_node_keys.add(str(evidence_source_id))
+            target = next(
+                (node for node in nodes if node.get("node_key") == evidence_source_id),
+                {"id": evidence_node_id, "label": evidence_source_id, "node_type": "evidence_source"},
+            )
+            edges.append(
+                {
+                    "id": f"compiled:{card['id']}:{evidence_source_id}",
+                    "tenant_id": card["tenant_id"],
+                    "organization_id": card["organization_id"],
+                    "source_node_id": memory_node_id,
+                    "target_node_id": target["id"],
+                    "source_label": card["subject"],
+                    "target_label": target.get("label"),
+                    "source_type": "memory",
+                    "target_type": target.get("node_type"),
+                    "edge_type": "grounded_by",
+                    "metadata": {"compiled": True, "source_type": evidence.get("source_type")},
+                    "first_seen_at_iso": card["updated_at_iso"],
+                    "last_seen_at_iso": card["updated_at_iso"],
+                    "observation_count": 1,
+                }
+            )
 
     def list_memories(
         self,
@@ -388,22 +647,33 @@ class AdminQueryService:
 
 class CopilotAdminServer(ThreadingHTTPServer):
     db_path: str
+    auth_token: str | None
 
 
-def create_admin_server(host: str, port: int, db_path: str | Path | None = None) -> CopilotAdminServer:
+def create_admin_server(
+    host: str,
+    port: int,
+    db_path: str | Path | None = None,
+    *,
+    auth_token: str | None = None,
+) -> CopilotAdminServer:
     resolved_db_path = str(db_path or db_path_from_env())
+    resolved_auth_token = auth_token if auth_token is not None else _admin_token_from_env()
 
     class Handler(CopilotAdminHandler):
         pass
 
     Handler.db_path = resolved_db_path
+    Handler.auth_token = resolved_auth_token
     server = CopilotAdminServer((host, port), Handler)
     server.db_path = resolved_db_path
+    server.auth_token = resolved_auth_token
     return server
 
 
 class CopilotAdminHandler(BaseHTTPRequestHandler):
     db_path = str(db_path_from_env())
+    auth_token: str | None = None
     server_version = "FeishuMemoryCopilotAdmin/0.1"
 
     def do_GET(self) -> None:
@@ -433,8 +703,27 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             if parsed.path == "/":
                 self._send_html(_index_html(), send_body=send_body)
                 return
+            if parsed.path == "/favicon.ico":
+                self.send_response(HTTPStatus.NO_CONTENT)
+                self.send_header("Cache-Control", "max-age=86400")
+                self.end_headers()
+                return
+            if parsed.path == "/healthz":
+                self._send_json({"ok": True, "service": "copilot_admin"}, send_body=send_body)
+                return
+            if parsed.path.startswith("/api/") and not self._authorized(parsed.query):
+                self._send_json(
+                    {"ok": False, "error": {"code": "admin_auth_required", "message": "Admin token required."}},
+                    status=HTTPStatus.UNAUTHORIZED,
+                    send_body=send_body,
+                    headers={"WWW-Authenticate": 'Bearer realm="Feishu Memory Copilot Admin"'},
+                )
+                return
             if parsed.path == "/api/summary":
                 self._send_json(self._api_summary(), send_body=send_body)
+                return
+            if parsed.path == "/api/health":
+                self._send_json(self._api_health(), send_body=send_body)
                 return
             if parsed.path == "/api/live":
                 self._send_json(self._api_live(), send_body=send_body)
@@ -448,6 +737,12 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/audit":
                 self._send_json(self._api_audit(parsed.query), send_body=send_body)
+                return
+            if parsed.path == "/api/wiki":
+                self._send_json(self._api_wiki(parsed.query), send_body=send_body)
+                return
+            if parsed.path == "/api/graph":
+                self._send_json(self._api_graph(parsed.query), send_body=send_body)
                 return
             if parsed.path == "/api/tables":
                 self._send_json(self._api_tables(), send_body=send_body)
@@ -475,6 +770,27 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     def _api_summary(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).summary()}
+
+    def _api_health(self) -> dict[str, Any]:
+        with _open_readonly_connection(self.db_path) as conn:
+            service = AdminQueryService(conn)
+            wiki = service.wiki_overview(limit=1)
+            graph = service.graph_workspace(limit=10)
+            return {
+                "ok": True,
+                "db_path": self.db_path,
+                "data": {
+                    "database": "readable",
+                    "auth": "enabled" if self.auth_token else "disabled_local_only",
+                    "read_only": True,
+                    "wiki_ready": bool(wiki.get("generation_policy"))
+                    and wiki["generation_policy"].get("source") == "active_curated_memory_only",
+                    "graph_ready": int(graph.get("workspace_node_count") or 0) >= 0,
+                    "wiki_card_count": int(wiki.get("card_count") or 0),
+                    "graph_workspace_node_count": int(graph.get("workspace_node_count") or 0),
+                    "boundary": "local/pre-production admin readiness; no production deployment claim.",
+                },
+            }
 
     def _api_live(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
@@ -511,6 +827,26 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             )
         return {"ok": True, "data": data}
 
+    def _api_wiki(self, query_string: str) -> dict[str, Any]:
+        params = parse_qs(query_string)
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).wiki_overview(
+                scope=_param(params, "scope"),
+                query=_param(params, "q"),
+                limit=_int_param(params, "limit", 50),
+            )
+        return {"ok": True, "data": data}
+
+    def _api_graph(self, query_string: str) -> dict[str, Any]:
+        params = parse_qs(query_string)
+        with _open_readonly_connection(self.db_path) as conn:
+            data = AdminQueryService(conn).graph_workspace(
+                node_type=_param(params, "node_type"),
+                query=_param(params, "q"),
+                limit=_int_param(params, "limit", 80),
+            )
+        return {"ok": True, "data": data}
+
     def _api_tables(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             return {"ok": True, "db_path": self.db_path, "data": AdminQueryService(conn).list_tables()}
@@ -531,12 +867,15 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         *,
         status: HTTPStatus = HTTPStatus.OK,
         send_body: bool,
+        headers: dict[str, str] | None = None,
     ) -> None:
         encoded = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(encoded)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         if send_body:
             self.wfile.write(encoded)
@@ -548,6 +887,18 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             send_body=True,
         )
 
+    def _authorized(self, query_string: str) -> bool:
+        if not self.auth_token:
+            return True
+        header = self.headers.get("Authorization", "")
+        if header.lower().startswith("bearer "):
+            token = header[7:].strip()
+            if hmac.compare_digest(token, self.auth_token):
+                return True
+        params = parse_qs(query_string)
+        query_token = _param(params, "admin_token")
+        return bool(query_token and hmac.compare_digest(query_token, self.auth_token))
+
 
 def _open_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
     path = Path(db_path).expanduser().resolve()
@@ -556,22 +907,71 @@ def _open_readonly_connection(db_path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def _admin_token_from_env() -> str | None:
+    for name in ADMIN_TOKEN_ENV_NAMES:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
 def _memory_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
+    payload["current_value"] = _redact_sensitive_text(payload.get("current_value"))
+    payload["summary"] = _redact_sensitive_text(payload.get("summary"))
     payload["scope"] = f"{row['scope_type']}:{row['scope_id']}"
     for key in ("created_at", "updated_at", "expires_at", "last_recalled_at", "source_visibility_revoked_at"):
         payload[f"{key}_iso"] = _ms_to_iso(payload.get(key))
     return payload
 
 
+def _wiki_card_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    raw = _loads_json(row["raw_json"], {})
+    document_title = raw.get("document_title") if isinstance(raw, dict) else None
+    document_token = raw.get("document_token") if isinstance(raw, dict) else None
+    source_id = row["raw_source_id"] or row["evidence_source_event_id"]
+    return {
+        "id": str(row["id"]),
+        "tenant_id": row["tenant_id"],
+        "organization_id": row["organization_id"],
+        "visibility_policy": row["visibility_policy"],
+        "scope": f"{row['scope_type']}:{row['scope_id']}",
+        "type": row["type"],
+        "subject": row["subject"],
+        "current_value": _redact_sensitive_text(row["current_value"]),
+        "summary": _redact_sensitive_text(row["summary"]),
+        "confidence": row["confidence"],
+        "importance": row["importance"],
+        "owner_id": row["owner_id"],
+        "updated_at": row["updated_at"],
+        "updated_at_iso": _ms_to_iso(row["updated_at"]),
+        "version": row["version_no"],
+        "superseded_version_count": int(row["superseded_version_count"] or 0),
+        "evidence": {
+            "quote": _redact_sensitive_text(row["evidence_quote"]),
+            "source_type": row["evidence_source_type"],
+            "source_id": source_id,
+            "source_url": row["evidence_source_url"],
+            "document_title": document_title,
+            "document_token": document_token,
+            "actor_display": row["evidence_actor_display"],
+            "event_time_iso": _ms_to_iso(row["evidence_event_time"]),
+        },
+    }
+
+
 def _version_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
+    payload["value"] = _redact_sensitive_text(payload.get("value"))
+    payload["reason"] = _redact_sensitive_text(payload.get("reason"))
+    payload["decision_reason"] = _redact_sensitive_text(payload.get("decision_reason"))
     payload["created_at_iso"] = _ms_to_iso(payload.get("created_at"))
     return payload
 
 
 def _evidence_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
+    payload["quote"] = _redact_sensitive_text(payload.get("quote"))
     raw_json = payload.pop("raw_json", None)
     raw = _loads_json(raw_json, {})
     if isinstance(raw, dict):
@@ -585,6 +985,7 @@ def _evidence_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 def _raw_event_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = dict(row)
+    payload["content"] = _redact_sensitive_text(payload.get("content"))
     payload["scope"] = f"{row['scope_type']}:{row['scope_id']}"
     payload["raw_json"] = _loads_json(payload.get("raw_json"), {})
     payload["event_time_iso"] = _ms_to_iso(payload.get("event_time"))
@@ -599,6 +1000,20 @@ def _audit_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload["source_context"] = _loads_json(payload.get("source_context"), {})
     payload["created_at_iso"] = _ms_to_iso(payload.get("created_at"))
     return payload
+
+
+def _redact_sensitive_text(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    patterns = [
+        r"(?i)(app_secret\s*=\s*)[^\s,;]+",
+        r"(?i)(token\s*=\s*)[^\s,;]+",
+        r"(?i)(api[_-]?key\s*=\s*)[^\s,;]+",
+    ]
+    redacted = value
+    for pattern in patterns:
+        redacted = re.sub(pattern, r"\1[REDACTED]", redacted)
+    return redacted
 
 
 def _graph_node_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -674,15 +1089,16 @@ def _index_html() -> str:
   <style>
     :root {{
       color-scheme: light;
-      --bg: #f7f3ea;
-      --surface: #fffaf0;
-      --ink: #1d2521;
-      --muted: #5f6b63;
-      --line: #d9d0bf;
-      --accent: #147d64;
-      --accent-2: #b35418;
+      --bg: #eef1ed;
+      --surface: #fbfaf5;
+      --ink: #17201d;
+      --muted: #5f6a66;
+      --line: #cfd7d1;
+      --accent: #0f766e;
+      --accent-2: #99582a;
+      --accent-3: #365d8d;
       --danger: #ad2f2f;
-      --shadow: 0 10px 30px rgba(29, 37, 33, .08);
+      --shadow: 0 14px 34px rgba(23, 32, 29, .09);
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     * {{ box-sizing: border-box; }}
@@ -694,9 +1110,9 @@ def _index_html() -> str:
     }}
     header {{
       border-bottom: 1px solid var(--line);
-      background: #292f2b;
-      color: #fbf7ec;
-      padding: 18px 24px;
+      background: #17201d;
+      color: #fbfaf5;
+      padding: 20px 24px;
     }}
     .title-row {{
       display: flex;
@@ -708,13 +1124,13 @@ def _index_html() -> str:
     }}
     h1 {{
       margin: 0;
-      font-size: 22px;
+      font-size: 23px;
       line-height: 1.2;
       font-weight: 720;
       letter-spacing: 0;
     }}
     .boundary {{
-      color: #dfd3bc;
+      color: #ccd9d3;
       font-size: 13px;
       line-height: 1.4;
       text-align: right;
@@ -743,7 +1159,7 @@ def _index_html() -> str:
       height: 38px;
       border: 1px solid #bfb5a4;
       border-radius: 6px;
-      background: #fffcf4;
+      background: #fffdf8;
       color: var(--ink);
       font: inherit;
       font-size: 14px;
@@ -758,7 +1174,7 @@ def _index_html() -> str:
       white-space: nowrap;
     }}
     button.secondary {{
-      background: #fffcf4;
+      background: #fffdf8;
       color: var(--ink);
     }}
     .summary {{
@@ -818,7 +1234,7 @@ def _index_html() -> str:
     th {{
       position: sticky;
       top: 0;
-      background: #eee5d3;
+      background: #e2e9e4;
       z-index: 2;
       color: #353b36;
     }}
@@ -904,11 +1320,147 @@ def _index_html() -> str:
     }}
     .detail {{
       border-left: 3px solid var(--accent);
-      background: #fffcf4;
+      background: #fffdf8;
       padding: 14px;
       white-space: pre-wrap;
       line-height: 1.45;
     }}
+    .split-view {{
+      display: grid;
+      grid-template-columns: minmax(340px, .9fr) minmax(460px, 1.1fr);
+      gap: 1px;
+      background: var(--line);
+      min-width: 980px;
+    }}
+    .workspace-column {{
+      background: var(--surface);
+      padding: 16px;
+      min-height: 560px;
+    }}
+    .section-title {{
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 0 0 14px;
+    }}
+    .section-title h2 {{
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.2;
+    }}
+    .section-title span {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .wiki-card {{
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      padding: 14px;
+      margin-bottom: 12px;
+      border-radius: 7px;
+    }}
+    .wiki-card h3 {{
+      margin: 0 0 8px;
+      font-size: 16px;
+      line-height: 1.25;
+    }}
+    .wiki-value {{
+      font-size: 14px;
+      line-height: 1.55;
+      margin-bottom: 10px;
+    }}
+    .wiki-evidence {{
+      border-left: 3px solid var(--accent-3);
+      padding-left: 10px;
+      color: #33413d;
+      line-height: 1.45;
+      font-size: 13px;
+    }}
+    .tag-row {{
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }}
+    .tag {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #e7ede9;
+      color: #24302d;
+      font-size: 12px;
+    }}
+    .tag.warn {{ background: #fbedd7; color: var(--accent-2); }}
+    .graph-board {{
+      min-height: 540px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(90deg, rgba(15,118,110,.06) 1px, transparent 1px),
+        linear-gradient(rgba(15,118,110,.06) 1px, transparent 1px),
+        #f8faf7;
+      background-size: 34px 34px;
+      position: relative;
+      overflow: hidden;
+    }}
+    .graph-node {{
+      position: absolute;
+      width: 136px;
+      min-height: 76px;
+      border: 1px solid #94aaa1;
+      background: rgba(255,253,248,.95);
+      border-radius: 8px;
+      padding: 9px;
+      box-shadow: 0 12px 24px rgba(23, 32, 29, .10);
+      overflow: hidden;
+    }}
+    .graph-node strong {{
+      display: block;
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 6px;
+    }}
+    .graph-node small {{
+      color: var(--muted);
+      line-height: 1.25;
+    }}
+    .graph-node.feishu_chat {{ border-color: var(--accent); }}
+    .graph-node.feishu_user {{ border-color: var(--accent-3); }}
+    .graph-node.feishu_message {{ border-color: var(--accent-2); }}
+    .graph-node.memory {{ border-color: #111827; }}
+    .graph-node.evidence_source {{ border-color: #64748b; }}
+    .graph-edge-list {{
+      max-height: 540px;
+      overflow: auto;
+    }}
+    .edge-item {{
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 0;
+      font-size: 13px;
+    }}
+    .edge-type {{
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }}
+    .footer-mark {{
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .footer-mark a {{
+      color: inherit;
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }}
+    .footer-mark a:hover {{ border-bottom-color: var(--muted); }}
     .empty, .error {{
       padding: 28px;
       color: var(--muted);
@@ -921,6 +1473,8 @@ def _index_html() -> str:
       .toolbar {{ grid-template-columns: 1fr 1fr; }}
       .summary {{ grid-template-columns: repeat(2, minmax(110px, 1fr)); }}
       .home-grid {{ grid-template-columns: 1fr; }}
+      .split-view {{ grid-template-columns: 1fr; min-width: 0; }}
+      .graph-board {{ min-height: 620px; }}
     }}
   </style>
 </head>
@@ -928,7 +1482,7 @@ def _index_html() -> str:
   <header>
     <div class="title-row">
       <h1>{escaped_title}</h1>
-      <div class="boundary">本地只读运维后台，默认读取 SQLite / Copilot ledger；不代表生产部署或完整多租户企业后台。</div>
+      <div class="boundary">本地只读 LLM Wiki / 知识图谱后台，默认读取 SQLite / Copilot ledger；不代表生产部署或完整多租户企业后台。</div>
     </div>
   </header>
   <main>
@@ -955,25 +1509,37 @@ def _index_html() -> str:
     </form>
     <section class="summary" id="summary"></section>
     <nav class="tabs">
-      <button class="tab active" data-view="home">Home</button>
-      <button class="tab" data-view="memories">Memory</button>
+      <button class="tab active" data-view="home">Overview</button>
+      <button class="tab" data-view="wiki">LLM Wiki</button>
+      <button class="tab" data-view="graph">Graph</button>
+      <button class="tab" data-view="memories">Ledger</button>
       <button class="tab" data-view="audit">Audit</button>
       <button class="tab" data-view="tables">Tables</button>
     </nav>
-    <section class="panel" id="panel"><div class="empty">加载中</div></section>
-  </main>
+	    <section class="panel" id="panel"><div class="empty">加载中</div></section>
+	    <div class="footer-mark">Created By <a href="https://deerflow.tech" target="_blank" rel="noreferrer">Deerflow</a></div>
+	  </main>
   <script>
     const state = {{ view: "home" }};
     const $ = (id) => document.getElementById(id);
     const text = (value) => value === null || value === undefined || value === "" ? "-" : String(value);
     const esc = (value) => text(value).replace(/[&<>"']/g, c => ({{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}})[c]);
 
-    async function getJson(path) {{
-      const response = await fetch(path, {{ headers: {{ "Accept": "application/json" }} }});
-      const payload = await response.json();
-      if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
-      return payload.data;
-    }}
+	    async function getJson(path) {{
+	      const token = sessionStorage.getItem("copilotAdminToken") || "";
+	      const headers = {{ "Accept": "application/json" }};
+	      if (token) headers.Authorization = `Bearer ${{token}}`;
+	      let response = await fetch(path, {{ headers }});
+	      if (response.status === 401) {{
+	        const entered = window.prompt("Admin token required");
+	        if (!entered) throw new Error("admin auth required");
+	        sessionStorage.setItem("copilotAdminToken", entered);
+	        response = await fetch(path, {{ headers: {{ "Accept": "application/json", "Authorization": `Bearer ${{entered}}` }} }});
+	      }}
+	      const payload = await response.json();
+	      if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
+	      return payload.data;
+	    }}
 
     async function loadSummary() {{
       const data = await getJson("/api/summary");
@@ -999,7 +1565,11 @@ def _index_html() -> str:
       const tenant = $("tenant").value.trim();
       const decision = $("decision").value;
       if (q) params.set("q", q);
-      if (view === "memories") {{
+      if (view === "wiki") {{
+        if (scope) params.set("scope", scope);
+      }} else if (view === "graph") {{
+        if (status) params.set("node_type", status);
+      }} else if (view === "memories") {{
         if (status) params.set("status", status);
         if (scope) params.set("scope", scope);
       }} else if (view === "audit") {{
@@ -1014,6 +1584,8 @@ def _index_html() -> str:
       if (!options.quiet) $("panel").innerHTML = `<div class="empty">加载中</div>`;
       try {{
         if (state.view === "home") return renderHome(await getJson("/api/live"));
+        if (state.view === "wiki") return renderWiki(await getJson(`/api/wiki?${{paramsFor("wiki")}}`));
+        if (state.view === "graph") return renderGraph(await getJson(`/api/graph?${{paramsFor("graph")}}`));
         if (state.view === "memories") return renderMemories(await getJson(`/api/memories?${{paramsFor("memories")}}`));
         if (state.view === "audit") return renderAudit(await getJson(`/api/audit?${{paramsFor("audit")}}`));
         return renderTables(await getJson("/api/tables"));
@@ -1022,8 +1594,8 @@ def _index_html() -> str:
       }}
     }}
 
-    function renderHome(data) {{
-      const activity = data.bot_activity || {{}};
+	    function renderHome(data) {{
+	      const activity = data.bot_activity || {{}};
       const rawRows = data.recent_raw_events.map(item => `
         <div class="feed-item">
           <div class="feed-title">
@@ -1089,10 +1661,90 @@ def _index_html() -> str:
             <h2>Wiki 记忆卡片</h2>
             ${{memoryRows || `<div class="empty">暂无 active memory</div>`}}
           </section>
-        </div>`;
-    }}
+	        </div>`;
+	    }}
 
-    function renderMemories(data) {{
+	    function renderWiki(data) {{
+	      const policy = data.generation_policy || {{}};
+	      const scopeRows = data.scopes.map(item => `<span class="tag">${{esc(item.scope)}} · ${{esc(item.count)}}</span>`).join("");
+	      const openRows = data.open_questions_by_scope.map(item => `<span class="tag warn">${{esc(item.scope)}} · open ${{esc(item.count)}}</span>`).join("");
+	      const cards = data.cards.map(item => {{
+	        const evidence = item.evidence || {{}};
+	        return `
+	          <article class="wiki-card">
+	            <h3>${{esc(item.subject)}}</h3>
+	            <div class="wiki-value">${{esc(item.current_value)}}</div>
+	            <div class="wiki-evidence">${{esc(evidence.quote)}}<br><span class="feed-meta mono">${{esc(evidence.source_type)}} / ${{esc(evidence.source_id)}} / ${{esc(evidence.document_title)}}</span></div>
+	            <div class="tag-row">
+	              <span class="tag">${{esc(item.scope)}}</span>
+	              <span class="tag">${{esc(item.type)}}</span>
+	              <span class="tag">v${{esc(item.version || 1)}}</span>
+	              <span class="tag">importance ${{esc(Number(item.importance || 0).toFixed(2))}}</span>
+	              ${{item.superseded_version_count ? `<span class="tag warn">${{esc(item.superseded_version_count)}} superseded</span>` : `<span class="tag">no superseded</span>`}}
+	            </div>
+	          </article>`;
+	      }}).join("");
+	      $("panel").innerHTML = `
+	        <div class="split-view">
+	          <section class="workspace-column">
+	            <div class="section-title"><h2>Compiled LLM Wiki</h2><span>${{esc(data.card_count)}} active cards</span></div>
+	            <div class="kv">
+	              <span>来源</span><strong>${{esc(policy.source)}}</strong>
+	              <span>raw events</span><strong>${{esc(policy.raw_events_included ? "included" : "excluded")}}</strong>
+	              <span>证据要求</span><strong>${{esc(policy.requires_evidence ? "required" : "optional")}}</strong>
+	              <span>写入飞书</span><strong>${{esc(policy.writes_feishu ? "yes" : "no")}}</strong>
+	            </div>
+	            <div class="tag-row">${{scopeRows || `<span class="tag">no active scope</span>`}}</div>
+	            <div class="tag-row">${{openRows || `<span class="tag">no open question</span>`}}</div>
+	          </section>
+	          <section class="workspace-column">
+	            <div class="section-title"><h2>Knowledge Cards</h2><span>evidence-backed current facts</span></div>
+	            ${{cards || `<div class="empty">暂无可编译 active memory</div>`}}
+	          </section>
+	        </div>`;
+	    }}
+
+	    function renderGraph(data) {{
+	      const nodes = data.nodes || [];
+	      const edges = data.edges || [];
+	      const width = 760;
+	      const height = 520;
+	      const centerX = width / 2;
+	      const centerY = height / 2;
+	      const radius = Math.max(160, Math.min(230, 70 + nodes.length * 8));
+	      const nodeHtml = nodes.map((node, index) => {{
+	        const angle = nodes.length <= 1 ? 0 : (Math.PI * 2 * index) / nodes.length;
+	        const x = Math.round(centerX + Math.cos(angle) * radius - 68);
+	        const y = Math.round(centerY + Math.sin(angle) * radius - 38);
+	        return `<div class="graph-node ${{esc(node.node_type)}}" style="left:${{x}}px;top:${{y}}px">
+	          <strong>${{esc(node.label)}}</strong>
+	          <small class="mono">${{esc(node.node_type)}}<br>${{esc(node.node_key)}}<br>obs=${{esc(node.observation_count)}}</small>
+	        </div>`;
+	      }}).join("");
+	      const edgeRows = edges.map(edge => `
+	        <div class="edge-item">
+	          <span>${{esc(edge.source_label || edge.source_node_id)}}</span>
+	          <span class="edge-type">${{esc(edge.edge_type)}} x${{esc(edge.observation_count)}}</span>
+	          <span>${{esc(edge.target_label || edge.target_node_id)}}</span>
+	        </div>`).join("");
+	      $("panel").innerHTML = `
+	        <div class="split-view">
+	          <section class="workspace-column">
+	            <div class="section-title"><h2>Knowledge Graph</h2><span>${{esc(data.workspace_node_count)}} visible nodes / ${{esc(data.workspace_edge_count)}} visible edges</span></div>
+	            <div class="kv">
+	              <span>节点类型</span><span class="mono">${{esc(JSON.stringify(data.nodes_by_type))}}</span>
+	              <span>边类型</span><span class="mono">${{esc(JSON.stringify(data.edges_by_type))}}</span>
+	            </div>
+	            <div class="graph-board">${{nodeHtml || `<div class="empty">暂无 graph node</div>`}}</div>
+	          </section>
+	          <section class="workspace-column">
+	            <div class="section-title"><h2>Relationship Ledger</h2><span>source / edge / target</span></div>
+	            <div class="graph-edge-list">${{edgeRows || `<div class="empty">暂无 graph edge</div>`}}</div>
+	          </section>
+	        </div>`;
+	    }}
+
+	    function renderMemories(data) {{
       if (!data.items.length) return $("panel").innerHTML = `<div class="empty">没有匹配的 memory</div>`;
       const rows = data.items.map(item => `
         <tr>

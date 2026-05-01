@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -42,7 +44,7 @@ class CopilotAdminTest(unittest.TestCase):
             event_time = now_ms()
             self.repo.record_raw_event(
                 "project:admin_demo",
-                "机器人收到一条新的飞书测试消息。",
+                "机器人收到一条新的飞书测试消息，app_secret=demo-secret。",
                 source_type="feishu_message",
                 source_id="msg_admin",
                 sender_id="ou_admin",
@@ -73,6 +75,51 @@ class CopilotAdminTest(unittest.TestCase):
                     1,
                 ),
             )
+            self.conn.execute(
+                """
+                INSERT INTO knowledge_graph_nodes (
+                  id, tenant_id, organization_id, node_type, node_key, label,
+                  visibility_policy, status, metadata_json, first_seen_at,
+                  last_seen_at, observation_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "kgn_admin_user",
+                    "tenant:demo",
+                    "org:demo",
+                    "feishu_user",
+                    "ou_admin",
+                    "Admin Reviewer",
+                    "team",
+                    "active",
+                    "{}",
+                    event_time,
+                    event_time,
+                    2,
+                ),
+            )
+            self.conn.execute(
+                """
+                INSERT INTO knowledge_graph_edges (
+                  id, tenant_id, organization_id, source_node_id, target_node_id,
+                  edge_type, metadata_json, first_seen_at, last_seen_at, observation_count
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "kge_admin_member",
+                    "tenant:demo",
+                    "org:demo",
+                    "kgn_admin_user",
+                    "kgn_admin_chat",
+                    "member_of",
+                    "{}",
+                    event_time,
+                    event_time,
+                    2,
+                ),
+            )
             self.repo.record_audit_event(
                 event_type="candidate_created",
                 action="memory.create_candidate",
@@ -100,8 +147,12 @@ class CopilotAdminTest(unittest.TestCase):
 
         live = service.live_overview()
         self.assertIn("msg_admin", {item["source_id"] for item in live["recent_raw_events"]})
-        self.assertEqual(1, live["knowledge_graph"]["node_total"])
-        self.assertEqual("feishu_chat", live["knowledge_graph"]["recent_nodes"][0]["node_type"])
+        self.assertIn("[REDACTED]", live["recent_raw_events"][0]["content"])
+        self.assertNotIn("demo-secret", live["recent_raw_events"][0]["content"])
+        self.assertEqual(2, live["knowledge_graph"]["node_total"])
+        self.assertEqual(1, live["knowledge_graph"]["edge_total"])
+        self.assertIn("wiki", live)
+        self.assertFalse(live["wiki"]["generation_policy"]["raw_events_included"])
 
         candidates = service.list_memories(status="candidate", query="review", limit=10)
         self.assertEqual(1, candidates["total"])
@@ -112,6 +163,21 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertEqual(self.active_id, detail["memory"]["id"])
         self.assertEqual(1, len(detail["versions"]))
         self.assertEqual(1, len(detail["evidence"]))
+
+        wiki = service.wiki_overview(scope="project:admin_demo")
+        self.assertEqual(1, wiki["card_count"])
+        self.assertEqual(self.active_id, wiki["cards"][0]["id"])
+        self.assertIn("后台服务", wiki["cards"][0]["evidence"]["quote"])
+
+        graph = service.graph_workspace(query="Reviewer")
+        self.assertEqual(1, len(graph["nodes"]))
+        self.assertEqual("feishu_user", graph["nodes"][0]["node_type"])
+        self.assertEqual(1, len(graph["edges"]))
+
+        compiled_graph = service.graph_workspace()
+        self.assertGreaterEqual(compiled_graph["workspace_node_count"], 4)
+        self.assertIn("memory", {node["node_type"] for node in compiled_graph["nodes"]})
+        self.assertIn("grounded_by", {edge["edge_type"] for edge in compiled_graph["edges"]})
 
     def test_http_admin_is_read_only_and_serves_json_api(self) -> None:
         self._seed_rows()
@@ -125,20 +191,77 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(payload["ok"])
             self.assertEqual(2, payload["data"]["memory_total"])
 
+            with urlopen(f"{base_url}/healthz", timeout=5) as response:
+                healthz = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(healthz["ok"])
+
+            with urlopen(f"{base_url}/api/health", timeout=5) as response:
+                health = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(health["ok"])
+            self.assertTrue(health["data"]["read_only"])
+            self.assertTrue(health["data"]["wiki_ready"])
+
             with urlopen(f"{base_url}/api/live", timeout=5) as response:
                 live_payload = json.loads(response.read().decode("utf-8"))
             self.assertTrue(live_payload["ok"])
             self.assertIn("msg_admin", {item["source_id"] for item in live_payload["data"]["recent_raw_events"]})
 
+            with urlopen(f"{base_url}/api/wiki?scope=project%3Aadmin_demo", timeout=5) as response:
+                wiki_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(wiki_payload["ok"])
+            self.assertEqual(1, wiki_payload["data"]["card_count"])
+            self.assertFalse(wiki_payload["data"]["generation_policy"]["writes_feishu"])
+
+            with urlopen(f"{base_url}/api/graph?q=Reviewer", timeout=5) as response:
+                graph_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(graph_payload["ok"])
+            self.assertEqual(1, len(graph_payload["data"]["nodes"]))
+
             with urlopen(base_url, timeout=5) as response:
                 html = response.read().decode("utf-8")
             self.assertLess(html.index("<th>Updated</th>"), html.index("<th>Status</th>"))
             self.assertIn('data-view="home"', html)
+            self.assertIn('data-view="wiki"', html)
+            self.assertIn('data-view="graph"', html)
 
             request = Request(f"{base_url}/api/memories", method="POST")
             with self.assertRaises(HTTPError) as raised:
                 urlopen(request, timeout=5)
             self.assertEqual(405, raised.exception.code)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_http_admin_api_requires_bearer_token_when_configured(self) -> None:
+        self._seed_rows()
+        server = create_admin_server("127.0.0.1", 0, self.tmp.name, auth_token="test-token")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            with urlopen(base_url, timeout=5) as response:
+                html = response.read().decode("utf-8")
+            self.assertIn("Feishu Memory Copilot Admin", html)
+
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(f"{base_url}/api/summary", timeout=5)
+            self.assertEqual(401, raised.exception.code)
+
+            with urlopen(f"{base_url}/healthz", timeout=5) as response:
+                healthz = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(healthz["ok"])
+
+            request = Request(f"{base_url}/api/summary", headers={"Authorization": "Bearer test-token"})
+            with urlopen(request, timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(payload["ok"])
+            self.assertEqual(2, payload["data"]["memory_total"])
+
+            request = Request(f"{base_url}/api/health", headers={"Authorization": "Bearer test-token"})
+            with urlopen(request, timeout=5) as response:
+                health = json.loads(response.read().decode("utf-8"))
+            self.assertEqual("enabled", health["data"]["auth"])
         finally:
             server.shutdown()
             server.server_close()
@@ -170,6 +293,28 @@ class CopilotAdminTest(unittest.TestCase):
 
         disabled = parser.parse_args(["copilot-feishu", "listen", "--no-admin"])
         self.assertFalse(disabled.admin)
+
+    def test_admin_start_script_rejects_remote_bind_without_token(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/start_copilot_admin.py",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "0",
+                "--db-path",
+                self.tmp.name,
+            ],
+            cwd=".",
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+        self.assertEqual(2, result.returncode)
+        self.assertIn("non-loopback host without an admin token", result.stderr)
 
 
 if __name__ == "__main__":

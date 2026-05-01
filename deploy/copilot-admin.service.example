@@ -1,0 +1,23 @@
+[Unit]
+Description=Feishu Memory Copilot read-only LLM Wiki / Graph Admin
+Documentation=docs/productization/admin-llm-wiki-launch-runbook.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/feishu_ai_challenge
+EnvironmentFile=/etc/feishu-memory-copilot/admin.env
+ExecStart=/usr/bin/env python3 scripts/start_copilot_admin.py \
+  --host ${FEISHU_MEMORY_COPILOT_ADMIN_HOST} \
+  --port ${FEISHU_MEMORY_COPILOT_ADMIN_PORT} \
+  --db-path ${MEMORY_DB_PATH}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
