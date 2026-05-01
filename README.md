@@ -297,6 +297,7 @@ python3 scripts/start_copilot_admin.py --db-path /path/to/memory.sqlite --port 8
 /api/memories            memory ledger 和 evidence
 /api/audit               权限、治理和工具调用审计
 /api/launch-readiness   staging gate、生产 blocker 和上线证据摘要
+/api/production-evidence 生产证据 manifest gate 读回；默认 production_ready=false
 /api/health              带认证的后台 readiness 摘要
 /metrics                 Prometheus text metrics；共享环境下需要 admin/viewer token 或 SSO
 /healthz                 不含敏感数据的进程 liveness 探活

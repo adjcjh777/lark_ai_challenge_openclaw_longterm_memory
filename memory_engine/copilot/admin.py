@@ -18,6 +18,12 @@ from urllib.parse import parse_qs, unquote, urlparse
 from memory_engine.copilot.knowledge_pages import compile_project_memory_cards
 from memory_engine.db import db_path_from_env, init_db
 from memory_engine.repository import MemoryRepository, now_ms
+from scripts.check_copilot_admin_production_evidence import (
+    DEFAULT_MANIFEST_PATH as DEFAULT_PRODUCTION_EVIDENCE_MANIFEST_PATH,
+)
+from scripts.check_copilot_admin_production_evidence import (
+    run_production_evidence_check,
+)
 
 DEFAULT_ADMIN_HOST = "127.0.0.1"
 DEFAULT_ADMIN_PORT = 8765
@@ -31,6 +37,10 @@ ADMIN_SSO_VIEWER_USERS_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_SSO_VIEWER_USER
 ADMIN_SSO_ALLOWED_DOMAINS_ENV_NAMES = (
     "FEISHU_MEMORY_COPILOT_ADMIN_SSO_ALLOWED_DOMAINS",
     "COPILOT_ADMIN_SSO_ALLOWED_DOMAINS",
+)
+ADMIN_PRODUCTION_EVIDENCE_MANIFEST_ENV_NAMES = (
+    "FEISHU_MEMORY_COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST",
+    "COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST",
 )
 MAX_LIMIT = 200
 
@@ -92,6 +102,7 @@ def start_embedded_admin(
     auth_token: str | None = None,
     viewer_token: str | None = None,
     sso_config: AdminSsoConfig | None = None,
+    production_evidence_manifest: str | Path | None = None,
 ) -> EmbeddedAdminRuntime:
     if not enabled:
         return EmbeddedAdminRuntime(enabled=False, reason="disabled")
@@ -103,6 +114,7 @@ def start_embedded_admin(
             auth_token=auth_token,
             viewer_token=viewer_token,
             sso_config=sso_config,
+            production_evidence_manifest=production_evidence_manifest,
         )
     except OSError as exc:
         return EmbeddedAdminRuntime(enabled=False, reason=f"bind_failed: {exc}")
@@ -1259,6 +1271,7 @@ class CopilotAdminServer(ThreadingHTTPServer):
     auth_token: str | None
     viewer_token: str | None
     sso_config: AdminSsoConfig
+    production_evidence_manifest: str
 
 
 def create_admin_server(
@@ -1269,11 +1282,15 @@ def create_admin_server(
     auth_token: str | None = None,
     viewer_token: str | None = None,
     sso_config: AdminSsoConfig | None = None,
+    production_evidence_manifest: str | Path | None = None,
 ) -> CopilotAdminServer:
     resolved_db_path = str(db_path or db_path_from_env())
     resolved_auth_token = auth_token if auth_token is not None else _admin_token_from_env()
     resolved_viewer_token = viewer_token if viewer_token is not None else _admin_viewer_token_from_env()
     resolved_sso_config = sso_config or admin_sso_config_from_env()
+    resolved_production_evidence_manifest = str(
+        production_evidence_manifest or _admin_production_evidence_manifest_from_env()
+    )
 
     class Handler(CopilotAdminHandler):
         pass
@@ -1282,11 +1299,13 @@ def create_admin_server(
     Handler.auth_token = resolved_auth_token
     Handler.viewer_token = resolved_viewer_token
     Handler.sso_config = resolved_sso_config
+    Handler.production_evidence_manifest = resolved_production_evidence_manifest
     server = CopilotAdminServer((host, port), Handler)
     server.db_path = resolved_db_path
     server.auth_token = resolved_auth_token
     server.viewer_token = resolved_viewer_token
     server.sso_config = resolved_sso_config
+    server.production_evidence_manifest = resolved_production_evidence_manifest
     return server
 
 
@@ -1295,6 +1314,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     auth_token: str | None = None
     viewer_token: str | None = None
     sso_config = AdminSsoConfig()
+    production_evidence_manifest = str(DEFAULT_PRODUCTION_EVIDENCE_MANIFEST_PATH)
     server_version = "FeishuMemoryCopilotAdmin/0.1"
 
     def do_GET(self) -> None:
@@ -1360,6 +1380,9 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/launch-readiness":
                 self._send_json(self._api_launch_readiness(), send_body=send_body)
+                return
+            if parsed.path == "/api/production-evidence":
+                self._send_json(self._api_production_evidence(), send_body=send_body)
                 return
             if parsed.path == "/api/tenants":
                 self._send_json(self._api_tenants(parsed.query), send_body=send_body)
@@ -1529,6 +1552,7 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
     def _api_launch_readiness(self) -> dict[str, Any]:
         with _open_readonly_connection(self.db_path) as conn:
             data = AdminQueryService(conn).launch_readiness()
+        production_evidence = run_production_evidence_check(Path(self.production_evidence_manifest))
         access_checks = [
             _launch_check(
                 "shared_access_gate",
@@ -1549,7 +1573,23 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 "Configure an admin token or SSO admin allowlist before Markdown export or tenant policy edits.",
             ),
         ]
-        data["checks"] = [*data.get("checks", []), *access_checks]
+        production_evidence_status = (
+            "pass"
+            if production_evidence.get("production_ready")
+            else "warning"
+            if production_evidence.get("ok")
+            else "fail"
+        )
+        production_evidence_check = _launch_check(
+            "production_evidence_manifest",
+            "Production evidence manifest",
+            production_evidence_status,
+            "production_ready=true"
+            if production_evidence.get("production_ready")
+            else f"production_ready=false; warnings={len(production_evidence.get('warning_checks') or [])}",
+            "Fill and validate real DB, IdP, TLS, monitoring, and 24h live evidence.",
+        )
+        data["checks"] = [*data.get("checks", []), *access_checks, production_evidence_check]
         data["staging_status"] = _rollup_status(data["checks"])
         data["access_policy"] = {
             "admin_token_configured": bool(self.auth_token),
@@ -1559,7 +1599,12 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
             "viewer_token_can_export": False,
             "tenant_policy_write_requires_admin": True,
         }
+        data["production_evidence"] = _compact_production_evidence(production_evidence)
         return {"ok": True, "db_path": self.db_path, "data": data}
+
+    def _api_production_evidence(self) -> dict[str, Any]:
+        data = run_production_evidence_check(Path(self.production_evidence_manifest))
+        return {"ok": bool(data.get("ok")), "data": data}
 
     def _metrics_text(self) -> str:
         with _open_readonly_connection(self.db_path) as conn:
@@ -1809,6 +1854,13 @@ def _admin_viewer_token_from_env() -> str | None:
         if value:
             return value
     return None
+
+
+def _admin_production_evidence_manifest_from_env() -> Path:
+    value = _env_first(ADMIN_PRODUCTION_EVIDENCE_MANIFEST_ENV_NAMES)
+    if value:
+        return Path(value).expanduser()
+    return DEFAULT_PRODUCTION_EVIDENCE_MANIFEST_PATH
 
 
 def admin_sso_config_from_env() -> AdminSsoConfig:
@@ -2138,6 +2190,33 @@ def _rollup_status(checks: list[dict[str, Any]]) -> str:
 
 def _metric_label_value(value: Any) -> str:
     return str(value or "").replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _compact_production_evidence(result: dict[str, Any]) -> dict[str, Any]:
+    checks = result.get("checks") if isinstance(result.get("checks"), dict) else {}
+    production_sections = {
+        "production_db",
+        "enterprise_idp_sso",
+        "production_domain_tls",
+        "production_monitoring",
+        "productized_live_long_run",
+    }
+    section_status = {
+        name: check.get("status")
+        for name, check in checks.items()
+        if name in production_sections and isinstance(check, dict)
+    }
+    return {
+        "ok": bool(result.get("ok")),
+        "production_ready": bool(result.get("production_ready")),
+        "example_manifest": bool(result.get("example_manifest")),
+        "manifest_path": result.get("manifest_path"),
+        "warning_checks": result.get("warning_checks") or [],
+        "failed_checks": result.get("failed_checks") or [],
+        "section_status": section_status,
+        "boundary": result.get("boundary"),
+        "next_step": result.get("next_step"),
+    }
 
 
 def _param(params: dict[str, list[str]], name: str) -> str | None:
@@ -3142,6 +3221,8 @@ def _index_html() -> str:
       const checks = data.checks || [];
       const blockers = data.production_blockers || [];
       const summary = data.summary || {{}};
+      const evidence = data.production_evidence || {{}};
+      const evidenceStatus = evidence.section_status || {{}};
       const rows = checks.map(item => `
         <tr>
           <td><span class="status ${{esc(item.status)}}">${{esc(item.status)}}</span></td>
@@ -3150,6 +3231,9 @@ def _index_html() -> str:
           <td class="content-cell">${{esc(item.next_step || "-")}}</td>
         </tr>`).join("");
       const blockerRows = blockers.map(item => `<span class="tag warn">${{esc(item.label || item.id)}}</span>`).join("");
+      const evidenceRows = Object.entries(evidenceStatus).map(([name, status]) => `
+        <tr><td class="mono">${{esc(name)}}</td><td><span class="status ${{esc(status)}}">${{esc(status)}}</span></td></tr>
+      `).join("");
       $("panel").innerHTML = `
         <div class="split-view">
           <section class="workspace-column">
@@ -3163,6 +3247,15 @@ def _index_html() -> str:
               <span>Boundary</span><strong>${{esc(data.boundary)}}</strong>
             </div>
             <div class="tag-row">${{blockerRows}}</div>
+            <div class="section-title"><h2>Production Evidence</h2><span>production_ready=${{esc(evidence.production_ready)}}</span></div>
+            <div class="kv">
+              <span>Manifest</span><strong class="mono">${{esc(evidence.manifest_path)}}</strong>
+              <span>Example</span><strong>${{esc(evidence.example_manifest)}}</strong>
+              <span>Warnings</span><strong>${{esc((evidence.warning_checks || []).length)}}</strong>
+              <span>Failures</span><strong>${{esc((evidence.failed_checks || []).length)}}</strong>
+              <span>Boundary</span><strong>${{esc(evidence.boundary)}}</strong>
+            </div>
+            <table><thead><tr><th>Evidence section</th><th>Status</th></tr></thead><tbody>${{evidenceRows}}</tbody></table>
           </section>
           <section class="workspace-column">
             <div class="section-title"><h2>Gate Evidence</h2><span>pass / warning / fail</span></div>

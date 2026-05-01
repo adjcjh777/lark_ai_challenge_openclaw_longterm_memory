@@ -38,6 +38,7 @@
 | live admin `/api/tenants` | `memory_engine/copilot/admin.py` | ledger + tenant policy 派生的 tenant / organization readiness，显示 memory、open review、graph、audit、policy editor 状态和缺失生产能力 |
 | live admin `/api/tenant-policies` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | GET 可读租户策略；POST 仅 admin 可 upsert 本地/pre-production tenant policy，并写 `tenant_policy_upserted` 审计 |
 | live admin `/api/launch-readiness` | `memory_engine/copilot/admin.py`、`scripts/check_copilot_admin_readiness.py` | staging gates 与 production blockers 分开展示，明确 production 仍 blocked |
+| live admin `/api/production-evidence` | `memory_engine/copilot/admin.py`、`scripts/check_copilot_admin_production_evidence.py` | 读回 production evidence manifest gate；Launch 页面显示 Production Evidence 区块，默认 `production_ready=false` |
 | live admin `/metrics` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | Prometheus text metrics；共享环境下要求 admin/viewer token 或 SSO |
 | staging Prometheus alert rules | `deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_prometheus_alert_rules.py`、`tests/test_prometheus_alert_rules.py` | 覆盖 admin scrape、staging gates、Wiki、Graph、tenant policy、audit ledger 和 production blocker；只证明 staging alert-rule artifact，不证明生产告警投递 |
 | admin env lint | `scripts/check_copilot_admin_env_file.py`、`tests/test_copilot_admin_env_file.py` | 校验 committed env 示例保留占位符；校验本机 runtime env 已替换 token、admin/viewer token 不同、端口合法、远程绑定有 token、SSO 配置完整；报告只输出 redacted state |

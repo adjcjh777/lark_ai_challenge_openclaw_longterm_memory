@@ -106,6 +106,12 @@ STAGING_CHECKS = (
         contains=("run_production_evidence_check", "production_ready", "productized_live_long_run"),
     ),
     EvidenceCheck(
+        requirement="Visible knowledge graph backend",
+        evidence="Admin Launch UI exposes production evidence manifest status.",
+        path="memory_engine/copilot/admin.py",
+        contains=("/api/production-evidence", "Production Evidence", "production_evidence_manifest"),
+    ),
+    EvidenceCheck(
         requirement="Launch gates",
         evidence="Production evidence manifest example documents required proof without real secrets.",
         path="deploy/copilot-admin.production-evidence.example.json",

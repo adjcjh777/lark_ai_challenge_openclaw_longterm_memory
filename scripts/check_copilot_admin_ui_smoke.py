@@ -418,6 +418,8 @@ async function checkAdminLaunch(browser, viewport, label) {
   await page.goto(config.adminUrl, { waitUntil: "networkidle" });
   await page.click('[data-view="launch"]');
   await page.waitForSelector("text=Launch Readiness");
+  await page.waitForSelector("text=Production Evidence");
+  await page.waitForSelector("text=production_ready=false");
   await page.waitForSelector("text=production=blocked");
   await page.waitForSelector("text=Real enterprise IdP");
   await page.waitForSelector("text=Admin export/write gate");
@@ -425,6 +427,9 @@ async function checkAdminLaunch(browser, viewport, label) {
   const panelText = await page.locator("#panel").innerText();
   if (!panelText.includes("staging launch readiness only") || !panelText.includes("Production monitoring and alerting")) {
     throw new Error(`admin launch ${label} missing launch boundary or blockers`);
+  }
+  if (!panelText.includes("production_evidence_manifest") || !panelText.includes("productized_live_long_run")) {
+    throw new Error(`admin launch ${label} missing production evidence manifest status`);
   }
   const file = path.join(config.outputDir, `admin-launch-${label}.png`);
   await page.screenshot({ path: file, fullPage: true });

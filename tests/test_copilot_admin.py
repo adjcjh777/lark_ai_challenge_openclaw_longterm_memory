@@ -320,10 +320,22 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(launch_payload["ok"])
             self.assertEqual("blocked", launch_payload["data"]["production_status"])
             self.assertIn("llm_wiki", {item["id"] for item in launch_payload["data"]["checks"]})
+            self.assertIn("production_evidence_manifest", {item["id"] for item in launch_payload["data"]["checks"]})
+            self.assertFalse(launch_payload["data"]["production_evidence"]["production_ready"])
+            self.assertIn(
+                "productized_live_long_run",
+                launch_payload["data"]["production_evidence"]["section_status"],
+            )
             self.assertIn(
                 "enterprise_idp_sso_validation",
                 {item["id"] for item in launch_payload["data"]["production_blockers"]},
             )
+
+            with urlopen(f"{base_url}/api/production-evidence", timeout=5) as response:
+                production_evidence_payload = json.loads(response.read().decode("utf-8"))
+            self.assertTrue(production_evidence_payload["ok"])
+            self.assertFalse(production_evidence_payload["data"]["production_ready"])
+            self.assertTrue(production_evidence_payload["data"]["example_manifest"])
 
             with urlopen(f"{base_url}/api/wiki?scope=project%3Aadmin_demo", timeout=5) as response:
                 wiki_payload = json.loads(response.read().decode("utf-8"))
