@@ -216,6 +216,21 @@ trace_id=trace_manual_dm_search_YYYYMMDD_HHMM。
 
 目的：区分“passive 静默筛选代码没触发”和“真实 Feishu 根本没有把普通群消息投递给当前 listener”。这一步只验证事件投递形态，不创建生产结论。
 
+建议先生成本次 live evidence run manifest，避免单监听 owner、日志路径和 packet 命令手工拼错：
+
+```bash
+python3 scripts/prepare_feishu_live_evidence_run.py \
+  --planned-listener openclaw-websocket \
+  --create-dirs \
+  --controlled-chat-id <controlled_chat_id> \
+  --non-reviewer-open-id <non_reviewer_open_id> \
+  --reviewer-open-id <reviewer_open_id> \
+  --output /tmp/feishu-live-evidence-run.json \
+  --json
+```
+
+该命令不会发送飞书消息或点击卡片；它只检查单监听状态，并生成四类日志路径、人工测试步骤、`collect_feishu_live_evidence_packet.py` 和 completion audit 命令。如果当前只看到 `openclaw-gateway`，计划 listener 应保持 `openclaw-websocket`。
+
 前置条件：
 
 - 已通过“Feishu websocket 单监听检查”。
