@@ -52,7 +52,9 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("api.registerTool", plugin_index)
         self.assertIn("memory_engine.copilot.openclaw_tool_runner", plugin_index)
         self.assertIn("startAdminDashboard", plugin_index)
+        self.assertIn("adminDashboardEnabled", plugin_index)
         self.assertIn("FEISHU_MEMORY_COPILOT_ADMIN_ENABLED", plugin_index)
+        self.assertIn('["1", "true", "yes", "on"]', plugin_index)
         self.assertIn("scripts/start_copilot_admin.py", plugin_index)
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:

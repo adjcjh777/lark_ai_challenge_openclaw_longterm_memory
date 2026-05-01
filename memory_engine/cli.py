@@ -8,6 +8,7 @@ import sys
 from .benchmark import run_benchmark, run_document_ingestion_benchmark, write_benchmark_outputs
 from .bitable_sync import BitableTarget, collect_sync_payload, setup_commands, sync_payload, table_schema_spec
 from .copilot.feishu_live import listen as copilot_feishu_listen
+from .copilot.knowledge_pages import compile_project_memory_cards
 from .db import connect, db_path_from_env, init_db
 from .document_ingestion import ingest_document_source
 from .feishu_runtime import listen, replay_event
@@ -147,6 +148,17 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
 
+    if args.command == "copilot-knowledge" and args.copilot_knowledge_command == "compile":
+        conn = connect(args.db_path)
+        init_db(conn)
+        result = compile_project_memory_cards(MemoryRepository(conn), scope=args.scope)
+        if args.markdown:
+            print(result["markdown"])
+        else:
+            print_json(result)
+        conn.close()
+        return
+
     parser.print_help()
 
 
@@ -268,6 +280,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=int(os.environ.get("COPILOT_ADMIN_PORT", "8765")),
         help="Dashboard bind port. Defaults to COPILOT_ADMIN_PORT or 8765.",
     )
+
+    copilot_knowledge_parser = subparsers.add_parser(
+        "copilot-knowledge",
+        help="Compile active curated memories into a local project memory card page",
+    )
+    copilot_knowledge_subparsers = copilot_knowledge_parser.add_subparsers(dest="copilot_knowledge_command")
+    compile_parser = copilot_knowledge_subparsers.add_parser(
+        "compile",
+        help="Render a Markdown knowledge page from active memories with evidence",
+    )
+    compile_parser.add_argument("--scope", default=DEFAULT_SCOPE)
+    compile_parser.add_argument("--markdown", action="store_true", help="Print Markdown only instead of JSON")
 
     return parser
 

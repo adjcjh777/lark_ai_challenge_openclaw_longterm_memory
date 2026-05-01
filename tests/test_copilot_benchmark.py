@@ -5,7 +5,7 @@ import unittest
 from collections import Counter
 from pathlib import Path
 
-from memory_engine.benchmark import run_benchmark
+from memory_engine.benchmark import _text_has_forbidden_leak, run_benchmark
 
 LAYER_CASES = Path("benchmarks/copilot_layer_cases.json")
 RECALL_CASES = Path("benchmarks/copilot_recall_cases.json")
@@ -79,7 +79,18 @@ class CopilotBenchmarkTest(unittest.TestCase):
             self.assertIn("trace", item)
             self.assertIn("expected_output", item)
             self.assertIn("actual_output_summary", item)
+            self.assertIn("score_breakdown_summary", item["actual_output_summary"])
             self.assertIn("failure_type", item)
+
+    def test_forbidden_leak_detector_allows_explicit_rejection_context_only(self) -> None:
+        self.assertFalse(_text_has_forbidden_leak("发布 pipeline 统一用 GitHub Actions，禁止 Jenkins 触发。", "Jenkins"))
+        self.assertFalse(_text_has_forbidden_leak("项目管理面板用飞书多维表格，不引入 Jira 或 Linear。", "Jira"))
+        self.assertFalse(_text_has_forbidden_leak("源码仓库迁到 GitHub，GitLab 只留镜像。", "GitLab"))
+        self.assertFalse(_text_has_forbidden_leak("生产环境部署必须走审批流，任何人不能直接 push 到 main。", "直接 push"))
+        self.assertTrue(_text_has_forbidden_leak("规则：发布 pipeline 使用 Jenkins。", "Jenkins"))
+        self.assertFalse(_text_has_forbidden_leak("覆盖率标准改成 90%，之前 80% 太低了。", "80%"))
+        self.assertFalse(_text_has_forbidden_leak("PostgreSQL 运维文档没跟上，暂时切回 MySQL。", "PostgreSQL"))
+        self.assertFalse(_text_has_forbidden_leak("80% 导致很多无意义 mock，调到 70%。", "80%"))
 
     def test_candidate_fixture_has_balanced_plain_language_reasons(self) -> None:
         cases = json.loads(CANDIDATE_CASES.read_text(encoding="utf-8"))
@@ -127,6 +138,7 @@ class CopilotBenchmarkTest(unittest.TestCase):
         self.assertIn("stale_leakage_rate", summary)
         self.assertIn("superseded_leakage_rate", summary)
         self.assertGreaterEqual(summary["evidence_coverage"], 0.8)
+        self.assertIn("score_breakdown_summary", result["results"][0]["actual_output_summary"])
 
     def test_real_feishu_expression_fixture_schema_and_coverage(self) -> None:
         cases = json.loads(REAL_FEISHU_CASES.read_text(encoding="utf-8"))

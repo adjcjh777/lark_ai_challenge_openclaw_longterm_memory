@@ -111,7 +111,7 @@ ollama ps
 ## 剩余风险
 
 - User Explanation Coverage 目前由单测和报告口径约束，尚未进入所有 benchmark runner 的自动汇总。
-- 2026-04-29 重跑 recall / conflict benchmark 时 runner exit 0，但指标未全部达标：conflict case pass rate = 0.4000、stale leakage rate = 0.4286；recall case pass rate = 0.5750、Recall@3 = 0.9250、stale leakage rate = 0.4444。该风险属于后续召回/冲突样本修复，不把 UX-03 写成全部指标达标。
+- 2026-05-01 按深研报告建议补 retrieval score breakdown、stale shadow filter、stable memory key / alias、contextual override、reject benchmark runner、subject normalization、override intent、forbidden-value 否定语境判定、组合式 search 摘要和跨语言 query expansion 后，重跑 recall / conflict benchmark 时 runner exit 0：conflict case pass rate = 1.0000、stale leakage rate = 0.0000；recall case pass rate = 1.0000、Recall@3 = 1.0000、stale leakage rate = 0.0000。
 - UX-03 只覆盖 search、explain_versions 和 permission denied 的关键出口；UX-06 还需要扩真实用户表达样本。
 - 本阶段不宣称 production live、全量飞书 workspace ingestion、productized live 长期运行，或真实 Feishu DM 已稳定进入本项目 first-class `fmc_*` / `memory.*` live E2E。
 

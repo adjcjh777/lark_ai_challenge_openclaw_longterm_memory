@@ -159,8 +159,8 @@
   - `python3 -m compileall memory_engine scripts`
   - `python3 -m unittest tests.test_copilot_retrieval tests.test_copilot_permissions`
   - `python3 -m unittest tests.test_copilot_tools tests.test_feishu_interactive_cards`
-  - `python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`（runner exit 0；当前扩样指标不理想，conflict case pass rate = 0.4000，stale leakage rate = 0.4286）
-  - `python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json`（runner exit 0；Recall@3 = 0.9250，但 case pass rate = 0.5750，stale leakage rate = 0.4444）
+  - `PYTHONPYCACHEPREFIX=/private/tmp/feishu_ai_challenge_pycache EMBEDDING_PROVIDER=deterministic MPLCONFIGDIR=/private/tmp/feishu_ai_challenge_mpl python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json`（2026-05-01 重跑 runner exit 0；conflict case pass rate = 1.0000，conflict accuracy = 1.0000，stale leakage rate = 0.0000）
+  - `PYTHONPYCACHEPREFIX=/private/tmp/feishu_ai_challenge_pycache EMBEDDING_PROVIDER=deterministic MPLCONFIGDIR=/private/tmp/feishu_ai_challenge_mpl python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json`（2026-05-01 重跑 runner exit 0；Recall@3 = 1.0000，case pass rate = 1.0000，evidence coverage = 1.0000，stale leakage rate = 0.0000）
   - `git diff --check`
   - `ollama ps`
 

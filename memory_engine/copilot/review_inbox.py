@@ -6,6 +6,7 @@ from typing import Any
 from memory_engine.models import parse_scope
 from memory_engine.repository import MemoryRepository
 
+from .graph_context import review_targets_for_chat
 from .permissions import DEFAULT_ORGANIZATION_ID, DEFAULT_TENANT_ID, sensitive_risk_flags
 from .review_policy import evaluate_review_policy
 
@@ -39,7 +40,7 @@ def list_review_inbox(
         *_candidate_memory_rows(repository, parsed_scope.scope_type, parsed_scope.scope_id, tenant, organization),
         *_candidate_version_rows(repository, parsed_scope.scope_type, parsed_scope.scope_id, tenant, organization),
     ]
-    items = [_row_to_item(row) for row in rows]
+    items = [_row_to_item(repository, row) for row in rows]
     items.sort(key=lambda item: (-int(item["_sort_at"] or 0), item["candidate_id"]))
 
     accessible_items = _accessible_items(items, actor_id=actor_id, actor_roles=actor_roles)
@@ -83,6 +84,8 @@ def _candidate_memory_rows(
           m.status AS status,
           m.owner_id AS owner_id,
           m.visibility_policy AS visibility_policy,
+          m.tenant_id AS tenant_id,
+          m.organization_id AS organization_id,
           m.updated_at AS sort_at,
           NULL AS supersedes_version_id,
           e.source_type AS source_type,
@@ -129,6 +132,8 @@ def _candidate_version_rows(
           mv.status AS status,
           COALESCE(mv.created_by, m.owner_id) AS owner_id,
           mv.visibility_policy AS visibility_policy,
+          mv.tenant_id AS tenant_id,
+          mv.organization_id AS organization_id,
           mv.created_at AS sort_at,
           mv.supersedes_version_id AS supersedes_version_id,
           e.source_type AS source_type,
@@ -156,7 +161,7 @@ def _candidate_version_rows(
     ).fetchall()
 
 
-def _row_to_item(row: Any) -> dict[str, Any]:
+def _row_to_item(repository: MemoryRepository, row: Any) -> dict[str, Any]:
     raw_metadata = _parse_raw_json(row["raw_json"])
     source = _source_from_metadata(raw_metadata, row)
     current_context = _context_from_metadata(raw_metadata)
@@ -178,6 +183,10 @@ def _row_to_item(row: Any) -> dict[str, Any]:
     review_targets = review_policy.get("review_targets")
     if not isinstance(review_targets, list):
         review_targets = []
+    graph_targets = _graph_review_targets(repository, row, raw_metadata)
+    for target in graph_targets:
+        if target not in review_targets:
+            review_targets.append(target)
 
     return {
         "candidate_id": str(row["candidate_id"]),
@@ -194,9 +203,45 @@ def _row_to_item(row: Any) -> dict[str, Any]:
         "evidence_quote": row["evidence_quote"],
         "visibility_policy": row["visibility_policy"],
         "review_targets": [str(target) for target in review_targets if str(target)],
+        "graph_review_targets": graph_targets,
+        "graph_context": {
+            "source_chat_id": _chat_id_from_metadata(raw_metadata),
+            "review_targets_from_chat_membership": graph_targets,
+        },
         "_risk_flags": flags,
         "_sort_at": row["sort_at"],
     }
+
+
+def _graph_review_targets(repository: MemoryRepository, row: Any, raw_metadata: dict[str, Any]) -> list[str]:
+    chat_id = _chat_id_from_metadata(raw_metadata)
+    if not chat_id:
+        return []
+    return review_targets_for_chat(
+        repository.conn,
+        chat_id=chat_id,
+        tenant_id=str(row["tenant_id"] or DEFAULT_TENANT_ID),
+        organization_id=str(row["organization_id"] or DEFAULT_ORGANIZATION_ID),
+    )
+
+
+def _chat_id_from_metadata(raw_metadata: dict[str, Any]) -> str | None:
+    source = raw_metadata.get("source")
+    source = source if isinstance(source, dict) else {}
+    current_context = raw_metadata.get("current_context")
+    current_context = current_context if isinstance(current_context, dict) else {}
+    permission = current_context.get("permission")
+    permission = permission if isinstance(permission, dict) else {}
+    source_context = permission.get("source_context")
+    source_context = source_context if isinstance(source_context, dict) else {}
+    for value in (
+        source.get("source_chat_id"),
+        current_context.get("chat_id"),
+        source_context.get("chat_id"),
+    ):
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def _parse_raw_json(raw_json: str | None) -> dict[str, Any]:

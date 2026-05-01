@@ -24,8 +24,10 @@ from .schemas import (
     RejectRequest,
     UndoReviewRequest,
 )
+from .stable_keys import StableKeyResolution, resolve_stable_memory_key
 
 _PREFIX_SIGNALS = ("记忆", "规则", "结论", "约束", "风险", "负责人", "决定")
+_STABLE_KEY_MIN_CONFIDENCE = 0.7
 
 
 class CopilotGovernance:
@@ -60,24 +62,55 @@ class CopilotGovernance:
                 details={"risk_flags": risk_flags},
             ).to_response()
 
-        parsed_scope = parse_scope(request.scope)
-        ts = now_ms()
-        event_id = self._insert_raw_event(request, extracted.current_value, ts)
         tenant_id = _tenant_id(request.current_context)
         organization_id = _organization_id(request.current_context)
-        existing = self._find_existing(
+        stable_key = resolve_stable_memory_key(
+            extracted.current_value,
+            scope=request.scope,
+            subject=extracted.subject,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+        )
+        parsed_scope = parse_scope(request.scope)
+        ts = now_ms()
+        event_id = self._insert_raw_event(request, extracted.current_value, ts, stable_key=stable_key)
+        existing = self._find_existing_by_stable_key(
             parsed_scope.scope_type,
             parsed_scope.scope_id,
             tenant_id,
             organization_id,
-            extracted.type,
-            extracted.normalized_subject,
-            allow_type_fallback=True,
+            stable_key,
         )
+        conflict_reason = (
+            "same stable memory key already has an active value" if existing is not None else None
+        )
+        if existing is None:
+            existing = self._find_existing(
+                parsed_scope.scope_type,
+                parsed_scope.scope_id,
+                tenant_id,
+                organization_id,
+                extracted.type,
+                extracted.normalized_subject,
+                allow_type_fallback=True,
+            )
+        if existing is None and stable_key.confidence < _STABLE_KEY_MIN_CONFIDENCE and _is_contextual_override(
+            extracted.current_value
+        ):
+            existing = self._find_single_active_memory(
+                parsed_scope.scope_type,
+                parsed_scope.scope_id,
+                tenant_id,
+                organization_id,
+            )
+            if existing is not None:
+                conflict_reason = "contextual override matched the only active memory in scope"
 
         with self.repository.conn:
             if existing is None:
-                candidate = self._insert_new_candidate(request, extracted, parsed_scope, event_id, ts, risk_flags)
+                candidate = self._insert_new_candidate(
+                    request, extracted, parsed_scope, event_id, ts, risk_flags, stable_key=stable_key
+                )
             elif existing["current_value"] == extracted.current_value:
                 self._insert_evidence(
                     existing["id"],
@@ -87,9 +120,18 @@ class CopilotGovernance:
                     request.source.quote,
                     ts,
                 )
-                candidate = self._duplicate_response(request, extracted, existing, risk_flags)
+                candidate = self._duplicate_response(request, extracted, existing, risk_flags, stable_key=stable_key)
             else:
-                candidate = self._insert_conflict_candidate(request, extracted, existing, event_id, ts, risk_flags)
+                candidate = self._insert_conflict_candidate(
+                    request,
+                    extracted,
+                    existing,
+                    event_id,
+                    ts,
+                    risk_flags,
+                    stable_key=stable_key,
+                    conflict_reason=conflict_reason,
+                )
 
         if request.auto_confirm and candidate.get("candidate"):
             confirm_request = ConfirmRequest(
@@ -251,7 +293,14 @@ class CopilotGovernance:
             "user_explanation": self._user_version_explanation(active_version, versions),
         }
 
-    def _insert_raw_event(self, request: CreateCandidateRequest, content: str, ts: int) -> str:
+    def _insert_raw_event(
+        self,
+        request: CreateCandidateRequest,
+        content: str,
+        ts: int,
+        *,
+        stable_key: StableKeyResolution | None = None,
+    ) -> str:
         parsed_scope = parse_scope(request.scope)
         event_id = new_id("evt")
         raw_json = {
@@ -261,6 +310,8 @@ class CopilotGovernance:
             "document_token": request.current_context.get("document_token") or request.source.source_doc_id,
             "document_title": request.current_context.get("document_title"),
         }
+        if stable_key is not None:
+            raw_json["stable_key"] = stable_key.to_dict()
         self.repository.conn.execute(
             """
             INSERT INTO raw_events (
@@ -297,6 +348,7 @@ class CopilotGovernance:
         event_id: str,
         ts: int,
         risk_flags: list[str],
+        stable_key: StableKeyResolution | None = None,
     ) -> dict[str, Any]:
         memory_id = new_id("mem")
         version_id = new_id("ver")
@@ -349,6 +401,7 @@ class CopilotGovernance:
             evidence=request.source.to_dict(),
             risk_flags=risk_flags,
             conflict={"has_conflict": False},
+            stable_key=stable_key,
         )
         return self._candidate_response("created", request.scope, candidate)
 
@@ -358,6 +411,7 @@ class CopilotGovernance:
         extracted: Any,
         existing: Any,
         risk_flags: list[str],
+        stable_key: StableKeyResolution | None = None,
     ) -> dict[str, Any]:
         candidate = self._candidate_payload(
             candidate_id=str(existing["id"]),
@@ -369,6 +423,7 @@ class CopilotGovernance:
             evidence=request.source.to_dict(),
             risk_flags=["duplicate", *risk_flags],
             conflict={"has_conflict": False},
+            stable_key=stable_key,
         )
         return self._candidate_response("duplicate", request.scope, candidate)
 
@@ -380,6 +435,8 @@ class CopilotGovernance:
         event_id: str,
         ts: int,
         risk_flags: list[str],
+        stable_key: StableKeyResolution | None = None,
+        conflict_reason: str | None = None,
     ) -> dict[str, Any]:
         version_no = self._version_no(str(existing["id"])) + 1
         version_id = new_id("ver")
@@ -402,8 +459,10 @@ class CopilotGovernance:
             "old_memory_id": str(existing["id"]),
             "old_value": str(existing["current_value"]),
             "old_status": str(existing["status"]),
-            "reason": "same type and subject already has an active value",
+            "reason": conflict_reason or "same type and subject already has an active value",
         }
+        if stable_key is not None:
+            conflict["stable_key"] = stable_key.to_dict()
         flags = ["conflict_candidate", *risk_flags]
         if is_override_intent(extracted.current_value):
             flags.append("override_intent")
@@ -417,6 +476,7 @@ class CopilotGovernance:
             evidence=request.source.to_dict(),
             risk_flags=flags,
             conflict=conflict,
+            stable_key=stable_key,
         )
         return self._candidate_response("candidate_conflict", request.scope, candidate)
 
@@ -784,6 +844,7 @@ class CopilotGovernance:
             "memory": candidate["memory"],
             "quote": candidate["evidence"]["quote"],
             "owner_id": candidate.get("owner_id"),
+            "stable_key": candidate.get("stable_key"),
         }
 
     def _status_response(self, action: str, memory: Any, *, candidate_id: str, actor_id: str | None = None) -> dict[str, Any]:
@@ -852,8 +913,9 @@ class CopilotGovernance:
         evidence: dict[str, Any],
         risk_flags: list[str],
         conflict: dict[str, Any],
+        stable_key: StableKeyResolution | None = None,
     ) -> dict[str, Any]:
-        return {
+        payload = {
             "candidate_id": candidate_id,
             "memory_id": memory_id,
             "version_id": version_id,
@@ -887,6 +949,10 @@ class CopilotGovernance:
             },
             "memory": asdict(extracted),
         }
+        if stable_key is not None:
+            payload["stable_key"] = stable_key.to_dict()
+            payload["memory"]["stable_key"] = stable_key.to_dict()
+        return payload
 
     def _insert_version(
         self,
@@ -995,6 +1061,82 @@ class CopilotGovernance:
             """,
             (scope_type, scope_id, tenant_id, organization_id, normalized_subject),
         ).fetchone()
+
+    def _find_existing_by_stable_key(
+        self,
+        scope_type: str,
+        scope_id: str,
+        tenant_id: str,
+        organization_id: str,
+        stable_key: StableKeyResolution,
+    ) -> Any:
+        if stable_key.confidence < _STABLE_KEY_MIN_CONFIDENCE:
+            return None
+        rows = self.repository.conn.execute(
+            """
+            SELECT m.*, r.raw_json
+            FROM memories m
+            LEFT JOIN raw_events r ON r.id = m.source_event_id
+            WHERE m.scope_type = ?
+              AND m.scope_id = ?
+              AND m.tenant_id = ?
+              AND m.organization_id = ?
+              AND m.status = 'active'
+            ORDER BY m.updated_at DESC, m.id
+            """,
+            (scope_type, scope_id, tenant_id, organization_id),
+        ).fetchall()
+        for row in rows:
+            if self._row_stable_key(row) == stable_key.stable_key:
+                return row
+            fallback = resolve_stable_memory_key(
+                str(row["current_value"]),
+                scope=f"{scope_type}:{scope_id}",
+                subject=str(row["subject"]),
+                tenant_id=tenant_id,
+                organization_id=organization_id,
+            )
+            if fallback.confidence >= _STABLE_KEY_MIN_CONFIDENCE and fallback.stable_key == stable_key.stable_key:
+                return row
+        return None
+
+    def _find_single_active_memory(
+        self,
+        scope_type: str,
+        scope_id: str,
+        tenant_id: str,
+        organization_id: str,
+    ) -> Any:
+        rows = self.repository.conn.execute(
+            """
+            SELECT *
+            FROM memories
+            WHERE scope_type = ?
+              AND scope_id = ?
+              AND tenant_id = ?
+              AND organization_id = ?
+              AND status = 'active'
+            ORDER BY updated_at DESC, id
+            LIMIT 2
+            """,
+            (scope_type, scope_id, tenant_id, organization_id),
+        ).fetchall()
+        return rows[0] if len(rows) == 1 else None
+
+    def _row_stable_key(self, row: Any) -> str | None:
+        raw_json = row["raw_json"] if "raw_json" in row.keys() else None
+        if not raw_json:
+            return None
+        try:
+            parsed = json.loads(raw_json)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        stable_key = parsed.get("stable_key")
+        if isinstance(stable_key, dict) and isinstance(stable_key.get("stable_key"), str):
+            return stable_key["stable_key"]
+        return None
 
     def _memory_by_id(self, memory_id: str) -> Any:
         return self.repository.conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
@@ -1138,6 +1280,11 @@ def _looks_like_question(text: str) -> bool:
     lowered = text.lower()
     question_markers = ("？", "?", "是什么", "怎么", "是否", "吗", "是不是")
     return any(marker in text or marker in lowered for marker in question_markers)
+
+
+def _is_contextual_override(text: str) -> bool:
+    stripped = text.strip()
+    return stripped.startswith(("之前", "上次", "后来", "刚才")) and contains_any(stripped, OVERRIDE_WORDS)
 
 
 def _current_version_summary(version: dict[str, Any]) -> dict[str, Any]:

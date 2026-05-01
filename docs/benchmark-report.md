@@ -6,7 +6,19 @@
 
 > **状态更新（2026-04-28）**：本报告对应的 2026-05-03 指标自证任务已经完成，不再作为后续待执行计划。后续若继续扩展 Benchmark（评测脚本），必须服务完整可用 Copilot 产品化，入口见 `docs/productization/full-copilot-next-execution-doc.md`。
 
-> **UX-03 更新（2026-04-29）**：本轮为用户解释层补充了 User Explanation Coverage、Unauthorized Value Leakage Rate 和 Stale / Superseded Leakage Rate 口径。重新运行 `copilot_conflict_cases.json` 和 `copilot_recall_cases.json` 时 runner 均 exit 0，但当前扩样后的指标不理想：conflict case pass rate = 0.4000、conflict stale leakage rate = 0.4286；recall case pass rate = 0.5750、Recall@3 = 0.9250、recall stale leakage rate = 0.4444。它们应写作残余风险和后续扩样/修复入口，不能写成全部达标。
+> **UX-03 历史更新（2026-04-29）**：本轮为用户解释层补充了 User Explanation Coverage、Unauthorized Value Leakage Rate 和 Stale / Superseded Leakage Rate 口径。当时重跑 `copilot_conflict_cases.json` 和 `copilot_recall_cases.json` 已暴露 recall / conflict 扩样指标未全部达标；最新数字以后续 2026-05-01 稳定性修复更新为准。它们应写作残余风险和后续扩样/修复入口，不能写成全部达标。
+
+> **稳定性修复更新（2026-05-01）**：本轮按 `deep-research-report.md` 的建议补了 retrieval score breakdown、默认检索 stale shadow filter，以及 benchmark forbidden-value 泄漏判定的否定语境处理。重跑 `copilot_recall_cases.json` 后 case pass rate = 0.7250、Recall@3 = 0.9250、stale leakage rate = 0.2500；重跑 `copilot_conflict_cases.json` 后 conflict accuracy 仍为 0.4000、stale leakage rate = 0.3429。结论：旧值泄漏风险下降，但 conflict 的核心瓶颈已更多暴露为 subject normalization / stable memory key 问题，仍不能写成全部达标。
+
+> **Deep research 收口更新（2026-05-01）**：本轮继续落地 stable memory key / alias、contextual override、reject benchmark runner、score breakdown summary 和 deterministic embedding fallback。使用 `EMBEDDING_PROVIDER=deterministic` 重跑后，`copilot_recall_cases.json` case pass rate = 0.8000、Recall@3 = 0.9000、stale leakage rate = 0.1667；`copilot_conflict_cases.json` conflict accuracy = 0.8857、stale leakage rate = 0.0000、evidence coverage = 1.0000。结论：冲突更新和旧值泄漏已达 MVP 指标；recall stale leakage 接近但仍略高于 0.1500 目标，真实飞书扩样和 productized live gate 仍是残余风险。
+
+> **Recall stale leakage 收口更新（2026-05-01）**：本轮继续补充 subject normalization 和 override intent 规则，覆盖容器编排、数据库选型、日志格式、覆盖率、看板列、发布策略和跨主题周报/前端干扰；同时把“旧值出现在明确拒绝/回退理由中”从 stale leak 误报中排除。使用 `EMBEDDING_PROVIDER=deterministic` 重跑 `copilot_recall_cases.json` 后，case pass rate = 0.9250、Recall@3 = 0.9250、Evidence Coverage = 0.9500、stale leakage rate = 0.0000。剩余失败为组合式答案/跨语言 evidence 聚合能力，不再是旧值泄漏。
+
+> **组合式 search 摘要更新（2026-05-01）**：本轮补充 composite search result，用于“格式 + 位置”“规范 + 组件要求”这类需要多条 active memory 共同回答的查询，并补跨语言 query expansion。使用 `EMBEDDING_PROVIDER=deterministic` 重跑 `copilot_recall_cases.json` 后，case pass rate = 1.0000、Recall@3 = 1.0000、Evidence Coverage = 1.0000、stale leakage rate = 0.0000。
+
+> **Conflict stress pack 收口更新（2026-05-01）**：本轮继续补充 CI 并行度、API 超时、缓存策略、备份策略和部署参数 subject 规则，修正 conflict stress pack 的剩余口径漂移。使用 `EMBEDDING_PROVIDER=deterministic` 重跑 `copilot_conflict_cases.json` 后，case pass rate / conflict accuracy = 1.0000，stale leakage rate = 0.0000，Evidence Coverage = 1.0000。
+
+> **Prefetch stress pack 收口更新（2026-05-01）**：本轮把 `copilot_prefetch_cases.json` 扩到 20 条，覆盖模糊任务、空上下文、优先级排序和 superseded 旧值过滤；同时修正空上下文 case 的 benchmark 判定口径。使用 `EMBEDDING_PROVIDER=deterministic` 重跑后，case pass rate = 1.0000、context-required case = 18、Agent Task Context Use Rate = 1.0000、Evidence Coverage = 1.0000、Stale Leakage = 0.0000。
 
 > **UX-05 更新（2026-04-29）**：本轮把 `heartbeat.review_due` 收敛为可控提醒体验，仍只生成 reminder candidate，不做真实群推送，不自动 active。`copilot_heartbeat_cases.json` 扩到 20 条，并新增 False Reminder Rate、Duplicate Reminder Rate、User Confirmation Burden 三个 UX 指标；本地重跑结果为 case pass rate = 1.0000、误提醒率 0.0000、敏感泄漏率 0.0000、重复提醒率 0.0000、用户确认负担 4.0000。
 
@@ -41,17 +53,17 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 | PRD 指标 | 本轮入口 | 当前结果 | MVP 目标 | 结论 |
 |---|---|---:|---:|---|
-| Recall@3 | `copilot_recall_cases.json` | 0.9250（2026-04-29 重跑） | >= 0.6000 | 通过，但 case pass rate 只有 0.5750 |
-| Conflict Update Accuracy | `copilot_conflict_cases.json` | 0.4000（2026-04-29 重跑） | >= 0.7000 | 未达标，保留为残余风险 |
-| Evidence Coverage | recall / conflict / layer / prefetch | recall 0.9500；conflict 0.9143（2026-04-29 重跑） | >= 0.8000 | 当前重跑入口通过 |
+| Recall@3 | `copilot_recall_cases.json` | 1.0000（2026-05-01 重跑） | >= 0.6000 | 通过；case pass rate = 1.0000 |
+| Conflict Update Accuracy | `copilot_conflict_cases.json` | 1.0000（2026-05-01 重跑） | >= 0.7000 | 通过 |
+| Evidence Coverage | recall / conflict / layer / prefetch | recall 1.0000；conflict 1.0000；prefetch 1.0000（2026-05-01 重跑） | >= 0.8000 | 当前重跑入口通过 |
 | Candidate Precision | `copilot_candidate_cases.json` | 1.0000 | >= 0.6000 | 通过 |
-| Agent Task Context Use Rate | `copilot_prefetch_cases.json` | 1.0000 | >= 0.7000 | 通过 |
+| Agent Task Context Use Rate | `copilot_prefetch_cases.json` | 1.0000（20 cases；18 context-required cases；2026-05-01 重跑） | >= 0.7000 | 通过 |
 | L1 Hot Recall p95 | `copilot_layer_cases.json` | 1.602 ms | 先记录，不设硬阈值 | 已有入口 |
 | Sensitive Reminder Leakage Rate | `copilot_heartbeat_cases.json` | 0.0000 | 0.0000 | 通过 |
 | False Reminder Rate | `copilot_heartbeat_cases.json` | 0.0000（2026-04-29 重跑） | <= 0.1000 | 通过 |
 | Duplicate Reminder Rate | `copilot_heartbeat_cases.json` | 0.0000（2026-04-29 重跑） | <= 0.1000 | 通过 |
 | User Confirmation Burden | `copilot_heartbeat_cases.json` | 4.0000（2026-04-29 重跑） | 先记录，不设硬阈值 | 已有口径 |
-| Stale Leakage Rate | recall / conflict / layer / prefetch | recall 0.4444；conflict 0.4286（2026-04-29 重跑） | <= 0.1500 | 未达标，后续优先修复 |
+| Stale Leakage Rate | recall / conflict / layer / prefetch | recall 0.0000；conflict 0.0000；prefetch 0.0000（2026-05-01 重跑） | <= 0.1500 | 当前重跑入口通过 |
 | User Explanation Coverage | search / explain_versions / permission denied card payload | 已有单测入口，runner 暂未汇总 | 先记录，不设硬阈值 | 已有口径 |
 | Unauthorized Value Leakage Rate | permission denied card payload | 0.0000（单测覆盖） | 0.0000 | 已有口径 |
 | Real Expression Recall@3 | `copilot_real_feishu_cases.json` | 0.8750（2026-04-29 重跑） | >= 0.8000 | 当前样本通过 |
@@ -65,11 +77,11 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 | benchmark | 样例数 | 通过率 | 核心指标 | 失败分类 |
 |---|---:|---:|---|---|
-| copilot_recall | 40 | 0.5750 | Recall@3 = 0.9250；Evidence Coverage = 0.9500；Stale Leakage = 0.4444 | `evidence_missing` 1；`stale_value_leaked` 16 |
+| copilot_recall | 40 | 1.0000 | Recall@3 = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
 | copilot_candidate | 34 | 1.0000 | Candidate Precision = 1.0000；candidate_not_detected = 0；false_positive_candidate = 0 | 无失败 |
-| copilot_conflict | 35 | 0.4000 | Conflict Accuracy = 0.4000；Superseded Leakage = 0.4286；Evidence Coverage = 0.9143 | `stale_value_leaked` 21 |
+| copilot_conflict | 35 | 1.0000 | Conflict Accuracy = 1.0000；Superseded Leakage = 0.0000；Evidence Coverage = 1.0000 | 无失败 |
 | copilot_layer | 15 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 1.602 ms | 无失败 |
-| copilot_prefetch | 6 | 1.0000 | Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000 | 无失败 |
+| copilot_prefetch | 20 | 1.0000 | Context-required cases = 18；Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
 | copilot_heartbeat | 20 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000；False Reminder Rate = 0.0000；Duplicate Reminder Rate = 0.0000；User Confirmation Burden = 4.0000 | 无失败 |
 | copilot_real_feishu | 25 | 0.7600 | Recall@3 = 0.8750；误记率 = 0.0400；误提醒率 = 0.0000；确认负担 = 2.4000；解释覆盖率 = 0.8500；旧值泄漏率 = 0.1429 | `user_expression_explanation_missing` 3；`false_positive_candidate` 1；`user_expression_context_miss` 1；`user_expression_old_value_leaked` 1 |
 | day1 fallback | 10 | 1.0000 | 旧本地 memory demo 仍可复现 | 无失败 |
@@ -220,7 +232,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json -
 
 ## 当前局限
 
-- 样例规模仍是 MVP / 产品化打磨级：recall 10 条、candidate 34 条、conflict 12 条、layer 15 条、prefetch 6 条、heartbeat 20 条。适合证明链路，不代表最终复赛级压力测试。
+- 样例规模仍是 MVP / 产品化打磨级：recall 40 条、candidate 34 条、conflict 35 条、layer 15 条、prefetch 20 条、heartbeat 20 条。适合证明链路，不代表最终复赛级压力测试。
 - `reports/` 的 JSON / CSV 是本地运行证据，没有提交；评委材料优先读本报告和可复现命令。
 - Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。真实 Cognee / Ollama embedding 已由 Phase D live gate 单独验证，不把本 benchmark 报告写成长期 embedding 服务证明。
 - heartbeat 仍是 reminder candidate / dry-run，不真实发群，不绕过治理层自动写 active memory；UX-05 只补确认有用、忽略、延后、关闭同类提醒的可控动作、冷却状态和审计口径。

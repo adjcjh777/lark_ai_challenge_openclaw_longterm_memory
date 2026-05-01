@@ -305,6 +305,46 @@ class CopilotGovernanceTest(unittest.TestCase):
         assert before is not None
         self.assertIn("cn-shanghai", before["answer"])
 
+    def test_stable_key_detects_conflict_when_subject_text_drifted(self) -> None:
+        seed = self.service.create_candidate(candidate_request("决定：生产部署 region 固定 cn-shanghai。"))
+        confirmed = self.service.confirm(
+            ConfirmRequest(
+                candidate_id=seed["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+        self.assertTrue(confirmed["ok"])
+
+        result = self.service.create_candidate(candidate_request("不对，线上部署机房以后统一改成 ap-shanghai。"))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("candidate_conflict", result["action"])
+        self.assertTrue(result["conflict"]["has_conflict"])
+        self.assertEqual("same stable memory key already has an active value", result["conflict"]["reason"])
+        self.assertEqual("deploy_region", result["candidate"]["stable_key"]["slot_type"])
+
+    def test_stable_key_does_not_merge_owner_with_weekly_report_recipient(self) -> None:
+        owner = self.service.create_candidate(candidate_request("OpenClaw 产品化负责人是程俊豪。"))
+        confirmed = self.service.confirm(
+            ConfirmRequest(
+                candidate_id=owner["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+        self.assertTrue(confirmed["ok"])
+
+        recipient = self.service.create_candidate(candidate_request("OpenClaw 周报接收人改成 Alice。"))
+
+        self.assertTrue(recipient["ok"])
+        self.assertNotEqual("candidate_conflict", recipient["action"])
+        self.assertEqual("weekly_report_recipient", recipient["candidate"]["stable_key"]["slot_type"])
+
     def test_undo_confirm_returns_new_memory_to_candidate(self) -> None:
         created = self.service.create_candidate(candidate_request("决定：演示脚本必须先展示权限拒绝。"))
         confirmed = self.service.confirm(

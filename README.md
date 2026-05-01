@@ -12,7 +12,7 @@
 
 当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-状态快照：2026-04-30，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md` 和 `docs/productization/user-experience-todo.md` 为准。
+状态快照：2026-05-01，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/deep-research-improvement-backlog.md` 和 `docs/productization/user-experience-todo.md` 为准。
 
 ### 当前真实 Feishu 使用边界
 
@@ -56,6 +56,7 @@
 | OpenClaw Feishu websocket staging | 已完成本机 running 证据 | `scripts/check_openclaw_feishu_websocket.py`、`docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` |
 | Demo readiness | 已完成一键检查 | `scripts/check_demo_readiness.py` |
 | Benchmark | 已完成多类评测样例 | `benchmarks/copilot_*.json`、`docs/benchmark-report.md` |
+| Deep research 改进闭环 | 已完成第一轮代码收口：stable memory key / alias 层、score breakdown 输出、stale shadow filter、deterministic embedding fallback、graph review target / prefetch context、conflict/reject benchmark runner 修正、组合式 search 摘要、本地编译型记忆卡册，以及受控真实 Feishu Task fetch -> candidate smoke；最新本地重跑显示 recall 40/40、conflict 35/35、prefetch 20/20 均通过，stale leakage 均为 0.0000；仍保留 productized live 长期运行为后续风险 | `memory_engine/copilot/stable_keys.py`、`memory_engine/copilot/governance.py`、`memory_engine/copilot/review_inbox.py`、`memory_engine/copilot/knowledge_pages.py`、`memory_engine/feishu_task_fetcher.py`、`memory_engine/benchmark.py`、`tests/test_copilot_stable_keys.py`、`tests/test_copilot_review_inbox.py`、`tests/test_copilot_prefetch.py`、`tests/test_feishu_fetchers.py`、`tests/test_copilot_knowledge_pages.py`、`docs/productization/deep-research-improvement-backlog.md` |
 | 白皮书 / 答辩材料 | 已完成初稿和 10 分钟评委体验包，放在后半部分查看 | `docs/memory-definition-and-architecture-whitepaper.md`、`docs/demo-runbook.md`、`docs/judge-10-minute-experience.md` |
 
 ### 不能 overclaim
@@ -73,7 +74,7 @@
 
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
-| P1 | 扩大真实飞书样本实测 | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 做 smoke，继续保留 review-policy gate、失败 fallback 和 no-overclaim |
+| P1 | 扩大真实飞书样本实测 | 已完成 1 条受控真实 Feishu Task fetch -> candidate smoke；后续继续扩到 Meeting / Bitable 和更多真实表达样本，保留 review-policy gate、失败 fallback 和 no-overclaim |
 | P1 | 扩大真实飞书可点击卡片实测 | 在受控测试群里用真实卡片点击覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`，并读回审计；不把一次 sandbox 点击写成生产长期运行 |
 | P1 | 扩大真实飞书审核收件箱实测 | 在受控测试群里用 `/review`、`/review conflicts`、`确认合并` 和 `/undo` 覆盖真实卡片点击与审计读回；当前只完成本地受控路径，不宣称真实 DM/群长期稳定运行 |
 | P1 | 扩大真实 DM 定向投递实测 | 在 lark-cli 认证可用后，用受控 reviewer/owner open_id 读回 DM 卡片投递和失败 fallback；当前完成 publisher 本地测试，不宣称生产长期运行 |
@@ -245,9 +246,9 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 
 ### 2.5 本地只读后台
 
-Dashboard 不是单独的产品服务。它会随 Memory Copilot runtime 启动：
+Dashboard 不是单独的产品服务。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
 
-- OpenClaw 加载 `feishu-memory-copilot` 插件时，会尝试启动本地 dashboard。
+- OpenClaw 加载 `feishu-memory-copilot` 插件时，只有 `FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1` 或 `COPILOT_ADMIN_ENABLED=1` 才会尝试启动本地 dashboard。
 - 仓库内 `python3 -m memory_engine copilot-feishu listen` / `scripts/start_copilot_feishu_live.sh` 启动时，也会带起 dashboard。
 
 默认访问地址：

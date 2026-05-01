@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -10,8 +11,9 @@ from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 
 from .cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter
-from .embeddings import OllamaEmbeddingProvider, create_embedding_provider
+from .embeddings import DeterministicEmbeddingProvider, OllamaEmbeddingProvider, create_embedding_provider
 from .governance import CopilotGovernance
+from .graph_context import review_targets_for_chat
 from .heartbeat import DEFAULT_COOLDOWN_MS, HeartbeatReminderEngine, _reminder_key, parse_review_at_ms
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
@@ -47,7 +49,7 @@ class CopilotService:
         repository: MemoryRepository | None = None,
         db_path: str | Path | None = None,
         cognee_adapter: CogneeMemoryAdapter | None = None,
-        embedding_provider: OllamaEmbeddingProvider | None = None,
+        embedding_provider: OllamaEmbeddingProvider | DeterministicEmbeddingProvider | None = None,
         auto_init_cognee: bool = True,
     ) -> None:
         self.repository = repository
@@ -397,6 +399,7 @@ class CopilotService:
         deadlines = [
             item for item in relevant if item.get("type") == "deadline" or _mentions_deadline(item.get("current_value"))
         ]
+        graph_context = _prefetch_graph_context(self._repository(), request.current_context)
         response = {
             "ok": True,
             "tool": "memory.prefetch",
@@ -406,6 +409,7 @@ class CopilotService:
             "context_pack": {
                 "summary": _prefetch_summary(request.task, relevant, risks, deadlines),
                 "relevant_memories": relevant,
+                "graph_context": graph_context,
                 "risks": risks,
                 "deadlines": deadlines,
                 "version_status": [
@@ -525,7 +529,7 @@ class CopilotService:
         )
         return response
 
-    def _get_or_init_embedding_provider(self) -> OllamaEmbeddingProvider | None:
+    def _get_or_init_embedding_provider(self) -> OllamaEmbeddingProvider | DeterministicEmbeddingProvider | None:
         """Get or initialize the embedding provider.
 
         Returns the OllamaEmbeddingProvider if available, otherwise None
@@ -542,6 +546,12 @@ class CopilotService:
             return self._embedding_provider
 
         # Try to create OllamaEmbeddingProvider
+        provider_name = os.environ.get("EMBEDDING_PROVIDER", "ollama")
+        if provider_name != "ollama":
+            self._embedding_provider = create_embedding_provider(provider=provider_name, fallback=True)
+            self._embedding_provider_unavailable_reason = None
+            return self._embedding_provider
+
         try:
             provider = create_embedding_provider(provider="ollama", fallback=False)
             if isinstance(provider, OllamaEmbeddingProvider):
@@ -992,6 +1002,44 @@ def _compact_memory(memory: dict[str, object]) -> dict[str, object]:
         "matched_via": memory.get("matched_via") or [],
         "why_ranked": memory.get("why_ranked") or {},
     }
+
+
+def _prefetch_graph_context(repository: MemoryRepository, current_context: dict[str, object]) -> dict[str, object]:
+    permission_payload = current_context.get("permission") if isinstance(current_context, dict) else None
+    permission = _parse_permission(permission_payload)
+    chat_id = _context_chat_id(current_context, permission_payload)
+    if permission is None or not chat_id:
+        return {
+            "source_chat_id": chat_id,
+            "related_people": [],
+            "policy": "graph_context_unavailable_without_permission_or_chat",
+        }
+
+    related_people = review_targets_for_chat(
+        repository.conn,
+        chat_id=chat_id,
+        tenant_id=permission.actor.tenant_id,
+        organization_id=permission.actor.organization_id,
+        limit=8,
+    )
+    return {
+        "source_chat_id": chat_id,
+        "related_people": related_people,
+        "policy": "feishu_chat_membership_only",
+        "raw_message_content_included": False,
+    }
+
+
+def _context_chat_id(current_context: dict[str, object], permission_payload: object) -> str | None:
+    value = current_context.get("chat_id") if isinstance(current_context, dict) else None
+    if isinstance(value, str) and value:
+        return value
+    source_context = permission_payload.get("source_context") if isinstance(permission_payload, dict) else {}
+    if isinstance(source_context, dict):
+        value = source_context.get("chat_id")
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def _mentions_risk(value: object) -> bool:

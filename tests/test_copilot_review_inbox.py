@@ -19,6 +19,7 @@ def current_context(
     *,
     actor_id: str,
     reviewers: list[str] | None = None,
+    chat_id: str | None = None,
     tenant_id: str = "tenant:demo",
     organization_id: str = "org:demo",
 ) -> dict[str, object]:
@@ -39,6 +40,11 @@ def current_context(
     actor["organization_id"] = organization_id
     if reviewers:
         permission["reviewers"] = list(reviewers)
+    if chat_id:
+        context["chat_id"] = chat_id
+        source_context = permission.get("source_context")
+        assert isinstance(source_context, dict)
+        source_context["chat_id"] = chat_id
     return context
 
 
@@ -48,6 +54,7 @@ def candidate_request(
     actor_id: str,
     source_type: str = "feishu_message",
     reviewers: list[str] | None = None,
+    chat_id: str | None = None,
     tenant_id: str = "tenant:demo",
     organization_id: str = "org:demo",
 ) -> CreateCandidateRequest:
@@ -65,6 +72,7 @@ def candidate_request(
             "memory.create_candidate",
             actor_id=actor_id,
             reviewers=reviewers,
+            chat_id=chat_id,
             tenant_id=tenant_id,
             organization_id=organization_id,
         ),
@@ -172,6 +180,59 @@ class CopilotReviewInboxTest(unittest.TestCase):
         self.assertEqual(1, reviewer_view["counts"]["mine"])
         self.assertEqual(str(self.conflict_candidate["candidate_id"]), reviewer_view["items"][0]["candidate_id"])
         self.assertIn("ou_reviewer_conflict", reviewer_view["items"][0]["review_targets"])
+
+    def test_graph_chat_membership_extends_review_targets(self) -> None:
+        chat_id = "oc_review_graph"
+        ts = 1777600000000
+        self.conn.execute(
+            """
+            INSERT INTO knowledge_graph_nodes (
+              id, tenant_id, organization_id, node_type, node_key, label,
+              visibility_policy, status, metadata_json, first_seen_at, last_seen_at
+            )
+            VALUES
+              ('node_chat_review_graph', 'tenant:demo', 'org:demo', 'feishu_chat', ?, 'review graph chat', 'team', 'active', '{}', ?, ?),
+              ('node_user_review_graph', 'tenant:demo', 'org:demo', 'feishu_user', 'ou_graph_reviewer', 'graph reviewer', 'team', 'active', '{}', ?, ?)
+            """,
+            (chat_id, ts, ts, ts, ts),
+        )
+        self.conn.execute(
+            """
+            INSERT INTO knowledge_graph_edges (
+              id, tenant_id, organization_id, source_node_id, target_node_id,
+              edge_type, metadata_json, first_seen_at, last_seen_at
+            )
+            VALUES (
+              'edge_user_chat_review_graph', 'tenant:demo', 'org:demo',
+              'node_user_review_graph', 'node_chat_review_graph',
+              'member_of_feishu_chat', '{}', ?, ?
+            )
+            """,
+            (ts, ts),
+        )
+        created = self.service.create_candidate(
+            candidate_request(
+                "决定：图谱审核候选需要按群成员路由。",
+                actor_id="ou_graph_owner",
+                chat_id=chat_id,
+            )
+        )
+        self.assertTrue(created["ok"])
+
+        inbox = list_review_inbox(
+            self.repo,
+            scope=SCOPE,
+            actor_id="ou_graph_reviewer",
+            actor_roles=["member"],
+            view="mine",
+        )
+
+        self.assertEqual(1, len(inbox["items"]))
+        item = inbox["items"][0]
+        self.assertEqual(str(created["candidate_id"]), item["candidate_id"])
+        self.assertIn("ou_graph_reviewer", item["review_targets"])
+        self.assertEqual(["ou_graph_reviewer"], item["graph_review_targets"])
+        self.assertEqual(chat_id, item["graph_context"]["source_chat_id"])
 
     def test_conflicts_view_returns_version_candidates_with_old_and_new_values(self) -> None:
         inbox = list_review_inbox(

@@ -114,6 +114,40 @@ class TaskFetcherTest(unittest.TestCase):
         self.assertEqual(source.actor_id, "ou_creator_1")
         self.assertEqual(source.metadata["task_status"], "open")
         self.assertEqual(source.metadata["due_at"], "1714500000")
+        self.assertEqual(
+            [
+                "--as",
+                "user",
+                "task",
+                "tasks",
+                "get",
+                "--params",
+                '{"task_guid": "task_123", "user_id_type": "open_id"}',
+            ],
+            mock_run.call_args.args[0],
+        )
+
+    @patch("memory_engine.feishu_task_fetcher.run_lark_cli")
+    def test_fetch_feishu_task_text_supports_task_v2_shape(self, mock_run: Mock) -> None:
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "task": {
+                        "summary": "Task v2 标题",
+                        "description": "Task v2 描述里记录上线前必须检查审计。",
+                        "creator": {"id": "ou_creator_2"},
+                        "status": "todo",
+                        "url": "https://applink.feishu.cn/client/todo/detail?guid=task_v2",
+                    },
+                },
+            }
+        )
+
+        source = fetch_feishu_task_text("task_v2")
+
+        self.assertEqual("Task v2 标题", source.title)
+        self.assertIn("Task v2 描述", source.text)
+        self.assertEqual("https://applink.feishu.cn/client/todo/detail?guid=task_v2", source.source_url)
 
     @patch("memory_engine.feishu_task_fetcher.run_lark_cli")
     def test_fetch_feishu_task_text_api_error(self, mock_run: Mock) -> None:

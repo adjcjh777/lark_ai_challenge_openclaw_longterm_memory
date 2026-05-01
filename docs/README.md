@@ -1,6 +1,6 @@
 # 项目文档导航
 
-日期：2026-04-30（更新：OpenClaw gateway 静默候选、DM 定向审核、群级设置卡）
+日期：2026-05-01（更新：deep research 改进闭环、stable memory key、真实飞书扩样 gate、审计 read-only live gate）
 
 ## 先看这个
 
@@ -29,6 +29,10 @@
 | [productization/complete-product-roadmap-test-spec.md](productization/complete-product-roadmap-test-spec.md) | 验收规格 |
 | [productization/launch-polish-todo.md](productization/launch-polish-todo.md) | 待办清单 |
 | [productization/user-experience-todo.md](productization/user-experience-todo.md) | 用户体验产品化 TODO，记录 7 个 UX 缺口是否完成 |
+| [productization/deep-research-improvement-backlog.md](productization/deep-research-improvement-backlog.md) | 深研报告改进事项，聚焦指标口径、旧值泄漏、冲突更新和 retrieval 可解释性 |
+| [productization/stable-memory-key-alias-design.md](productization/stable-memory-key-alias-design.md) | 稳定 memory key / alias 层设计，用于降低 subject normalization 和旧值泄漏风险 |
+| [productization/real-feishu-controlled-expansion-checklist.md](productization/real-feishu-controlled-expansion-checklist.md) | 真实飞书受控扩样 gate，列出 smoke matrix、读回证据和凭据/资源 ID 阻塞 |
+| [productization/audit-read-only-live-gate.md](productization/audit-read-only-live-gate.md) | productized live 小步实施 gate：审计 read-only view，不宣称生产长期运行 |
 | [productization/productized-live-long-run-plan.md](productization/productized-live-long-run-plan.md) | Productized live 长期运行方案；只定义 gate 和运行边界，不代表已上线 |
 
 ### 工作流和人类入口（2 个）

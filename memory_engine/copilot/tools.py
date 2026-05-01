@@ -165,10 +165,8 @@ def _handle_fetch_task(payload: dict[str, Any], scope: str, current_context: dic
         return error_response("validation_error", "task_id is required", details={"tool": "feishu.fetch_task"})
 
     try:
-        from memory_engine.db import connect, init_db
-        from memory_engine.document_ingestion import ingest_feishu_source, preflight_feishu_source_access
+        from memory_engine.document_ingestion import preflight_feishu_source_access
         from memory_engine.feishu_task_fetcher import fetch_feishu_task_text
-        from memory_engine.repository import MemoryRepository
 
         permission_error = preflight_feishu_source_access(
             "feishu_task",
@@ -180,17 +178,7 @@ def _handle_fetch_task(payload: dict[str, Any], scope: str, current_context: dic
             return permission_error.to_response()
 
         source = fetch_feishu_task_text(task_id)
-
-        from memory_engine.db import db_path_from_env
-
-        conn = connect(db_path_from_env())
-        init_db(conn)
-        repo = MemoryRepository(conn)
-
-        result = ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
-        conn.close()
-
-        return result
+        return _ingest_limited_feishu_source(source, scope=scope, current_context=current_context)
     except ValueError as e:
         return error_response("validation_error", str(e), details={"tool": "feishu.fetch_task"})
     except Exception as e:
@@ -204,10 +192,8 @@ def _handle_fetch_meeting(payload: dict[str, Any], scope: str, current_context: 
         return error_response("validation_error", "minute_token is required", details={"tool": "feishu.fetch_meeting"})
 
     try:
-        from memory_engine.db import connect, init_db
-        from memory_engine.document_ingestion import ingest_feishu_source, preflight_feishu_source_access
+        from memory_engine.document_ingestion import preflight_feishu_source_access
         from memory_engine.feishu_meeting_fetcher import fetch_feishu_meeting_text
-        from memory_engine.repository import MemoryRepository
 
         permission_error = preflight_feishu_source_access(
             "feishu_meeting",
@@ -219,17 +205,7 @@ def _handle_fetch_meeting(payload: dict[str, Any], scope: str, current_context: 
             return permission_error.to_response()
 
         source = fetch_feishu_meeting_text(minute_token)
-
-        from memory_engine.db import db_path_from_env
-
-        conn = connect(db_path_from_env())
-        init_db(conn)
-        repo = MemoryRepository(conn)
-
-        result = ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
-        conn.close()
-
-        return result
+        return _ingest_limited_feishu_source(source, scope=scope, current_context=current_context)
     except ValueError as e:
         return error_response("validation_error", str(e), details={"tool": "feishu.fetch_meeting"})
     except Exception as e:
@@ -250,10 +226,8 @@ def _handle_fetch_bitable(payload: dict[str, Any], scope: str, current_context: 
         )
 
     try:
-        from memory_engine.db import connect, init_db
-        from memory_engine.document_ingestion import ingest_feishu_source, preflight_feishu_source_access
+        from memory_engine.document_ingestion import preflight_feishu_source_access
         from memory_engine.feishu_bitable_fetcher import fetch_bitable_record_text
-        from memory_engine.repository import MemoryRepository
 
         permission_error = preflight_feishu_source_access(
             "lark_bitable",
@@ -266,21 +240,25 @@ def _handle_fetch_bitable(payload: dict[str, Any], scope: str, current_context: 
             return permission_error.to_response()
 
         source = fetch_bitable_record_text(app_token, table_id, record_id)
-
-        from memory_engine.db import db_path_from_env
-
-        conn = connect(db_path_from_env())
-        init_db(conn)
-        repo = MemoryRepository(conn)
-
-        result = ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
-        conn.close()
-
-        return result
+        return _ingest_limited_feishu_source(source, scope=scope, current_context=current_context)
     except ValueError as e:
         return error_response("validation_error", str(e), details={"tool": "feishu.fetch_bitable"})
     except Exception as e:
         return error_response("internal_error", str(e), details={"tool": "feishu.fetch_bitable"})
+
+
+def _ingest_limited_feishu_source(source: Any, *, scope: str, current_context: dict[str, Any]) -> dict[str, Any]:
+    from memory_engine.db import connect, db_path_from_env, init_db
+    from memory_engine.document_ingestion import ingest_feishu_source
+    from memory_engine.repository import MemoryRepository
+
+    conn = connect(db_path_from_env())
+    try:
+        init_db(conn)
+        repo = MemoryRepository(conn)
+        return ingest_feishu_source(repo, source, scope=scope, current_context=current_context)
+    finally:
+        conn.close()
 
 
 def _to_plain_dict(value: Any) -> dict[str, Any]:

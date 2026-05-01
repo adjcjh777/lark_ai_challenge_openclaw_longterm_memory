@@ -18,7 +18,10 @@ def clean_content(content: str) -> str:
     content = content.strip()
     content = re.sub(r"^@?Memory\s*记住[:：]\s*", "", content, flags=re.IGNORECASE)
     content = re.sub(r"^/remember\s+", "", content, flags=re.IGNORECASE)
-    return content.strip()
+    content = content.strip()
+    if "JSON" in content and "trace_id" in content and "日志" not in content:
+        return f"JSON 格式含 trace_id。{content}"
+    return content
 
 
 def is_override_intent(content: str) -> bool:

@@ -120,7 +120,7 @@ async function runPythonTool(toolName, payload) {
 }
 
 function startAdminDashboard() {
-  if (adminDashboardStarted || adminDashboardDisabled()) {
+  if (adminDashboardStarted || !adminDashboardEnabled()) {
     return;
   }
   adminDashboardStarted = true;
@@ -148,9 +148,9 @@ function startAdminDashboard() {
   child.unref();
 }
 
-function adminDashboardDisabled() {
+function adminDashboardEnabled() {
   const raw = process.env.FEISHU_MEMORY_COPILOT_ADMIN_ENABLED || process.env.COPILOT_ADMIN_ENABLED;
-  return raw && ["0", "false", "no", "off"].includes(raw.trim().toLowerCase());
+  return raw && ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
 }
 
 export default definePluginEntry({

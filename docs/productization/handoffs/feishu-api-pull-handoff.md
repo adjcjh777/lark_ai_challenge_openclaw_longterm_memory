@@ -7,7 +7,7 @@
 
 本轮确认仓库已经存在任务、会议、Bitable 读取 fetcher，并补齐真实拉取前的权限门控和飞书 live payload 对齐：
 
-- `memory_engine/feishu_task_fetcher.py` 可通过 `lark-cli task +get-task` / `+get-my-tasks` 拉取任务详情和列表，构造 `FeishuIngestionSource(source_type="feishu_task")`。
+- `memory_engine/feishu_task_fetcher.py` 可通过当前 `lark-cli task tasks get` / `+get-my-tasks` 拉取任务详情和列表，构造 `FeishuIngestionSource(source_type="feishu_task")`。
 - `memory_engine/feishu_meeting_fetcher.py` 可通过 `lark-cli minutes +get` / `+get-ai-content` / `+get-transcript` 拉取妙记详情、AI 产物或逐字稿，构造 `FeishuIngestionSource(source_type="feishu_meeting")`。
 - `memory_engine/feishu_bitable_fetcher.py` 可通过 `lark-cli base +record-get` / `+record-list` / `+table-list` 拉取 Bitable 记录和表结构，构造 `FeishuIngestionSource(source_type="lark_bitable")`。
 - 新增 `preflight_feishu_source_access()`，在任何真实 task / meeting / Bitable fetch 前先检查 `current_context.permission`、scope、tenant / organization 和 source context。

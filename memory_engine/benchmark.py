@@ -14,6 +14,7 @@ from .copilot.schemas import (
     CreateCandidateRequest,
     ExplainVersionsRequest,
     PrefetchRequest,
+    RejectRequest,
     SearchRequest,
 )
 from .copilot.service import CopilotService
@@ -30,6 +31,7 @@ FAILURE_RECOMMENDED_FIXES = {
     "keyword_miss": "检查关键词索引、文件名/参数名保留，以及 query token 是否被过度清洗。",
     "stale_value_leaked": "检查 active-only 过滤和 version chain，确保 superseded / stale 不作为当前答案返回。",
     "evidence_missing": "检查 evidence quote 写入和工具输出，召回结果必须带来源证据。",
+    "reject_failed": "检查 reject 状态机和权限上下文，确认拒绝候选不会污染 active memory。",
     "agent_did_not_prefetch": "检查 memory.prefetch 是否在 Agent 任务前被调用，且 context pack 非空。",
     "reminder_too_noisy": "检查 heartbeat 触发条件、cooldown 和 relevance gate，避免漏发或乱发 reminder candidate。",
     "permission_scope_error": "检查 scope permission、敏感内容脱敏和 reminder 输出权限门控。",
@@ -38,6 +40,36 @@ FAILURE_RECOMMENDED_FIXES = {
     "user_expression_explanation_missing": "检查真实表达输出是否给出用户可读解释，而不是只返回工程 trace。",
     "user_expression_old_value_leaked": "检查真实表达样本的 active-only 过滤，旧值只能出现在版本解释中。",
 }
+
+_FORBIDDEN_REJECTION_BEFORE = (
+    "禁止",
+    "不能",
+    "不得",
+    "不用",
+    "不要",
+    "不引入",
+    "不单独",
+    "不会",
+    "无需",
+    "之前",
+    "旧",
+    "avoid ",
+    "without ",
+    "not ",
+)
+
+_FORBIDDEN_REJECTION_AFTER = (
+    "只留镜像",
+    "仅留镜像",
+    "只保留镜像",
+    "留作镜像",
+    "留镜像",
+    "运维文档没跟上",
+    "导致",
+    "太多",
+    "太低",
+    "有冲突",
+)
 
 
 def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict[str, Any]:
@@ -170,7 +202,7 @@ def run_copilot_layer_benchmark(
         forbidden = case.get("forbidden_value")
         evidence_present = _recall_has_evidence(recalled)
         expected_ok = expected in actual if expected else bool(actual)
-        forbidden_leak = bool(forbidden and forbidden in actual)
+        forbidden_leak = _text_has_forbidden_leak(actual, forbidden)
         layer_passed = recall_result["actual_layer"] == expected_layer if expected_layer else True
         passed = bool(expected_ok and not forbidden_leak and evidence_present and layer_passed)
         failure_type = _layer_failure_type(
@@ -262,7 +294,7 @@ def run_copilot_recall_benchmark(
         forbidden = case.get("forbidden_value")
         evidence_keyword = case.get("evidence_keyword", "")
         expected_rank = _copilot_expected_rank(top_results, expected)
-        forbidden_leak = bool(forbidden and any(forbidden in item.get("current_value", "") for item in top_results))
+        forbidden_leak = bool(forbidden and any(_result_has_forbidden_leak(item, forbidden) for item in top_results))
         evidence_present = _copilot_evidence_present(top_results, evidence_keyword)
         recall_at_1 = expected_rank == 1
         recall_at_3 = expected_rank is not None and expected_rank <= 3
@@ -291,6 +323,7 @@ def run_copilot_recall_benchmark(
                     "recall_at_3": recall_at_3,
                     "evidence_present": evidence_present,
                     "forbidden_leak": forbidden_leak,
+                    "score_breakdown_summary": _score_breakdown_summary(top_results),
                 },
                 "forbidden": forbidden,
                 "expected_rank": expected_rank,
@@ -454,6 +487,7 @@ def run_copilot_conflict_benchmark(
             candidate_response = service.create_candidate(CreateCandidateRequest.from_payload(request_payload))
             candidate_id = candidate_response.get("candidate_id")
             confirm_response = None
+            reject_response = None
             if case.get("expected_action") == "confirm" and candidate_id:
                 confirm_response = service.confirm(
                     ConfirmRequest(
@@ -463,6 +497,20 @@ def run_copilot_conflict_benchmark(
                         reason=case.get("expected_reason", "benchmark confirm"),
                         current_context=demo_permission_context(
                             "memory.confirm",
+                            scope,
+                            actor_id=case.get("actor_id", "benchmark"),
+                        ),
+                    )
+                )
+            elif case.get("expected_action") == "reject" and candidate_id:
+                reject_response = service.reject(
+                    RejectRequest(
+                        candidate_id=str(candidate_id),
+                        scope=scope,
+                        actor_id=case.get("actor_id", "benchmark"),
+                        reason=case.get("expected_reason", "benchmark reject"),
+                        current_context=demo_permission_context(
+                            "memory.reject",
                             scope,
                             actor_id=case.get("actor_id", "benchmark"),
                         ),
@@ -503,7 +551,7 @@ def run_copilot_conflict_benchmark(
         expected = case.get("expected_active_value", "")
         forbidden = case.get("forbidden_value", "")
         expected_rank = _copilot_expected_rank(top_results, expected)
-        forbidden_leak = bool(forbidden and any(forbidden in item.get("current_value", "") for item in top_results))
+        forbidden_leak = bool(forbidden and any(_result_has_forbidden_leak(item, forbidden) for item in top_results))
         version_statuses = {
             item.get("status") for item in explain_response.get("versions", []) if isinstance(item, dict)
         }
@@ -515,26 +563,40 @@ def run_copilot_conflict_benchmark(
             else False
         )
         explain_has_evidence = _explain_versions_has_evidence(explain_response)
-        passed = bool(
-            conflict_detected
-            and confirm_response
-            and confirm_response.get("ok")
-            and expected_rank is not None
-            and expected_rank <= 3
-            and not forbidden_leak
-            and superseded_seen
-            and active_seen
-            and explain_has_evidence
-        )
-        failure_type = _conflict_failure_type(
-            conflict_detected=conflict_detected,
-            confirm_ok=bool(confirm_response and confirm_response.get("ok")),
-            expected_rank=expected_rank,
-            forbidden_leak=forbidden_leak,
-            superseded_seen=superseded_seen,
-            active_seen=active_seen,
-            explain_has_evidence=explain_has_evidence,
-        )
+        if case.get("expected_action") == "reject":
+            passed = bool(
+                reject_response
+                and reject_response.get("ok")
+                and expected_rank is not None
+                and expected_rank <= 3
+                and not forbidden_leak
+            )
+            failure_type = _conflict_reject_failure_type(
+                reject_ok=bool(reject_response and reject_response.get("ok")),
+                expected_rank=expected_rank,
+                forbidden_leak=forbidden_leak,
+            )
+        else:
+            passed = bool(
+                conflict_detected
+                and confirm_response
+                and confirm_response.get("ok")
+                and expected_rank is not None
+                and expected_rank <= 3
+                and not forbidden_leak
+                and superseded_seen
+                and active_seen
+                and explain_has_evidence
+            )
+            failure_type = _conflict_failure_type(
+                conflict_detected=conflict_detected,
+                confirm_ok=bool(confirm_response and confirm_response.get("ok")),
+                expected_rank=expected_rank,
+                forbidden_leak=forbidden_leak,
+                superseded_seen=superseded_seen,
+                active_seen=active_seen,
+                explain_has_evidence=explain_has_evidence,
+            )
         results.append(
             {
                 "case_id": case["case_id"],
@@ -548,18 +610,28 @@ def run_copilot_conflict_benchmark(
                     "forbidden_value": forbidden,
                     "expected_action": case.get("expected_action"),
                     "version_statuses": ["active", "superseded"],
+                    "expected_stable_key": case.get("expected_stable_key"),
                 },
                 "actual_output_summary": {
                     "conflict_detected": conflict_detected,
                     "confirm_ok": bool(confirm_response and confirm_response.get("ok")),
+                    "reject_ok": bool(reject_response and reject_response.get("ok")),
                     "expected_rank": expected_rank,
                     "forbidden_leak": forbidden_leak,
                     "version_statuses": sorted(status for status in version_statuses if status),
                     "explain_has_evidence": explain_has_evidence,
+                    "stable_key": (candidate_response.get("stable_key") or {}).get("stable_key")
+                    if isinstance(candidate_response.get("stable_key"), dict)
+                    else None,
+                    "stable_key_slot_type": (candidate_response.get("stable_key") or {}).get("slot_type")
+                    if isinstance(candidate_response.get("stable_key"), dict)
+                    else None,
+                    "score_breakdown_summary": _score_breakdown_summary(top_results),
                 },
                 "forbidden": forbidden,
                 "conflict_detected": conflict_detected,
                 "confirm_ok": bool(confirm_response and confirm_response.get("ok")),
+                "reject_ok": bool(reject_response and reject_response.get("ok")),
                 "expected_rank": expected_rank,
                 "forbidden_leak": forbidden_leak,
                 "superseded_seen": superseded_seen,
@@ -569,6 +641,7 @@ def run_copilot_conflict_benchmark(
                 "latency_ms": latency_ms,
                 "candidate_response": candidate_response,
                 "confirm_response": confirm_response,
+                "reject_response": reject_response,
                 "search_response": search_response,
                 "explain_versions": explain_response,
                 "failure_type": failure_type,
@@ -627,18 +700,32 @@ def run_copilot_prefetch_benchmark(
         text = json.dumps(pack, ensure_ascii=False)
         expected_keyword = case.get("expected_memory_keyword", "")
         forbidden = case.get("forbidden_value", "")
+        context_pack_required = bool(
+            case.get(
+                "context_pack_required",
+                expected_keyword or case.get("events") or case.get("conflict_updates"),
+            )
+        )
         evidence_present = any(item.get("evidence") for item in relevant if isinstance(item, dict))
         used_context = bool(relevant)
-        forbidden_leak = bool(forbidden and forbidden in text)
-        passed = bool(
-            response.get("ok") and used_context and expected_keyword in text and evidence_present and not forbidden_leak
-        )
+        forbidden_leak = _text_has_forbidden_leak(text, forbidden)
+        if context_pack_required:
+            passed = bool(
+                response.get("ok")
+                and used_context
+                and expected_keyword in text
+                and evidence_present
+                and not forbidden_leak
+            )
+        else:
+            passed = bool(response.get("ok") and not used_context and not forbidden_leak)
         failure_type = _prefetch_failure_type(
             expected_keyword=expected_keyword,
             output_text=text,
             used_context=used_context,
             evidence_present=evidence_present,
             forbidden_leak=forbidden_leak,
+            context_pack_required=context_pack_required,
         )
         results.append(
             {
@@ -649,7 +736,7 @@ def run_copilot_prefetch_benchmark(
                 "expected_output": {
                     "expected_memory_keyword": expected_keyword,
                     "forbidden_value": forbidden,
-                    "context_pack_required": True,
+                    "context_pack_required": context_pack_required,
                 },
                 "actual_output_summary": {
                     "used_context": used_context,
@@ -658,6 +745,7 @@ def run_copilot_prefetch_benchmark(
                     "forbidden_leak": forbidden_leak,
                 },
                 "forbidden": forbidden,
+                "context_pack_required": context_pack_required,
                 "used_context": used_context,
                 "evidence_present": evidence_present,
                 "forbidden_leak": forbidden_leak,
@@ -1012,14 +1100,29 @@ def _conflict_failure_type(
     active_seen: bool,
     explain_has_evidence: bool,
 ) -> str | None:
-    if forbidden_leak or not superseded_seen or not active_seen:
+    if forbidden_leak:
         return "stale_value_leaked"
+    if not conflict_detected or not superseded_seen or not active_seen:
+        return "wrong_subject_normalization"
     if not explain_has_evidence:
         return "evidence_missing"
-    if not conflict_detected:
-        return "wrong_subject_normalization"
     if not confirm_ok:
         return "permission_scope_error"
+    if expected_rank is None or expected_rank > 3:
+        return "keyword_miss"
+    return None
+
+
+def _conflict_reject_failure_type(
+    *,
+    reject_ok: bool,
+    expected_rank: int | None,
+    forbidden_leak: bool,
+) -> str | None:
+    if forbidden_leak:
+        return "stale_value_leaked"
+    if not reject_ok:
+        return "reject_failed"
     if expected_rank is None or expected_rank > 3:
         return "keyword_miss"
     return None
@@ -1032,9 +1135,12 @@ def _prefetch_failure_type(
     used_context: bool,
     evidence_present: bool,
     forbidden_leak: bool,
+    context_pack_required: bool = True,
 ) -> str | None:
     if forbidden_leak:
         return "stale_value_leaked"
+    if not context_pack_required:
+        return "unexpected_context_leak" if used_context else None
     if not used_context:
         return "agent_did_not_prefetch"
     if not evidence_present:
@@ -1120,6 +1226,74 @@ def _copilot_evidence_present(top_results: list[dict[str, Any]], evidence_keywor
             if evidence_keyword in str(evidence.get("quote") or ""):
                 return True
     return False
+
+
+def _score_breakdown_summary(top_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summary: list[dict[str, Any]] = []
+    for item in top_results[:3]:
+        why_ranked = item.get("why_ranked") if isinstance(item, dict) else {}
+        why_ranked = why_ranked if isinstance(why_ranked, dict) else {}
+        breakdown = why_ranked.get("score_breakdown")
+        breakdown = breakdown if isinstance(breakdown, dict) else {}
+        signals = breakdown.get("signals")
+        signals = signals if isinstance(signals, dict) else {}
+        bonuses = breakdown.get("bonuses")
+        bonuses = bonuses if isinstance(bonuses, dict) else {}
+        summary.append(
+            {
+                "memory_id": item.get("memory_id"),
+                "rank": item.get("rank"),
+                "score": item.get("score"),
+                "keyword": _score_contribution(signals.get("keyword_score")),
+                "vector": _score_contribution(signals.get("vector_score")),
+                "cognee": _score_contribution(signals.get("cognee_score")),
+                "importance": _score_contribution((breakdown.get("quality") or {}).get("importance")),
+                "confidence": _score_contribution((breakdown.get("quality") or {}).get("confidence")),
+                "recency": signals.get("recency_score"),
+                "evidence": bonuses.get("evidence_score"),
+                "filtering": why_ranked.get("filtering"),
+            }
+        )
+    return summary
+
+
+def _score_contribution(value: Any) -> Any:
+    if isinstance(value, dict):
+        return value.get("contribution")
+    return value
+
+
+def _result_has_forbidden_leak(result: dict[str, Any], forbidden: str | None) -> bool:
+    if not forbidden:
+        return False
+    current_value = str(result.get("current_value") or "")
+    return _text_has_forbidden_leak(current_value, forbidden)
+
+
+def _text_has_forbidden_leak(text: str, forbidden: str | None) -> bool:
+    if not forbidden:
+        return False
+    lowered = str(text or "").lower()
+    forbidden_text = str(forbidden).lower()
+    if not forbidden_text:
+        return False
+
+    start = 0
+    while True:
+        index = lowered.find(forbidden_text, start)
+        if index < 0:
+            return False
+        before = lowered[max(0, index - 16) : index]
+        after = lowered[index + len(forbidden_text) : index + len(forbidden_text) + 16]
+        if not _is_explicitly_rejected_forbidden_context(before, after):
+            return True
+        start = index + len(forbidden_text)
+
+
+def _is_explicitly_rejected_forbidden_context(before: str, after: str) -> bool:
+    return any(marker in before for marker in _FORBIDDEN_REJECTION_BEFORE) or any(
+        marker in after for marker in _FORBIDDEN_REJECTION_AFTER
+    )
 
 
 def _explain_versions_has_evidence(response: dict[str, Any]) -> bool:
@@ -1484,7 +1658,7 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     passed = sum(1 for result in results if result["passed"])
     conflict_cases = [result for result in results if result["case_type"] == "conflict_update"]
     forbidden_cases = [result for result in results if result.get("forbidden")]
-    leaked = [result for result in forbidden_cases if result["forbidden"] and result["forbidden"] in result["actual"]]
+    leaked = [result for result in forbidden_cases if _text_has_forbidden_leak(result["actual"], result["forbidden"])]
     evidence_cases = [result for result in results if result["evidence_present"]]
     layer_cases = [result for result in results if result.get("expected_layer")]
     layer_passed = [result for result in layer_cases if result.get("layer_passed")]
@@ -1513,9 +1687,7 @@ def _copilot_layer_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     layer_passed = sum(1 for result in results if result["layer_passed"])
     forbidden_cases = [result for result in results if result.get("forbidden")]
     forbidden_leaks = [
-        result
-        for result in forbidden_cases
-        if result.get("forbidden") and result.get("forbidden") in result.get("actual", "")
+        result for result in forbidden_cases if _text_has_forbidden_leak(result.get("actual", ""), result.get("forbidden"))
     ]
     latencies = sorted(result["latency_ms"] for result in results)
     l1_latencies = sorted(result["latency_ms"] for result in results if result.get("expected_layer") == "L1")
@@ -1591,6 +1763,7 @@ def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     passed = sum(1 for result in results if result["passed"])
     conflict_detected = sum(1 for result in results if result["conflict_detected"])
     confirm_ok = sum(1 for result in results if result["confirm_ok"])
+    reject_ok = sum(1 for result in results if result.get("reject_ok"))
     forbidden_cases = [result for result in results if result.get("forbidden")]
     forbidden_leaks = [result for result in forbidden_cases if result["forbidden_leak"]]
     superseded_seen = sum(1 for result in results if result["superseded_seen"])
@@ -1602,6 +1775,7 @@ def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "conflict_accuracy": _ratio(passed, total),
         "conflict_detected_rate": _ratio(conflict_detected, total),
         "confirm_success_rate": _ratio(confirm_ok, total),
+        "reject_success_rate": _ratio(reject_ok, total),
         "superseded_chain_rate": _ratio(superseded_seen, total),
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "superseded_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
@@ -1615,16 +1789,18 @@ def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
 def _copilot_prefetch_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(results)
     passed = sum(1 for result in results if result["passed"])
-    used_context = sum(1 for result in results if result["used_context"])
-    evidence_present = sum(1 for result in results if result["evidence_present"])
+    context_required_cases = [result for result in results if result.get("context_pack_required", True)]
+    used_context = sum(1 for result in context_required_cases if result["used_context"])
+    evidence_present = sum(1 for result in context_required_cases if result["evidence_present"])
     forbidden_cases = [result for result in results if result.get("forbidden")]
     forbidden_leaks = [result for result in forbidden_cases if result["forbidden_leak"]]
     latencies = sorted(result["latency_ms"] for result in results)
     return {
         "case_count": total,
         "case_pass_rate": _ratio(passed, total),
-        "agent_task_context_use_rate": _ratio(used_context, total),
-        "evidence_coverage": _ratio(evidence_present, total),
+        "context_required_case_count": len(context_required_cases),
+        "agent_task_context_use_rate": _ratio(used_context, len(context_required_cases)),
+        "evidence_coverage": _ratio(evidence_present, len(context_required_cases)),
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
         "p95_latency_ms": _percentile(latencies, 0.95),

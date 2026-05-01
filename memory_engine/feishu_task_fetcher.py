@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .document_ingestion import FeishuIngestionSource
@@ -46,9 +47,11 @@ def fetch_feishu_task_text(
     if not task:
         raise ValueError("获取任务失败: 任务数据为空")
 
-    # 提取任务信息
-    title = task.get("title", f"任务 {task_id}")
-    summary = task.get("summary", "")
+    # Task v2 returns `summary` as the visible title and `description` as body.
+    # Older shortcut responses used `title` plus `summary`; keep both shapes
+    # supported so tests and stored fixtures remain valid.
+    title = task.get("title") or task.get("summary") or f"任务 {task_id}"
+    summary = task.get("description") or (task.get("summary") if task.get("title") else "")
     creator = task.get("creator", {})
     creator_id = creator.get("id", "unknown")
     due = task.get("due", {})
@@ -94,7 +97,7 @@ def fetch_feishu_task_text(
         title=title,
         text=combined_text,
         actor_id=creator_id,
-        source_url=f"https://feishu.cn/tasks/{task_id}",
+        source_url=task.get("url") or f"https://feishu.cn/tasks/{task_id}",
         metadata=metadata,
     )
 
@@ -162,7 +165,12 @@ def _fetch_task_detail(
     as_identity: str | None = None,
 ) -> FeishuApiResult:
     """获取任务详情。"""
-    argv = _build_argv(["task", "+get-task", "--task-id", task_id], profile=profile, as_identity=as_identity)
+    params = json.dumps({"task_guid": task_id, "user_id_type": "open_id"}, ensure_ascii=False)
+    argv = _build_argv(
+        ["task", "tasks", "get", "--params", params],
+        profile=profile,
+        as_identity=as_identity or "user",
+    )
     return run_lark_cli(argv)
 
 

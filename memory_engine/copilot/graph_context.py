@@ -49,6 +49,45 @@ class FeishuMessageGraphRegistration:
         }
 
 
+def review_targets_for_chat(
+    conn: sqlite3.Connection,
+    *,
+    chat_id: str,
+    tenant_id: str,
+    organization_id: str,
+    limit: int = 8,
+) -> list[str]:
+    """Return Feishu user ids connected to a chat node for review routing hints."""
+
+    if not chat_id:
+        return []
+    rows = conn.execute(
+        """
+        SELECT user_node.node_key AS user_id
+        FROM knowledge_graph_edges edge
+        JOIN knowledge_graph_nodes user_node ON user_node.id = edge.source_node_id
+        JOIN knowledge_graph_nodes chat_node ON chat_node.id = edge.target_node_id
+        WHERE edge.tenant_id = ?
+          AND edge.organization_id = ?
+          AND edge.edge_type = 'member_of_feishu_chat'
+          AND user_node.node_type = 'feishu_user'
+          AND chat_node.node_type = 'feishu_chat'
+          AND chat_node.node_key = ?
+          AND user_node.status = 'active'
+          AND chat_node.status = 'active'
+        ORDER BY edge.last_seen_at DESC, user_node.node_key
+        LIMIT ?
+        """,
+        (tenant_id, organization_id, chat_id, max(0, int(limit))),
+    ).fetchall()
+    targets: list[str] = []
+    for row in rows:
+        value = str(row["user_id"] or "").strip()
+        if value and value not in targets:
+            targets.append(value)
+    return targets
+
+
 def register_feishu_chat_node(
     conn: sqlite3.Connection,
     event: FeishuMessageEvent,

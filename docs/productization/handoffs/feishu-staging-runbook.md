@@ -24,7 +24,7 @@
 
 只读 dashboard 是 Memory Copilot runtime 的一部分，不作为另一个需要单独维护的服务：
 
-- OpenClaw 加载 `feishu-memory-copilot` 插件时，会尝试启动 dashboard。
+- OpenClaw 加载 `feishu-memory-copilot` 插件时，只有 `FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1` 或 `COPILOT_ADMIN_ENABLED=1` 才会尝试启动 dashboard。
 - `scripts/start_copilot_feishu_live.sh` 或 `python3 -m memory_engine copilot-feishu listen` 启动时，会同时启动 dashboard。
 - 默认地址：`http://127.0.0.1:8765`。
 - 只开放 `GET` / `HEAD` 查询；写请求返回 `405`。

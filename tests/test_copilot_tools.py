@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from unittest.mock import patch
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request, supported_tool_names, validate_tool_request
 from memory_engine.db import connect, init_db
+from memory_engine.document_ingestion import FeishuIngestionSource
 from memory_engine.repository import MemoryRepository
 
 SCHEMA_PATH = Path("agent_adapters/openclaw/memory_tools.schema.json")
@@ -189,6 +191,42 @@ class CopilotToolContractTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual("permission_denied", result["error"]["code"])
         self.assertEqual("source_context_mismatch", result["error"]["details"]["reason_code"])
+
+    def test_feishu_fetch_task_uses_shared_ingestion_path(self) -> None:
+        source = FeishuIngestionSource(
+            source_type="feishu_task",
+            source_id="task_ingest",
+            title="上线检查",
+            text="决定：生产部署 region 固定 cn-shanghai。",
+            actor_id="ou_task_owner",
+        )
+        with tempfile.NamedTemporaryFile(prefix="copilot_tools_feishu_", suffix=".sqlite") as tmp:
+            with patch.dict(os.environ, {"MEMORY_DB_PATH": tmp.name}):
+                with patch("memory_engine.feishu_task_fetcher.fetch_feishu_task_text", return_value=source) as fetch:
+                    result = handle_tool_request(
+                        "feishu.fetch_task",
+                        {
+                            "task_id": "task_ingest",
+                            "scope": SCOPE,
+                            "current_context": feishu_source_context(
+                                "memory.create_candidate",
+                                task_id="task_ingest",
+                            ),
+                        },
+                    )
+            conn = connect(tmp.name)
+            try:
+                candidate_count = conn.execute(
+                    "SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'"
+                ).fetchone()["count"]
+            finally:
+                conn.close()
+
+        fetch.assert_called_once_with("task_ingest")
+        self.assertTrue(result["ok"])
+        self.assertEqual("feishu_task", result["source"]["source_type"])
+        self.assertEqual(1, result["candidate_count"])
+        self.assertEqual(1, candidate_count)
 
     def test_handle_heartbeat_review_due_returns_candidate_only_output(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_tools_heartbeat_", suffix=".sqlite") as tmp:

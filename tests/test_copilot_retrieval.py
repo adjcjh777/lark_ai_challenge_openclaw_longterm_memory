@@ -42,6 +42,32 @@ def current_context(
 
 
 class CopilotRetrievalTest(unittest.TestCase):
+    def test_search_can_summarize_complementary_active_memories(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_composite_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(SCOPE, "API 接口文档用 Swagger/OpenAPI 3.0 格式。", source_type="unit_test")
+            repo.remember(SCOPE, "文档放在 docs/api/ 目录下，用 Markdown 格式存一份副本。", source_type="unit_test")
+
+            response = CopilotService(repository=repo, embedding_provider=DeterministicEmbeddingProvider()).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "API documentation format and where to store it",
+                        "scope": SCOPE,
+                        "current_context": current_context(),
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertEqual("composite_summary", response["results"][0]["matched_via"][0])
+        self.assertIn("Swagger/OpenAPI 3.0 format", response["results"][0]["current_value"])
+        self.assertIn("docs/api/", response["results"][0]["current_value"])
+        self.assertIn("Swagger/OpenAPI 3.0 格式，docs/api/", response["results"][0]["evidence"][0]["quote"])
+        self.assertEqual(True, response["results"][0]["why_ranked"]["composite_summary"])
+
     def test_search_trace_shows_l0_and_hybrid_stages_when_warm_fallback_is_needed(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)
@@ -119,6 +145,11 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual(["L1"], response["trace"]["layers"])
         self.assertIn("keyword_index", response["results"][0]["matched_via"])
         self.assertTrue(response["results"][0]["why_ranked"]["evidence_complete"])
+        why_ranked = response["results"][0]["why_ranked"]
+        self.assertEqual(response["results"][0]["score"], why_ranked["score_breakdown"]["total"])
+        self.assertIn("signals", why_ranked["score_breakdown"])
+        self.assertEqual(180.0, why_ranked["score_thresholds"]["hot_layer_min_score"])
+        self.assertTrue(why_ranked["score_thresholds"]["stale_shadow_filter_enabled"])
 
     def test_default_search_trace_keeps_all_layers_after_l1_hit(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
@@ -185,6 +216,40 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual(
             "l3_raw_events_blocked_for_default_search", _trace_step(response, layer="L3", stage="structured")["note"]
         )
+
+    def test_default_search_filters_shadowed_stale_active_memory(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "规则：数据同步 cron 表达式为 0 2 * * *（每天凌晨 2 点）。",
+                source_type="unit_test",
+            )
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "数据同步改成每 6 小时执行一次，cron 改成 0 */6 * * *。",
+                source_type="unit_test",
+            )
+
+            response = CopilotService(repository=repo).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "数据同步频率",
+                        "scope": "project:feishu_ai_challenge",
+                        "top_k": 3,
+                        "current_context": current_context(),
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        values = [item["current_value"] for item in response["results"]]
+        self.assertTrue(any("0 */6 * * *" in value for value in values))
+        self.assertFalse(any("0 2 * * *" in value for value in values))
+        self.assertEqual("stale_shadow_filtered:1", _trace_step(response, layer="L2", stage="rerank")["note"])
 
     def test_missing_evidence_candidate_does_not_enter_top_results(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
