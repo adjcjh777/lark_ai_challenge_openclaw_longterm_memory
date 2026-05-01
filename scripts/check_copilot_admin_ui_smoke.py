@@ -517,6 +517,10 @@ async function checkAdminGraph(browser, viewport, label) {
   if (!detail.includes("Source") || !detail.includes("Tenant")) {
     throw new Error(`admin ${label} edge detail missing Source/Tenant`);
   }
+  const focus = await page.locator("#relationship-focus").innerText();
+  if (!focus.includes("Relationship Focus") || !focus.includes("Evidence path")) {
+    throw new Error(`admin ${label} relationship focus missing selected edge path`);
+  }
   const file = path.join(config.outputDir, `admin-graph-${label}.png`);
   await page.screenshot({ path: file, fullPage: true });
   screenshots[`admin_${label}`] = file;
@@ -604,9 +608,9 @@ async function checkStaticSite(browser, viewport, label) {
   const browser = await chromium.launch({ headless: true });
   try {
     await checkAdminGraph(browser, { width: 1440, height: 1000 }, "desktop");
-    pass("admin_desktop_graph", "Graph tab renders selectable edge detail without horizontal overflow.");
+    pass("admin_desktop_graph", "Graph tab renders selectable edge detail and relationship focus without horizontal overflow.");
     await checkAdminGraph(browser, { width: 390, height: 844 }, "mobile");
-    pass("admin_mobile_graph", "Mobile Graph tab renders selectable edge detail without horizontal overflow.");
+    pass("admin_mobile_graph", "Mobile Graph tab renders selectable edge detail and relationship focus without horizontal overflow.");
     await checkAdminTenants(browser, { width: 1440, height: 1000 }, "desktop");
     pass("admin_desktop_tenants", "Tenants tab renders readiness counters, policy editor save, and missing capabilities without horizontal overflow.");
     await checkAdminTenants(browser, { width: 390, height: 844 }, "mobile");

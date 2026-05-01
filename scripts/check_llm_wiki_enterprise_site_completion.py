@@ -87,9 +87,9 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Visible knowledge graph backend",
-        evidence="Admin UI has a Graph tab and graph detail panel.",
+        evidence="Admin UI has a Graph tab, graph detail panel, and relationship focus path panel.",
         path="memory_engine/copilot/admin.py",
-        contains=('data-view="graph"', "graph-detail", "/api/graph"),
+        contains=('data-view="graph"', "graph-detail", "relationship-focus", "Relationship Focus", "/api/graph"),
     ),
     EvidenceCheck(
         requirement="Visible knowledge graph backend",
@@ -99,11 +99,12 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Admin UI optimization",
-        evidence="Playwright smoke covers desktop/mobile graph detail, overflow, pixel integrity, and optional screenshot baseline diff checks.",
+        evidence="Playwright smoke covers desktop/mobile graph detail, relationship focus, overflow, pixel integrity, and optional screenshot baseline diff checks.",
         path="scripts/check_copilot_admin_ui_smoke.py",
         contains=(
             "admin_desktop_graph",
             "admin_mobile_graph",
+            "relationship focus",
             "horizontal overflow",
             "visual_pixel_integrity",
             "visual-baseline.json",

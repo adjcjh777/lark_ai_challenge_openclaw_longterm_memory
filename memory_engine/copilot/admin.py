@@ -2909,6 +2909,37 @@ def _index_html() -> str:
       line-height: 1.45;
     }}
     .graph-detail h3 {{ margin-bottom: 10px; }}
+    .relationship-focus {{
+      margin-top: 12px;
+      border: 1px solid #d7c7af;
+      background: #fffaf0;
+      border-radius: 7px;
+      padding: 12px;
+    }}
+    .relationship-focus h3 {{
+      margin: 0 0 10px;
+      font-size: 14px;
+      line-height: 1.2;
+    }}
+    .path-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      border-top: 1px solid var(--line);
+      padding: 9px 0;
+      font-size: 13px;
+    }}
+    .path-row:first-of-type {{ border-top: 0; }}
+    .node-pill {{
+      min-width: 0;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 999px;
+      padding: 5px 8px;
+      line-height: 1.25;
+    }}
     .detail-grid {{
       display: grid;
       grid-template-columns: 130px minmax(0, 1fr);
@@ -2951,6 +2982,7 @@ def _index_html() -> str:
       .split-view {{ grid-template-columns: 1fr; min-width: 0; }}
       .graph-board {{ min-height: 620px; grid-template-columns: 1fr; }}
       .edge-item {{ grid-template-columns: 1fr; gap: 3px; }}
+      .path-row {{ grid-template-columns: 1fr; }}
       .detail-grid {{ grid-template-columns: 1fr; }}
       .form-grid {{ grid-template-columns: 1fr; }}
     }}
@@ -3278,12 +3310,50 @@ def _index_html() -> str:
               </div>
               <div class="graph-board">${{nodeHtml || `<div class="empty">暂无 graph node</div>`}}</div>
               <div class="graph-detail" id="graph-detail">${{renderGraphDetail(nodes, edges)}}</div>
+              <div class="relationship-focus" id="relationship-focus">${{renderRelationshipFocus(nodes, edges)}}</div>
             </section>
             <section class="workspace-column">
               <div class="section-title"><h2>Relationship Ledger</h2><span>source / edge / target</span></div>
               <div class="graph-edge-list">${{edgeRows || `<div class="empty">暂无 graph edge</div>`}}</div>
             </section>
           </div>`;
+      }}
+
+      function renderRelationshipFocus(nodes, edges) {{
+        if (!state.selectedGraphItem) return `<h3>Relationship Focus</h3><div class="empty">选择节点或关系后查看邻接路径</div>`;
+        if (state.selectedGraphItem.type === "edge") {{
+          const edge = edges.find(item => item.id === state.selectedGraphItem.id);
+          if (!edge) return `<h3>Relationship Focus</h3><div class="empty">选择 graph edge</div>`;
+          return `<h3>Relationship Focus</h3>
+            <div class="kv">
+              <span>Selected edge</span><strong class="mono">${{esc(edge.edge_type)}}</strong>
+              <span>Evidence path</span><strong>${{esc(edge.source_type)}} → ${{esc(edge.target_type)}}</strong>
+            </div>
+            ${{pathRow(edge, nodes)}}`;
+        }}
+        const node = nodes.find(item => item.id === state.selectedGraphItem.id);
+        if (!node) return `<h3>Relationship Focus</h3><div class="empty">选择 graph node</div>`;
+        const related = edges.filter(edge => edge.source_node_id === node.id || edge.target_node_id === node.id);
+        const paths = related.slice(0, 8).map(edge => pathRow(edge, nodes)).join("");
+        return `<h3>Relationship Focus</h3>
+          <div class="kv">
+            <span>Selected node</span><strong class="mono">${{esc(node.node_type)}} / ${{esc(node.node_key || node.id)}}</strong>
+            <span>Evidence paths</span><strong>${{esc(related.length)}}</strong>
+          </div>
+          ${{paths || `<div class="empty">当前筛选下没有邻接关系</div>`}}`;
+      }}
+
+      function pathRow(edge, nodes) {{
+        return `<div class="path-row" data-focus-edge-id="${{esc(edge.id)}}">
+          <span class="node-pill">${{esc(labelForNode(edge.source_node_id, edge.source_label, nodes))}}</span>
+          <span class="edge-type">${{esc(edge.edge_type)}}</span>
+          <span class="node-pill">${{esc(labelForNode(edge.target_node_id, edge.target_label, nodes))}}</span>
+        </div>`;
+      }}
+
+      function labelForNode(nodeId, fallback, nodes) {{
+        const node = nodes.find(item => item.id === nodeId);
+        return node ? `${{node.label}} (${{node.node_type}})` : (fallback || nodeId);
       }}
 
       function graphItemExists(item, nodes, edges) {{

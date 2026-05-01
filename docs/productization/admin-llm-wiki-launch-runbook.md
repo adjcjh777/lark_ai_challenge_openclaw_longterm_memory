@@ -42,7 +42,7 @@ python3 scripts/check_copilot_audit_readonly_gate.py --json
 
 这个 gate 只证明本地/staging 审计可读、可过滤、可导出且不泄漏常见 token/secret 字段，不代表生产长期运行、真实企业 IdP、生产 DB 或 SIEM/告警投递完成。
 
-UI smoke 会启动本机 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、Tenants tab、Launch tab、节点/边详情、租户 readiness 计数、admin-only tenant policy editor、缺失生产能力清单、静态站 Deerflow attribution、横向溢出和截图像素完整性。需要固定视觉基线时，先运行 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续复用同一个 `--visual-baseline-dir` 会按截图逐张执行采样 pixel diff。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
+UI smoke 会启动本机 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、Tenants tab、Launch tab、节点/边详情、Relationship Focus evidence path、租户 readiness 计数、admin-only tenant policy editor、缺失生产能力清单、静态站 Deerflow attribution、横向溢出和截图像素完整性。需要固定视觉基线时，先运行 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续复用同一个 `--visual-baseline-dir` 会按截图逐张执行采样 pixel diff。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
 GitHub Actions 的 `Admin UI Smoke` job 会运行同一脚本，并额外在 CI 临时目录执行 baseline update / compare，最后上传普通截图、baseline PNG、`visual-baseline.json` 和 compare 截图 artifact。
 
 如果要绑定到非本机地址，必须设置后台 token：

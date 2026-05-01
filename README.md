@@ -247,7 +247,7 @@ Embedding 配置参数（在 `memory_engine/copilot/embedding-provider.lock` 中
 
 ### 2.5 本地 LLM Wiki / 知识图谱后台
 
-Dashboard 不是单独的产品服务。它提供本地 LLM Wiki、知识图谱、tenant readiness、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Wiki / Graph / Ledger / Audit 仍是只读知识面；Tenants tab 已有 admin-only 的本地/pre-production 租户策略编辑入口，可配置默认 visibility、reviewer roles、admin users、SSO allowed domains、低风险 auto-confirm 和冲突人工审核开关。Wiki / Graph / Tenants / Ledger / Audit 支持按 `tenant_id` 和 `organization_id` 收敛展示；这仍不等于生产 DB、真实企业 IdP SSO 验收或 productized live。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
+Dashboard 不是单独的产品服务。它提供本地 LLM Wiki、知识图谱、tenant readiness、memory ledger、audit 和 schema table 视图，用于把 active curated memory 编译成可展示的企业知识资产，同时观察 Feishu 群/用户/消息图谱拓扑。Graph tab 会展示节点/边详情和 Relationship Focus 邻接路径，便于从 active memory 追到 evidence source。Wiki / Graph / Ledger / Audit 仍是只读知识面；Tenants tab 已有 admin-only 的本地/pre-production 租户策略编辑入口，可配置默认 visibility、reviewer roles、admin users、SSO allowed domains、低风险 auto-confirm 和冲突人工审核开关。Wiki / Graph / Tenants / Ledger / Audit 支持按 `tenant_id` 和 `organization_id` 收敛展示；这仍不等于生产 DB、真实企业 IdP SSO 验收或 productized live。Feishu live listener 默认会随 runtime 启动；OpenClaw 插件侧为避免工具加载副作用，必须显式 opt-in：
 
 - OpenClaw 加载 `feishu-memory-copilot` 插件时，只有 `FEISHU_MEMORY_COPILOT_ADMIN_ENABLED=1` 或 `COPILOT_ADMIN_ENABLED=1` 才会尝试启动本地 dashboard。
 - 仓库内 `python3 -m memory_engine copilot-feishu listen` / `scripts/start_copilot_feishu_live.sh` 启动时，也会带起 dashboard。
@@ -338,7 +338,7 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_graph_quality.py` 会检查本地/staging 知识图谱 workspace 是否有 `memory -> grounded_by -> evidence_source` 编译图谱、边端点完整性、tenant/org 覆盖、孤立节点比例和敏感字符串泄漏；它是图谱质量 gate，不代表生产级图谱治理后台。
 
-`check_copilot_admin_ui_smoke.py` 会启动本机 admin、导出静态站并截图，除桌面/移动端 Graph、Tenants、Launch 和静态站 DOM 断言外，还会对截图做像素级非空白、色彩多样性、主色占比和文件大小检查。需要固定视觉基线时，先用 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续传同一个 `--visual-baseline-dir` 会按截图逐张做采样 pixel diff，并用脚本内阈值阻断明显 UI 回归。这仍只证明本地/staging UI 回归，不代表生产上线。
+`check_copilot_admin_ui_smoke.py` 会启动本机 admin、导出静态站并截图，除桌面/移动端 Graph、Relationship Focus、Tenants、Launch 和静态站 DOM 断言外，还会对截图做像素级非空白、色彩多样性、主色占比和文件大小检查。需要固定视觉基线时，先用 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续传同一个 `--visual-baseline-dir` 会按截图逐张做采样 pixel diff，并用脚本内阈值阻断明显 UI 回归。这仍只证明本地/staging UI 回归，不代表生产上线。
 
 `check_llm_wiki_enterprise_site_completion.py` 会把 LLM Wiki、知识图谱后台、UI smoke、上线 gate 和 no-overclaim 边界映射到具体 artifact；当前预期输出是 `staging_ok=true` 且 `goal_complete=false`，因为生产 DB、真实 IdP SSO、域名证书、生产监控和 productized live 长期运行仍未完成。
 

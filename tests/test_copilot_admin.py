@@ -409,8 +409,11 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertIn('data-view="launch"', html)
             self.assertIn('id="organization"', html)
             self.assertIn('id="graph-detail"', html)
+            self.assertIn('id="relationship-focus"', html)
             self.assertIn("data-node-id", html)
             self.assertIn("data-edge-id", html)
+            self.assertIn("Relationship Focus", html)
+            self.assertIn("Evidence paths", html)
             self.assertIn("Related edges", html)
 
             request = Request(f"{base_url}/api/memories", method="POST")
