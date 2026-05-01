@@ -59,6 +59,29 @@ def event() -> FeishuTextEvent:
     )
 
 
+def card_action_event(*, token: str | None = "card_token_review") -> FeishuTextEvent:
+    raw_event = {
+        "event": {
+            "operator": {"open_id": "ou_sender"},
+            "context": {"open_chat_id": "oc_group"},
+            "action": {"value": {"memory_engine_action": "confirm", "candidate_id": "mem_1"}},
+        }
+    }
+    if token is not None:
+        raw_event["event"]["token"] = token
+    return FeishuTextEvent(
+        message_id=f"card_action_{token or 'missing'}",
+        chat_id="oc_group",
+        chat_type="group",
+        sender_id="ou_sender",
+        sender_type="user",
+        message_type="card_action",
+        text="/confirm mem_1",
+        create_time=1777000000000,
+        raw=raw_event,
+    )
+
+
 def config() -> FeishuConfig:
     return FeishuConfig(
         bot_mode="reply",
@@ -136,6 +159,38 @@ class FeishuPublisherTest(unittest.TestCase):
         self.assertEqual("interactive", result["mode"])
         self.assertEqual("direct_interactive", result["direct_mode"])
         self.assertIsNone(result["chat_id"])
+
+    def test_card_action_with_token_updates_clicked_card_only(self) -> None:
+        publisher = RecordingPublisher(config())
+
+        result = publisher.publish(card_action_event(token="card_token_review"), "更新卡片", {"elements": []})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("update_card", result["mode"])
+        self.assertEqual("card_token_review", result["card_update_token"])
+        self.assertEqual(["update_card"], publisher.modes)
+        command = publisher.commands[0]
+        self.assertEqual("/open-apis/interactive/v1/card/update", command[command.index("POST") + 1])
+        self.assertNotIn("--chat-id", command)
+
+    def test_card_action_without_token_suppresses_duplicate_group_card(self) -> None:
+        publisher = RecordingPublisher(config())
+
+        result = publisher.publish(card_action_event(token=None), "不能新发群卡片", {"elements": []})
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("card_action_update_token_missing", result["mode"])
+        self.assertTrue(result["fallback_suppressed"])
+        self.assertEqual("card_action_update_token_missing", result["fallback_reason"])
+        self.assertEqual([], publisher.modes)
+
+    def test_dry_run_card_action_without_token_reports_suppressed_update(self) -> None:
+        result = DryRunPublisher().publish(card_action_event(token=None), "dry run", {"elements": []})
+
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["dry_run"])
+        self.assertEqual("card_action_update_token_missing", result["mode"])
+        self.assertTrue(result["fallback_suppressed"])
 
 
 if __name__ == "__main__":

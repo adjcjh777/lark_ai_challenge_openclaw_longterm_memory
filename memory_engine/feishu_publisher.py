@@ -13,6 +13,8 @@ from .feishu_events import FeishuTextEvent
 class DryRunPublisher:
     def publish(self, event: FeishuTextEvent, text: str, card: dict[str, Any] | None = None) -> dict[str, Any]:
         update_token = _card_update_token(event) if card else None
+        if card and _is_card_action_without_update_token(event):
+            return _card_action_update_token_missing_result(event, card, dry_run=True)
         direct_targets = _card_direct_targets(card) if card and not update_token else []
         return {
             "ok": True,
@@ -55,6 +57,9 @@ class LarkCliPublisher:
     def _publish_interactive_with_text_fallback(
         self, event: FeishuTextEvent, text: str, card: dict[str, Any]
     ) -> dict[str, Any]:
+        if _is_card_action_without_update_token(event):
+            return _card_action_update_token_missing_result(event, card, dry_run=False)
+
         direct_targets = _card_direct_targets(card)
         if direct_targets and not _card_update_token(event):
             return self._publish_direct_interactive_with_text_fallback(event, text, card, direct_targets)
@@ -462,6 +467,37 @@ def _card_update_token(event: FeishuTextEvent) -> str | None:
     if isinstance(token, str) and token.strip():
         return token.strip()
     return None
+
+
+def _is_card_action_without_update_token(event: FeishuTextEvent) -> bool:
+    return getattr(event, "message_type", None) == "card_action" and _card_update_token(event) is None
+
+
+def _card_action_update_token_missing_result(
+    event: FeishuTextEvent,
+    card: dict[str, Any],
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "dry_run": dry_run,
+        "mode": "card_action_update_token_missing",
+        "reply_to": event.message_id,
+        "chat_id": event.chat_id,
+        "text": "",
+        "card": card,
+        "returncode": None,
+        "stdout": "",
+        "stderr": "card action update token missing; duplicate card/text fallback suppressed",
+        "timed_out": False,
+        "latency_ms": 0,
+        "card_attempts": [],
+        "fallback_used": False,
+        "fallback_suppressed": True,
+        "fallback_reason": "card_action_update_token_missing",
+        "card_update_token": None,
+    }
 
 
 def _with_card_open_ids(card: dict[str, Any], open_id: str) -> dict[str, Any]:

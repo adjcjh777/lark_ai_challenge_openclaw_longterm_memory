@@ -121,10 +121,23 @@ def _card_action_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEve
     if not chat_id:
         return None
 
-    token = _string(event.get("token") or action.get("action_id") or action.get("name"))
-    if not token:
-        token = hashlib.sha1(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
     sender_id = _string(operator.get("open_id") or operator.get("operator_id") or event.get("operator_id"))
+    token = _string(event.get("token"))
+    if not token:
+        fallback_id = hashlib.sha1(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
+        return FeishuMessageEvent(
+            message_id=f"card_action_missing_token_{fallback_id}",
+            chat_id=chat_id,
+            chat_type="group",
+            sender_id=sender_id or "card_operator",
+            sender_type="user",
+            message_type="card_action",
+            text=command,
+            create_time=_int(event.get("create_time") or payload.get("create_time")),
+            raw=payload,
+            ignore_reason="card action update token missing",
+            bot_mentioned=True,
+        )
     return FeishuMessageEvent(
         message_id=f"card_action_{token}",
         chat_id=chat_id,

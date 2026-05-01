@@ -820,6 +820,44 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         clicked_actions = [element for element in clicked_card["elements"] if element.get("tag") == "action"]
         self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in clicked_actions[0]["actions"]])
 
+    def test_card_action_without_update_token_does_not_mutate_candidate(self) -> None:
+        config = FeishuConfig(
+            bot_mode="reply",
+            default_scope=SCOPE,
+            lark_cli="lark-cli",
+            lark_profile="feishu-ai-challenge",
+            lark_as="bot",
+            reply_in_thread=False,
+            card_mode="interactive",
+        )
+        created = handle_copilot_message_event(
+            self.conn,
+            message_event_from_payload(
+                payload("om_live_missing_token_candidate", "/remember 决定：无 token 卡片点击不能改状态。")
+            ),
+            DryRunPublisher(),
+            config,
+            dry_run=True,
+        )
+        candidate_id = created["tool_result"]["candidate_id"]
+        action_blocks = [element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"]
+        confirm_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存")
+        raw_click = card_action_payload(confirm_button["value"])
+        del raw_click["event"]["token"]
+        click_event = message_event_from_payload(raw_click)
+        self.assertIsNotNone(click_event)
+        self.assertEqual("card action update token missing", click_event.ignore_reason)
+
+        with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
+            clicked = handle_copilot_message_event(self.conn, click_event, DryRunPublisher(), config, dry_run=True)
+
+        self.assertTrue(clicked["ignored"])
+        self.assertEqual("card action update token missing", clicked["reason"])
+        self.assertEqual("card_action_update_token_missing", clicked["publish"]["mode"])
+        row = self.conn.execute("SELECT status FROM memories WHERE id = ?", (candidate_id,)).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual("candidate", row["status"])
+
     def test_interactive_candidate_card_shows_review_buttons_for_candidate_owner(self) -> None:
         config = FeishuConfig(
             bot_mode="reply",
