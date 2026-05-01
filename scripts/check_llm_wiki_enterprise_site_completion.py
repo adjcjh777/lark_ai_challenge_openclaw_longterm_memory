@@ -156,6 +156,17 @@ STAGING_CHECKS = (
         contains=("run_production_evidence_check", "production_ready", "productized_live_long_run"),
     ),
     EvidenceCheck(
+        requirement="Launch gates",
+        evidence="Long-run evidence collector samples the running Admin backend and emits a productized live manifest patch.",
+        path="scripts/collect_copilot_admin_long_run_evidence.py",
+        contains=(
+            "collect_long_run_evidence",
+            "production_manifest_patch",
+            "productized_live_long_run",
+            "production_ready_claim",
+        ),
+    ),
+    EvidenceCheck(
         requirement="Visible knowledge graph backend",
         evidence="Admin Launch UI exposes production evidence manifest status.",
         path="memory_engine/copilot/admin.py",
@@ -272,7 +283,7 @@ PRODUCTION_BLOCKERS = (
     {
         "id": "productized_live_long_run",
         "description": "Productized live long-running evidence is not complete.",
-        "evidence": "Plan and gates exist; long-running live logs and operational proof are not present.",
+        "evidence": "A collector exists for running Admin health samples, but real production long-run logs and operational proof are not present.",
     },
 )
 

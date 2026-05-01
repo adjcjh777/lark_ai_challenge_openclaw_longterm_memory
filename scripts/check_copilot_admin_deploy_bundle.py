@@ -165,6 +165,17 @@ CHECKS = (
         ),
     ),
     BundleCheck(
+        name="long_run_evidence_collector",
+        path="scripts/collect_copilot_admin_long_run_evidence.py",
+        description="Long-run evidence collector probes a running Admin backend and emits a productized live manifest patch.",
+        required_patterns=(
+            "collect_long_run_evidence",
+            "production_manifest_patch",
+            "productized_live_long_run",
+            "production_ready_claim",
+        ),
+    ),
+    BundleCheck(
         name="production_evidence_manifest_example",
         path="deploy/copilot-admin.production-evidence.example.json",
         description="Example manifest lists required production evidence without real secrets.",
@@ -218,7 +229,7 @@ PRODUCTION_BLOCKERS = (
     },
     {
         "id": "long_running_live_ops",
-        "description": "No productized live long-run logs, on-call proof, or rollback drill evidence is present.",
+        "description": "Long-run evidence collector exists, but no real productized live 24h logs, on-call proof, or rollback drill evidence is present.",
     },
 )
 

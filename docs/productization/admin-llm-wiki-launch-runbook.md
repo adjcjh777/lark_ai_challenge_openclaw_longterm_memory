@@ -83,6 +83,8 @@ python3 scripts/export_copilot_admin_launch_evidence.py --db-path data/memory.sq
 
 `check_copilot_admin_production_evidence.py` 默认检查 `deploy/copilot-admin.production-evidence.example.json`，确认生产证据 manifest 结构完整且不含密钥明文；示例文件的预期输出是 `ok=true`、`production_ready=false`。真实上线验收时，复制该 manifest 到受控环境，填入真实 DB / IdP / TLS / monitoring / long-run 证据后运行 `python3 scripts/check_copilot_admin_production_evidence.py --manifest <path> --require-production-ready --json`。
 
+`collect_copilot_admin_long_run_evidence.py` 用于真实运行窗口的证据采集：它会探测正在运行的 Admin 后台 `/healthz`、`/api/health`、`/api/launch-readiness`、`/api/graph-quality` 和 `/metrics`，并输出可填入 production evidence manifest 的 `productized_live_long_run` patch。采集器本身不创建生产 DB、IdP、TLS、监控或生产 readiness。
+
 `check_copilot_admin_deploy_bundle.py` 检查 `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、staging Prometheus alert rules、backup gate、readiness gate、SSO header gate、env lint 和 completion audit gate 是否齐备。它的预期结果是 `staging_bundle_ok=true`、`production_blocked=true`；这只说明 staging 部署包模板完整，不代表真实域名/TLS、企业 IdP、生产 DB、生产监控或长期 live 已完成。
 
 `export_copilot_admin_launch_evidence.py` 会把当前本地/staging admin 状态导出为固定 JSON bundle：`summary.json`、`wiki.json`、`graph.json`、`graph-quality.json`、`audit.json`、`audit-readonly-gate.json`、`launch-readiness.json`、`deploy-bundle.json`、`production-evidence.json`、`completion-audit.json` 和 `manifest.json`。manifest 保留 `goal_complete=false`、`production_blocked=true` 和 production blockers；它是交付证据包，不是生产上线证明。
@@ -186,6 +188,24 @@ curl -fsS \
   -H "Authorization: Bearer $FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" \
   http://127.0.0.1:8765/metrics
 ```
+
+本地/staging 长跑采集 smoke：
+
+```bash
+python3 scripts/collect_copilot_admin_long_run_evidence.py \
+  --base-url http://127.0.0.1:8765 \
+  --token "$FEISHU_MEMORY_COPILOT_ADMIN_VIEWER_TOKEN" \
+  --sample-count 3 \
+  --sample-interval-seconds 0 \
+  --min-sample-count 3 \
+  --service-unit copilot-admin.service \
+  --oncall-owner staging-owner \
+  --rollback-drill-at 2026-05-01T00:00:00+08:00 \
+  --evidence-ref staging/local-long-run-smoke \
+  --json
+```
+
+真实 productized live gate 至少要在生产入口运行 24 小时，例如 `--sample-count 25 --sample-interval-seconds 3600 --min-window-hours 24 --min-sample-count 24`，并把输出中的 `production_manifest_patch.productized_live_long_run` 合并到真实 production evidence manifest。短跑 smoke 只证明采集器和接口可用，不代表长期线上运行完成。
 
 ### Prometheus Alert Rules
 
