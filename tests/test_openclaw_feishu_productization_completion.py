@@ -78,6 +78,7 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
                     "failed_checks": [],
                     "warning_checks": ["embedding_successful_samples", "embedding_window"],
                     "next_step": "Leave the sampler running until it collects more successful samples.",
+                    "collector_command_template": "python3 scripts/collect_cognee_embedding_long_run_evidence.py --embedding-sample-log samples.ndjson",
                 },
             )
 
@@ -97,6 +98,37 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         sampler_evidence = cognee_item["evidence"]["sampler_status"]
         self.assertEqual(1, sampler_evidence["successful_sample_count"])
         self.assertEqual("2026-05-02T16:50:51+00:00", sampler_evidence["estimated_ready_at"])
+        self.assertIn("collect_cognee_embedding_long_run_evidence.py", sampler_evidence["collector_command_template"])
+
+    def test_audit_uses_sampler_collector_command_when_sampler_ready(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
+            root = Path(temp_dir)
+            sampler_status = _write_json(
+                root / "cognee-sampler-status.json",
+                {
+                    "ok": True,
+                    "completion_ready": True,
+                    "sample_count": 3,
+                    "successful_sample_count": 3,
+                    "embedding_window_hours": 24.5,
+                    "failed_checks": [],
+                    "warning_checks": [],
+                    "collector_command_template": "python3 scripts/collect_cognee_embedding_long_run_evidence.py --embedding-sample-log samples.ndjson",
+                },
+            )
+
+            report = build_completion_audit(
+                passive_event_log=None,
+                permission_event_log=None,
+                review_event_log=None,
+                routing_event_log=None,
+                cognee_sampler_status=sampler_status,
+            )
+
+        blockers = {item["name"]: item for item in report["blockers"]}
+        item = blockers["cognee_embedding_long_term_service"]
+        self.assertEqual("cognee_sampler_ready_but_long_run_evidence_missing", item["reason"])
+        self.assertIn("collect_cognee_embedding_long_run_evidence.py", item["next_step"])
 
     def test_audit_fails_closed_for_unreadable_sampler_status_path(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:

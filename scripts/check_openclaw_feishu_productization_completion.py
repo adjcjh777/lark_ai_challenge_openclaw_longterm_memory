@@ -514,13 +514,17 @@ def _cognee_sampler_status_item(*, local_sync_gate: bool, sampler_status: dict[s
             "estimated_ready_at": sampler_status.get("estimated_ready_at"),
             "failed_checks": sampler_status.get("failed_checks"),
             "warning_checks": sampler_status.get("warning_checks"),
+            "collector_command_template": sampler_status.get("collector_command_template"),
         },
     }
     if sampler_status.get("completion_ready") is True:
         reason = "cognee_sampler_ready_but_long_run_evidence_missing"
-        next_step = (
-            "Sampler status is ready; run collect_cognee_embedding_long_run_evidence.py with curated-sync and "
-            "persistent readback reports, then pass --cognee-long-run-evidence."
+        next_step = str(
+            sampler_status.get("collector_command_template")
+            or (
+                "Sampler status is ready; run collect_cognee_embedding_long_run_evidence.py with curated-sync "
+                "and persistent readback reports, then pass --cognee-long-run-evidence."
+            )
         )
     elif sampler_status.get("ok"):
         reason = "cognee_sampler_running_but_window_incomplete"
