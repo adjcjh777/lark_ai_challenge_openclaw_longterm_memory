@@ -134,6 +134,7 @@ def prepare_live_evidence_run(
     blocking_failures = [
         name for name in ("single_listener", "event_subscription") if checks[name]["status"] == "fail"
     ]
+    blocking_resolution_steps = _blocking_resolution_steps(checks)
     warnings = [name for name, check in checks.items() if check["status"] == "warning"]
     diagnostic_paths = _diagnostic_paths(evidence_dir)
     diagnostic_write_results = _write_diagnostic_inputs(
@@ -167,7 +168,9 @@ def prepare_live_evidence_run(
         "evidence_dir": str(evidence_dir),
         "create_dirs": bool(create_dirs),
         "checks": checks,
+        "ready_to_capture_live_logs": not blocking_failures,
         "blocking_failures": blocking_failures,
+        "blocking_resolution_steps": blocking_resolution_steps,
         "warnings": warnings,
         "log_paths": {name: str(path) for name, path in log_paths.items()},
         "diagnostic_paths": {name: str(path) for name, path in diagnostic_paths.items()},
@@ -185,11 +188,16 @@ def format_report(result: dict[str, Any]) -> str:
         f"evidence_dir: {result['evidence_dir']}",
         f"single_listener: {result['checks']['single_listener']['status']}",
         f"event_subscription: {result['checks']['event_subscription']['status']}",
+        f"ready_to_capture_live_logs: {str(result['ready_to_capture_live_logs']).lower()}",
     ]
     if result["warnings"]:
         lines.append(f"warnings: {', '.join(result['warnings'])}")
     if result["blocking_failures"]:
         lines.append(f"blocking_failures: {', '.join(result['blocking_failures'])}")
+    if result.get("blocking_resolution_steps"):
+        lines.append("blocking_resolution_steps:")
+        for step in result["blocking_resolution_steps"]:
+            lines.append(f"  - {step}")
     lines.append("manual_steps:")
     for step in result["manual_steps"]:
         lines.append(f"  {step['id']}. {step['title']}")
@@ -211,6 +219,24 @@ def _diagnostic_paths(evidence_dir: Path) -> dict[str, Path]:
         "feishu_event_diagnostics": evidence_dir / "00-feishu-event-diagnostics.json",
         "cognee_sampler_status": evidence_dir / "00-cognee-sampler-status.json",
     }
+
+
+def _blocking_resolution_steps(checks: dict[str, dict[str, Any]]) -> list[str]:
+    steps: list[str] = []
+    singleton = checks.get("single_listener") or {}
+    if singleton.get("status") == "fail":
+        report = str(singleton.get("report") or "Stop the conflicting Feishu listener before collecting live logs.")
+        steps.append(report)
+    event_subscription = checks.get("event_subscription") or {}
+    if event_subscription.get("status") == "fail":
+        diagnostics = event_subscription.get("diagnostics")
+        remediation = diagnostics.get("remediation") if isinstance(diagnostics, dict) else None
+        remediation_steps = remediation.get("steps") if isinstance(remediation, dict) else None
+        if isinstance(remediation_steps, list) and remediation_steps:
+            steps.extend(str(step) for step in remediation_steps)
+        else:
+            steps.append(str(event_subscription.get("detail") or "Fix Feishu event diagnostics before live capture."))
+    return steps
 
 
 def _write_diagnostic_inputs(
