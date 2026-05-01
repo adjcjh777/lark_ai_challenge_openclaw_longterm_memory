@@ -589,6 +589,7 @@ async function checkStaticSite(browser, viewport, label) {
   const page = await browser.newPage({ viewport });
   await page.goto(config.staticUrl, { waitUntil: "networkidle" });
   await page.waitForSelector("#graphDetail");
+  await page.waitForSelector("#relationshipFocus");
   await page.waitForSelector("[data-node-id]");
   await page.waitForSelector("[data-edge-id]");
   await page.waitForSelector('a[href="https://deerflow.tech"]');
@@ -597,6 +598,10 @@ async function checkStaticSite(browser, viewport, label) {
   const detail = await page.locator("#graphDetail").innerText();
   if (!detail.includes("Tenant") || !detail.includes("Related edges")) {
     throw new Error(`static ${label} node detail missing Tenant/Related edges`);
+  }
+  const focus = await page.locator("#relationshipFocus").innerText();
+  if (!focus.includes("Relationship Focus") || !focus.includes("Evidence paths")) {
+    throw new Error(`static ${label} relationship focus missing node evidence paths`);
   }
   const file = path.join(config.outputDir, `static-site-${label}.png`);
   await page.screenshot({ path: file, fullPage: true });
@@ -620,9 +625,9 @@ async function checkStaticSite(browser, viewport, label) {
     await checkAdminLaunch(browser, { width: 390, height: 844 }, "mobile");
     pass("admin_mobile_launch", "Mobile Launch tab renders readiness gates without horizontal overflow.");
     await checkStaticSite(browser, { width: 1440, height: 1000 }, "desktop");
-    pass("static_desktop_site", "Static site renders graph detail and Deerflow attribution.");
+    pass("static_desktop_site", "Static site renders graph detail, relationship focus, and Deerflow attribution.");
     await checkStaticSite(browser, { width: 390, height: 844 }, "mobile");
-    pass("static_mobile_site", "Mobile static site renders graph detail without horizontal overflow.");
+    pass("static_mobile_site", "Mobile static site renders graph detail and relationship focus without horizontal overflow.");
     assertVisualBaseline();
   } catch (error) {
     fail("playwright", error.message);

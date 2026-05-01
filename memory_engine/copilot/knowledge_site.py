@@ -341,6 +341,36 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     .graph-detail h3 {{
       margin-bottom: 10px;
     }}
+    .relationship-focus {{
+      margin-top: 12px;
+      border: 1px solid #d8c8aa;
+      background: #fffaf0;
+      border-radius: 7px;
+      padding: 12px;
+      line-height: 1.45;
+    }}
+    .relationship-focus h3 {{
+      margin: 0 0 10px;
+      font-size: 14px;
+    }}
+    .path-row {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      border-top: 1px solid var(--line);
+      padding: 8px 0;
+      font-size: 12px;
+    }}
+    .path-row:first-of-type {{ border-top: 0; }}
+    .node-pill {{
+      min-width: 0;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 999px;
+      padding: 5px 8px;
+    }}
     .detail-grid {{
       display: grid;
       grid-template-columns: 128px minmax(0, 1fr);
@@ -390,6 +420,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       .grid {{ grid-template-columns: 1fr; }}
       .topbar {{ align-items: stretch; flex-direction: column; }}
       .graph {{ min-height: 680px; }}
+      .path-row {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -417,6 +448,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
           <h2>Knowledge Graph</h2>
           <div class="graph" id="graph"></div>
           <div class="graph-detail" id="graphDetail"></div>
+          <div class="relationship-focus" id="relationshipFocus"></div>
           <div class="edge-list" id="edges"></div>
         </section>
       </div>
@@ -548,15 +580,51 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     function renderGraphDetail(nodes, edges) {{
       if (!selectedGraphItem) {{
         $("graphDetail").innerHTML = `<div class="empty">Select a node or edge</div>`;
+        $("relationshipFocus").innerHTML = `<h3>Relationship Focus</h3><div class="empty">Select a node or edge</div>`;
         return;
       }}
       if (selectedGraphItem.type === "edge") {{
         const edge = edges.find(item => item.id === selectedGraphItem.id);
         $("graphDetail").innerHTML = edge ? edgeDetail(edge) : `<div class="empty">Select a graph edge</div>`;
+        $("relationshipFocus").innerHTML = edge ? relationshipFocusForEdge(edge, nodes) : `<h3>Relationship Focus</h3><div class="empty">Select a graph edge</div>`;
         return;
       }}
       const node = nodes.find(item => item.id === selectedGraphItem.id);
       $("graphDetail").innerHTML = node ? nodeDetail(node, edges) : `<div class="empty">Select a graph node</div>`;
+      $("relationshipFocus").innerHTML = node ? relationshipFocusForNode(node, edges, nodes) : `<h3>Relationship Focus</h3><div class="empty">Select a graph node</div>`;
+    }}
+
+    function relationshipFocusForNode(node, edges, nodes) {{
+      const related = edges.filter(edge => edge.source_node_id === node.id || edge.target_node_id === node.id);
+      const rows = related.slice(0, 8).map(edge => pathRow(edge, nodes)).join("");
+      return `<h3>Relationship Focus</h3>
+        <div class="detail-grid">
+          <span>Selected node</span><strong class="mono">${{esc(node.node_type)}} / ${{esc(node.node_key || node.id)}}</strong>
+          <span>Evidence paths</span><strong>${{esc(related.length)}}</strong>
+        </div>
+        ${{rows || `<div class="empty">No adjacent relationship in current filter</div>`}}`;
+    }}
+
+    function relationshipFocusForEdge(edge, nodes) {{
+      return `<h3>Relationship Focus</h3>
+        <div class="detail-grid">
+          <span>Selected edge</span><strong class="mono">${{esc(edge.edge_type)}}</strong>
+          <span>Evidence path</span><strong>${{esc(edge.source_type)}} → ${{esc(edge.target_type)}}</strong>
+        </div>
+        ${{pathRow(edge, nodes)}}`;
+    }}
+
+    function pathRow(edge, nodes) {{
+      return `<div class="path-row" data-focus-edge-id="${{esc(edge.id)}}">
+        <span class="node-pill">${{esc(labelForNode(edge.source_node_id, edge.source_label, nodes))}}</span>
+        <strong>${{esc(edge.edge_type)}}</strong>
+        <span class="node-pill">${{esc(labelForNode(edge.target_node_id, edge.target_label, nodes))}}</span>
+      </div>`;
+    }}
+
+    function labelForNode(nodeId, fallback, nodes) {{
+      const node = nodes.find(item => item.id === nodeId);
+      return node ? `${{node.label}} (${{node.node_type}})` : (fallback || nodeId);
     }}
 
     function nodeDetail(node, edges) {{

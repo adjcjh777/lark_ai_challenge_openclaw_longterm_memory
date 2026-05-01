@@ -286,8 +286,11 @@ def _check_index_ui(index_text: str) -> dict[str, Any]:
         "Feishu Memory Copilot Knowledge Site",
         "Knowledge Graph",
         'id="graphDetail"',
+        'id="relationshipFocus"',
         "data-node-id",
         "data-edge-id",
+        "Relationship Focus",
+        "Evidence paths",
         "window.COPILOT_KNOWLEDGE_SITE",
     )
     missing = [item for item in required if item not in index_text]

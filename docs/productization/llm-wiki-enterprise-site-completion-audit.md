@@ -19,7 +19,7 @@
 | LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`scripts/check_copilot_knowledge_site_export.py --json`、`tests/test_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site_export_check.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
 | 知识图谱结合 | staging 已完成 | `/api/graph`、`/api/graph-quality`、Launch 页 Graph Quality 区块、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板、`scripts/check_copilot_graph_quality.py --json` 图谱质量 gate | 还没有生产级图谱治理后台或长期 live 增量质量证据 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、节点/边详情、Relationship Focus 邻接路径面板、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
-| 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、Relationship Focus evidence path、移动端无横向溢出；静态站 Graph 稳定网格；UI smoke 已加入截图像素完整性检查，并支持固定截图基线 / sampled pixel diff 阈值 gate | 还缺设计系统级组件抽象和人工维护的长期截图基线库 |
+| 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、Relationship Focus evidence path、移动端无横向溢出；静态站 Graph 稳定网格、节点/边详情和 Relationship Focus evidence path；UI smoke 已加入截图像素完整性检查，并支持固定截图基线 / sampled pixel diff 阈值 gate | 还缺设计系统级组件抽象和人工维护的长期截图基线库 |
 | 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.env.example`、`deploy/copilot-admin.nginx.example`、`deploy/copilot-admin.production-evidence.example.json`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_copilot_admin_env_file.py --expect-runtime --json`、`scripts/check_copilot_admin_deploy_bundle.py --json`、`scripts/check_copilot_admin_sso_gate.py --json`、`scripts/check_copilot_audit_readonly_gate.py --json`、`scripts/export_copilot_admin_launch_evidence.py --json`、`scripts/check_copilot_admin_production_evidence.py --json`、`scripts/check_llm_wiki_enterprise_site_completion.py --json`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成；production evidence manifest 目前只有示例模板 |
 
 ## 2. Prompt-to-Artifact Checklist
@@ -31,7 +31,7 @@
 | `data/wiki.json` | `memory_engine/copilot/knowledge_site.py` | 来源为 active curated memory，不包含 raw events |
 | `data/graph.json` | `memory_engine/copilot/knowledge_site.py` | 包含 storage graph 和 compiled memory graph |
 | `wiki/*.md` | `AdminQueryService.wiki_export_markdown()` | Markdown Wiki 导出，敏感字段脱敏 |
-| static knowledge site export gate | `scripts/check_copilot_knowledge_site_export.py`、`tests/test_copilot_knowledge_site_export_check.py` | 临时导出并校验 `index.html`、data manifest、Wiki JSON、Graph JSON、Markdown、Graph detail UI、read-only boundary 和 secret-like 文本脱敏；只证明静态 artifact |
+| static knowledge site export gate | `scripts/check_copilot_knowledge_site_export.py`、`tests/test_copilot_knowledge_site_export_check.py` | 临时导出并校验 `index.html`、data manifest、Wiki JSON、Graph JSON、Markdown、Graph detail / Relationship Focus UI、read-only boundary 和 secret-like 文本脱敏；只证明静态 artifact |
 | live admin `/api/wiki` | `memory_engine/copilot/admin.py` | 只读 LLM Wiki 编译视图 |
 | live admin `/api/wiki/export` | `memory_engine/copilot/admin.py` | 只接受 admin token；viewer token 返回 `403` |
 | live admin `/api/graph` | `memory_engine/copilot/admin.py` | 节点、边、metadata、tenant/org/visibility 字段可查 |
@@ -47,7 +47,7 @@
 | production evidence manifest gate | `scripts/check_copilot_admin_production_evidence.py`、`deploy/copilot-admin.production-evidence.example.json`、`tests/test_copilot_admin_production_evidence.py` | 默认验证示例 manifest 结构和密钥脱敏，输出 `production_ready=false`；真实上线时用 `--require-production-ready` 强制 DB / SSO / TLS / monitoring / 24h long-run 证据 |
 | SQLite staging backup / restore drill | `memory_engine/storage_backup.py`、`scripts/backup_copilot_storage.py`、`tests/test_storage_backup.py` | 生成带 manifest 的 SQLite 备份，支持 verify 和 restore-to；只覆盖 staging 回滚演练，不替代生产 PostgreSQL / PITR |
 | tenant/org 过滤 | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | `/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 可按 `tenant_id` / `organization_id` 收敛结果 |
-| Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata；Admin Graph 额外展示 Relationship Focus 邻接路径和 evidence path |
+| Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata；Admin Graph 和静态知识站都展示 Relationship Focus 邻接路径和 evidence path |
 | restricted write gate | `tests/test_copilot_admin.py` | 非 tenant policy 写请求返回 `405`；tenant policy POST 要求 admin |
 | admin/viewer token gate | `tests/test_copilot_admin.py`、`scripts/check_copilot_admin_readiness.py` | admin 可导出和保存 tenant policy；viewer 只读；token 相同被启动脚本拒绝 |
 | reverse-proxy SSO header gate | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py`、`deploy/copilot-admin.nginx.example` | 本机反向代理注入 `X-Forwarded-Email` 后，admin allowlist 可导出，allowed domain viewer 只能浏览；非生产 IdP 验收 |
@@ -68,7 +68,7 @@
 | Python 编译 | `python3 -m compileall memory_engine scripts` | 覆盖 Python 语法和导入编译 |
 | 单元测试 | `python3 -m unittest tests.test_copilot_admin tests.test_copilot_knowledge_site tests.test_copilot_knowledge_pages` | 覆盖 admin API、静态站导出、Wiki 页面编译 |
 | 空白检查 | `git diff --check` | 避免 trailing whitespace 等提交问题 |
-| UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json`、`.github/workflows/ci.yml` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Graph 详情、Relationship Focus evidence path、Tenants readiness、缺失生产能力清单、Deerflow attribution、横向溢出和截图像素完整性；可选 `--visual-baseline-dir` 比较固定 PNG 基线，`--update-visual-baseline` 刷新基线和 `visual-baseline.json`；CI 的 Admin UI Smoke job 会同时跑普通 smoke、baseline update 和 baseline compare，并上传 PNG / manifest artifacts |
+| UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json`、`.github/workflows/ci.yml` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Admin Graph 与静态站 Graph 详情、Relationship Focus evidence path、Tenants readiness、缺失生产能力清单、Deerflow attribution、横向溢出和截图像素完整性；可选 `--visual-baseline-dir` 比较固定 PNG 基线，`--update-visual-baseline` 刷新基线和 `visual-baseline.json`；CI 的 Admin UI Smoke job 会同时跑普通 smoke、baseline update 和 baseline compare，并上传 PNG / manifest artifacts |
 | 本地模型占用检查 | `ollama ps` | 确认没有残留 embedding/model runtime |
 
 ## 3. 当前已推送里程碑
@@ -124,8 +124,8 @@ admin desktop tenants readiness and horizontal overflow
 admin mobile tenants readiness and horizontal overflow
 admin tenant policy editor save and configured readiness
 admin desktop/mobile launch readiness and production blockers
-static site desktop graph detail and Deerflow attribution
-static site mobile graph detail and horizontal overflow
+static site desktop graph detail, relationship focus, and Deerflow attribution
+static site mobile graph detail, relationship focus, and horizontal overflow
 ```
 
 额外 HTTP smoke：

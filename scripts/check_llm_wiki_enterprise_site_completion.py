@@ -124,9 +124,9 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="Admin UI optimization",
-        evidence="Static site UI exposes graph detail and search/filter surface.",
+        evidence="Static site UI exposes graph detail, relationship focus, and search/filter surface.",
         path="memory_engine/copilot/knowledge_site.py",
-        contains=("graphDetail", "search", "nodeDetail", "edgeDetail"),
+        contains=("graphDetail", "relationshipFocus", "Relationship Focus", "search", "nodeDetail", "edgeDetail"),
     ),
     EvidenceCheck(
         requirement="Launch gates",
