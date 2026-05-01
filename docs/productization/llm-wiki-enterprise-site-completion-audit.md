@@ -78,7 +78,7 @@
 | 单元测试 | `python3 -m unittest tests.test_copilot_admin tests.test_copilot_knowledge_site tests.test_copilot_knowledge_pages` | 覆盖 admin API、静态站导出、Wiki 页面编译 |
 | 空白检查 | `git diff --check` | 避免 trailing whitespace 等提交问题 |
 | UI smoke gate | `python3 scripts/check_copilot_admin_ui_smoke.py --json`、`.github/workflows/ci.yml` | 启动 admin、导出静态站，用 Chromium 检查 desktop/mobile Admin Graph 与静态站 Graph 详情、Relationship Focus evidence path、Tenants readiness、Launch production evidence missing fields、缺失生产能力清单、Deerflow attribution、横向溢出和截图像素完整性；可选 `--visual-baseline-dir` 比较固定 PNG 基线，`--update-visual-baseline` 刷新基线和 `visual-baseline.json`；CI 的 Admin UI Smoke job 会同时跑普通 smoke、baseline update 和 baseline compare，并上传 PNG / manifest artifacts |
-| UI design-system token check | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py`、`tests/test_copilot_admin.py`、`tests/test_copilot_knowledge_site.py`、`scripts/check_llm_wiki_enterprise_site_completion.py --json` | Admin 与静态知识站输出稳定 `data-design-system` 标记，CSS token 覆盖 surface、radius、spacing、info/warning surfaces，并把偏米色单一 palette 收敛为中性的企业后台配色；这是本地/staging 设计一致性 gate，不代表完整设计系统组件库 |
+| UI design-system token check | `scripts/check_copilot_admin_design_system.py --json`、`memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py`、`tests/test_copilot_admin_design_system.py`、`tests/test_copilot_admin.py`、`tests/test_copilot_knowledge_site.py`、`scripts/check_llm_wiki_enterprise_site_completion.py --json` | Admin 与静态知识站输出稳定 `data-design-system` 标记，CSS token 覆盖 surface、radius、spacing、info/warning surfaces，并用脚本拒绝缺失 token 或旧米色/单一 palette 回流；这是本地/staging 设计一致性 gate，不代表完整设计系统组件库 |
 | 本地模型占用检查 | `ollama ps` | 确认没有残留 embedding/model runtime |
 
 ## 3. 当前已推送里程碑

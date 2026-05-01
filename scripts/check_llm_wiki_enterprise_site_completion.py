@@ -161,6 +161,17 @@ STAGING_CHECKS = (
         ),
     ),
     EvidenceCheck(
+        requirement="Admin UI optimization",
+        evidence="Design-system verifier rejects missing UI tokens and retired one-note palette values.",
+        path="scripts/check_copilot_admin_design_system.py",
+        contains=(
+            "run_design_system_check",
+            "RETIRED_PALETTE_VALUES",
+            "data-design-system",
+            "local/staging admin UI design-system token check only",
+        ),
+    ),
+    EvidenceCheck(
         requirement="Launch gates",
         evidence="Strict admin readiness gate exists.",
         path="scripts/check_copilot_admin_readiness.py",
