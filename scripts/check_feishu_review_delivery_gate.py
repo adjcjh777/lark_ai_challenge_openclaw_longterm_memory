@@ -8,7 +8,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -28,16 +28,33 @@ BOUNDARY = (
     "private review-card addressing, and card-action update-token handling in-process. "
     "It does not prove production long-running Feishu DM/card delivery."
 )
+LOG_BOUNDARY = (
+    "Feishu review delivery evidence gate only; proves captured listener/OpenClaw result shape "
+    "for candidate review card, private review DM, and original-card update. "
+    "It does not prove production long-running Feishu DM/card delivery."
+)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run a local review inbox DM/card-action safety gate for Feishu Memory Copilot."
+        description=(
+            "Run a local review inbox DM/card-action safety gate for Feishu Memory Copilot, "
+            "or audit captured Feishu/OpenClaw result logs with --event-log."
+        )
+    )
+    parser.add_argument(
+        "--event-log",
+        type=Path,
+        default=None,
+        help="NDJSON/JSON log file to audit for real Feishu review delivery evidence. Defaults to local gate.",
     )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
-    report = check_review_delivery_gate()
+    if args.event_log:
+        report = check_review_delivery_log_events(args.event_log.read_text(encoding="utf-8"))
+    else:
+        report = check_review_delivery_gate()
     if args.json:
         print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     else:
@@ -188,16 +205,116 @@ def check_review_delivery_gate() -> dict[str, Any]:
     }
 
 
+def check_review_delivery_log_events(text: str) -> dict[str, Any]:
+    payloads = list(_payloads_from_text(text))
+    summary = {
+        "total_payloads": len(payloads),
+        "candidate_review_cards": 0,
+        "review_inbox_results": 0,
+        "private_review_dm_results": 0,
+        "card_action_update_results": 0,
+        "missing_token_fail_closed_results": 0,
+        "card_action_triggers_without_result": 0,
+        "unsupported_payloads": 0,
+    }
+    checks: list[dict[str, Any]] = []
+    failures: list[str] = []
+    examples: list[dict[str, Any]] = []
+    event_types: dict[str, int] = {}
+
+    for payload in payloads:
+        event_type = _event_type(payload)
+        event_types[event_type] = event_types.get(event_type, 0) + 1
+
+        result = _result_payload(payload)
+        if result is None:
+            if event_type == "card.action.trigger":
+                summary["card_action_triggers_without_result"] += 1
+            else:
+                summary["unsupported_payloads"] += 1
+            continue
+
+        if _is_candidate_review_card(result):
+            summary["candidate_review_cards"] += 1
+            _append_example(examples, result, "candidate_review_card")
+        if result.get("tool") == "memory.review_inbox":
+            summary["review_inbox_results"] += 1
+            if _is_private_review_dm(result):
+                summary["private_review_dm_results"] += 1
+                _append_example(examples, result, "private_review_dm")
+        if _is_card_action_update(result):
+            summary["card_action_update_results"] += 1
+            _append_example(examples, result, "card_action_update")
+        if _is_missing_token_fail_closed(result):
+            summary["missing_token_fail_closed_results"] += 1
+            _append_example(examples, result, "missing_token_fail_closed")
+
+    _record_check(
+        checks,
+        failures,
+        "candidate_review_card_seen",
+        summary["candidate_review_cards"] >= 1,
+        {"count": summary["candidate_review_cards"]},
+    )
+    _record_check(
+        checks,
+        failures,
+        "private_review_dm_seen",
+        summary["private_review_dm_results"] >= 1,
+        {
+            "review_inbox_results": summary["review_inbox_results"],
+            "private_review_dm_results": summary["private_review_dm_results"],
+        },
+    )
+    _record_check(
+        checks,
+        failures,
+        "card_action_updates_original_card_seen",
+        summary["card_action_update_results"] >= 1,
+        {
+            "card_action_update_results": summary["card_action_update_results"],
+            "card_action_triggers_without_result": summary["card_action_triggers_without_result"],
+        },
+    )
+    _record_check(
+        checks,
+        failures,
+        "missing_card_token_fail_closed_seen",
+        summary["missing_token_fail_closed_results"] >= 1,
+        {"count": summary["missing_token_fail_closed_results"]},
+    )
+
+    reason = "review_delivery_e2e_evidence_seen" if not failures else _log_failure_reason(summary)
+    return {
+        "ok": not failures,
+        "gate": "feishu_review_delivery_evidence",
+        "boundary": LOG_BOUNDARY,
+        "checks": checks,
+        "summary": summary,
+        "event_types": event_types,
+        "examples": examples,
+        "failures": failures,
+        "reason": reason,
+        "next_step": "" if not failures else _log_next_step(reason),
+    }
+
+
 def format_report(report: dict[str, Any]) -> str:
     lines = [
         f"gate: {report['gate']}",
         f"ok: {str(report['ok']).lower()}",
         f"boundary: {report['boundary']}",
     ]
+    if report.get("reason"):
+        lines.append(f"reason: {report['reason']}")
+    if report.get("summary"):
+        lines.append(f"summary: {json.dumps(report['summary'], ensure_ascii=False, sort_keys=True)}")
     for check in report["checks"]:
         lines.append(f"- {check['name']}: {check['status']}")
     if report["failures"]:
         lines.append(f"failures: {', '.join(report['failures'])}")
+    if report.get("next_step"):
+        lines.append(f"next_step: {report['next_step']}")
     return "\n".join(lines)
 
 
@@ -277,6 +394,208 @@ def _button_value(card: Any, label: str) -> dict[str, Any] | None:
             if text.get("content") == label and isinstance(action.get("value"), dict):
                 return action["value"]
     return None
+
+
+def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
+    stripped = text.strip()
+    if not stripped:
+        return []
+    parsed = _parse_json(stripped)
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("lines"), list):
+            return [_payload_from_log_line(item) for item in parsed["lines"] if isinstance(item, dict)]
+        return [_payload_from_log_line(parsed)]
+
+    payloads: list[dict[str, Any]] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        parsed_line = _parse_json(line)
+        if isinstance(parsed_line, dict):
+            payloads.append(_payload_from_log_line(parsed_line))
+        else:
+            payloads.append({"log_message": line})
+    return payloads
+
+
+def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
+    if "result" in line or "tool" in line or "tool_result" in line or "header" in line:
+        return line
+    raw_line = line.get("raw_line")
+    if isinstance(raw_line, str):
+        parsed = _parse_json(raw_line)
+        if isinstance(parsed, dict):
+            return parsed
+        return {"log_message": raw_line}
+    for key in ("payload", "data", "raw", "message"):
+        value = line.get(key)
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            parsed = _parse_json(value)
+            if isinstance(parsed, dict):
+                return parsed
+    return line
+
+
+def _result_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    result = payload.get("result") if isinstance(payload.get("result"), dict) else None
+    if result and ("tool" in result or "tool_result" in result or "publish" in result):
+        return result
+    if "tool" in payload or "tool_result" in payload:
+        return payload
+    for key in ("payload", "data", "message"):
+        value = payload.get(key)
+        if isinstance(value, dict):
+            nested = _result_payload(value)
+            if nested is not None:
+                return nested
+        if isinstance(value, str):
+            parsed = _parse_json(value)
+            if isinstance(parsed, dict):
+                nested = _result_payload(parsed)
+                if nested is not None:
+                    return nested
+    return None
+
+
+def _event_type(payload: dict[str, Any]) -> str:
+    header = payload.get("header") if isinstance(payload.get("header"), dict) else {}
+    event_type = header.get("event_type") or payload.get("event_type") or payload.get("type") or payload.get("event")
+    if event_type:
+        return str(event_type)
+    if _result_payload(payload) is not None:
+        return "copilot_result"
+    return "unknown"
+
+
+def _is_candidate_review_card(result: dict[str, Any]) -> bool:
+    publish = _publish(result)
+    return (
+        result.get("tool") == "memory.create_candidate"
+        and str(publish.get("mode") or "") in {"interactive", "reply_card", "send_card"}
+        and _card_has_memory_action(_card(result))
+    )
+
+
+def _is_private_review_dm(result: dict[str, Any]) -> bool:
+    publish = _publish(result)
+    targets = publish.get("targets")
+    card_open_ids = _card(result).get("open_ids")
+    return (
+        publish.get("delivery_mode") == "dm"
+        and isinstance(targets, list)
+        and bool(targets)
+        and isinstance(card_open_ids, list)
+        and card_open_ids == targets
+    )
+
+
+def _is_card_action_update(result: dict[str, Any]) -> bool:
+    publish = _publish(result)
+    return (
+        str(result.get("tool") or "").startswith("memory.")
+        and publish.get("mode") == "update_card"
+        and bool(publish.get("card_update_token"))
+    )
+
+
+def _is_missing_token_fail_closed(result: dict[str, Any]) -> bool:
+    publish = _publish(result)
+    return (
+        bool(result.get("ignored"))
+        and result.get("reason") == "card action update token missing"
+        and publish.get("mode") == "card_action_update_token_missing"
+    )
+
+
+def _publish(result: dict[str, Any]) -> dict[str, Any]:
+    publish = result.get("publish") if isinstance(result.get("publish"), dict) else {}
+    return publish
+
+
+def _card(result: dict[str, Any]) -> dict[str, Any]:
+    publish = _publish(result)
+    card = publish.get("card") if isinstance(publish.get("card"), dict) else {}
+    return card
+
+
+def _card_has_memory_action(card: dict[str, Any]) -> bool:
+    for element in card.get("elements", []):
+        if not isinstance(element, dict) or element.get("tag") != "action":
+            continue
+        for action in element.get("actions", []):
+            if not isinstance(action, dict):
+                continue
+            value = action.get("value")
+            if isinstance(value, dict) and value.get("memory_engine_action"):
+                return True
+    return False
+
+
+def _append_example(examples: list[dict[str, Any]], result: dict[str, Any], kind: str) -> None:
+    if len(examples) >= 4:
+        return
+    publish = _publish(result)
+    examples.append(
+        {
+            "kind": kind,
+            "tool": str(result.get("tool") or ""),
+            "message_id": _redacted_id(str(result.get("message_id") or "")),
+            "publish_mode": str(publish.get("mode") or ""),
+            "delivery_mode": str(publish.get("delivery_mode") or ""),
+            "targets": _redacted_ids(publish.get("targets")),
+            "card_update_token_present": bool(publish.get("card_update_token")),
+        }
+    )
+
+
+def _log_failure_reason(summary: dict[str, int]) -> str:
+    if summary["candidate_review_cards"] and not summary["private_review_dm_results"]:
+        return "candidate_card_only_no_private_review_dm"
+    if summary["private_review_dm_results"] and not summary["card_action_update_results"]:
+        return "private_review_dm_without_card_action_update"
+    if summary["card_action_triggers_without_result"] and not summary["card_action_update_results"]:
+        return "card_action_trigger_without_update_result"
+    if summary["card_action_update_results"] and not summary["missing_token_fail_closed_results"]:
+        return "card_action_update_without_missing_token_negative"
+    return "review_delivery_e2e_evidence_missing"
+
+
+def _log_next_step(reason: str) -> str:
+    if reason == "candidate_card_only_no_private_review_dm":
+        return "当前只看到候选审核卡；请在受控群触发 /review，并保留 private DM delivery result log。"
+    if reason == "private_review_dm_without_card_action_update":
+        return "当前看到 /review DM；请真实点击审核卡按钮，并保留 card.action -> update_card result log。"
+    if reason == "card_action_trigger_without_update_result":
+        return "捕获到 card.action.trigger 但没有 update_card result；检查 card action router/listener result 输出。"
+    if reason == "card_action_update_without_missing_token_negative":
+        return "正向点击已见；如需完整 safety gate，请补一条缺 update token 的 fail-closed 回归证据。"
+    return "请在受控群创建候选、触发 /review 私聊、真实点击审核卡，并导出 listener/OpenClaw result log 重跑。"
+
+
+def _parse_json(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _redacted_id(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _redacted_ids(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [_redacted_id(str(item)) for item in value[:3]]
 
 
 @contextmanager
