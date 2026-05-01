@@ -51,6 +51,15 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--feishu-event-diagnostics",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON from check_feishu_event_subscription_diagnostics.py. When present, item 1 reports "
+            "missing group-message scope as the preflight blocker before asking for another live send."
+        ),
+    )
+    parser.add_argument(
         "--cognee-long-run-evidence",
         type=Path,
         default=None,
@@ -69,6 +78,7 @@ def main() -> int:
         review_event_log=args.review_event_log,
         routing_event_log=args.routing_event_log,
         feishu_live_evidence_packet=args.feishu_live_evidence_packet,
+        feishu_event_diagnostics=args.feishu_event_diagnostics,
         cognee_long_run_evidence=args.cognee_long_run_evidence,
     )
     if args.json:
@@ -85,19 +95,16 @@ def build_completion_audit(
     review_event_log: Path | None = DEFAULT_REVIEW_EVENT_LOG,
     routing_event_log: Path | None = DEFAULT_ROUTING_EVENT_LOG,
     feishu_live_evidence_packet: Path | None = None,
+    feishu_event_diagnostics: Path | None = None,
     cognee_long_run_evidence: Path | None = None,
 ) -> dict[str, Any]:
     live_packet = _load_live_packet(feishu_live_evidence_packet) if feishu_live_evidence_packet else None
+    event_diagnostics = _load_event_diagnostics(feishu_event_diagnostics) if feishu_event_diagnostics else None
     items = [
-        _live_gate_item_or_packet(
-            item_id="1",
-            name="non_at_group_message_live_delivery",
-            requirement="普通非 @ 群文本消息必须真实进入当前单监听入口，并可触发 passive screening 前置判断。",
-            evidence_path=passive_event_log,
-            packet=live_packet,
-            packet_key="passive_group_message",
-            gate=check_passive_message_events,
-            pass_reason="passive_group_message_seen",
+        _passive_group_message_item(
+            passive_event_log=passive_event_log,
+            live_packet=live_packet,
+            event_diagnostics=event_diagnostics,
         ),
         _single_listener_item(),
         _live_gate_item_or_packet(
@@ -289,6 +296,49 @@ def _live_gate_item_or_packet(
             "failures": report.get("failures"),
         },
         next_step="" if ok else str(report.get("next_step") or "Collect live evidence that satisfies this gate."),
+    )
+
+
+def _passive_group_message_item(
+    *,
+    passive_event_log: Path | None,
+    live_packet: dict[str, Any] | None,
+    event_diagnostics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    item = _live_gate_item_or_packet(
+        item_id="1",
+        name="non_at_group_message_live_delivery",
+        requirement="普通非 @ 群文本消息必须真实进入当前单监听入口，并可触发 passive screening 前置判断。",
+        evidence_path=passive_event_log,
+        packet=live_packet,
+        packet_key="passive_group_message",
+        gate=check_passive_message_events,
+        pass_reason="passive_group_message_seen",
+    )
+    if item["status"] == "pass" or not event_diagnostics or not _diagnostics_group_scope_missing(event_diagnostics):
+        return item
+    evidence = dict(item["evidence"])
+    message_schema = event_diagnostics.get("message_event_schema")
+    if not isinstance(message_schema, dict):
+        message_schema = {}
+    evidence["event_subscription_diagnostics"] = {
+        "path": event_diagnostics.get("path"),
+        "failed_checks": event_diagnostics.get("failed_checks"),
+        "scopes": message_schema.get("scopes"),
+        "has_group_message_scope": message_schema.get("has_group_message_scope"),
+    }
+    return _item(
+        item_id="1",
+        name="non_at_group_message_live_delivery",
+        requirement=item["requirement"],
+        status="fail",
+        reason="message_schema_group_message_scope_missing",
+        evidence=evidence,
+        next_step=(
+            "Feishu event diagnostics show the app schema lacks group-message readonly scope. "
+            "Enable/verify im:message.group_msg:readonly or im:message:readonly for im.message.receive_v1, "
+            "rerun diagnostics with --require-group-message-scope, then send a real non-@ group text."
+        ),
     )
 
 
@@ -519,6 +569,31 @@ def _load_live_packet(path: Path) -> dict[str, Any]:
     if not isinstance(payload.get("reports"), dict):
         return {"ok": False, "path": str(path), "reason": "live_evidence_packet_reports_missing", "reports": {}}
     return payload
+
+
+def _load_event_diagnostics(path: Path) -> dict[str, Any]:
+    loaded = _load_json(path)
+    if not loaded["ok"]:
+        return {"ok": False, "path": str(path), "reason": loaded["reason"]}
+    payload = loaded["payload"]
+    diagnostics = _extract_event_diagnostics(payload)
+    diagnostics["path"] = str(path)
+    return diagnostics
+
+
+def _extract_event_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+    event_subscription = checks.get("event_subscription") if isinstance(checks.get("event_subscription"), dict) else {}
+    nested = event_subscription.get("diagnostics") if isinstance(event_subscription.get("diagnostics"), dict) else None
+    return nested if nested is not None else payload
+
+
+def _diagnostics_group_scope_missing(diagnostics: dict[str, Any]) -> bool:
+    if not diagnostics.get("ok") and diagnostics.get("reason"):
+        return False
+    failed = diagnostics.get("failed_checks") if isinstance(diagnostics.get("failed_checks"), list) else []
+    schema = diagnostics.get("message_event_schema") if isinstance(diagnostics.get("message_event_schema"), dict) else {}
+    return "message_schema_group_message_scope" in failed or schema.get("has_group_message_scope") is False
 
 
 def _number(value: Any) -> float:

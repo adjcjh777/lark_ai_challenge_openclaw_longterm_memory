@@ -26,6 +26,38 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertEqual("evidence_log_not_configured", blockers["review_dm_card_e2e"])
         self.assertEqual("long_term_cognee_embedding_evidence_missing", blockers["cognee_embedding_long_term_service"])
 
+    def test_audit_uses_event_diagnostics_for_passive_group_scope_blocker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
+            root = Path(temp_dir)
+            diagnostics = _write_json(
+                root / "feishu-event-diagnostics.json",
+                {
+                    "ok": False,
+                    "failed_checks": ["message_schema_group_message_scope"],
+                    "message_event_schema": {
+                        "scopes": ["im:message.p2p_msg:readonly"],
+                        "has_group_message_scope": False,
+                    },
+                },
+            )
+
+            report = build_completion_audit(
+                passive_event_log=None,
+                permission_event_log=None,
+                review_event_log=None,
+                routing_event_log=None,
+                feishu_event_diagnostics=diagnostics,
+                cognee_long_run_evidence=None,
+            )
+
+        blockers = {item["name"]: item for item in report["blockers"]}
+        item = blockers["non_at_group_message_live_delivery"]
+        self.assertEqual("message_schema_group_message_scope_missing", item["reason"])
+        self.assertIn("im:message.group_msg:readonly", item["next_step"])
+        passive_item = next(entry for entry in report["items"] if entry["name"] == "non_at_group_message_live_delivery")
+        diagnostic_evidence = passive_item["evidence"]["event_subscription_diagnostics"]
+        self.assertEqual(["im:message.p2p_msg:readonly"], diagnostic_evidence["scopes"])
+
     def test_audit_can_pass_when_all_live_and_long_run_evidence_is_supplied(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
             root = Path(temp_dir)
