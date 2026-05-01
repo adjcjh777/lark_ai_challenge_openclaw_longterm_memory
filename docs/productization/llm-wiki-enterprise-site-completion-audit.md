@@ -16,7 +16,7 @@
 
 | 要求 | 当前判定 | 证据 | 缺口 |
 | --- | --- | --- | --- |
-| LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
+| LLM Wiki 企业知识站 | staging 已完成 | `memory_engine/copilot/knowledge_site.py`、`scripts/export_copilot_knowledge_site.py`、`scripts/check_copilot_knowledge_site_export.py --json`、`tests/test_copilot_knowledge_site.py`、`tests/test_copilot_knowledge_site_export_check.py`、`README.md` 静态导出说明 | 还没有生产域名、真实 IdP SSO 验收、长期运行证据 |
 | 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
 | 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格 | 还缺设计系统级组件抽象和完整视觉回归流水线 |
@@ -31,6 +31,7 @@
 | `data/wiki.json` | `memory_engine/copilot/knowledge_site.py` | 来源为 active curated memory，不包含 raw events |
 | `data/graph.json` | `memory_engine/copilot/knowledge_site.py` | 包含 storage graph 和 compiled memory graph |
 | `wiki/*.md` | `AdminQueryService.wiki_export_markdown()` | Markdown Wiki 导出，敏感字段脱敏 |
+| static knowledge site export gate | `scripts/check_copilot_knowledge_site_export.py`、`tests/test_copilot_knowledge_site_export_check.py` | 临时导出并校验 `index.html`、data manifest、Wiki JSON、Graph JSON、Markdown、Graph detail UI、read-only boundary 和 secret-like 文本脱敏；只证明静态 artifact |
 | live admin `/api/wiki` | `memory_engine/copilot/admin.py` | 只读 LLM Wiki 编译视图 |
 | live admin `/api/wiki/export` | `memory_engine/copilot/admin.py` | 只接受 admin token；viewer token 返回 `403` |
 | live admin `/api/graph` | `memory_engine/copilot/admin.py` | 节点、边、metadata、tenant/org/visibility 字段可查 |
@@ -50,6 +51,7 @@
 | staging SSO header gate verifier | `scripts/check_copilot_admin_sso_gate.py`、`tests/test_copilot_admin_sso_gate.py` | 在 loopback 临时 admin server 上验证 no-header `401`、viewer read `200`、viewer export `403`、admin export `200`、metrics auth 和 `/api/health` SSO policy；只证明 reverse-proxy header gate，不证明真实企业 IdP / Feishu SSO 生产验收 |
 | executable completion audit | `scripts/check_llm_wiki_enterprise_site_completion.py`、`tests/test_llm_wiki_enterprise_site_completion.py` | 把 objective 拆成 LLM Wiki、Knowledge Graph、后台图谱 UI、UI optimization、Launch gates 和 no-overclaim boundary；当前应输出 `staging_ok=true`、`goal_complete=false` 和生产 blocker 列表 |
 | staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、Launch readiness、tenant policy editor availability、restricted write API、access policy |
+| static knowledge site export gate | `python3 scripts/check_copilot_knowledge_site_export.py --json` | 生成临时静态 LLM Wiki / Knowledge Graph 包并验证文件、UI marker、raw event 排除和脱敏 |
 | staging alert rules gate | `python3 scripts/check_prometheus_alert_rules.py --json` | 校验 alert rules 文件存在、必需 alert、指标引用、severity、runbook annotation 和敏感词 |
 | SQLite backup gate | `python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json` | 备份当前 SQLite，运行 integrity check 和 storage readiness 检查，写 manifest |
 | OpenClaw 固定版本 | `python3 scripts/check_openclaw_version.py` | 验证 `2026.4.24` 锁定 |
@@ -89,6 +91,7 @@ python3 scripts/check_copilot_admin_readiness.py --db-path /tmp/copilot-admin-ui
 python3 scripts/check_copilot_admin_env_file.py --expect-example --json
 python3 scripts/check_copilot_admin_deploy_bundle.py --json
 python3 scripts/check_copilot_admin_sso_gate.py --json
+python3 scripts/check_copilot_knowledge_site_export.py --json
 python3 scripts/check_llm_wiki_enterprise_site_completion.py --json
 python3 scripts/check_openclaw_version.py
 python3 scripts/check_agent_harness.py

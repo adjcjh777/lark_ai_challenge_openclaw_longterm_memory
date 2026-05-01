@@ -29,6 +29,12 @@ STAGING_CHECKS = (
     ),
     EvidenceCheck(
         requirement="LLM Wiki enterprise knowledge site",
+        evidence="Static export verifier generates and checks Wiki/Graph/Markdown artifacts.",
+        path="scripts/check_copilot_knowledge_site_export.py",
+        contains=("run_knowledge_site_export_check", "required_files", "redaction"),
+    ),
+    EvidenceCheck(
+        requirement="LLM Wiki enterprise knowledge site",
         evidence="Knowledge site manifest includes wiki, graph, Markdown export, and no-production boundary.",
         path="memory_engine/copilot/knowledge_site.py",
         contains=(
