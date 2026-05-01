@@ -58,6 +58,7 @@
 | `0afc42d` | static knowledge graph inspection |
 | `e309847` | live admin knowledge graph inspection |
 | `59798aa` | admin/viewer token access policy |
+| `eb78491` | Copilot Admin / static site UI smoke gate script |
 
 ## 4. 已验证命令
 
@@ -115,12 +116,12 @@ static-site-mobile.png
 3. 生产 DB 部署未完成。当前 runbook 覆盖本地 / staging SQLite 只读 admin，不覆盖生产数据库运维。
 4. 长期 productized live 未完成。当前不能声明真实 Feishu DM 稳定路由到 first-class `memory.*` 工具或长期线上运行。
 5. 监控告警未完成。已有 health/readiness，但没有生产级 uptime、延迟、错误率、审计异常告警。
-6. UI 视觉回归没有进入 CI。已有可复跑 Playwright smoke 和截图输出，但没有固定基线、自动 diff 和发布阻断。
+6. UI 视觉回归已有 CI smoke，但没有固定截图基线或自动 pixel diff；目前阻断的是关键 DOM、详情面板和横向溢出。
 
 ## 6. 下一步建议
 
 1. 明确目标部署方式：内网静态 artifact、受控 staging admin、还是真实生产服务。
 2. 选定企业认证边界：Feishu SSO、oauth2-proxy、Nginx `auth_request`，或其他 IdP。
 3. 将 tenant/org 权限策略从只读展示推进到配置化后台。
-4. 将 `scripts/check_copilot_admin_ui_smoke.py` 接入 CI，并增加固定截图基线或 DOM layout assertions 作为发布阻断。
+4. 给 `scripts/check_copilot_admin_ui_smoke.py` 增加固定截图基线或 DOM layout assertions，覆盖更多 dashboard tab。
 5. 建立 productized live 运行证据：启动命令、日志窗口、健康探活、真实受控消息链路、回滚记录。

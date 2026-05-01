@@ -30,6 +30,7 @@ git diff --check
 ```
 
 UI smoke 会启动本机只读 admin、导出静态知识站，并用 Chromium 验证 desktop/mobile 下 Graph tab、节点/边详情、静态站 Deerflow attribution 和横向溢出。脚本会在临时目录安装 Playwright 运行依赖；如果浏览器缓存不存在，先运行 `npx --yes playwright@1.59.1 install chromium`。
+GitHub Actions 的 `Admin UI Smoke` job 会运行同一脚本并上传截图 artifact。
 
 如果要绑定到非本机地址，必须设置后台 token：
 

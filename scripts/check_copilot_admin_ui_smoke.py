@@ -34,7 +34,9 @@ def main() -> int:
         default=None,
         help="Directory for screenshots and static export. Defaults to a temporary directory.",
     )
-    parser.add_argument("--keep-output", action="store_true", help="Keep temporary output when --output-dir is omitted.")
+    parser.add_argument(
+        "--keep-output", action="store_true", help="Keep temporary output when --output-dir is omitted."
+    )
     parser.add_argument("--json", action="store_true", help="Print JSON report.")
     args = parser.parse_args()
 
