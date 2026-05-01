@@ -22,6 +22,12 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertEqual(0, result["event_status"]["active_bus_count"])
         self.assertFalse(result["message_event_schema"]["has_group_message_scope"])
         self.assertEqual(["message_schema_scope_does_not_list_group_msg_readonly"], [item["id"] for item in result["warnings"]])
+        self.assertTrue(result["remediation"]["requires_external_console_change"])
+        self.assertEqual(
+            ["im:message.group_msg:readonly", "im:message:readonly"],
+            result["remediation"]["required_scopes_any_of"],
+        )
+        self.assertEqual(["im:message.p2p_msg:readonly"], result["remediation"]["current_scopes"])
 
     def test_can_require_group_message_scope_for_passive_live_preflight(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
@@ -37,6 +43,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertFalse(result["ok"], result)
         self.assertTrue(result["require_group_message_scope"])
         self.assertIn("message_schema_group_message_scope", result["failed_checks"])
+        self.assertIn("group-message readonly scope", result["next_step"])
 
     def test_fails_when_lark_cli_bus_is_running_but_openclaw_is_planned_owner(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
@@ -50,6 +57,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
 
         self.assertFalse(result["ok"], result)
         self.assertIn("listener_mode_consistent", result["failed_checks"])
+        self.assertTrue(result["remediation"]["single_listener_action_required"])
 
     def test_fails_when_message_event_is_not_registered(self) -> None:
         result = run_feishu_event_subscription_diagnostics(

@@ -337,6 +337,7 @@ def _passive_group_message_item(
         "failed_checks": event_diagnostics.get("failed_checks"),
         "scopes": message_schema.get("scopes"),
         "has_group_message_scope": message_schema.get("has_group_message_scope"),
+        "remediation": event_diagnostics.get("remediation"),
     }
     return _item(
         item_id="1",

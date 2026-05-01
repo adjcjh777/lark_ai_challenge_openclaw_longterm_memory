@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 MESSAGE_EVENT_KEY = "im.message.receive_v1"
+GROUP_MESSAGE_SCOPE_OPTIONS = ("im:message.group_msg:readonly", "im:message:readonly")
 BOUNDARY = (
     "feishu_event_subscription_diagnostics_only; read-only lark-cli event status/list/schema checks, "
     "does not start a listener or prove live passive group delivery"
@@ -110,6 +111,12 @@ def run_feishu_event_subscription_diagnostics(
                 "detail": "OpenClaw is planned owner, so lark-cli event bus should not also consume the same bot.",
             }
         )
+    remediation = _remediation(
+        planned_listener=planned_listener,
+        scopes=scopes,
+        has_group_scope=has_group_scope,
+        active_buses=active_buses,
+    )
     failed = sorted(name for name, check in checks.items() if check["status"] != "pass")
     return {
         "ok": not failed,
@@ -133,9 +140,8 @@ def run_feishu_event_subscription_diagnostics(
             "required_console_events": required_events,
             "has_group_message_scope": has_group_scope,
         },
-        "next_step": ""
-        if not failed
-        else "Fix lark-cli event status/list/schema diagnostics before rerunning live passive group message evidence.",
+        "remediation": remediation,
+        "next_step": "" if not failed else remediation["summary"],
     }
 
 
@@ -148,6 +154,9 @@ def format_report(report: dict[str, Any]) -> str:
         f"failed_checks: {', '.join(report['failed_checks']) if report['failed_checks'] else 'none'}",
         f"warnings: {', '.join(item['id'] for item in report['warnings']) if report['warnings'] else 'none'}",
     ]
+    remediation = report.get("remediation") if isinstance(report.get("remediation"), dict) else {}
+    if remediation.get("summary"):
+        lines.append(f"next_step: {remediation['summary']}")
     return "\n".join(lines)
 
 
@@ -178,6 +187,51 @@ def _listener_status_ok(*, planned_listener: str, active_buses: list[dict[str, A
 
 def _has_group_message_scope(scopes: list[Any]) -> bool:
     return any("group_msg" in str(scope) or str(scope) == "im:message:readonly" for scope in scopes)
+
+
+def _remediation(
+    *,
+    planned_listener: str,
+    scopes: list[Any],
+    has_group_scope: bool,
+    active_buses: list[dict[str, Any]],
+) -> dict[str, Any]:
+    current_scopes = [str(scope) for scope in scopes]
+    missing_group_scope = not has_group_scope
+    listener_conflict = planned_listener == "openclaw-websocket" and bool(active_buses)
+    steps: list[str] = []
+    if missing_group_scope:
+        steps.extend(
+            [
+                "In the Feishu/Lark developer console for this same bot app, enable or verify one group-message readonly permission.",
+                f"Acceptable scope options: {', '.join(GROUP_MESSAGE_SCOPE_OPTIONS)}.",
+                f"Keep event subscription for {MESSAGE_EVENT_KEY} enabled for bot auth, then publish or reauthorize the app if the console requires it.",
+                "Rerun this diagnostic with --require-group-message-scope before sending another non-@ group test message.",
+            ]
+        )
+    if listener_conflict:
+        steps.append("Stop the lark-cli event bus before using OpenClaw websocket as the planned single listener.")
+    if not steps:
+        steps.append("Event subscription prerequisites look ready; send a real non-@ group text and preserve the single-listener log.")
+
+    if missing_group_scope:
+        summary = (
+            "Feishu message event schema lacks group-message readonly scope; fix app permissions/event subscription, "
+            "rerun diagnostics, then retest passive group delivery."
+        )
+    elif listener_conflict:
+        summary = "Stop the conflicting lark-cli event bus before retesting with OpenClaw websocket as owner."
+    else:
+        summary = ""
+    return {
+        "requires_external_console_change": missing_group_scope,
+        "required_scopes_any_of": list(GROUP_MESSAGE_SCOPE_OPTIONS),
+        "current_scopes": current_scopes,
+        "message_event_key": MESSAGE_EVENT_KEY,
+        "single_listener_action_required": listener_conflict,
+        "steps": steps,
+        "summary": summary,
+    }
 
 
 def _parse_json_object(text: str) -> Any:
