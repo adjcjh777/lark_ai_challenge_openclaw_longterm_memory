@@ -21,6 +21,9 @@ from memory_engine.feishu_listener_guard import (  # noqa: E402
 from scripts.check_feishu_event_subscription_diagnostics import (  # noqa: E402
     run_feishu_event_subscription_diagnostics,
 )
+from scripts.check_cognee_embedding_sampler_status import (  # noqa: E402
+    check_cognee_embedding_sampler_status,
+)
 
 BOUNDARY = (
     "feishu_live_evidence_run_preflight_only; validates single-listener state and emits manual test steps, "
@@ -88,6 +91,7 @@ def prepare_live_evidence_run(
     create_dirs: bool = False,
     process_rows: Iterable[str] | None = None,
     event_subscription_diagnostics: dict[str, Any] | None = None,
+    cognee_sampler_status: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence_dir = (output_dir or DEFAULT_OUTPUT_ROOT / run_id).expanduser()
@@ -132,6 +136,14 @@ def prepare_live_evidence_run(
     ]
     warnings = [name for name, check in checks.items() if check["status"] == "warning"]
     diagnostic_paths = _diagnostic_paths(evidence_dir)
+    diagnostic_write_results = _write_diagnostic_inputs(
+        create_dirs=create_dirs,
+        diagnostic_paths=diagnostic_paths,
+        event_subscription=event_subscription,
+        embedding_sample_log=embedding_sample_log,
+        embedding_sampler_pid_file=embedding_sampler_pid_file,
+        cognee_sampler_status=cognee_sampler_status,
+    )
     packet_output = evidence_dir / "feishu-live-evidence-packet.json"
     completion_output = evidence_dir / "completion-audit.json"
     steps = _manual_steps(
@@ -159,6 +171,7 @@ def prepare_live_evidence_run(
         "warnings": warnings,
         "log_paths": {name: str(path) for name, path in log_paths.items()},
         "diagnostic_paths": {name: str(path) for name, path in diagnostic_paths.items()},
+        "diagnostic_write_results": diagnostic_write_results,
         "manual_steps": steps,
         "next_step": "Follow manual_steps and rerun packet/completion audit after real Feishu/OpenClaw logs are captured.",
     }
@@ -198,6 +211,63 @@ def _diagnostic_paths(evidence_dir: Path) -> dict[str, Path]:
         "feishu_event_diagnostics": evidence_dir / "00-feishu-event-diagnostics.json",
         "cognee_sampler_status": evidence_dir / "00-cognee-sampler-status.json",
     }
+
+
+def _write_diagnostic_inputs(
+    *,
+    create_dirs: bool,
+    diagnostic_paths: dict[str, Path],
+    event_subscription: dict[str, Any],
+    embedding_sample_log: Path | None,
+    embedding_sampler_pid_file: Path | None,
+    cognee_sampler_status: dict[str, Any] | None,
+) -> dict[str, dict[str, str]]:
+    if not create_dirs:
+        return {}
+
+    results: dict[str, dict[str, str]] = {}
+    event_diagnostics = event_subscription.get("diagnostics")
+    if isinstance(event_diagnostics, dict):
+        results["feishu_event_diagnostics"] = _write_json_file(
+            diagnostic_paths["feishu_event_diagnostics"],
+            event_diagnostics,
+        )
+    else:
+        results["feishu_event_diagnostics"] = {
+            "status": "warning",
+            "path": str(diagnostic_paths["feishu_event_diagnostics"]),
+            "detail": "Event subscription diagnostics were unavailable; rerun the manual diagnostics command.",
+        }
+
+    if embedding_sample_log:
+        sampler_status = cognee_sampler_status
+        if sampler_status is None:
+            try:
+                sampler_status = check_cognee_embedding_sampler_status(
+                    embedding_sample_log=embedding_sample_log,
+                    pid_file=embedding_sampler_pid_file,
+                )
+            except Exception as exc:  # pragma: no cover - defensive local process/file boundary.
+                results["cognee_sampler_status"] = {
+                    "status": "warning",
+                    "path": str(diagnostic_paths["cognee_sampler_status"]),
+                    "detail": f"Unable to check Cognee sampler status: {exc}",
+                }
+                return results
+        results["cognee_sampler_status"] = _write_json_file(
+            diagnostic_paths["cognee_sampler_status"],
+            sampler_status,
+        )
+    return results
+
+
+def _write_json_file(path: Path, payload: dict[str, Any]) -> dict[str, str]:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    except OSError as exc:
+        return {"status": "warning", "path": str(path), "detail": f"Unable to write diagnostic JSON: {exc}"}
+    return {"status": "pass", "path": str(path), "detail": "written"}
 
 
 def _manual_steps(

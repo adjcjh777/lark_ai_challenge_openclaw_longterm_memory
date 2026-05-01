@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -123,6 +124,61 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn(f"--pid-file {pid_file}", instructions)
         self.assertIn("00-cognee-sampler-status.json", instructions)
         self.assertIn("--cognee-sampler-status", instructions)
+
+    def test_create_dirs_writes_event_diagnostics_for_completion_audit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
+            root = Path(temp_dir)
+            diagnostics = _event_diagnostics(
+                ok=False,
+                failed_checks=["message_schema_group_message_scope"],
+            )
+            result = prepare_live_evidence_run(
+                planned_listener="openclaw-websocket",
+                output_dir=root,
+                process_rows=[],
+                create_dirs=True,
+                event_subscription_diagnostics=diagnostics,
+            )
+
+            diagnostic_path = Path(result["diagnostic_paths"]["feishu_event_diagnostics"])
+            written = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(diagnostics, written)
+        self.assertEqual(
+            "pass",
+            result["diagnostic_write_results"]["feishu_event_diagnostics"]["status"],
+        )
+
+    def test_create_dirs_writes_injected_cognee_sampler_status(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
+            root = Path(temp_dir)
+            sample_log = root / "embedding-samples.ndjson"
+            pid_file = root / "sampler.pid"
+            sampler_status = {
+                "ok": True,
+                "completion_ready": False,
+                "warning_checks": ["embedding_window"],
+                "failed_checks": [],
+            }
+            result = prepare_live_evidence_run(
+                planned_listener="openclaw-websocket",
+                output_dir=root,
+                process_rows=[],
+                embedding_sample_log=sample_log,
+                embedding_sampler_pid_file=pid_file,
+                create_dirs=True,
+                event_subscription_diagnostics=_event_diagnostics(),
+                cognee_sampler_status=sampler_status,
+            )
+
+            diagnostic_path = Path(result["diagnostic_paths"]["cognee_sampler_status"])
+            written = json.loads(diagnostic_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(sampler_status, written)
+        self.assertEqual(
+            "pass",
+            result["diagnostic_write_results"]["cognee_sampler_status"]["status"],
+        )
 
 
 if __name__ == "__main__":
