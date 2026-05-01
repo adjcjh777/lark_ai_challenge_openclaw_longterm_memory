@@ -346,7 +346,7 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `check_copilot_graph_quality.py` 会检查本地/staging 知识图谱 workspace 是否有 `memory -> grounded_by -> evidence_source` 编译图谱、边端点完整性、tenant/org 覆盖、孤立节点比例和敏感字符串泄漏；它是图谱质量 gate，不代表生产级图谱治理后台。
 
-`check_copilot_admin_ui_smoke.py` 会启动本机 admin、导出静态站并截图，除桌面/移动端 Admin Graph、静态站 Relationship Focus、Tenants、Launch 和静态站 DOM 断言外，还会对截图做像素级非空白、色彩多样性、主色占比和文件大小检查。需要固定视觉基线时，先用 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续传同一个 `--visual-baseline-dir` 会按截图逐张做采样 pixel diff，并用脚本内阈值阻断明显 UI 回归。这仍只证明本地/staging UI 回归，不代表生产上线。
+`check_copilot_admin_ui_smoke.py` 会启动本机 admin、导出静态站并截图，除桌面/移动端 Admin Graph、静态站 Relationship Focus、Tenants、Launch 和静态站 DOM 断言外，还会对截图做像素级非空白、色彩多样性、主色占比和文件大小检查。Admin 与静态知识站也带有 `data-design-system` 标记和共享 UI token，用于把本地/staging 后台维持在同一套中性企业后台视觉语言内。需要固定视觉基线时，先用 `--visual-baseline-dir reports/admin-ui-baseline --update-visual-baseline` 生成 `visual-baseline.json` 和 PNG 基线；后续传同一个 `--visual-baseline-dir` 会按截图逐张做采样 pixel diff，并用脚本内阈值阻断明显 UI 回归。这仍只证明本地/staging UI 回归，不代表生产上线。
 
 `check_llm_wiki_enterprise_site_completion.py` 会把 LLM Wiki、知识图谱后台、UI smoke、上线 gate 和 no-overclaim 边界映射到具体 artifact；当前预期输出是 `staging_ok=true` 且 `goal_complete=false`，因为生产 DB、真实 IdP SSO、域名证书、生产监控和 productized live 长期运行仍未完成。
 

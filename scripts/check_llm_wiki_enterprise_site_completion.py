@@ -139,6 +139,28 @@ STAGING_CHECKS = (
         ),
     ),
     EvidenceCheck(
+        requirement="Admin UI optimization",
+        evidence="Admin and static site carry explicit design-system markers and shared UI tokens.",
+        path="memory_engine/copilot/admin.py",
+        contains=(
+            'data-design-system="copilot-admin-ui/v1"',
+            "--radius-panel",
+            "--surface-muted",
+            "--info-surface",
+        ),
+    ),
+    EvidenceCheck(
+        requirement="Admin UI optimization",
+        evidence="Static export uses the same restrained enterprise UI token vocabulary.",
+        path="memory_engine/copilot/knowledge_site.py",
+        contains=(
+            'data-design-system="copilot-static-knowledge-site/v1"',
+            "--radius-panel",
+            "--panel-muted",
+            "--info-surface",
+        ),
+    ),
+    EvidenceCheck(
         requirement="Launch gates",
         evidence="Strict admin readiness gate exists.",
         path="scripts/check_copilot_admin_readiness.py",

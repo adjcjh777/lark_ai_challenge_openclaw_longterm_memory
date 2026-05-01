@@ -2461,16 +2461,25 @@ def _index_html() -> str:
   <style>
     :root {{
       color-scheme: light;
-      --bg: #eef1ed;
-      --surface: #fbfaf5;
-      --ink: #17201d;
-      --muted: #5f6a66;
-      --line: #cfd7d1;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-muted: #f8fafc;
+      --surface-tint: #eef6f3;
+      --ink: #111827;
+      --muted: #64748b;
+      --line: #d7dee8;
       --accent: #0f766e;
-      --accent-2: #99582a;
-      --accent-3: #365d8d;
+      --accent-2: #7c3f12;
+      --accent-3: #2563eb;
       --danger: #ad2f2f;
-      --shadow: 0 14px 34px rgba(23, 32, 29, .09);
+      --warning-surface: #fff7ed;
+      --info-surface: #eff6ff;
+      --radius-control: 6px;
+      --radius-panel: 8px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --shadow: 0 14px 34px rgba(15, 23, 42, .08);
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }}
     * {{ box-sizing: border-box; }}
@@ -2482,8 +2491,8 @@ def _index_html() -> str:
     }}
     header {{
       border-bottom: 1px solid var(--line);
-      background: #17201d;
-      color: #fbfaf5;
+      background: #111827;
+      color: #f8fafc;
       padding: 20px 24px;
     }}
     .title-row {{
@@ -2529,9 +2538,9 @@ def _index_html() -> str:
     }}
     input, select, button {{
       height: 38px;
-      border: 1px solid #bfb5a4;
-      border-radius: 6px;
-      background: #fffdf8;
+      border: 1px solid #cbd5e1;
+      border-radius: var(--radius-control);
+      background: #fff;
       color: var(--ink);
       font: inherit;
       font-size: 14px;
@@ -2541,12 +2550,12 @@ def _index_html() -> str:
     button {{
       padding: 0 14px;
       background: var(--ink);
-      color: #fffaf0;
+      color: #fff;
       cursor: pointer;
       white-space: nowrap;
     }}
     button.secondary {{
-      background: #fffdf8;
+      background: #fff;
       color: var(--ink);
     }}
     .summary {{
@@ -2607,7 +2616,7 @@ def _index_html() -> str:
     th {{
       position: sticky;
       top: 0;
-      background: #e2e9e4;
+      background: #edf2f7;
       z-index: 2;
       color: #353b36;
     }}
@@ -2625,11 +2634,11 @@ def _index_html() -> str:
       font-size: 12px;
     }}
     .status.candidate, .status.needs_evidence {{
-      background: #fff2d6;
+      background: var(--warning-surface);
       color: var(--accent-2);
     }}
     .status.warning, .status.blocker {{
-      background: #fbedd7;
+      background: var(--warning-surface);
       color: var(--accent-2);
     }}
     .status.rejected, .status.expired, .status.deny {{
@@ -2706,7 +2715,7 @@ def _index_html() -> str:
     }}
     .detail {{
       border-left: 3px solid var(--accent);
-      background: #fffdf8;
+      background: var(--surface-muted);
       padding: 14px;
       white-space: pre-wrap;
       line-height: 1.45;
@@ -2749,8 +2758,8 @@ def _index_html() -> str:
     }}
     .policy-form {{
       border: 1px solid var(--line);
-      background: #fffdf8;
-      border-radius: 7px;
+      background: var(--surface-muted);
+      border-radius: var(--radius-panel);
       padding: 12px;
       margin-top: 12px;
     }}
@@ -2802,10 +2811,10 @@ def _index_html() -> str:
     }}
     .wiki-card {{
       border: 1px solid var(--line);
-      background: #fffdf8;
+      background: #fff;
       padding: 14px;
       margin-bottom: 12px;
-      border-radius: 7px;
+      border-radius: var(--radius-panel);
     }}
     .wiki-card h3 {{
       margin: 0 0 8px;
@@ -2840,14 +2849,14 @@ def _index_html() -> str:
       color: #24302d;
       font-size: 12px;
     }}
-    .tag.warn {{ background: #fbedd7; color: var(--accent-2); }}
+    .tag.warn {{ background: var(--warning-surface); color: var(--accent-2); }}
     .graph-board {{
       min-height: 540px;
       border: 1px solid var(--line);
       background:
-        linear-gradient(90deg, rgba(15,118,110,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(37,99,235,.055) 1px, transparent 1px),
         linear-gradient(rgba(15,118,110,.06) 1px, transparent 1px),
-        #f8faf7;
+        var(--surface-muted);
       background-size: 34px 34px;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
@@ -2860,10 +2869,10 @@ def _index_html() -> str:
       width: 100%;
       min-height: 76px;
       border: 1px solid #94aaa1;
-      background: rgba(255,253,248,.95);
-      border-radius: 8px;
+      background: rgba(255,255,255,.96);
+      border-radius: var(--radius-panel);
       padding: 9px;
-      box-shadow: 0 12px 24px rgba(23, 32, 29, .10);
+      box-shadow: 0 12px 24px rgba(15, 23, 42, .10);
       overflow-wrap: anywhere;
       cursor: pointer;
       text-align: left;
@@ -2899,7 +2908,7 @@ def _index_html() -> str:
       font-size: 13px;
       cursor: pointer;
     }}
-    .edge-item.selected {{ background: #f0eadf; }}
+    .edge-item.selected {{ background: var(--surface-tint); }}
     .edge-type {{
       color: var(--accent);
       font-weight: 700;
@@ -2909,17 +2918,17 @@ def _index_html() -> str:
     .graph-detail {{
       margin-top: 12px;
       border: 1px solid var(--line);
-      background: #fffdf8;
-      border-radius: 7px;
+      background: #fff;
+      border-radius: var(--radius-panel);
       padding: 12px;
       line-height: 1.45;
     }}
     .graph-detail h3 {{ margin-bottom: 10px; }}
     .relationship-focus {{
       margin-top: 12px;
-      border: 1px solid #d7c7af;
-      background: #fffaf0;
-      border-radius: 7px;
+      border: 1px solid #bfdbfe;
+      background: var(--info-surface);
+      border-radius: var(--radius-panel);
       padding: 12px;
     }}
     .relationship-focus h3 {{
@@ -2941,7 +2950,7 @@ def _index_html() -> str:
       min-width: 0;
       overflow-wrap: anywhere;
       border: 1px solid var(--line);
-      background: #fffdf8;
+      background: #fff;
       border-radius: 999px;
       padding: 5px 8px;
       line-height: 1.25;
@@ -2994,7 +3003,7 @@ def _index_html() -> str:
     }}
   </style>
 </head>
-<body>
+<body data-design-system="copilot-admin-ui/v1">
   <header>
     <div class="title-row">
       <h1>{escaped_title}</h1>

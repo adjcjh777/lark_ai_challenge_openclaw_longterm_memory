@@ -164,16 +164,24 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
   <style>
     :root {{
       color-scheme: light;
-      --paper: #fbfaf5;
-      --ink: #18201d;
-      --muted: #66706b;
-      --line: #d8ddd6;
-      --field: #eef1ed;
-      --moss: #355c4b;
-      --clay: #9d5d3f;
-      --blue: #2f5f89;
-      --gold: #b2872d;
+      --paper: #ffffff;
+      --ink: #111827;
+      --muted: #64748b;
+      --line: #d7dee8;
+      --field: #f4f6f8;
+      --panel-muted: #f8fafc;
+      --moss: #0f766e;
+      --clay: #7c3f12;
+      --blue: #2563eb;
+      --gold: #b45309;
       --danger: #9f3434;
+      --warning-surface: #fff7ed;
+      --info-surface: #eff6ff;
+      --radius-control: 6px;
+      --radius-panel: 8px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
     }}
     * {{ box-sizing: border-box; }}
     body {{
@@ -189,10 +197,10 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       grid-template-columns: 300px minmax(0, 1fr);
     }}
     aside {{
-      background: #17201d;
-      color: #f4f0e8;
+      background: #111827;
+      color: #f8fafc;
       padding: 18px;
-      border-right: 1px solid #0f1613;
+      border-right: 1px solid #0f172a;
     }}
     h1, h2, h3 {{ margin: 0; line-height: 1.2; }}
     h1 {{ font-size: 22px; max-width: 250px; }}
@@ -221,10 +229,10 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     button, a.button {{
       min-height: 34px;
       border: 1px solid var(--line);
-      background: #fffdf8;
+      background: #fff;
       color: var(--ink);
       padding: 0 12px;
-      border-radius: 6px;
+      border-radius: var(--radius-control);
       cursor: pointer;
       text-decoration: none;
       display: inline-flex;
@@ -252,7 +260,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       width: min(460px, 100%);
       min-height: 36px;
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: var(--radius-control);
       padding: 0 10px;
       background: #fff;
       font: inherit;
@@ -266,7 +274,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     .panel {{
       background: var(--paper);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-panel);
       min-height: 220px;
       padding: 14px;
     }}
@@ -307,12 +315,12 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       color: #27322f;
       font-size: 12px;
     }}
-    .tag.warn {{ background: #f4e6d6; color: #6f3f21; }}
+    .tag.warn {{ background: var(--warning-surface); color: var(--clay); }}
     .graph {{
       position: relative;
       min-height: 520px;
       border: 1px solid var(--line);
-      background: #fffdf8;
+      background: var(--panel-muted);
       overflow: hidden;
     }}
     .node {{
@@ -321,10 +329,10 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       min-height: 70px;
       border: 1px solid var(--line);
       border-left: 4px solid var(--blue);
-      border-radius: 7px;
+      border-radius: var(--radius-panel);
       background: #fff;
       padding: 9px;
-      box-shadow: 0 8px 22px rgba(23, 32, 29, .08);
+      box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
       cursor: pointer;
       text-align: left;
     }}
@@ -355,8 +363,8 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     .graph-detail {{
       margin-top: 12px;
       border: 1px solid var(--line);
-      background: #f6f4ed;
-      border-radius: 7px;
+      background: var(--panel-muted);
+      border-radius: var(--radius-panel);
       padding: 12px;
       line-height: 1.45;
     }}
@@ -365,9 +373,9 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     }}
     .relationship-focus {{
       margin-top: 12px;
-      border: 1px solid #d8c8aa;
-      background: #fffaf0;
-      border-radius: 7px;
+      border: 1px solid #bfdbfe;
+      background: var(--info-surface);
+      border-radius: var(--radius-panel);
       padding: 12px;
       line-height: 1.45;
     }}
@@ -389,7 +397,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       min-width: 0;
       overflow-wrap: anywhere;
       border: 1px solid var(--line);
-      background: #fffdf8;
+      background: #fff;
       border-radius: 999px;
       padding: 5px 8px;
     }}
@@ -423,7 +431,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     }}
     .edge:first-child {{ border-top: 0; }}
     .edge.selected {{
-      background: #f0eadf;
+      background: #eef6f3;
     }}
     .mono {{
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -434,7 +442,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
       color: #aeb8b2;
       font-size: 12px;
     }}
-    .footer-mark a {{ color: #f4f0e8; }}
+    .footer-mark a {{ color: #f8fafc; }}
     .empty {{ color: var(--muted); padding: 16px 0; }}
     @media (max-width: 980px) {{
       main {{ grid-template-columns: 1fr; }}
@@ -446,7 +454,7 @@ def _render_index_html(site_payload: dict[str, Any]) -> str:
     }}
   </style>
 </head>
-<body>
+<body data-design-system="copilot-static-knowledge-site/v1">
   <main>
     <aside>
       <h1>{escaped_title}</h1>
