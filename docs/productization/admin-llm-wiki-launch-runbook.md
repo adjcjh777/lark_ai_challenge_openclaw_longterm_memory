@@ -131,6 +131,28 @@ curl -fsS \
 5. 进入 `Graph`，确认至少能看到 compiled memory 节点；如果已有飞书群/用户/消息图谱，应同时显示 `feishu_chat` / `feishu_user` / `feishu_message`。
 6. 进入 `Audit`，确认权限和工具调用审计可读。
 
+静态知识站导出验收：
+
+```bash
+python3 scripts/export_copilot_knowledge_site.py \
+  --db-path data/memory.sqlite \
+  --output-dir reports/copilot-knowledge-site \
+  --scope project:feishu_ai_challenge \
+  --json
+```
+
+导出目录必须包含：
+
+```text
+index.html
+data/manifest.json
+data/wiki.json
+data/graph.json
+wiki/project_feishu_ai_challenge.md
+```
+
+`index.html` 是只读 Wiki + Graph 静态入口；`manifest.json` 里必须保留 `no production deployment` 边界。该导出包可作为受控内网静态 artifact，但仍不代表生产部署、SSO 或 productized live 已完成。
+
 ## 5. 回滚
 
 后台是只读服务，不应修改 SQLite / Feishu / Bitable。回滚动作：
@@ -145,7 +167,7 @@ curl -fsS \
 可以说：
 
 - 已完成本地 / staging 只读 LLM Wiki 和知识图谱后台。
-- 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出和敏感字段脱敏。
+- 已有 token gate、只读 API、healthz、readiness gate、Markdown Wiki 导出、静态知识站导出和敏感字段脱敏。
 - Wiki 只编译 active curated memory，不向量化或展示全部 raw events。
 
 不能说：

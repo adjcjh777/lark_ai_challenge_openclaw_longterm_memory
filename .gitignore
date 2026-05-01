@@ -18,6 +18,7 @@ data/*.sqlite3
 .local/
 reports/*.csv
 reports/*.json
+reports/copilot-knowledge-site/
 .claude-auto-logs/
 .claude-auto-logs/
 .claude-auto-logs/

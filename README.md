@@ -299,6 +299,15 @@ python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
 python3 scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite --host 0.0.0.0 --admin-token "$FEISHU_MEMORY_COPILOT_ADMIN_TOKEN" --strict --min-wiki-cards 1
 ```
 
+如需生成可放到受控内网或反向代理后的静态知识站包：
+
+```bash
+python3 scripts/export_copilot_knowledge_site.py --db-path data/memory.sqlite --output-dir reports/copilot-knowledge-site --scope project:feishu_ai_challenge --json
+open reports/copilot-knowledge-site/index.html
+```
+
+导出包固定包含 `index.html`、`data/manifest.json`、`data/wiki.json`、`data/graph.json` 和 `wiki/*.md`。它只读取 active curated memory、evidence 和知识图谱视图，不读取全部 raw events，也不写 SQLite / Feishu / Bitable。
+
 详细启动、探活、验收和回滚步骤见 [LLM Wiki / Graph Admin Launch Runbook](docs/productization/admin-llm-wiki-launch-runbook.md)。
 受控 systemd 模板见 `deploy/copilot-admin.service.example`，Nginx 反向代理模板见 `deploy/copilot-admin.nginx.example`；需要先把真实 token 写入本机 `/etc/feishu-memory-copilot/admin.env`，不要提交。
 
