@@ -63,6 +63,40 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertEqual(["im:message.p2p_msg:readonly"], diagnostic_evidence["scopes"])
         self.assertTrue(diagnostic_evidence["remediation"]["requires_external_console_change"])
 
+    def test_audit_fails_single_listener_when_event_diagnostics_show_conflict(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
+            root = Path(temp_dir)
+            diagnostics = _write_json(
+                root / "feishu-event-diagnostics.json",
+                {
+                    "ok": False,
+                    "planned_listener": "openclaw-websocket",
+                    "failed_checks": ["listener_mode_consistent"],
+                    "checks": {"listener_mode_consistent": {"status": "fail"}},
+                    "event_status": {
+                        "active_bus_count": 1,
+                        "active_bus_app_ids": ["cli_...1234"],
+                    },
+                    "message_event_schema": {"has_group_message_scope": True},
+                },
+            )
+
+            report = build_completion_audit(
+                passive_event_log=None,
+                permission_event_log=None,
+                review_event_log=None,
+                routing_event_log=None,
+                feishu_event_diagnostics=diagnostics,
+                cognee_long_run_evidence=None,
+            )
+
+        blockers = {item["name"]: item for item in report["blockers"]}
+        self.assertEqual("listener_conflict_detected", blockers["single_feishu_listener_entry"]["reason"])
+        single_listener_item = next(entry for entry in report["items"] if entry["name"] == "single_feishu_listener_entry")
+        diagnostic_evidence = single_listener_item["evidence"]["event_subscription_diagnostics"]
+        self.assertEqual(1, diagnostic_evidence["active_bus_count"])
+        self.assertTrue(diagnostic_evidence["listener_conflict_detected"])
+
     def test_audit_uses_sampler_status_for_cognee_progress_blocker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
             root = Path(temp_dir)

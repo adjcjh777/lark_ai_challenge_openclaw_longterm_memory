@@ -119,7 +119,7 @@ def build_completion_audit(
             live_packet=live_packet,
             event_diagnostics=event_diagnostics,
         ),
-        _single_listener_item(),
+        _single_listener_item(event_diagnostics=event_diagnostics),
         _live_gate_item_or_packet(
             item_id="3",
             name="first_class_memory_tool_live_routing",
@@ -356,7 +356,7 @@ def _passive_group_message_item(
     )
 
 
-def _single_listener_item() -> dict[str, Any]:
+def _single_listener_item(*, event_diagnostics: dict[str, Any] | None = None) -> dict[str, Any]:
     checks = {
         "guard_exists": (ROOT / "memory_engine/feishu_listener_guard.py").exists(),
         "singleton_script_exists": (ROOT / "scripts/check_feishu_listener_singleton.py").exists(),
@@ -374,6 +374,17 @@ def _single_listener_item() -> dict[str, Any]:
             "FeishuListenerConflict",
         ),
     }
+    diagnostic_evidence = _single_listener_diagnostic_evidence(event_diagnostics)
+    if diagnostic_evidence.get("listener_conflict_detected"):
+        return _item(
+            item_id="2",
+            name="single_feishu_listener_entry",
+            requirement="OpenClaw gateway、Copilot lark-cli sandbox 和 legacy listener 必须三选一，冲突时 fail closed。",
+            status="fail",
+            reason="listener_conflict_detected",
+            evidence={"checks": checks, "event_subscription_diagnostics": diagnostic_evidence},
+            next_step="Stop the conflicting lark-cli event bus or switch the planned Feishu event owner before collecting live evidence.",
+        )
     ok = all(checks.values())
     return _item(
         item_id="2",
@@ -381,9 +392,28 @@ def _single_listener_item() -> dict[str, Any]:
         requirement="OpenClaw gateway、Copilot lark-cli sandbox 和 legacy listener 必须三选一，冲突时 fail closed。",
         status="pass" if ok else "fail",
         reason="single_listener_guard_present" if ok else "single_listener_guard_incomplete",
-        evidence={"checks": checks},
+        evidence={"checks": checks, "event_subscription_diagnostics": diagnostic_evidence},
         next_step="" if ok else "Complete listener guard, singleton CLI, tests, and staging runbook coverage.",
     )
+
+
+def _single_listener_diagnostic_evidence(event_diagnostics: dict[str, Any] | None) -> dict[str, Any]:
+    if not event_diagnostics:
+        return {}
+    checks = event_diagnostics.get("checks") if isinstance(event_diagnostics.get("checks"), dict) else {}
+    listener_check = checks.get("listener_mode_consistent") if isinstance(checks.get("listener_mode_consistent"), dict) else {}
+    event_status = (
+        event_diagnostics.get("event_status") if isinstance(event_diagnostics.get("event_status"), dict) else {}
+    )
+    failed = event_diagnostics.get("failed_checks") if isinstance(event_diagnostics.get("failed_checks"), list) else []
+    return {
+        "path": event_diagnostics.get("path"),
+        "planned_listener": event_diagnostics.get("planned_listener"),
+        "listener_mode_status": listener_check.get("status"),
+        "listener_conflict_detected": "listener_mode_consistent" in failed or listener_check.get("status") == "fail",
+        "active_bus_count": event_status.get("active_bus_count"),
+        "active_bus_app_ids": event_status.get("active_bus_app_ids"),
+    }
 
 
 def _dashboard_access_control_item() -> dict[str, Any]:
