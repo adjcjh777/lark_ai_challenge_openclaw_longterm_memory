@@ -297,19 +297,19 @@ CHECKS = (
 PRODUCTION_BLOCKERS = (
     {
         "id": "real_domain_tls",
-        "description": "External evidence collector exists, but no real production domain or certificate evidence is present.",
+        "description": "TLS live probe and evidence collector exist, but no real production domain/certificate/HSTS evidence is present.",
     },
     {
         "id": "real_enterprise_idp",
-        "description": "External evidence collector exists, but no real enterprise IdP login evidence is present.",
+        "description": "IdP entrypoint probe and evidence collector exist, but no real enterprise IdP login evidence is present.",
     },
     {
         "id": "production_database",
-        "description": "Production DB evidence collector exists, but real PostgreSQL/PITR deployment evidence is not present.",
+        "description": "Production DB live probe and evidence collector exist, but real PostgreSQL/PITR deployment evidence is not present.",
     },
     {
         "id": "production_monitoring_delivery",
-        "description": "External evidence collector exists, but production Prometheus/Grafana/Alertmanager delivery is not proven.",
+        "description": "Monitoring live probe and evidence collector exist, but production Prometheus/Grafana/Alertmanager delivery is not proven.",
     },
     {
         "id": "long_running_live_ops",

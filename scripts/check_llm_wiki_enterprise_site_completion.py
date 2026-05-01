@@ -380,22 +380,22 @@ PRODUCTION_BLOCKERS = (
     {
         "id": "production_db",
         "description": "Production DB / PostgreSQL / PITR deployment has not been validated.",
-        "evidence": "A collector exists for PostgreSQL/PITR manifest patches, but real production DB deployment evidence is not present.",
+        "evidence": "A DB live probe and collector exist for PostgreSQL/PITR manifest patches, but real production DB deployment evidence is not present.",
     },
     {
         "id": "enterprise_idp_sso",
         "description": "Real enterprise IdP / Feishu SSO production validation is not complete.",
-        "evidence": "A collector exists for IdP evidence patches, but real enterprise login evidence is not present.",
+        "evidence": "An IdP entrypoint probe and collector exist for IdP evidence patches, but real enterprise login evidence is not present.",
     },
     {
         "id": "production_domain_tls",
         "description": "Production domain and TLS certificate delivery are not evidenced.",
-        "evidence": "A collector exists for TLS evidence patches, but no production host/certificate proof is present.",
+        "evidence": "A TLS live probe and collector exist for TLS evidence patches, but no production host/certificate proof is present.",
     },
     {
         "id": "production_monitoring",
         "description": "Production Prometheus/Grafana / Alertmanager delivery is not validated.",
-        "evidence": "A collector exists for monitoring evidence patches, but production scrape/alert delivery is not proven.",
+        "evidence": "A monitoring live probe and collector exist for monitoring evidence patches, but production scrape/alert delivery is not proven.",
     },
     {
         "id": "productized_live_long_run",
