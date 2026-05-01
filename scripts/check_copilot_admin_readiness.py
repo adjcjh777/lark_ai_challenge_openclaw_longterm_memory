@@ -16,8 +16,8 @@ if str(ROOT) not in sys.path:
 from memory_engine.copilot.admin import (
     ADMIN_TOKEN_ENV_NAMES,
     ADMIN_VIEWER_TOKEN_ENV_NAMES,
-    AdminQueryService,
     DEFAULT_ADMIN_HOST,
+    AdminQueryService,
 )
 from memory_engine.db import db_path_from_env
 
@@ -112,6 +112,7 @@ def run_admin_readiness(
             checks["wiki"] = _wiki_check(service, min_cards=required_wiki_cards)
             checks["wiki_export"] = _wiki_export_check(service, require_export=strict or required_wiki_cards > 0)
             checks["graph"] = _graph_check(service, require_compiled_memory=strict)
+            checks["tenants"] = _tenants_check(service, require_inventory=strict)
             checks["read_only_api"] = {
                 "status": "pass",
                 "supported_methods": ["GET", "HEAD"],
@@ -234,6 +235,41 @@ def _graph_check(service: AdminQueryService, *, require_compiled_memory: bool) -
     }
 
 
+def _tenants_check(service: AdminQueryService, *, require_inventory: bool) -> dict[str, Any]:
+    tenants = service.tenant_overview(limit=80)
+    tenant_count = int(tenants.get("tenant_count") or 0)
+    organization_count = int(tenants.get("organization_count") or 0)
+    missing_capabilities = set(tenants.get("missing_capabilities") or [])
+    expected_missing = {
+        "enterprise_sso",
+        "tenant_config_editor",
+        "role_policy_editor",
+        "production_db_operations",
+    }
+    has_boundary = "no tenant config write API" in str(tenants.get("boundary") or "")
+    has_expected_missing = expected_missing.issubset(missing_capabilities)
+    if require_inventory and tenant_count == 0:
+        status = "fail"
+    elif not has_boundary or not has_expected_missing:
+        status = "fail"
+    elif tenant_count == 0:
+        status = "warning"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "tenant_count": tenant_count,
+        "organization_count": organization_count,
+        "read_only": bool(tenants.get("read_only")),
+        "source": tenants.get("source"),
+        "missing_capabilities": sorted(missing_capabilities),
+        "require_inventory": require_inventory,
+        "next_step": ""
+        if status == "pass"
+        else "Confirm tenant/org scoped ledger rows and missing production capabilities before launch.",
+    }
+
+
 def _remote_bind_auth_check(
     *,
     host: str,
@@ -320,7 +356,7 @@ def _admin_viewer_token_from_env() -> str | None:
 
 def _summary(check: dict[str, Any]) -> str:
     bits = []
-    for key in ("card_count", "workspace_node_count", "workspace_edge_count", "auth", "path"):
+    for key in ("card_count", "workspace_node_count", "workspace_edge_count", "tenant_count", "auth", "path"):
         if key in check:
             bits.append(f"{key}={check[key]}")
     return " " + " ".join(bits) if bits else ""

@@ -464,6 +464,9 @@ class CopilotAdminTest(unittest.TestCase):
         self.assertTrue(strict_ok["ok"])
         self.assertEqual("pass", strict_ok["checks"]["wiki"]["status"])
         self.assertEqual("pass", strict_ok["checks"]["graph"]["status"])
+        self.assertEqual("pass", strict_ok["checks"]["tenants"]["status"])
+        self.assertEqual(2, strict_ok["checks"]["tenants"]["tenant_count"])
+        self.assertIn("enterprise_sso", strict_ok["checks"]["tenants"]["missing_capabilities"])
         self.assertEqual("pass", strict_ok["checks"]["access_policy"]["status"])
 
         missing_auth = run_admin_readiness(
