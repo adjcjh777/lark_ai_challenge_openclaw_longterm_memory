@@ -147,7 +147,7 @@ def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
     if isinstance(parsed, dict):
         if isinstance(parsed.get("lines"), list):
             return [_payload_from_log_line(item) for item in parsed["lines"] if isinstance(item, dict)]
-        return [parsed]
+        return [_payload_from_log_line(parsed)]
 
     payloads: list[dict[str, Any]] = []
     for raw_line in text.splitlines():
@@ -169,6 +169,12 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
         value = line.get(key)
         if isinstance(value, dict):
             return value
+    raw_line = line.get("raw_line")
+    if isinstance(raw_line, str):
+        parsed = _parse_json(raw_line)
+        if isinstance(parsed, dict):
+            return parsed
+        return {"log_message": raw_line}
     message = line.get("message")
     if isinstance(message, dict):
         return message

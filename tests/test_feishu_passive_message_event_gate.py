@@ -90,6 +90,17 @@ class FeishuPassiveMessageEventGateTest(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(1, report["summary"]["passive_group_text_messages"])
 
+    def test_reads_copilot_listener_raw_line_wrappers(self) -> None:
+        wrapped = {
+            "ts": "2026-05-01T19:18:35+08:00",
+            "event": "copilot_live_event_received",
+            "raw_line": json.dumps(_message_payload(), ensure_ascii=False),
+        }
+        report = check_passive_message_events(json.dumps(wrapped, ensure_ascii=False) + "\n")
+
+        self.assertTrue(report["ok"])
+        self.assertEqual(1, report["summary"]["passive_group_text_messages"])
+
 
 if __name__ == "__main__":
     unittest.main()
