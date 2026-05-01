@@ -48,7 +48,7 @@ Feishu workspace
 | 文档 | 当前用途 | 边界 |
 |---|---|---|
 | [productized-live-architecture.md](productized-live-architecture.md) | 生产拓扑参考 | PostgreSQL、Cognee server、Ollama 长期服务仍未部署 |
-| [deployment-runbook.md](deployment-runbook.md) | 部署步骤草案 | 包含当前仓库未实现或未验证的命令，例如 `scripts/validate_env.py`、`requirements.txt`、`scripts/backup_database.sh` |
+| [deployment-runbook.md](deployment-runbook.md) | 部署步骤草案 | 包含当前仓库未实现或未验证的命令，例如 `scripts/validate_env.py`、`requirements.txt`；SQLite staging backup/restore 已有 `scripts/backup_copilot_storage.py`，但 PostgreSQL 生产备份仍未实施 |
 | [ops-runbook.md](ops-runbook.md) | 运维流程草案 | 包含生产 PostgreSQL / systemd / exporter 假设，当前只作未来实施参考 |
 | [monitoring-design.md](monitoring-design.md) | Prometheus/Grafana 指标设计 | 生产级 exporter / dashboard 尚未实现 |
 | [permission-admin-design.md](permission-admin-design.md) | 多租户权限后台设计 | 当前只有权限映射和 fail-closed 本地闭环，不是企业后台 |
@@ -127,6 +127,7 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-w
 python3 scripts/check_copilot_health.py --json
 python3 scripts/check_demo_readiness.py --json
 python3 scripts/migrate_copilot_storage.py --dry-run --json
+python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json
 python3 scripts/query_audit_events.py --summary --json
 python3 scripts/check_audit_alerts.py --json
 git diff --check
@@ -214,7 +215,7 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-w
 
 ### 数据回滚
 
-- SQLite staging：按备份文件恢复，不 drop audit table。
+- SQLite staging：使用 `scripts/backup_copilot_storage.py` 生成带 manifest 的备份；恢复前停止写入，执行 `--verify-backup`，再用 `--restore-backup ... --restore-to ... --force` 恢复，不 drop audit table。
 - PostgreSQL pilot：使用托管 PITR / snapshot；恢复前先停 ingestion。
 - Cognee：以本地 ledger 为事实源；Cognee result 未匹配 ledger 不进入 answer。
 
@@ -231,7 +232,7 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-w
 
 进入 L2 还需要：
 
-- PostgreSQL 试点库 dry-run / apply / restore 演练完成。
+- PostgreSQL 试点库 dry-run / apply / restore 演练完成；当前 SQLite staging backup / verify / restore drill 不替代 PostgreSQL 生产备份。
 - allowlist、reviewer/admin、source_context 配置有变更记录。
 - 真实 Task / Meeting / Bitable source smoke 至少各 1 条，仍经过 review-policy gate。
 - websocket down、embedding unavailable、ingestion_failed、permission_denied 都能在运维报告里定位。

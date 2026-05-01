@@ -8,15 +8,17 @@
 1. 今天做的是后期打磨 P1 第 4 项：把已经有的本地 SQLite schema / audit table 补成可检查、可重复执行、可交接的迁移流程。
 2. 我接下来从 [launch-polish-todo.md](launch-polish-todo.md) 的第 5 项继续：扩大真实 Feishu ingestion 范围，但仍必须 candidate-only（待确认记忆，不自动生效）。
 3. 交付物是迁移检查模块、迁移脚本、healthcheck 的索引/审计状态、合同文档和本 handoff。
-4. 判断做对：`scripts/migrate_copilot_storage.py --dry-run --json` 能报告待迁移项但不改库；`--apply --json` 可重复执行；healthcheck 能看到 schema version、index status、audit status。
+4. 判断做对：`scripts/migrate_copilot_storage.py --dry-run --json` 能报告待迁移项但不改库；`--apply --json` 可重复执行；`scripts/backup_copilot_storage.py --json` 能生成带 manifest 的 SQLite staging 备份并可 verify / restore-to；healthcheck 能看到 schema version、index status、audit status。
 5. 遇到问题记录：数据库路径、dry-run JSON、apply JSON、回滚入口、是否有真实飞书监听仍在写入。
 
 ## 本阶段做了什么
 
 - 新增 `memory_engine/storage_migration.py`：提供 `inspect_copilot_storage()` 和 `apply_copilot_storage_migration()`，统一检查 schema version、缺失列、缺失表、缺失索引、需要补默认 tenant / organization / visibility 的行数，以及审计状态。
 - 新增 `scripts/migrate_copilot_storage.py`：支持 `--dry-run` 和 `--apply`，并可用 `--json` 输出给 handoff 或看板备注。
+- 新增 `memory_engine/storage_backup.py` 和 `scripts/backup_copilot_storage.py`：支持 SQLite staging backup、verify 和 restore-to，生成 `.manifest.json`，恢复覆盖必须显式 `--force`。
 - 更新 `memory_engine/copilot/healthcheck.py`：`storage_schema` 现在包含 `index_status` 和 `audit_status`，能报告索引缺失、审计事件数量、权限拒绝数量和遮挡数量。
 - 新增 `tests/test_copilot_storage_migration.py`：覆盖 dry-run 不修改旧库、apply 可重复执行、产品化索引存在。
+- 新增 `tests/test_storage_backup.py`：覆盖备份、校验、恢复和拒绝隐式覆盖。
 - 更新 `tests/test_copilot_healthcheck.py`：锁住 healthcheck 必须报告索引和审计状态。
 
 ## 生产 DB 选择和边界
@@ -36,8 +38,8 @@
 
 ## 备份、恢复和数据清理
 
-- 备份：迁移真实数据库前复制 SQLite 文件，备份名建议带绝对时间，例如 `memory.sqlite.backup-20260428-1630`。
-- 恢复：迁移失败时停止 Feishu ingestion / OpenClaw websocket 写入入口，用备份文件替换当前 SQLite；不要自动 DROP 新列或审计表。
+- 备份：迁移真实数据库前运行 `python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json`；备份会使用 SQLite backup API、运行 integrity check、检查 Copilot schema/index/audit readiness，并写 `.manifest.json`。
+- 恢复：迁移失败时停止 Feishu ingestion / OpenClaw websocket 写入入口，先 `--verify-backup`，再 `--restore-backup ... --restore-to ... --force` 恢复 SQLite；不要自动 DROP 新列或审计表。
 - 审计保留：`memory_audit_events` 至少保留最近 90 天；提交材料和看板只写统计、request_id、trace_id，不写 token、secret 或 raw private memory。
 - 数据删除：来源撤权或删除时先标记 source revoked / stale，recall 降级或隐藏；不要直接物理删除 evidence，除非后续产品策略明确要求。
 
@@ -48,9 +50,10 @@
 ```bash
 python3 scripts/check_openclaw_version.py
 python3 scripts/migrate_copilot_storage.py --dry-run --json
+python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json
 python3 scripts/check_copilot_health.py --json
 python3 -m compileall memory_engine scripts
-python3 -m unittest tests.test_copilot_healthcheck tests.test_copilot_permissions tests.test_copilot_storage_migration
+python3 -m unittest tests.test_copilot_healthcheck tests.test_copilot_permissions tests.test_copilot_storage_migration tests.test_storage_backup
 git diff --check
 ollama ps
 ```

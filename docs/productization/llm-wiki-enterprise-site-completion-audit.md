@@ -20,7 +20,7 @@
 | 知识图谱结合 | staging 已完成 | `/api/graph`、静态 `data/graph.json`、compiled `memory -> grounded_by -> evidence_source`、图谱节点/边详情面板 | 还没有长期图谱增量质量评估和生产级图谱治理后台 |
 | 后台可展示知识图谱 | staging 已完成 | `memory_engine/copilot/admin.py` 的 `Graph` tab、`Tenants` tab、`tests/test_copilot_admin.py`、桌面/移动端 Playwright smoke 截图、tenant/org 过滤、admin-only tenant policy editor | 还不是生产级租户管理控制台 |
 | 当前后台 UI 优化 | staging 已完成 | Admin Graph 响应式网格、节点/边详情、移动端无横向溢出；静态站 Graph 稳定网格 | 还缺设计系统级组件抽象和完整视觉回归流水线 |
-| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_prometheus_alert_rules.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成 |
+| 可上线 | 部分完成 | `deploy/copilot-admin.service.example`、`deploy/copilot-admin.nginx.example`、`deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_copilot_admin_readiness.py --strict`、`scripts/check_prometheus_alert_rules.py --json`、`scripts/backup_copilot_storage.py --json`、admin/viewer token 分级、reverse-proxy SSO header gate | 生产 DB、真实企业 IdP 验收、域名证书、生产 Prometheus/Grafana / Alertmanager 投递、长期 productized live 仍未完成 |
 
 ## 2. Prompt-to-Artifact Checklist
 
@@ -39,6 +39,7 @@
 | live admin `/api/launch-readiness` | `memory_engine/copilot/admin.py`、`scripts/check_copilot_admin_readiness.py` | staging gates 与 production blockers 分开展示，明确 production 仍 blocked |
 | live admin `/metrics` | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | Prometheus text metrics；共享环境下要求 admin/viewer token 或 SSO |
 | staging Prometheus alert rules | `deploy/monitoring/copilot-admin-alerts.yml`、`scripts/check_prometheus_alert_rules.py`、`tests/test_prometheus_alert_rules.py` | 覆盖 admin scrape、staging gates、Wiki、Graph、tenant policy、audit ledger 和 production blocker；只证明 staging alert-rule artifact，不证明生产告警投递 |
+| SQLite staging backup / restore drill | `memory_engine/storage_backup.py`、`scripts/backup_copilot_storage.py`、`tests/test_storage_backup.py` | 生成带 manifest 的 SQLite 备份，支持 verify 和 restore-to；只覆盖 staging 回滚演练，不替代生产 PostgreSQL / PITR |
 | tenant/org 过滤 | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py` | `/api/wiki`、`/api/graph`、`/api/tenants`、`/api/memories`、`/api/audit` 可按 `tenant_id` / `organization_id` 收敛结果 |
 | Graph UI 节点/边详情 | `memory_engine/copilot/admin.py`、`memory_engine/copilot/knowledge_site.py` | 点击节点/边展示 tenant、organization、visibility、observations、metadata |
 | restricted write gate | `tests/test_copilot_admin.py` | 非 tenant policy 写请求返回 `405`；tenant policy POST 要求 admin |
@@ -46,6 +47,7 @@
 | reverse-proxy SSO header gate | `memory_engine/copilot/admin.py`、`tests/test_copilot_admin.py`、`deploy/copilot-admin.nginx.example` | 本机反向代理注入 `X-Forwarded-Email` 后，admin allowlist 可导出，allowed domain viewer 只能浏览；非生产 IdP 验收 |
 | staging readiness gate | `python3 scripts/check_copilot_admin_readiness.py --strict` | 覆盖 DB、schema、Wiki、export、Graph、Tenants readiness、Launch readiness、tenant policy editor availability、restricted write API、access policy |
 | staging alert rules gate | `python3 scripts/check_prometheus_alert_rules.py --json` | 校验 alert rules 文件存在、必需 alert、指标引用、severity、runbook annotation 和敏感词 |
+| SQLite backup gate | `python3 scripts/backup_copilot_storage.py --db-path data/memory.sqlite --backup-dir data/backups --json` | 备份当前 SQLite，运行 integrity check 和 storage readiness 检查，写 manifest |
 | OpenClaw 固定版本 | `python3 scripts/check_openclaw_version.py` | 验证 `2026.4.24` 锁定 |
 | harness contract | `python3 scripts/check_agent_harness.py` | 验证 AGENTS、执行 contract、Cognee adapter 边界 |
 | Python 编译 | `python3 -m compileall memory_engine scripts` | 覆盖 Python 语法和导入编译 |

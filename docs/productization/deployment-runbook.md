@@ -4,7 +4,7 @@
 状态：方案设计（未完成生产上线）
 适用范围：从零到可运行的完整部署步骤，新机器可按文档部署
 
-> 2026-04-29 校准：本文是 productized live 部署草案，不是当前已验证 runbook。文中 `scripts/validate_env.py`、`requirements.txt`、`scripts/backup_database.sh` 等命令或文件在当前仓库未实现或未作为验收入口；实施前以 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 的 gate 为准，逐条校准命令后再执行。
+> 2026-05-01 校准：本文是 productized live 部署草案，不是当前已验证 runbook。文中 `scripts/validate_env.py`、`requirements.txt` 等命令或文件在当前仓库未实现或未作为验收入口；SQLite staging 备份/校验/恢复已落成 `scripts/backup_copilot_storage.py`，但 PostgreSQL 生产备份、PITR 和托管数据库部署仍未实施。实施前以 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 的 gate 为准，逐条校准命令后再执行。
 
 ---
 
@@ -487,7 +487,37 @@ openclaw agent start --agent main --daemon
 | 配置备份 | 每次变更 | 永久 | .env, 配置文件 |
 | 代码备份 | 每次 push | 永久 | Git |
 
-### 10.2 备份脚本
+### 10.2 SQLite staging 备份脚本
+
+当前仓库已实现本地 / staging SQLite backup / verify / restore drill：
+
+```bash
+python3 scripts/backup_copilot_storage.py \
+  --db-path data/memory.sqlite \
+  --backup-dir data/backups \
+  --json
+```
+
+校验已有备份：
+
+```bash
+python3 scripts/backup_copilot_storage.py \
+  --verify-backup data/backups/<backup>.sqlite \
+  --json
+```
+
+恢复到新路径或停写后的目标路径：
+
+```bash
+python3 scripts/backup_copilot_storage.py \
+  --restore-backup data/backups/<backup>.sqlite \
+  --restore-to data/memory.restored.sqlite \
+  --json
+```
+
+如果要覆盖现有 SQLite，必须先停止 Feishu/OpenClaw 写入入口，再显式加 `--force`。这个脚本会运行 `PRAGMA integrity_check`、检查 Copilot schema/index/audit readiness，并写 `.manifest.json`。它不是 PostgreSQL 生产备份、PITR 或 productized live 证明。
+
+### 10.3 PostgreSQL 生产备份草案
 
 ```bash
 #!/bin/bash
@@ -509,7 +539,7 @@ find $BACKUP_DIR -name "*.dump" -mtime +30 -delete
 echo "Backup completed: $BACKUP_FILE"
 ```
 
-### 10.3 恢复测试
+### 10.4 PostgreSQL 恢复测试草案
 
 ```bash
 # 恢复到测试数据库

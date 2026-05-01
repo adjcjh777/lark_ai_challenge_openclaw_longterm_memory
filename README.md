@@ -44,7 +44,7 @@
 | 候选记忆治理 | 已完成 candidate / confirm / reject / conflict / version chain | `memory_engine/copilot/governance.py` |
 | 检索链路 | 已完成 L0/L1/L2/L3 分层混合检索 | `memory_engine/copilot/orchestrator.py`、`retrieval.py` |
 | 审计表 | 已完成 SQLite 本地审计闭环 | `memory_engine/db.py`、`memory_audit_events` |
-| 存储迁移方案 | 已完成本地 migration dry-run / apply 和索引检查 | `scripts/migrate_copilot_storage.py`、`tests/test_copilot_storage_migration.py` |
+| 存储迁移和备份恢复 | 已完成本地 migration dry-run / apply、索引检查，以及 SQLite staging backup / verify / restore drill；这不是生产 PostgreSQL / PITR | `scripts/migrate_copilot_storage.py`、`scripts/backup_copilot_storage.py`、`tests/test_copilot_storage_migration.py`、`tests/test_storage_backup.py` |
 | 企业图谱群/用户/消息拓扑 | 已完成本地 Feishu 群节点发现与授权消息拓扑：新群会登记为同企业下的 `feishu_chat` 图谱节点；未在 allowlist 的群只记录 org/chat 最小元数据；授权群会把同一用户建模为 tenant/org 内唯一 `feishu_user` 节点，并用 membership/message 边表达其在不同群里的上下文；消息正文仍只进入 `raw_events` / candidate evidence，不写入图谱节点 | `memory_engine/copilot/graph_context.py`、`memory_engine/copilot/feishu_live.py`、`tests/test_copilot_feishu_live.py`、`docs/productization/handoffs/feishu-group-graph-node-handoff.md` |
 | LLM Wiki / Graph Admin | 已完成本地 / staging 后台：active curated memory 编译成 LLM Wiki，Graph tab 展示 storage graph + compiled memory graph，Tenants tab 支持 tenant/org 过滤、readiness、admin-only tenant policy editor 和 `tenant_policy_upserted` 审计；这不是生产 DB、真实企业 IdP SSO 或完整多租户权限后台 | `memory_engine/copilot/admin.py`、`memory_engine/db.py`、`scripts/check_copilot_admin_readiness.py`、`scripts/check_copilot_admin_ui_smoke.py`、`tests/test_copilot_admin.py`、`docs/productization/admin-llm-wiki-launch-runbook.md` |
 | Cognee 主路径 | 已完成本地可控同步 / 检索 / fallback 闭环 | `memory_engine/copilot/cognee_adapter.py`、`memory_engine/copilot/retrieval.py`、`tests/test_copilot_cognee_adapter.py`、`docs/productization/cognee-main-path-handoff.md` |
@@ -471,6 +471,7 @@ scripts/
   check_openclaw_version.py      OpenClaw 版本检查
   check_live_embedding_gate.py   live embedding gate
   migrate_copilot_storage.py     存储迁移 dry-run / apply
+  backup_copilot_storage.py      SQLite staging 备份 / 校验 / 恢复演练
   start_copilot_feishu_live.sh   飞书测试群 sandbox 启动脚本
 
 benchmarks/
