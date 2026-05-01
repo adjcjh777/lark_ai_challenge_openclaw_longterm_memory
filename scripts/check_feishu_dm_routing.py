@@ -7,6 +7,9 @@ Validates that:
 4. tools.alsoAllow includes fmc_xxx tools
 5. Agent can call fmc_memory_search successfully
 
+Boundary: this is a local/staging readiness check. It does not prove stable
+long-running real Feishu DM/group routing.
+
 Usage:
     python3 scripts/check_feishu_dm_routing.py [--json] [--timeout 60]
 """
@@ -19,6 +22,9 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BOUNDARY = (
+    "Local/staging Feishu DM routing readiness only; does not prove stable long-running real Feishu routing."
+)
 
 
 def run_cmd(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
@@ -168,9 +174,31 @@ def check_feishu_dm_routing() -> dict:
     all_ok = all(c["ok"] for c in checks)
     return {
         "ok": all_ok,
+        "boundary": BOUNDARY,
+        "production_ready_claim": False,
+        "stable_live_routing_claim": False,
         "checks": checks,
         "summary": f"{sum(1 for c in checks if c['ok'])}/{len(checks)} checks passed",
     }
+
+
+def format_human_result(result: dict) -> str:
+    lines = [
+        f"Feishu DM Routing Readiness Check: {result['summary']}",
+        f"Boundary: {result.get('boundary') or BOUNDARY}",
+        "",
+    ]
+    for check in result["checks"]:
+        status = "PASS" if check["ok"] else "FAIL"
+        lines.append(f"  {status} {check['name']}: {check['detail']}")
+    lines.append("")
+    if result["ok"]:
+        lines.append(
+            "Local/staging readiness checks passed. Do not claim stable live Feishu routing without captured live result evidence."
+        )
+    else:
+        lines.append("Some readiness checks failed. Fix the issues above before collecting live Feishu routing evidence.")
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -184,16 +212,7 @@ def main() -> int:
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
-        print(f"Feishu DM Routing Check: {result['summary']}")
-        print()
-        for check in result["checks"]:
-            status = "✅" if check["ok"] else "❌"
-            print(f"  {status} {check['name']}: {check['detail']}")
-        print()
-        if result["ok"]:
-            print("All checks passed! Feishu DM routing is working correctly.")
-        else:
-            print("Some checks failed. Please fix the issues above.")
+        print(format_human_result(result))
 
     return 0 if result["ok"] else 1
 

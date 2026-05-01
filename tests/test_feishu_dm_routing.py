@@ -24,6 +24,7 @@ from memory_engine.copilot.permissions import demo_permission_context
 from memory_engine.copilot.tools import supported_tool_names
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
+from scripts.check_feishu_dm_routing import BOUNDARY, format_human_result
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / "agent_adapters" / "openclaw" / "plugin"
@@ -32,6 +33,20 @@ SCOPE = "project:feishu_ai_challenge"
 
 class FeishuDMRoutingTest(unittest.TestCase):
     """Test Feishu DM → plugin tool routing."""
+
+    def test_dm_routing_check_output_keeps_no_overclaim_boundary(self) -> None:
+        output = format_human_result(
+            {
+                "ok": True,
+                "summary": "6/6 checks passed",
+                "boundary": BOUNDARY,
+                "checks": [{"name": "python_tests", "ok": True, "detail": "exit_code=0"}],
+            }
+        )
+
+        self.assertIn("Local/staging", output)
+        self.assertIn("Do not claim stable live Feishu routing", output)
+        self.assertNotIn("working correctly", output)
 
     def test_plugin_tools_registered_with_fmc_names(self) -> None:
         """Verify plugin tools use fmc_xxx naming convention."""
