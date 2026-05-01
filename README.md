@@ -404,6 +404,15 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 5. 生成 Agent 任务前上下文包。
 6. 生成 heartbeat reminder candidate。
 
+如果真实飞书 live 测试已经在默认库里写入测试 memory、群策略或 audit，可以先生成隔离的干净评委 demo 库：
+
+```bash
+python3 scripts/prepare_clean_demo_db.py --source-db data/memory.sqlite --output-db data/demo_clean.sqlite --force --json
+python3 scripts/demo_seed.py --db-path data/demo_clean.sqlite --json-output reports/demo_replay.json
+```
+
+这个脚本只检查 source DB 的噪声计数并创建新的 demo DB，不删除 live/staging 证据；它不代表生产数据保留或删除策略。
+
 ### 3.2 运行 Benchmark
 
 ```bash
@@ -515,6 +524,7 @@ scripts/
   check_copilot_health.py        Copilot healthcheck
   check_demo_readiness.py        Demo readiness
   demo_seed.py                   固定 Demo replay
+  prepare_clean_demo_db.py       隔离生成干净评委 Demo SQLite
   check_openclaw_version.py      OpenClaw 版本检查
   check_live_embedding_gate.py   live embedding gate
   migrate_copilot_storage.py     存储迁移 dry-run / apply

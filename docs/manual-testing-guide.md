@@ -78,7 +78,8 @@ ollama ps
 执行：
 
 ```bash
-python3 scripts/demo_seed.py --json-output reports/demo_replay.json
+python3 scripts/prepare_clean_demo_db.py --source-db data/memory.sqlite --output-db data/demo_clean.sqlite --force --json
+python3 scripts/demo_seed.py --db-path data/demo_clean.sqlite --json-output reports/demo_replay.json
 python3 scripts/check_demo_readiness.py --json
 ```
 
@@ -94,6 +95,7 @@ docs/benchmark-report.md
 通过标准：
 
 - `demo_seed.py` 输出中 `production_feishu_write=false`。
+- `prepare_clean_demo_db.py` 返回 `ok=true`，`source_db_modified=false`，且 output DB 没有带入 `feishu_group_policies` 或非 `demo_seed` source type。
 - replay 里能看到 5 个主要步骤：搜索当前结论、版本解释、prefetch、候选/确认、提醒候选。
 - `check_demo_readiness.py --json` 返回 `ok=true`。
 - 搜索结果包含固定样例：`ap-shanghai` 和 `--canary`。
