@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -19,6 +20,9 @@ BOUNDARY = (
     "not production long-running ingestion."
 )
 ID_PATTERN = re.compile(r"\b(?:ou|oc|om|cli|ou_|oc_|om_)[A-Za-z0-9_-]+\b")
+OPENCLAW_GROUP_MESSAGE_PATTERN = re.compile(
+    r"feishu\[[^\]]+\]: Feishu\[[^\]]+\] message in group (?P<chat_id>oc_[A-Za-z0-9_-]+):\s*(?P<text>.*)"
+)
 
 
 def main() -> int:
@@ -182,8 +186,50 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
         parsed = _parse_json(message)
         if isinstance(parsed, dict):
             return parsed
+        openclaw_payload = _openclaw_group_message_payload(message, raw=line)
+        if openclaw_payload:
+            return openclaw_payload
         return {"log_message": message}
     return line
+
+
+def _openclaw_group_message_payload(message: str, *, raw: dict[str, Any]) -> dict[str, Any] | None:
+    matched = OPENCLAW_GROUP_MESSAGE_PATTERN.search(message)
+    if not matched:
+        return None
+    text = matched.group("text").strip()
+    chat_id = matched.group("chat_id")
+    if not text or text.startswith("@"):
+        mentions = [{"mentioned_type": "bot", "name": "bot"}] if text.startswith("@") else []
+    else:
+        mentions = []
+    return {
+        "schema": "2.0",
+        "header": {"event_type": "im.message.receive_v1"},
+        "event": {
+            "sender": {
+                "sender_id": {"open_id": "openclaw_log_sender"},
+                "sender_type": "user",
+            },
+            "message": {
+                "message_id": f"openclaw_log_{hashlib.sha1(message.encode('utf-8')).hexdigest()[:16]}",
+                "chat_id": chat_id,
+                "chat_type": "group",
+                "message_type": "text",
+                "content": json.dumps({"text": text}, ensure_ascii=False),
+                "mentions": mentions,
+                "create_time": _timestamp_from_log_line(raw),
+            },
+        },
+    }
+
+
+def _timestamp_from_log_line(raw: dict[str, Any]) -> str:
+    value = raw.get("time")
+    if isinstance(value, str) and value:
+        digits = re.sub(r"\D", "", value)
+        return digits[:13] if digits else "0"
+    return "0"
 
 
 def _event_type(payload: dict[str, Any]) -> str:

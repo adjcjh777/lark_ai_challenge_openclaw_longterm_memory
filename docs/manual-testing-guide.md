@@ -263,6 +263,8 @@ python3 scripts/check_feishu_event_subscription_diagnostics.py \
 python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/feishu-events.ndjson --json
 ```
 
+2026-05-02 实测补充：如果证据来自 `openclaw channels logs --channel feishu --json`，也可以直接把 JSON 输出作为 `--event-log` 输入；gate 会解析 `Feishu[default] message in group ...` 这种 channel log 行。
+
 生成 completion audit 时，把这一步的诊断 JSON 作为 `--feishu-event-diagnostics` 输入；否则 audit 只能根据旧日志提示“只看到 @Bot 消息”，不能指出当前真正的 scope blocker。
 
 通过标准：
