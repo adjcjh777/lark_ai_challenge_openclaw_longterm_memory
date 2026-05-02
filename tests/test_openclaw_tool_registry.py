@@ -108,6 +108,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   buildRouterFailureFallback,
                   isRealFeishuMessageId,
                   publishInteractiveCardViaLarkCli,
+                  resolveLarkCliBin,
                 } from './agent_adapters/openclaw/plugin/feishu_card_delivery.js';
                 const publish = {
                   mode: 'interactive',
@@ -154,6 +155,8 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                     chatId: 'oc_demo',
                     uuid: 'uuid_demo',
                   }),
+                  explicitCli: resolveLarkCliBin({ LARK_CLI_BIN: '/tmp/custom-lark-cli' }),
+                  defaultCli: resolveLarkCliBin({}),
                   cardFallback: buildCardDeliveryFailureFallback({
                     fallback_reason: 'boom',
                     card: {
@@ -204,6 +207,8 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertEqual("interactive", payload["requestBody"]["msg_type"])
             self.assertEqual("oc_demo", payload["requestBody"]["receive_id"])
             self.assertIsInstance(payload["requestBody"]["content"], str)
+            self.assertEqual("/tmp/custom-lark-cli", payload["explicitCli"])
+            self.assertIn("lark-cli", payload["defaultCli"])
             self.assertFalse(payload["missingTarget"]["ok"])
             self.assertTrue(payload["missingTarget"]["fallback_suppressed"])
             self.assertIn("card_delivery_failed", payload["cardFallback"])

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 export async function runCommand(command, options = {}) {
   const child = spawn(command[0], command.slice(1), {
@@ -20,7 +21,10 @@ export async function runCommand(command, options = {}) {
 
   const exitCode = await new Promise((resolveExit) => {
     child.on("close", resolveExit);
-    child.on("error", () => resolveExit(1));
+    child.on("error", (error) => {
+      stderrChunks.push(Buffer.from(String(error?.message || error || "spawn failed")));
+      resolveExit(1);
+    });
   });
   clearTimeout(timer);
   return {
@@ -49,7 +53,7 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
     };
   }
   const env = options.env || process.env;
-  const larkCli = env.LARK_CLI_BIN || "lark-cli";
+  const larkCli = resolveLarkCliBin(env);
   const larkAs = env.LARK_CLI_AS || "bot";
   const command = [larkCli];
   if (env.LARK_CLI_PROFILE) {
@@ -88,6 +92,18 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
     fallback_suppressed: !result.ok,
     fallback_reason: result.ok ? undefined : "openclaw_gateway_interactive_card_failed",
   };
+}
+
+export function resolveLarkCliBin(env = process.env) {
+  if (env.LARK_CLI_BIN) {
+    return env.LARK_CLI_BIN;
+  }
+  const candidates = [
+    "/opt/homebrew/bin/lark-cli",
+    "/usr/local/bin/lark-cli",
+    "lark-cli",
+  ];
+  return candidates.find((candidate) => candidate === "lark-cli" || existsSync(candidate)) || "lark-cli";
 }
 
 export function buildInteractiveCardRequestBody({ card, chatId, messageId, uuid }) {
