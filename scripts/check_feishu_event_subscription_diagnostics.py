@@ -140,7 +140,8 @@ def run_feishu_event_subscription_diagnostics(
         checks["target_bot_group_messages_readable"] = _check(bot_group_access_probe["ok"])
     has_schema_group_scope = _has_group_message_scope(scopes)
     has_enabled_group_scope = _has_group_message_scope(enabled_scopes)
-    has_group_scope = has_schema_group_scope or has_enabled_group_scope
+    has_target_group_access = bool(bot_group_access_probe and bot_group_access_probe["ok"])
+    has_group_scope = has_schema_group_scope or has_enabled_group_scope or has_target_group_access
     if require_group_message_scope:
         checks["message_schema_group_message_scope"] = _check(has_group_scope)
     warnings = []
@@ -152,6 +153,17 @@ def run_feishu_event_subscription_diagnostics(
                     "lark-cli event schema scopes still omit a group-message scope, but app enabled scopes "
                     f"include one of {', '.join(GROUP_MESSAGE_SCOPE_OPTIONS)}. Continue with live non-@ message capture, and keep "
                     "Feishu event-log verification as the final proof."
+                ),
+            }
+        )
+    elif not has_schema_group_scope and has_target_group_access:
+        warnings.append(
+            {
+                "id": "message_schema_scope_missing_but_target_group_readable",
+                "detail": (
+                    "lark-cli event schema and enabled scope metadata still omit a group-message scope, but "
+                    "bot identity can read recent messages in the target group. Continue with live non-@ "
+                    "message capture, and keep Feishu event-log verification as the final proof."
                 ),
             }
         )
@@ -219,6 +231,7 @@ def run_feishu_event_subscription_diagnostics(
             "has_group_message_scope": has_group_scope,
             "has_group_message_scope_from_schema": has_schema_group_scope,
             "has_group_message_scope_from_enabled_scopes": has_enabled_group_scope,
+            "has_group_message_access_from_target_probe": has_target_group_access,
         },
         "target_group_probe": bot_group_access_probe,
         "remediation": remediation,
@@ -299,10 +312,11 @@ def _remediation(
     if listener_conflict:
         steps.append("Stop the lark-cli event bus before using OpenClaw websocket as the planned single listener.")
     if not steps:
-        if has_enabled_group_scope and not has_schema_group_scope:
+        if (has_enabled_group_scope or bool(bot_group_access_probe and bot_group_access_probe["ok"])) and not has_schema_group_scope:
             steps.append(
                 "Enabled app scopes include group-message permission even though event schema "
-                "metadata is stale; continue with a real non-@ group text and preserve the single-listener log."
+                "metadata may be stale, or bot target-group access has been verified; continue with a real "
+                "non-@ group text and preserve the single-listener log."
             )
         else:
             steps.append(

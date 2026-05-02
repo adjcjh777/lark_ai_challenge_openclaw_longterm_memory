@@ -149,6 +149,31 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertTrue(result["target_group_probe"]["ok"])
         self.assertFalse(result["remediation"]["target_group_access_action_required"])
 
+    def test_target_chat_probe_can_satisfy_preflight_when_scope_metadata_is_stale(self) -> None:
+        result = run_feishu_event_subscription_diagnostics(
+            planned_listener="openclaw-websocket",
+            require_group_message_scope=True,
+            target_chat_id="oc_target_group",
+            runner=_runner(
+                status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
+                schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message:readonly"]},
+                bot_group_messages={"ok": True, "data": {"messages": []}},
+            ),
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["failed_checks"])
+        self.assertTrue(result["message_event_schema"]["has_group_message_scope"])
+        self.assertTrue(result["message_event_schema"]["has_group_message_access_from_target_probe"])
+        self.assertFalse(result["message_event_schema"]["has_group_message_scope_from_enabled_scopes"])
+        self.assertEqual(
+            ["message_schema_scope_missing_but_target_group_readable"],
+            [item["id"] for item in result["warnings"]],
+        )
+        self.assertFalse(result["remediation"]["requires_external_console_change"])
+
     def test_fails_when_lark_cli_bus_is_running_but_openclaw_is_planned_owner(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
             planned_listener="openclaw-websocket",
