@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from memory_engine.copilot.feishu_live import handle_copilot_message_event, invocation_from_event
@@ -211,6 +212,122 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("memory.prefetch", invocation.tool_name)
         self.assertEqual("natural_prefetch", invocation.reason)
         self.assertEqual(SCOPE, invocation.payload["scope"])
+
+    def test_first_class_feishu_commands_route_through_single_tool_entrypoint(self) -> None:
+        calls: list[tuple[str, dict[str, Any], object | None]] = []
+
+        def stub_handle_tool_request(tool_name: str, payload: dict[str, Any], *, service=None) -> dict[str, Any]:
+            calls.append((tool_name, payload, service))
+            self.assertIsNotNone(service)
+            permission = payload["current_context"]["permission"]
+            bridge = {
+                "entrypoint": "openclaw_tool",
+                "tool": {
+                    "memory.search": "fmc_memory_search",
+                    "memory.create_candidate": "fmc_memory_create_candidate",
+                    "memory.confirm": "fmc_memory_confirm",
+                    "memory.reject": "fmc_memory_reject",
+                    "memory.explain_versions": "fmc_memory_explain_versions",
+                    "memory.prefetch": "fmc_memory_prefetch",
+                    "heartbeat.review_due": "fmc_heartbeat_review_due",
+                }[tool_name],
+                "request_id": permission["request_id"],
+                "trace_id": permission["trace_id"],
+                "permission_decision": {
+                    "decision": "allow",
+                    "reason_code": "scope_access_granted",
+                    "requested_action": permission["requested_action"],
+                },
+            }
+            if tool_name == "memory.search":
+                return {
+                    "ok": True,
+                    "query": payload["query"],
+                    "scope": payload["scope"],
+                    "results": [],
+                    "trace": {"final_reason": "stubbed_single_entrypoint"},
+                    "bridge": bridge,
+                }
+            if tool_name == "memory.create_candidate":
+                return {
+                    "ok": True,
+                    "action": "created",
+                    "candidate_id": "cand_single_entrypoint",
+                    "candidate": {
+                        "status": "candidate",
+                        "subject": "single entrypoint",
+                        "current_value": payload["text"],
+                    },
+                    "risk_flags": [],
+                    "recommended_action": "review",
+                    "bridge": bridge,
+                }
+            if tool_name in {"memory.confirm", "memory.reject"}:
+                return {
+                    "ok": True,
+                    "candidate_id": payload["candidate_id"],
+                    "status": "active" if tool_name == "memory.confirm" else "rejected",
+                    "memory": {
+                        "status": "active" if tool_name == "memory.confirm" else "rejected",
+                        "current_value": "stubbed review result",
+                    },
+                    "bridge": bridge,
+                }
+            if tool_name == "memory.explain_versions":
+                return {
+                    "ok": True,
+                    "memory_id": payload["memory_id"],
+                    "active_version": {"value": "stubbed active value"},
+                    "versions": [],
+                    "explanation": "stubbed version chain",
+                    "bridge": bridge,
+                }
+            if tool_name == "memory.prefetch":
+                return {
+                    "ok": True,
+                    "tool": "memory.prefetch",
+                    "task": payload["task"],
+                    "context_pack": {
+                        "summary": "stubbed context pack",
+                        "relevant_memories": [],
+                        "raw_events_included": False,
+                        "stale_superseded_filtered": True,
+                    },
+                    "bridge": bridge,
+                }
+            if tool_name == "heartbeat.review_due":
+                return {"ok": True, "status": "dry_run", "reminders": [], "bridge": bridge}
+            raise AssertionError(f"unexpected tool routed through Feishu live entrypoint: {tool_name}")
+
+        cases = [
+            ("om_route_search", "/recall 部署参数", "memory.search"),
+            ("om_route_candidate", "/remember 决定：single entrypoint 必须保留。", "memory.create_candidate"),
+            ("om_route_confirm", "/confirm cand_single_entrypoint", "memory.confirm"),
+            ("om_route_reject", "/reject cand_single_entrypoint", "memory.reject"),
+            ("om_route_versions", "/versions mem_single_entrypoint", "memory.explain_versions"),
+            ("om_route_prefetch", "/prefetch 生成上线 checklist", "memory.prefetch"),
+            ("om_route_heartbeat", "/heartbeat", "heartbeat.review_due"),
+        ]
+
+        with patch("memory_engine.copilot.feishu_live.handle_tool_request", side_effect=stub_handle_tool_request):
+            for message_id, text, expected_tool in cases:
+                with self.subTest(expected_tool=expected_tool):
+                    event = message_event_from_payload(payload(message_id, text))
+                    self.assertIsNotNone(event)
+                    result = handle_copilot_message_event(
+                        self.conn,
+                        event,
+                        DryRunPublisher(),
+                        self.config,
+                        dry_run=True,
+                    )
+
+                    self.assertTrue(result["ok"])
+                    self.assertEqual(expected_tool, result["tool"])
+                    self.assertEqual(expected_tool, calls[-1][0])
+                    self.assertEqual("openclaw_tool", result["tool_result"]["bridge"]["entrypoint"])
+
+        self.assertEqual([expected for _, _, expected in cases], [tool for tool, _, _ in calls])
 
     def test_natural_owner_deadline_sentence_routes_to_candidate(self) -> None:
         result = self.handle("om_live_owner_deadline", "上线窗口固定为每周四下午，回滚负责人是程俊豪，截止周五中午。")
