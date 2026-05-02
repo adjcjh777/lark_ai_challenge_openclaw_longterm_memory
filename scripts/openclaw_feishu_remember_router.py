@@ -38,6 +38,7 @@ SCOPE = "project:feishu_ai_challenge"
 TENANT_ID = "tenant:demo"
 ORGANIZATION_ID = "org:demo"
 VISIBILITY = "team"
+REVIEW_INBOX_DELIVERY_LIMIT = 3
 
 ENTERPRISE_MEMORY_SIGNALS = (
     "记住",
@@ -581,7 +582,7 @@ def route_gateway_review_inbox(
     payload = {
         "scope": scope,
         "view": normalized_view,
-        "limit": 10,
+        "limit": REVIEW_INBOX_DELIVERY_LIMIT,
         "current_context": _gateway_current_context(
             text=text,
             message_id=message_id,

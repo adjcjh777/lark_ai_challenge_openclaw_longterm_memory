@@ -432,17 +432,12 @@ class LarkCliPublisher:
 
     def _idempotency_key(self, event: FeishuTextEvent) -> str:
         key = f"feishu-memory-{event.message_id}"
-        if len(key) <= 64:
+        if len(key) <= 50:
             return key
         digest = hashlib.sha1(event.message_id.encode("utf-8")).hexdigest()[:32]
         return f"feishu-memory-{digest}"
 
     def _direct_idempotency_key(self, event: FeishuTextEvent, target: str, kind: str) -> str:
-        base = self._idempotency_key(event)
-        digest = hashlib.sha1(f"{target}:{kind}".encode("utf-8")).hexdigest()[:12]
-        key = f"{base}-{digest}"
-        if len(key) <= 64:
-            return key
         event_digest = hashlib.sha1(f"{event.message_id}:{target}:{kind}".encode("utf-8")).hexdigest()[:32]
         return f"feishu-memory-{event_digest}"
 

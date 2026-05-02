@@ -237,9 +237,14 @@ def check_review_delivery_log_events(text: str, *, expected_reviewer_open_id: st
 
         result = _result_payload(payload)
         if result is None:
-            if event_type == "card.action.trigger":
+            handled_log_event = False
+            if event_type == "card.action.trigger" or _is_openclaw_card_action_trigger_log(payload):
                 summary["card_action_triggers_without_result"] += 1
-            else:
+                handled_log_event = True
+            if _is_openclaw_card_action_update_log(payload):
+                summary["card_action_update_results"] += 1
+                handled_log_event = True
+            if not handled_log_event:
                 summary["unsupported_payloads"] += 1
             continue
 
@@ -457,6 +462,8 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
                 return embedded
     numbered = _numbered_field_text(line)
     if numbered:
+        if "card-action intercept" in numbered:
+            return line
         parsed = _parse_json(numbered)
         if isinstance(parsed, dict):
             return parsed
@@ -548,6 +555,18 @@ def _is_card_action_update(result: dict[str, Any]) -> bool:
     )
 
 
+def _is_openclaw_card_action_trigger_log(payload: dict[str, Any]) -> bool:
+    text = _log_message_text(payload)
+    return (
+        "card-action intercept acknowledged immediately" in text
+        or "card-action intercept invalid JSON" in text
+    )
+
+
+def _is_openclaw_card_action_update_log(payload: dict[str, Any]) -> bool:
+    return "card-action intercept asynchronously updated original card via repo helper" in _log_message_text(payload)
+
+
 def _is_missing_token_fail_closed(result: dict[str, Any]) -> bool:
     publish = _publish(result)
     return (
@@ -579,6 +598,18 @@ def _card_has_memory_action(card: dict[str, Any]) -> bool:
             if isinstance(value, dict) and value.get("memory_engine_action"):
                 return True
     return False
+
+
+def _log_message_text(payload: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in ("log_message", "message", "raw_line", "payload", "data"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+    numbered = _numbered_field_text(payload)
+    if numbered:
+        parts.append(numbered)
+    return " ".join(parts)
 
 
 def _append_example(examples: list[dict[str, Any]], result: dict[str, Any], kind: str) -> None:

@@ -252,7 +252,21 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         key = publisher._idempotency_key(long_event)
 
-        self.assertLessEqual(len(key), 64)
+        self.assertLessEqual(len(key), 50)
+        self.assertTrue(key.startswith("feishu-memory-"))
+
+    def test_direct_idempotency_key_is_short_digest(self) -> None:
+        event = message_event_from_payload(text_payload("om_direct_key", "/review"))
+        self.assertIsNotNone(event)
+        publisher = LarkCliPublisher(self.config)
+
+        key = publisher._direct_idempotency_key(
+            event,
+            "ou_" + "x" * 40,
+            "card",
+        )
+
+        self.assertLessEqual(len(key), 50)
         self.assertTrue(key.startswith("feishu-memory-"))
 
     def test_ingest_card_buttons_only_target_candidate_rows(self) -> None:

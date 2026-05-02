@@ -162,16 +162,17 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
                 },
                 clear=False,
             ):
-                route_gateway_message(
-                    text="/remember 决定：OpenClaw gateway /review 应私聊投递审核卡片。",
-                    message_id="om_router_review_create",
-                    chat_id=CHAT_ID,
-                    sender_open_id=SENDER_OPEN_ID,
-                    chat_type="group",
-                    bot_mentioned=False,
-                    allowlist_chat_ids=[],
-                    db_path=str(db_path),
-                )
+                for index in range(5):
+                    route_gateway_message(
+                        text=f"/remember 决定：OpenClaw gateway /review 第 {index} 条候选应进入审核收件箱。",
+                        message_id=f"om_router_review_create_{index}",
+                        chat_id=CHAT_ID,
+                        sender_open_id=SENDER_OPEN_ID,
+                        chat_type="group",
+                        bot_mentioned=False,
+                        allowlist_chat_ids=[],
+                        db_path=str(db_path),
+                    )
                 result = route_gateway_message(
                     text="/review",
                     message_id="om_router_review_inbox",
@@ -187,6 +188,9 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("memory.review_inbox", result["tool"])
         self.assertEqual("openclaw_gateway_review_inbox", result["routing_reason"])
         self.assertEqual("private_review_dm", result["disposition"])
+        self.assertLessEqual(len(result["tool_result"]["items"]), 3)
+        action_blocks = [element for element in result["card"]["elements"] if element.get("tag") == "action"]
+        self.assertLessEqual(len(action_blocks), 3)
         self.assertEqual("dm", result["publish"]["delivery_mode"])
         self.assertEqual([SENDER_OPEN_ID], result["publish"]["targets"])
         self.assertEqual([SENDER_OPEN_ID], result["publish"]["card"]["open_ids"])

@@ -43,6 +43,7 @@ from .service import CopilotService
 from .tools import handle_tool_request
 
 DEFAULT_SCOPE = "project:feishu_ai_challenge"
+REVIEW_INBOX_DELIVERY_LIMIT = 3
 SOURCE_TYPE = "feishu_message"
 ENTRYPOINT = "feishu_test_group"
 EVENT_TYPES = "im.message.receive_v1,card.action.trigger"
@@ -619,7 +620,7 @@ def _review_inbox_invocation(
         {
             "scope": scope,
             "view": view,
-            "limit": 10,
+            "limit": REVIEW_INBOX_DELIVERY_LIMIT,
             "current_context": context,
         },
         argument,

@@ -174,6 +174,35 @@ class FeishuReviewDeliveryGateTest(unittest.TestCase):
         self.assertEqual(1, report["summary"]["private_review_dm_results"])
         self.assertEqual(1, report["summary"]["card_action_update_results"])
 
+    def test_log_gate_reads_openclaw_card_action_intercept_update_logs(self) -> None:
+        text = "\n".join(
+            [
+                json.dumps(_candidate_result(), ensure_ascii=False),
+                json.dumps(_review_dm_result(), ensure_ascii=False),
+                json.dumps(
+                    {
+                        "0": '{"subsystem":"gateway/channels/feishu"}',
+                        "1": "feishu[default]: card-action intercept acknowledged immediately; async repo helper started",
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "0": '{"subsystem":"gateway/channels/feishu"}',
+                        "1": "feishu[default]: card-action intercept asynchronously updated original card via repo helper",
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(_missing_token_result(), ensure_ascii=False),
+            ]
+        )
+
+        report = check_review_delivery_log_events(text)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual(1, report["summary"]["card_action_triggers_without_result"])
+        self.assertEqual(1, report["summary"]["card_action_update_results"])
+
 
 if __name__ == "__main__":
     unittest.main()
