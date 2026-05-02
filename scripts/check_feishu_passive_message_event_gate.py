@@ -190,7 +190,25 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
         if openclaw_payload:
             return openclaw_payload
         return {"log_message": message}
+    openclaw_payload = _openclaw_group_message_from_numbered_fields(line)
+    if openclaw_payload:
+        return openclaw_payload
     return line
+
+
+def _openclaw_group_message_from_numbered_fields(line: dict[str, Any]) -> dict[str, Any] | None:
+    # OpenClaw file logs emitted through logToFile/console can store message
+    # parts under JSON keys "0", "1", ... instead of a named message field.
+    parts: list[str] = []
+    for key in sorted((key for key in line.keys() if str(key).isdigit()), key=lambda value: int(str(value))):
+        value = line.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, dict):
+            parts.append(json.dumps(value, ensure_ascii=False, sort_keys=True))
+    if not parts:
+        return None
+    return _openclaw_group_message_payload(" ".join(parts), raw=line)
 
 
 def _openclaw_group_message_payload(message: str, *, raw: dict[str, Any]) -> dict[str, Any] | None:
