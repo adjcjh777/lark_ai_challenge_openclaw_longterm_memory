@@ -40,7 +40,7 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
                     },
                     "remediation": {
                         "requires_external_console_change": True,
-                        "required_scopes_any_of": ["im:message.group_msg:readonly", "im:message:readonly"],
+                        "required_scopes_any_of": ["im:message.group_msg:readonly"],
                     },
                 },
             )

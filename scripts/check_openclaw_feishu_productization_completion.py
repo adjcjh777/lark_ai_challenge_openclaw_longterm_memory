@@ -350,7 +350,7 @@ def _passive_group_message_item(
         evidence=evidence,
         next_step=(
             "Feishu event diagnostics show the app schema lacks group-message readonly scope. "
-            "Enable/verify im:message.group_msg:readonly or im:message:readonly for im.message.receive_v1, "
+            "Enable/verify im:message.group_msg:readonly for im.message.receive_v1, "
             "rerun diagnostics with --require-group-message-scope, then send a real non-@ group text."
         ),
     )
