@@ -31,6 +31,9 @@ const FEISHU_GROUP_ROUTER_COMMANDS = new Set([
   "prefetch",
   "memory_prefetch",
   "prefetch_memory",
+  "review",
+  "inbox",
+  "review_inbox",
   "enable_memory",
   "memory_on",
   "enable_group_memory",
@@ -212,6 +215,7 @@ function sanitizeRouteResult(result) {
     message_id: redactId(result.message_id),
     chat_id: redactId(result.chat_id),
     publish: sanitizePublish(result.publish),
+    card: sanitizeCard(result.card),
     tool_result: {
       ok: toolResult.ok,
       tool: toolResult.tool,
@@ -226,11 +230,53 @@ function sanitizePublish(publish) {
   if (!publish || typeof publish !== "object") {
     return {};
   }
+  const targets = Array.isArray(publish.targets) ? publish.targets.map(redactId) : undefined;
   return {
     ok: publish.ok,
     mode: publish.mode,
+    delivery_mode: publish.delivery_mode,
+    targets,
+    card: sanitizeCard(publish.card),
     suppressed: publish.suppressed,
   };
+}
+
+function sanitizeCard(card) {
+  if (!card || typeof card !== "object") {
+    return undefined;
+  }
+  const openIds = Array.isArray(card.open_ids) ? card.open_ids.map(redactId) : undefined;
+  const actionElements = sanitizeCardActionElements(card);
+  if (openIds || actionElements.length > 0) {
+    return {
+      open_ids: openIds,
+      elements: actionElements.length > 0 ? actionElements : undefined,
+    };
+  }
+  return undefined;
+}
+
+function sanitizeCardActionElements(card) {
+  const elements = Array.isArray(card.elements) ? card.elements : [];
+  const actionElements = [];
+  for (const element of elements) {
+    if (!element || typeof element !== "object" || element.tag !== "action" || !Array.isArray(element.actions)) {
+      continue;
+    }
+    const actions = [];
+    for (const action of element.actions) {
+      const value = action && typeof action === "object" && action.value && typeof action.value === "object"
+        ? action.value
+        : {};
+      if (value.memory_engine_action) {
+        actions.push({ value: { memory_engine_action: String(value.memory_engine_action) } });
+      }
+    }
+    if (actions.length > 0) {
+      actionElements.push({ tag: "action", actions });
+    }
+  }
+  return actionElements;
 }
 
 function sanitizeBridge(bridge) {

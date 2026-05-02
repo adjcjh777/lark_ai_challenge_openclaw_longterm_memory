@@ -28,8 +28,11 @@ from memory_engine.feishu_cards import (  # noqa: E402
     build_candidate_review_card,
     build_card_from_text,
     build_group_settings_card,
+    build_review_inbox_card,
 )
+from memory_engine.feishu_config import load_feishu_config  # noqa: E402
 from memory_engine.feishu_events import FeishuMessageEvent  # noqa: E402
+from memory_engine.feishu_publisher import DryRunPublisher, LarkCliPublisher  # noqa: E402
 
 SCOPE = "project:feishu_ai_challenge"
 TENANT_ID = "tenant:demo"
@@ -150,10 +153,26 @@ def route_remember_message(
     tool_result = handle_tool_request("memory.create_candidate", payload, service=service)
     if not tool_result.get("ok"):
         return {"ok": False, "tool_result": tool_result}
+    card = build_candidate_review_card(tool_result)
     return {
         "ok": True,
+        "tool": "memory.create_candidate",
+        "routing_reason": "explicit_remember",
+        "message_id": message_id,
+        "chat_id": chat_id,
         "tool_result": tool_result,
-        "card": build_candidate_review_card(tool_result),
+        "card": card,
+        "publish": {
+            "ok": True,
+            "dry_run": False,
+            "mode": "interactive",
+            "delivery_mode": "chat",
+            "reply_to": message_id,
+            "chat_id": chat_id,
+            "text": "",
+            "card": card,
+            "suppressed": False,
+        },
     }
 
 
@@ -202,6 +221,15 @@ def route_gateway_message(
             chat_id=chat_id,
             sender_open_id=sender_open_id,
             task=_argument,
+            db_path=db_path,
+        )
+    if command_name in {"review", "inbox", "review_inbox"}:
+        return route_gateway_review_inbox(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            view=_argument,
             db_path=db_path,
         )
     if command_name in {"enable_memory", "memory_on", "enable_group_memory"}:
@@ -539,6 +567,95 @@ def route_gateway_memory_prefetch(
     }
 
 
+def route_gateway_review_inbox(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    view: str,
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    normalized_view = _review_inbox_view(view)
+    payload = {
+        "scope": scope,
+        "view": normalized_view,
+        "limit": 10,
+        "current_context": _gateway_current_context(
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action="memory.review_inbox",
+            intent="review_inbox",
+            thread_topic=normalized_view,
+            scope=scope,
+        ),
+    }
+    service = CopilotService(db_path=db_path)
+    tool_result = handle_tool_request("memory.review_inbox", payload, service=service)
+    reply = _format_review_inbox_result(tool_result)
+    card = build_review_inbox_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
+    event = FeishuMessageEvent(
+        message_id=message_id,
+        chat_id=chat_id,
+        chat_type="group",
+        sender_id=sender_open_id,
+        sender_type="user",
+        message_type="text",
+        text=text,
+        create_time=0,
+        raw={},
+        ignore_reason=None,
+        bot_mentioned=True,
+    )
+    publisher = DryRunPublisher() if _review_delivery_dry_run() else LarkCliPublisher(load_feishu_config())
+    publish = publisher.publish(event, reply, card)
+    return {
+        "ok": bool(tool_result.get("ok", True)),
+        "tool": "memory.review_inbox",
+        "message_id": message_id,
+        "chat_id": chat_id,
+        "routing_reason": "openclaw_gateway_review_inbox",
+        "source_entrypoint": "openclaw_gateway_live",
+        "tool_result": tool_result,
+        "card": card,
+        "disposition": "private_review_dm",
+        "message_disposition": {
+            "memory_path": "review_inbox",
+            "candidate_path": "read_only",
+            "reason_code": "openclaw_gateway_review_inbox",
+        },
+        "publish": publish,
+        "input_text": text,
+    }
+
+
+def _review_inbox_view(argument: str) -> str:
+    value = (argument or "").strip().lower()
+    aliases = {
+        "": "mine",
+        "mine": "mine",
+        "我": "mine",
+        "我的": "mine",
+        "all": "all",
+        "全部": "all",
+        "conflict": "conflicts",
+        "conflicts": "conflicts",
+        "冲突": "conflicts",
+        "high_risk": "high_risk",
+        "risk": "high_risk",
+        "高风险": "high_risk",
+    }
+    return aliases.get(value, "mine")
+
+
+def _review_delivery_dry_run() -> bool:
+    value = os.environ.get("OPENCLAW_FEISHU_REVIEW_DRY_RUN", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def _is_explicit_remember(text: str) -> bool:
     lowered = text.lower()
     return lowered == "/remember" or lowered.startswith("/remember ")
@@ -664,6 +781,26 @@ def _format_memory_prefetch_result(result: dict[str, Any]) -> str:
         lines.append(f"摘要：{summary}")
     lines.extend(_bridge_trace_lines(bridge))
     return "\n".join(lines)
+
+
+def _format_review_inbox_result(result: dict[str, Any]) -> str:
+    items = result.get("items") if isinstance(result.get("items"), list) else []
+    if not result.get("ok", True):
+        error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        return "\n".join(
+            [
+                "Memory Copilot 审核收件箱不可用。",
+                f"原因：{error.get('reason_code') or error.get('code') or 'unknown'}",
+            ]
+        )
+    return "\n".join(
+        [
+            "Memory Copilot 已生成审核收件箱。",
+            "投递方式：私聊审核卡片",
+            f"待审核数量：{len(items)}",
+            f"view：{result.get('view') or 'mine'}",
+        ]
+    )
 
 
 def _bridge_trace_lines(bridge: dict[str, Any]) -> list[str]:

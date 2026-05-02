@@ -634,6 +634,13 @@ def _parse_json(text: str) -> Any:
 
 
 def _parse_embedded_json(text: str) -> Any:
+    route_marker = "feishu-memory-copilot route result "
+    marker_index = text.find(route_marker)
+    if marker_index >= 0:
+        route_json = text[marker_index + len(route_marker) :].strip()
+        parsed = _parse_json(route_json)
+        if isinstance(parsed, dict):
+            return parsed
     start = text.find("{")
     end = text.rfind("}")
     if start < 0 or end <= start:

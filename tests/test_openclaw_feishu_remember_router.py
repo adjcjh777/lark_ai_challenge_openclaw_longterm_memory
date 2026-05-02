@@ -57,9 +57,12 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
             )
 
         self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
         self.assertEqual("fmc_memory_create_candidate", result["tool_result"]["bridge"]["tool"])
         self.assertEqual("candidate", result["tool_result"]["candidate"]["status"])
+        self.assertEqual("interactive", result["publish"]["mode"])
         card = result["card"]
+        self.assertEqual(card, result["publish"]["card"])
         action_blocks = [element for element in card["elements"] if element.get("tag") == "action"]
         self.assertEqual(1, len(action_blocks))
         labels = [action["text"]["content"] for action in action_blocks[0]["actions"]]
@@ -143,6 +146,51 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("fmc_memory_prefetch", bridge["tool"])
         self.assertEqual("allow", bridge["permission_decision"]["decision"])
         self.assertEqual("openclaw_gateway_live", bridge["permission_decision"]["source_entrypoint"])
+
+    def test_gateway_review_command_routes_to_private_review_inbox_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "COPILOT_FEISHU_REVIEWER_OPEN_IDS": SENDER_OPEN_ID,
+                    "OPENCLAW_FEISHU_REVIEW_DRY_RUN": "1",
+                },
+                clear=False,
+            ):
+                route_gateway_message(
+                    text="/remember 决定：OpenClaw gateway /review 应私聊投递审核卡片。",
+                    message_id="om_router_review_create",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=False,
+                    allowlist_chat_ids=[],
+                    db_path=str(db_path),
+                )
+                result = route_gateway_message(
+                    text="/review",
+                    message_id="om_router_review_inbox",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=False,
+                    allowlist_chat_ids=[],
+                    db_path=str(db_path),
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.review_inbox", result["tool"])
+        self.assertEqual("openclaw_gateway_review_inbox", result["routing_reason"])
+        self.assertEqual("private_review_dm", result["disposition"])
+        self.assertEqual("dm", result["publish"]["delivery_mode"])
+        self.assertEqual([SENDER_OPEN_ID], result["publish"]["targets"])
+        self.assertEqual([SENDER_OPEN_ID], result["publish"]["card"]["open_ids"])
+        self.assertEqual("review_inbox", result["message_disposition"]["memory_path"])
 
     def test_gateway_unmentioned_allowlist_group_message_creates_silent_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
