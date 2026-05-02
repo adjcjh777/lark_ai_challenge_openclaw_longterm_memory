@@ -104,6 +104,27 @@ class FeishuPermissionNegativeGateTest(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
 
+    def test_reads_numbered_openclaw_file_log_fields(self) -> None:
+        embedded = json.dumps(_denied_result(), ensure_ascii=False)
+        line = json.dumps(
+            {
+                "0": "2026-05-02T12:00:00+08:00 info",
+                "1": f"feishu[default]: group policy result {embedded}",
+                "_meta": {"date": "2026-05-02T04:00:00Z"},
+            },
+            ensure_ascii=False,
+        )
+
+        report = check_permission_negative_events(
+            line,
+            expected_chat_id=CHAT_ID,
+            expected_actor_id=ACTOR_ID,
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("non_reviewer_enable_memory_denied", report["reason"])
+        self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
+
     def test_reads_copilot_listener_raw_line_attempt_wrappers(self) -> None:
         line = json.dumps(
             {

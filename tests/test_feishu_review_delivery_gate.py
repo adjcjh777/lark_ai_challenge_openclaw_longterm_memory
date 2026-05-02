@@ -154,6 +154,26 @@ class FeishuReviewDeliveryGateTest(unittest.TestCase):
         self.assertFalse(report["ok"])
         self.assertEqual(1, report["summary"]["candidate_review_cards"])
 
+    def test_log_gate_reads_numbered_openclaw_file_log_fields(self) -> None:
+        text = "\n".join(
+            json.dumps(
+                {
+                    "0": "2026-05-02T12:00:00+08:00 info",
+                    "1": f"feishu[default]: review result {json.dumps(item, ensure_ascii=False)}",
+                    "_meta": {"date": "2026-05-02T04:00:00Z"},
+                },
+                ensure_ascii=False,
+            )
+            for item in [_candidate_result(), _review_dm_result(), _card_update_result(), _missing_token_result()]
+        )
+
+        report = check_review_delivery_log_events(text)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("review_delivery_e2e_evidence_seen", report["reason"])
+        self.assertEqual(1, report["summary"]["private_review_dm_results"])
+        self.assertEqual(1, report["summary"]["card_action_update_results"])
+
 
 if __name__ == "__main__":
     unittest.main()

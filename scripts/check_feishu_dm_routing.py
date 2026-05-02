@@ -376,6 +376,14 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
             embedded = _parse_embedded_json(value)
             if isinstance(embedded, dict):
                 return embedded
+    numbered = _numbered_field_text(line)
+    if numbered:
+        parsed = _parse_json(numbered)
+        if isinstance(parsed, dict):
+            return parsed
+        embedded = _parse_embedded_json(numbered)
+        if isinstance(embedded, dict):
+            return embedded
     return line
 
 
@@ -399,6 +407,15 @@ def _result_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
                 nested = _result_payload(parsed)
                 if nested is not None:
                     return nested
+    numbered = _numbered_field_text(payload)
+    if numbered:
+        parsed = _parse_json(numbered)
+        if not isinstance(parsed, dict):
+            parsed = _parse_embedded_json(numbered)
+        if isinstance(parsed, dict):
+            nested = _result_payload(parsed)
+            if nested is not None:
+                return nested
     return None
 
 
@@ -471,6 +488,17 @@ def _parse_embedded_json(text: str) -> Any:
     if start < 0 or end <= start:
         return None
     return _parse_json(text[start : end + 1])
+
+
+def _numbered_field_text(payload: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in sorted((key for key in payload.keys() if str(key).isdigit()), key=lambda value: int(str(value))):
+        value = payload.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, dict):
+            parts.append(json.dumps(value, ensure_ascii=False, sort_keys=True))
+    return " ".join(parts)
 
 
 def _redacted_id(value: str) -> str:

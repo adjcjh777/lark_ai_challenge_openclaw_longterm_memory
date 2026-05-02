@@ -136,6 +136,40 @@ class FeishuDMRoutingTest(unittest.TestCase):
         self.assertEqual(1, report["summary"]["first_class_fmc_results"])
         self.assertEqual(1, report["summary"]["denied_first_class_results"])
 
+    def test_live_routing_event_gate_reads_numbered_openclaw_file_log_fields(self) -> None:
+        embedded = json.dumps(
+            {
+                "result": {
+                    "ok": True,
+                    "message_id": "om_search_live",
+                    "tool": "memory.search",
+                    "bridge": {
+                        "entrypoint": "openclaw_tool",
+                        "tool": "fmc_memory_search",
+                        "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+                        "request_id": "req_search_live",
+                        "trace_id": "trace_search_live",
+                    },
+                    "publish": {"mode": "reply_text"},
+                }
+            },
+            ensure_ascii=False,
+        )
+        text = json.dumps(
+            {
+                "0": "2026-05-02T12:00:00+08:00 info",
+                "1": f"feishu[default]: first-class routing result {embedded}",
+                "_meta": {"date": "2026-05-02T04:00:00Z"},
+            },
+            ensure_ascii=False,
+        )
+
+        report = check_live_routing_events(text, required_tools=("fmc_memory_search",))
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("first_class_live_routing_evidence_seen", report["reason"])
+        self.assertEqual({"fmc_memory_search": 1}, report["first_class_tools"])
+
     def test_plugin_tools_registered_with_fmc_names(self) -> None:
         """Verify plugin tools use fmc_xxx naming convention."""
         registrations = native_tool_registrations()
