@@ -96,3 +96,10 @@ ollama ps
 - 指派给：`程俊豪`
 - 任务截止日期：`2026-04-29`
 - 记录 ID：`recvi9npnND5b8`
+
+2026-05-02 追加同步并读回确认：
+
+- 记录 ID：`recvi9npnND5b8`
+- commit：`68212a6 Enforce card-only Feishu replies`
+- 看板备注已追加：live 启动脚本默认并强制 `FEISHU_CARD_MODE=interactive`；interactive card 失败时 suppress 纯文本 fallback；OpenClaw gateway search / prefetch / settings / policy publish 返回 interactive card 且 `text=""`。
+- 看板备注保留边界：sandbox/pre-production，不宣称生产级 card action 长期运行。
