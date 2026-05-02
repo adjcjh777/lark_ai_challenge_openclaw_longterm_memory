@@ -37,12 +37,18 @@ def main() -> int:
         action="store_true",
         help="Fail if the message event schema does not list a group-message readonly scope.",
     )
+    parser.add_argument(
+        "--target-chat-id",
+        default="",
+        help="Optional oc_ chat_id for a read-only bot identity group-message access probe.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     report = run_feishu_event_subscription_diagnostics(
         planned_listener=args.planned_listener,
         require_group_message_scope=args.require_group_message_scope,
+        target_chat_id=args.target_chat_id or None,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
@@ -55,6 +61,7 @@ def run_feishu_event_subscription_diagnostics(
     *,
     planned_listener: str = "openclaw-websocket",
     require_group_message_scope: bool = False,
+    target_chat_id: str | None = None,
     runner: Runner | None = None,
 ) -> dict[str, Any]:
     run = runner or _run_lark_cli
@@ -62,11 +69,31 @@ def run_feishu_event_subscription_diagnostics(
     list_result = run(["lark-cli", "event", "list", "--json"])
     schema_result = run(["lark-cli", "event", "schema", MESSAGE_EVENT_KEY, "--json"])
     auth_scopes_result = run(["lark-cli", "auth", "scopes", "--format", "json"])
+    bot_group_messages_result = None
+    if target_chat_id:
+        bot_group_messages_result = run(
+            [
+                "lark-cli",
+                "im",
+                "+chat-messages-list",
+                "--as",
+                "bot",
+                "--chat-id",
+                target_chat_id,
+                "--page-size",
+                "1",
+                "--sort",
+                "desc",
+                "--format",
+                "json",
+            ]
+        )
 
     status_payload = _parse_json_object(status_result.get("stdout", ""))
     list_payload = _parse_json_object(list_result.get("stdout", ""))
     schema_payload = _parse_json_object(schema_result.get("stdout", ""))
     auth_scopes_payload = _parse_json_object(auth_scopes_result.get("stdout", ""))
+    bot_group_messages_payload = _parse_command_json_payload(bot_group_messages_result)
     apps = (
         status_payload.get("apps")
         if isinstance(status_payload, dict) and isinstance(status_payload.get("apps"), list)
@@ -103,6 +130,13 @@ def run_feishu_event_subscription_diagnostics(
         "message_schema_bot_auth": _check("bot" in auth_types),
         "listener_mode_consistent": _check(listener_ok),
     }
+    bot_group_access_probe = _bot_group_access_probe(
+        target_chat_id=target_chat_id,
+        result=bot_group_messages_result,
+        payload=bot_group_messages_payload,
+    )
+    if bot_group_access_probe:
+        checks["target_bot_group_messages_readable"] = _check(bot_group_access_probe["ok"])
     has_schema_group_scope = _has_group_message_scope(scopes)
     has_enabled_group_scope = _has_group_message_scope(enabled_scopes)
     has_group_scope = has_schema_group_scope or has_enabled_group_scope
@@ -131,6 +165,17 @@ def run_feishu_event_subscription_diagnostics(
                 ),
             }
         )
+    if bot_group_access_probe and not bot_group_access_probe["ok"]:
+        warnings.append(
+            {
+                "id": "target_bot_group_messages_unreadable",
+                "detail": (
+                    "Bot identity cannot read recent messages in the target group. This usually means "
+                    "im:message.group_msg:readonly is not enabled/published for the app or the app needs "
+                    "to be reinstalled in the tenant."
+                ),
+            }
+        )
     if planned_listener == "openclaw-websocket" and active_buses:
         warnings.append(
             {
@@ -146,6 +191,7 @@ def run_feishu_event_subscription_diagnostics(
         has_schema_group_scope=has_schema_group_scope,
         has_enabled_group_scope=has_enabled_group_scope,
         active_buses=active_buses,
+        bot_group_access_probe=bot_group_access_probe,
     )
     failed = sorted(name for name, check in checks.items() if check["status"] != "pass")
     return {
@@ -173,6 +219,7 @@ def run_feishu_event_subscription_diagnostics(
             "has_group_message_scope_from_schema": has_schema_group_scope,
             "has_group_message_scope_from_enabled_scopes": has_enabled_group_scope,
         },
+        "target_group_probe": bot_group_access_probe,
         "remediation": remediation,
         "next_step": "" if not failed else remediation["summary"],
     }
@@ -231,19 +278,21 @@ def _remediation(
     has_schema_group_scope: bool,
     has_enabled_group_scope: bool,
     active_buses: list[dict[str, Any]],
+    bot_group_access_probe: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current_scopes = [str(scope) for scope in scopes]
     current_enabled_scopes = [str(scope) for scope in enabled_scopes]
     missing_group_scope = not has_group_scope
     listener_conflict = planned_listener == "openclaw-websocket" and bool(active_buses)
+    target_group_unreadable = bool(bot_group_access_probe and not bot_group_access_probe["ok"])
     steps: list[str] = []
-    if missing_group_scope:
+    if missing_group_scope or target_group_unreadable:
         steps.extend(
             [
                 "In the Feishu/Lark developer console for this same bot app, enable or verify one group-message readonly permission.",
                 f"Acceptable scope options: {', '.join(GROUP_MESSAGE_SCOPE_OPTIONS)}.",
                 f"Keep event subscription for {MESSAGE_EVENT_KEY} enabled for bot auth, then publish or reauthorize the app if the console requires it.",
-                "Rerun this diagnostic with --require-group-message-scope before sending another non-@ group test message.",
+                "Rerun this diagnostic with --require-group-message-scope and --target-chat-id before sending another non-@ group test message.",
             ]
         )
     if listener_conflict:
@@ -251,7 +300,7 @@ def _remediation(
     if not steps:
         if has_enabled_group_scope and not has_schema_group_scope:
             steps.append(
-                "Enabled app scopes include group-message/broad message readonly permission even though event schema "
+                "Enabled app scopes include group-message readonly permission even though event schema "
                 "metadata is stale; continue with a real non-@ group text and preserve the single-listener log."
             )
         else:
@@ -259,7 +308,12 @@ def _remediation(
                 "Event subscription prerequisites look ready; send a real non-@ group text and preserve the single-listener log."
             )
 
-    if missing_group_scope:
+    if target_group_unreadable:
+        summary = (
+            "Bot identity cannot read target group messages; fix im:message.group_msg:readonly app permissions, "
+            "publish/reinstall if needed, then retest passive group delivery."
+        )
+    elif missing_group_scope:
         summary = (
             "Feishu message event schema lacks group-message readonly scope; fix app permissions/event subscription, "
             "rerun diagnostics, then retest passive group delivery."
@@ -269,7 +323,8 @@ def _remediation(
     else:
         summary = ""
     return {
-        "requires_external_console_change": missing_group_scope,
+        "requires_external_console_change": missing_group_scope or target_group_unreadable,
+        "target_group_access_action_required": target_group_unreadable,
         "required_scopes_any_of": list(GROUP_MESSAGE_SCOPE_OPTIONS),
         "current_scopes": current_scopes,
         "enabled_scopes": _relevant_message_scopes(current_enabled_scopes),
@@ -277,6 +332,31 @@ def _remediation(
         "single_listener_action_required": listener_conflict,
         "steps": steps,
         "summary": summary,
+    }
+
+
+def _bot_group_access_probe(
+    *,
+    target_chat_id: str | None,
+    result: dict[str, Any] | None,
+    payload: Any,
+) -> dict[str, Any] | None:
+    if not target_chat_id:
+        return None
+    ok = bool(result and result.get("returncode") == 0 and isinstance(payload, dict))
+    error = payload.get("error") if isinstance(payload, dict) and isinstance(payload.get("error"), dict) else {}
+    return {
+        "ok": ok,
+        "target_chat_id": _redact_id(target_chat_id),
+        "identity": "bot",
+        "returncode": result.get("returncode") if result else None,
+        "error_code": error.get("code"),
+        "error_type": error.get("type"),
+        "message": (
+            "Bot identity can read recent target group messages."
+            if ok
+            else str(error.get("message") or "Bot identity cannot read recent target group messages.")
+        ),
     }
 
 
@@ -315,6 +395,12 @@ def _parse_json_object(text: str) -> Any:
             continue
         return value
     return None
+
+
+def _parse_command_json_payload(result: dict[str, Any] | None) -> Any:
+    if not result:
+        return None
+    return _parse_json_object(str(result.get("stdout") or "")) or _parse_json_object(str(result.get("stderr") or ""))
 
 
 def _check(ok: bool) -> dict[str, str]:

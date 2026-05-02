@@ -121,6 +121,7 @@ def prepare_live_evidence_run(
         }
     event_subscription = _event_subscription_check(
         planned_listener=planned_listener,
+        controlled_chat_id=controlled_chat_id,
         diagnostics=event_subscription_diagnostics,
     )
     checks = {
@@ -310,6 +311,7 @@ def _manual_steps(
     planned_listener: PlannedListener,
 ) -> list[dict[str, Any]]:
     chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
+    target_chat_probe = f" --target-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
     cognee_arg = f" --cognee-long-run-evidence {cognee_long_run_evidence}" if cognee_long_run_evidence else ""
     event_diagnostics_arg = f" --feishu-event-diagnostics {diagnostic_paths['feishu_event_diagnostics']}"
@@ -324,7 +326,7 @@ def _manual_steps(
             "requires_ready_to_capture_live_logs": False,
             "instruction": (
                 "python3 scripts/check_feishu_event_subscription_diagnostics.py "
-                f"--planned-listener {planned_listener} --require-group-message-scope --json "
+                f"--planned-listener {planned_listener} --require-group-message-scope{target_chat_probe} --json "
                 f"> {diagnostic_paths['feishu_event_diagnostics']}"
             ),
         },
@@ -431,12 +433,14 @@ def _manual_steps(
 def _event_subscription_check(
     *,
     planned_listener: PlannedListener,
+    controlled_chat_id: str,
     diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     try:
         report = diagnostics or run_feishu_event_subscription_diagnostics(
             planned_listener=planned_listener,
             require_group_message_scope=True,
+            target_chat_id=controlled_chat_id or None,
         )
     except Exception as exc:  # pragma: no cover - defensive shell/environment boundary.
         return {

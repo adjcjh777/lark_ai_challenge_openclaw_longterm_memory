@@ -54,6 +54,8 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
             ["openclaw-gateway-unknown"], [item["kind"] for item in result["checks"]["single_listener"]["active"]]
         )
         self.assertEqual([], result["blocking_failures"])
+        preflight_step = next(step for step in result["manual_steps"] if step["phase"] == "preflight")
+        self.assertIn("--target-chat-id oc_controlled", preflight_step["instruction"])
 
     def test_preflight_blocks_repo_lark_listener_when_openclaw_is_running(self) -> None:
         result = prepare_live_evidence_run(

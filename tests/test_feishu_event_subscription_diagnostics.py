@@ -91,6 +91,49 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
             [item["id"] for item in result["warnings"]],
         )
 
+    def test_target_chat_probe_fails_when_bot_cannot_read_group_messages(self) -> None:
+        result = run_feishu_event_subscription_diagnostics(
+            planned_listener="openclaw-websocket",
+            require_group_message_scope=True,
+            target_chat_id="oc_target_group",
+            runner=_runner(
+                status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
+                schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg:readonly"]},
+                bot_group_messages={
+                    "ok": False,
+                    "error": {"type": "permission", "code": 230027, "message": "Permission denied [230027]"},
+                },
+                bot_group_messages_returncode=1,
+            ),
+        )
+
+        self.assertFalse(result["ok"], result)
+        self.assertIn("target_bot_group_messages_readable", result["failed_checks"])
+        self.assertEqual(230027, result["target_group_probe"]["error_code"])
+        self.assertTrue(result["remediation"]["target_group_access_action_required"])
+        self.assertIn("target_bot_group_messages_unreadable", [item["id"] for item in result["warnings"]])
+
+    def test_target_chat_probe_passes_when_bot_can_read_group_messages(self) -> None:
+        result = run_feishu_event_subscription_diagnostics(
+            planned_listener="openclaw-websocket",
+            require_group_message_scope=True,
+            target_chat_id="oc_target_group",
+            runner=_runner(
+                status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
+                schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg:readonly"]},
+                bot_group_messages={"ok": True, "data": {"messages": []}},
+            ),
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["failed_checks"])
+        self.assertTrue(result["target_group_probe"]["ok"])
+        self.assertFalse(result["remediation"]["target_group_access_action_required"])
+
     def test_fails_when_lark_cli_bus_is_running_but_openclaw_is_planned_owner(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
             planned_listener="openclaw-websocket",
@@ -119,20 +162,36 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertIn("message_schema_requires_console_event", result["failed_checks"])
 
 
-def _runner(*, status: object, event_list: object, schema: object, auth_scopes: object | None = None):
+def _runner(
+    *,
+    status: object,
+    event_list: object,
+    schema: object,
+    auth_scopes: object | None = None,
+    bot_group_messages: object | None = None,
+    bot_group_messages_returncode: int = 0,
+):
     def run(command: list[str]) -> dict[str, object]:
         joined = " ".join(command)
         if "event status" in joined:
             payload = status
+            returncode = 0
         elif "event list" in joined:
             payload = event_list
+            returncode = 0
         elif "event schema" in joined:
             payload = schema
+            returncode = 0
         elif "auth scopes" in joined:
             payload = auth_scopes or {}
+            returncode = 0
+        elif "+chat-messages-list" in joined:
+            payload = bot_group_messages or {}
+            returncode = bot_group_messages_returncode
         else:
             payload = {}
-        return {"returncode": 0, "stdout": json.dumps(payload), "stderr": ""}
+            returncode = 0
+        return {"returncode": returncode, "stdout": json.dumps(payload), "stderr": ""}
 
     return run
 

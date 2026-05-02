@@ -38,6 +38,11 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
                         "scopes": ["im:message.p2p_msg:readonly"],
                         "has_group_message_scope": False,
                     },
+                    "target_group_probe": {
+                        "ok": False,
+                        "error_code": 230027,
+                        "target_chat_id": "oc_t...chat",
+                    },
                     "remediation": {
                         "requires_external_console_change": True,
                         "required_scopes_any_of": ["im:message.group_msg:readonly"],
@@ -61,6 +66,7 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         passive_item = next(entry for entry in report["items"] if entry["name"] == "non_at_group_message_live_delivery")
         diagnostic_evidence = passive_item["evidence"]["event_subscription_diagnostics"]
         self.assertEqual(["im:message.p2p_msg:readonly"], diagnostic_evidence["scopes"])
+        self.assertEqual(230027, diagnostic_evidence["target_group_probe"]["error_code"])
         self.assertTrue(diagnostic_evidence["remediation"]["requires_external_console_change"])
 
     def test_audit_fails_single_listener_when_event_diagnostics_show_conflict(self) -> None:
