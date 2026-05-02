@@ -549,6 +549,8 @@ def _cognee_sampler_status_item(*, local_sync_gate: bool, sampler_status: dict[s
             "successful_sample_count": sampler_status.get("successful_sample_count"),
             "embedding_window_hours": sampler_status.get("embedding_window_hours"),
             "estimated_ready_at": sampler_status.get("estimated_ready_at"),
+            "next_expected_sample_at": sampler_status.get("next_expected_sample_at"),
+            "final_scheduled_sample_at": sampler_status.get("final_scheduled_sample_at"),
             "failed_checks": sampler_status.get("failed_checks"),
             "warning_checks": sampler_status.get("warning_checks"),
             "collector_command_template": sampler_status.get("collector_command_template"),

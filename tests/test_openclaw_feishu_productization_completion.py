@@ -117,6 +117,8 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
                     "successful_sample_count": 1,
                     "embedding_window_hours": 0.0,
                     "estimated_ready_at": "2026-05-02T16:50:51+00:00",
+                    "next_expected_sample_at": "2026-05-02T04:50:51+00:00",
+                    "final_scheduled_sample_at": "2026-05-02T16:50:51+00:00",
                     "failed_checks": [],
                     "warning_checks": ["embedding_successful_samples", "embedding_window"],
                     "next_step": "Leave the sampler running until it collects more successful samples.",
@@ -140,6 +142,8 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         sampler_evidence = cognee_item["evidence"]["sampler_status"]
         self.assertEqual(1, sampler_evidence["successful_sample_count"])
         self.assertEqual("2026-05-02T16:50:51+00:00", sampler_evidence["estimated_ready_at"])
+        self.assertEqual("2026-05-02T04:50:51+00:00", sampler_evidence["next_expected_sample_at"])
+        self.assertEqual("2026-05-02T16:50:51+00:00", sampler_evidence["final_scheduled_sample_at"])
         self.assertIn("collect_cognee_embedding_long_run_evidence.py", sampler_evidence["collector_command_template"])
 
     def test_audit_uses_sampler_collector_command_when_sampler_ready(self) -> None:

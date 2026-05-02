@@ -20,6 +20,10 @@ class CogneeEmbeddingSamplerStatusTest(unittest.TestCase):
                 embedding_sample_log=sample_log,
                 pid_file=pid_file,
                 process_alive=lambda pid: pid == 12345,
+                process_command=lambda _pid: (
+                    "python scripts/sample_cognee_embedding_health.py --sample-count 3 "
+                    "--sample-interval-seconds 43200 --output samples.ndjson --json"
+                ),
             )
 
         self.assertTrue(result["ok"], result)
@@ -28,6 +32,16 @@ class CogneeEmbeddingSamplerStatusTest(unittest.TestCase):
         self.assertEqual("warning", result["checks"]["embedding_successful_samples"]["status"])
         self.assertEqual("warning", result["checks"]["embedding_window"]["status"])
         self.assertIn("more successful samples", result["next_step"])
+        self.assertEqual(
+            {
+                "sample_count": "3",
+                "sample_interval_seconds": "43200",
+                "output": "samples.ndjson",
+            },
+            result["sampler_schedule"],
+        )
+        self.assertEqual("2026-05-01T12:00:00+00:00", result["next_expected_sample_at"])
+        self.assertEqual("2026-05-02T00:00:00+00:00", result["final_scheduled_sample_at"])
         self.assertIn("collect_cognee_embedding_long_run_evidence.py", result["collector_command_template"])
         self.assertIn(str(sample_log), result["collector_command_template"])
 
