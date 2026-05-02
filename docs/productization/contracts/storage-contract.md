@@ -111,7 +111,9 @@ Phase 1 建议新增候选表，或在现有 memories 中用 `status=candidate` 
 | `schema_version` | integer | 是 | 当前存储 schema version。 |
 | `source_visibility_revoked_at` | integer | 否 | 来源撤权时间。 |
 
-唯一约束建议从：
+2026-05-02 补充：新建 SQLite schema 已把唯一约束升级为 tenant / organization aware，防止不同租户在同一 scope/type/subject 下互相撞库。
+
+唯一约束已从：
 
 ```text
 UNIQUE(scope_type, scope_id, type, normalized_subject)

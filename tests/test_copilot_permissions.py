@@ -333,6 +333,118 @@ class CopilotPermissionTest(unittest.TestCase):
         self.assertEqual("allow", reject_events[-1]["permission_decision"])
         self.assertEqual("candidate_rejected", reject_events[-1]["event_type"])
 
+    def test_cross_tenant_reviewer_cannot_confirm_candidate_by_id(self) -> None:
+        with cross_tenant_service() as fixture:
+            denied = handle_tool_request(
+                "memory.confirm",
+                {
+                    "candidate_id": fixture.candidate_id,
+                    "scope": SCOPE,
+                    "actor_id": "u_reviewer_b",
+                    "current_context": permission_context(
+                        action="memory.confirm",
+                        user_id="u_reviewer_b",
+                        tenant_id="tenant:b",
+                        organization_id="org:b",
+                        context_tenant_id="tenant:b",
+                        context_organization_id="org:b",
+                    ),
+                },
+                service=fixture.service,
+            )
+            row = fixture.conn.execute(
+                "SELECT tenant_id, organization_id, status, updated_by FROM memories WHERE id = ?",
+                (fixture.candidate_id,),
+            ).fetchone()
+            audit_events = fixture.audit_events("memory.confirm")
+
+        self.assert_permission_denied(denied, "tenant_mismatch")
+        self.assertNotIn("跨租户确认隔离", str(denied))
+        self.assertEqual("tenant:a", row["tenant_id"])
+        self.assertEqual("org:a", row["organization_id"])
+        self.assertEqual("candidate", row["status"])
+        self.assertNotEqual("u_reviewer_b", row["updated_by"])
+        self.assertEqual("deny", audit_events[-1]["permission_decision"])
+        self.assertEqual("tenant_mismatch", audit_events[-1]["reason_code"])
+
+    def test_cross_tenant_explain_versions_does_not_leak_current_value(self) -> None:
+        with cross_tenant_service() as fixture:
+            confirmed = handle_tool_request(
+                "memory.confirm",
+                {
+                    "candidate_id": fixture.candidate_id,
+                    "scope": SCOPE,
+                    "actor_id": "u_reviewer_a",
+                    "current_context": permission_context(
+                        action="memory.confirm",
+                        user_id="u_reviewer_a",
+                        tenant_id="tenant:a",
+                        organization_id="org:a",
+                        context_tenant_id="tenant:a",
+                        context_organization_id="org:a",
+                    ),
+                },
+                service=fixture.service,
+            )
+            denied = handle_tool_request(
+                "memory.explain_versions",
+                {
+                    "memory_id": fixture.candidate_id,
+                    "scope": SCOPE,
+                    "current_context": permission_context(
+                        action="memory.explain_versions",
+                        user_id="u_reviewer_b",
+                        tenant_id="tenant:b",
+                        organization_id="org:b",
+                        context_tenant_id="tenant:b",
+                        context_organization_id="org:b",
+                    ),
+                },
+                service=fixture.service,
+            )
+
+        self.assertTrue(confirmed["ok"], confirmed)
+        self.assert_permission_denied(denied, "tenant_mismatch")
+        self.assertNotIn("跨租户确认隔离", str(denied))
+        self.assertNotIn("versions", denied)
+
+    def test_same_scope_subject_can_exist_in_different_tenants(self) -> None:
+        with tempfile.NamedTemporaryFile(prefix="copilot_perm_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            service = CopilotService(repository=MemoryRepository(conn), auto_init_cognee=False)
+            first = create_candidate_for_tenant(
+                service,
+                text="决定：跨租户统一主题使用相同发布窗口。",
+                source_id="msg_same_subject_a",
+                tenant_id="tenant:a",
+                organization_id="org:a",
+                actor_id="u_a",
+            )
+            second = create_candidate_for_tenant(
+                service,
+                text="决定：跨租户统一主题使用相同发布窗口。",
+                source_id="msg_same_subject_b",
+                tenant_id="tenant:b",
+                organization_id="org:b",
+                actor_id="u_b",
+            )
+            rows = conn.execute(
+                """
+                SELECT tenant_id, organization_id, normalized_subject
+                FROM memories
+                WHERE normalized_subject = ?
+                ORDER BY tenant_id
+                """,
+                (conn.execute("SELECT normalized_subject FROM memories LIMIT 1").fetchone()["normalized_subject"],),
+            ).fetchall()
+            conn.close()
+
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        self.assertEqual(2, len(rows))
+        self.assertEqual(["tenant:a", "tenant:b"], [row["tenant_id"] for row in rows])
+
     def test_explain_versions_missing_permission_context_fails_closed(self) -> None:
         response = handle_tool_request(
             "memory.explain_versions",
@@ -477,6 +589,76 @@ class candidate_service:
             (action,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+class cross_tenant_service:
+    def __enter__(self) -> "cross_tenant_service":
+        self.tmp = tempfile.NamedTemporaryFile(prefix="copilot_cross_tenant_", suffix=".sqlite")
+        self.conn = connect(self.tmp.name)
+        init_db(self.conn)
+        self.service = CopilotService(repository=MemoryRepository(self.conn), auto_init_cognee=False)
+        created = create_candidate_for_tenant(
+            self.service,
+            text="决定：跨租户确认隔离测试 region 用 cn-east。",
+            source_id="msg_tenant_a",
+            tenant_id="tenant:a",
+            organization_id="org:a",
+            actor_id="u_author_a",
+        )
+        if not created.get("ok"):
+            raise AssertionError(created)
+        self.candidate_id = str(created["candidate_id"])
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.conn.close()
+        self.tmp.close()
+
+    def audit_events(self, action: str) -> list[dict[str, object]]:
+        rows = self.conn.execute(
+            """
+            SELECT event_type, action, actor_id, permission_decision, reason_code
+            FROM memory_audit_events
+            WHERE action = ?
+            ORDER BY created_at, audit_id
+            """,
+            (action,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def create_candidate_for_tenant(
+    service: CopilotService,
+    *,
+    text: str,
+    source_id: str,
+    tenant_id: str,
+    organization_id: str,
+    actor_id: str,
+) -> dict[str, object]:
+    return handle_tool_request(
+        "memory.create_candidate",
+        {
+            "text": text,
+            "scope": SCOPE,
+            "source": {
+                "source_type": "unit_test",
+                "source_id": source_id,
+                "actor_id": actor_id,
+                "created_at": "2026-05-07T10:00:00+08:00",
+                "quote": text,
+            },
+            "current_context": permission_context(
+                action="memory.create_candidate",
+                user_id=actor_id,
+                tenant_id=tenant_id,
+                organization_id=organization_id,
+                context_tenant_id=tenant_id,
+                context_organization_id=organization_id,
+            ),
+        },
+        service=service,
+    )
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@
 - 已修复：`confirm/reject` 不再只依赖 `actor_id` 字符串；可从 permission actor 派生 actor。
 - 已修复：数据库层 tenant / organization / visibility migration、audit table、Feishu review surface、OpenClaw live bridge。
 - 已修复：真实飞书 live sandbox 能把 actor、tenant、organization、chat、visibility 映射进 `current_context.permission`，非 demo tenant/org 不再被硬编码拒绝。
+- 2026-05-02 补充：`memory.confirm`、`memory.reject`、`memory.undo_review`、`memory.explain_versions` 这类按 ID 操作的入口已增加目标对象级 tenant / organization / scope / visibility 校验；不能只凭请求里的 scope 和 reviewer 角色跨租户操作或解释别人的 memory/version。
 - 仍未完成：真实 Feishu DM 到本项目 first-class `fmc_*` / `memory.*` tool routing 的 live E2E 证据和 productized live 长期运行。
 
 ## 2. Permission Context

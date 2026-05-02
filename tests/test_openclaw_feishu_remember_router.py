@@ -287,6 +287,40 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertIsNone(result["card"])
         self.assertEqual("chat_not_allowlisted", result["message_disposition"]["reason_code"])
 
+    def test_gateway_enabled_group_policy_allows_passive_message_without_allowlist(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            with patch.dict("os.environ", {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": SENDER_OPEN_ID}, clear=False):
+                enabled = route_gateway_group_policy(
+                    text="/enable_memory",
+                    message_id="om_router_policy_enable_for_passive",
+                    chat_id="oc_policy_enabled_not_allowlisted",
+                    sender_open_id=SENDER_OPEN_ID,
+                    action="enable",
+                    db_path=str(db_path),
+                )
+                result = route_gateway_message(
+                    text="决定：启用群策略后非 allowlist 群也要静默进入候选，负责人是程俊豪。",
+                    message_id="om_router_policy_passive",
+                    chat_id="oc_policy_enabled_not_allowlisted",
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=False,
+                    allowlist_chat_ids=[],
+                    db_path=str(db_path),
+                )
+
+        self.assertTrue(enabled["tool_result"]["ok"], enabled)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("passive_candidate_probe", result["routing_reason"])
+        self.assertEqual("candidate", result["tool_result"]["candidate"]["status"])
+        self.assertEqual("silent_no_reply", result["publish"]["mode"])
+
     def test_gateway_group_settings_returns_pending_policy_card_without_live_listener(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"

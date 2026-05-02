@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from memory_engine.db import connect, init_db
+from memory_engine.models import parse_scope
 from memory_engine.repository import MemoryRepository
 
 from .cognee_adapter import CogneeAdapterNotConfigured, CogneeMemoryAdapter
@@ -23,6 +24,7 @@ from .review_policy import evaluate_review_policy
 from .schemas import (
     WORKING_CONTEXT_FIELDS,
     ConfirmRequest,
+    CopilotError,
     CreateCandidateRequest,
     ExplainVersionsRequest,
     HeartbeatReviewDueRequest,
@@ -630,7 +632,28 @@ class CopilotService:
     ) -> dict[str, object] | None:
         permission_error = check_scope_access(scope, current_context, action=action)
         if permission_error is None:
-            return None
+            permission = _parse_permission(current_context.get("permission") if isinstance(current_context, dict) else None)
+            target_error = self._target_permission_error(
+                action,
+                scope,
+                permission,
+                target_id=target_id or candidate_id or memory_id,
+            )
+            if target_error is None:
+                return None
+            response = target_error.to_response()
+            self._record_audit(
+                action,
+                scope,
+                current_context,
+                response,
+                target_type=target_type,
+                target_id=target_id,
+                memory_id=memory_id,
+                candidate_id=candidate_id,
+                event_type="permission_denied",
+            )
+            return response
         response = permission_error.to_response()
         self._record_audit(
             action,
@@ -644,6 +667,69 @@ class CopilotService:
             event_type="permission_denied",
         )
         return response
+
+    def _target_permission_error(
+        self,
+        action: str,
+        scope: str,
+        permission: PermissionContext | None,
+        *,
+        target_id: str | None,
+    ) -> CopilotError | None:
+        if permission is None or not target_id:
+            return None
+        target = _target_memory_context(self._repository(), target_id)
+        if target is None:
+            return None
+
+        parsed_scope = parse_scope(scope)
+        if target["scope_type"] != parsed_scope.scope_type or target["scope_id"] != parsed_scope.scope_id:
+            return _target_permission_error(
+                "scope_mismatch",
+                "target memory scope does not match requested scope",
+                action=action,
+                permission=permission,
+                requested_scope=scope,
+                target_scope=f"{target['scope_type']}:{target['scope_id']}",
+                target_id=target_id,
+            )
+        if target["tenant_id"] != permission.actor.tenant_id:
+            return _target_permission_error(
+                "tenant_mismatch",
+                "actor tenant cannot access target memory",
+                action=action,
+                permission=permission,
+                target_tenant_id=target["tenant_id"],
+                target_id=target_id,
+            )
+        if target["organization_id"] != permission.actor.organization_id:
+            return _target_permission_error(
+                "organization_mismatch",
+                "actor organization cannot access target memory",
+                action=action,
+                permission=permission,
+                target_organization_id=target["organization_id"],
+                target_id=target_id,
+            )
+
+        visibility = str(target.get("visibility_policy") or "team")
+        roles = {role.strip().lower() for role in permission.actor.roles}
+        actor_id = permission.actor.primary_id()
+        owner_ids = {
+            str(value)
+            for value in (target.get("owner_id"), target.get("created_by"), target.get("updated_by"))
+            if value
+        }
+        if visibility == "private" and actor_id not in owner_ids and not roles.intersection({"reviewer", "admin"}):
+            return _target_permission_error(
+                "visibility_private_non_owner",
+                "private target memory requires owner or reviewer access",
+                action=action,
+                permission=permission,
+                target_visibility=visibility,
+                target_id=target_id,
+            )
+        return None
 
     def _record_audit(
         self,
@@ -879,6 +965,71 @@ def _parse_permission(permission_payload: Any) -> PermissionContext | None:
         return PermissionContext.from_payload(permission_payload)
     except ValidationError:
         return None
+
+
+def _target_memory_context(repo: MemoryRepository, target_id: str) -> dict[str, Any] | None:
+    memory = repo.conn.execute(
+        """
+        SELECT id AS memory_id,
+               tenant_id,
+               organization_id,
+               scope_type,
+               scope_id,
+               visibility_policy,
+               owner_id,
+               created_by,
+               updated_by
+        FROM memories
+        WHERE id = ?
+        """,
+        (target_id,),
+    ).fetchone()
+    if memory is not None:
+        return dict(memory)
+
+    version = repo.conn.execute(
+        """
+        SELECT m.id AS memory_id,
+               m.tenant_id,
+               m.organization_id,
+               m.scope_type,
+               m.scope_id,
+               m.visibility_policy,
+               m.owner_id,
+               m.created_by,
+               mv.created_by AS updated_by
+        FROM memory_versions mv
+        JOIN memories m ON m.id = mv.memory_id
+        WHERE mv.id = ?
+        """,
+        (target_id,),
+    ).fetchone()
+    return dict(version) if version is not None else None
+
+
+def _target_permission_error(
+    reason_code: str,
+    message: str,
+    *,
+    action: str,
+    permission: PermissionContext,
+    **details: Any,
+) -> CopilotError:
+    return CopilotError(
+        "permission_denied",
+        message,
+        details={
+            "reason_code": reason_code,
+            "action": action,
+            "request_id": permission.request_id,
+            "trace_id": permission.trace_id,
+            "tenant_id": permission.actor.tenant_id,
+            "organization_id": permission.actor.organization_id,
+            "visible_fields": [],
+            "redacted_fields": ["current_value", "summary", "evidence"],
+            **details,
+        },
+    )
 
 
 def _audit_actor(permission_payload: Any, permission: PermissionContext | None) -> dict[str, Any]:

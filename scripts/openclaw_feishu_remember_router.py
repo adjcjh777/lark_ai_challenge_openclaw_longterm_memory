@@ -268,7 +268,14 @@ def route_gateway_message(
             reason_code="not_passive_group_message",
         )
 
+    group_policy: dict[str, Any] | None = None
     if not _chat_allowed(chat_id, allowlist_chat_ids):
+        group_policy = _gateway_group_policy_for_chat(
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            db_path=db_path,
+        )
+    if not (_chat_allowed(chat_id, allowlist_chat_ids) or group_policy_allows_passive_memory(group_policy)):
         return _ignored_result(
             message_id=message_id,
             chat_id=chat_id,
@@ -655,6 +662,27 @@ def _review_inbox_view(argument: str) -> str:
 def _review_delivery_dry_run() -> bool:
     value = os.environ.get("OPENCLAW_FEISHU_REVIEW_DRY_RUN", "").strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def _gateway_group_policy_for_chat(
+    *,
+    chat_id: str,
+    sender_open_id: str,
+    db_path: str | None,
+    scope: str = SCOPE,
+) -> dict[str, Any] | None:
+    load_local_env_files(root=ROOT, override=True)
+    tenant_id, organization_id, visibility = _feishu_identity()
+    with _open_conn(db_path) as conn:
+        return ensure_group_policy(
+            conn,
+            chat_id=chat_id,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            scope=scope,
+            visibility_policy=visibility,
+            actor_id=sender_open_id or "unknown_feishu_actor",
+        )
 
 
 def _is_explicit_remember(text: str) -> bool:

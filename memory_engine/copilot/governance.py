@@ -492,8 +492,8 @@ class CopilotGovernance:
         ts = now_ms()
         with self.repository.conn:
             self.repository.conn.execute(
-                "UPDATE memories SET status = 'active', updated_at = ? WHERE id = ?",
-                (ts, memory["id"]),
+                "UPDATE memories SET status = 'active', updated_by = ?, updated_at = ? WHERE id = ?",
+                (request.actor_id, ts, memory["id"]),
             )
             self.repository.conn.execute(
                 "UPDATE memory_versions SET status = 'active' WHERE id = ?",
@@ -538,10 +538,19 @@ class CopilotGovernance:
                     source_event_id = ?,
                     active_version_id = ?,
                     status = 'active',
+                    updated_by = ?,
                     updated_at = ?
                 WHERE id = ?
                 """,
-                (version["value"], version["reason"], version["source_event_id"], version["id"], ts, memory["id"]),
+                (
+                    version["value"],
+                    version["reason"],
+                    version["source_event_id"],
+                    version["id"],
+                    request.actor_id,
+                    ts,
+                    memory["id"],
+                ),
             )
         response = self._status_response(
             "confirmed",

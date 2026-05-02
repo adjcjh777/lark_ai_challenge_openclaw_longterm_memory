@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS memories (
   last_recalled_at INTEGER,
   recall_count INTEGER NOT NULL DEFAULT 0,
   source_visibility_revoked_at INTEGER,
-  UNIQUE(scope_type, scope_id, type, normalized_subject)
+  UNIQUE(tenant_id, organization_id, scope_type, scope_id, type, normalized_subject)
 );
 
 CREATE TABLE IF NOT EXISTS memory_versions (
@@ -212,7 +212,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_scope_status
   ON memories(scope_type, scope_id, status);
 
 CREATE INDEX IF NOT EXISTS idx_memories_subject
-  ON memories(scope_type, scope_id, type, normalized_subject);
+  ON memories(tenant_id, organization_id, scope_type, scope_id, type, normalized_subject);
 
 CREATE INDEX IF NOT EXISTS idx_versions_memory_status
   ON memory_versions(memory_id, status);
