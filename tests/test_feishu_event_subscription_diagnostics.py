@@ -47,6 +47,28 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertIn("message_schema_group_message_scope", result["failed_checks"])
         self.assertIn("group-message readonly scope", result["next_step"])
 
+    def test_enabled_app_scope_can_satisfy_group_message_preflight_when_schema_scope_is_stale(self) -> None:
+        result = run_feishu_event_subscription_diagnostics(
+            planned_listener="openclaw-websocket",
+            require_group_message_scope=True,
+            runner=_runner(
+                status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
+                schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message:readonly"]},
+            ),
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["failed_checks"])
+        self.assertFalse(result["message_event_schema"]["has_group_message_scope_from_schema"])
+        self.assertTrue(result["message_event_schema"]["has_group_message_scope_from_enabled_scopes"])
+        self.assertIn("im:message:readonly", result["remediation"]["enabled_scopes"])
+        self.assertEqual(
+            ["message_schema_scope_missing_but_enabled_scope_present"],
+            [item["id"] for item in result["warnings"]],
+        )
+
     def test_fails_when_lark_cli_bus_is_running_but_openclaw_is_planned_owner(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
             planned_listener="openclaw-websocket",
@@ -75,7 +97,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertIn("message_schema_requires_console_event", result["failed_checks"])
 
 
-def _runner(*, status: object, event_list: object, schema: object):
+def _runner(*, status: object, event_list: object, schema: object, auth_scopes: object | None = None):
     def run(command: list[str]) -> dict[str, object]:
         joined = " ".join(command)
         if "event status" in joined:
@@ -84,6 +106,8 @@ def _runner(*, status: object, event_list: object, schema: object):
             payload = event_list
         elif "event schema" in joined:
             payload = schema
+        elif "auth scopes" in joined:
+            payload = auth_scopes or {}
         else:
             payload = {}
         return {"returncode": 0, "stdout": json.dumps(payload), "stderr": ""}

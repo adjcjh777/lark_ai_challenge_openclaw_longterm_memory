@@ -61,10 +61,12 @@ def run_feishu_event_subscription_diagnostics(
     status_result = run(["lark-cli", "event", "status", "--json"])
     list_result = run(["lark-cli", "event", "list", "--json"])
     schema_result = run(["lark-cli", "event", "schema", MESSAGE_EVENT_KEY, "--json"])
+    auth_scopes_result = run(["lark-cli", "auth", "scopes", "--format", "json"])
 
     status_payload = _parse_json_object(status_result.get("stdout", ""))
     list_payload = _parse_json_object(list_result.get("stdout", ""))
     schema_payload = _parse_json_object(schema_result.get("stdout", ""))
+    auth_scopes_payload = _parse_json_object(auth_scopes_result.get("stdout", ""))
     apps = (
         status_payload.get("apps")
         if isinstance(status_payload, dict) and isinstance(status_payload.get("apps"), list)
@@ -77,6 +79,7 @@ def run_feishu_event_subscription_diagnostics(
         if isinstance(schema_payload, dict) and isinstance(schema_payload.get("scopes"), list)
         else []
     )
+    enabled_scopes = _enabled_scopes(auth_scopes_payload)
     required_events = (
         schema_payload.get("required_console_events")
         if isinstance(schema_payload, dict) and isinstance(schema_payload.get("required_console_events"), list)
@@ -93,21 +96,38 @@ def run_feishu_event_subscription_diagnostics(
         "event_list_readable": _check(list_result.get("returncode") == 0 and bool(event_keys)),
         "message_event_registered": _check(MESSAGE_EVENT_KEY in event_keys),
         "message_schema_readable": _check(schema_result.get("returncode") == 0 and isinstance(schema_payload, dict)),
+        "auth_scopes_readable": _check(
+            auth_scopes_result.get("returncode") == 0 and isinstance(auth_scopes_payload, dict)
+        ),
         "message_schema_requires_console_event": _check(MESSAGE_EVENT_KEY in required_events),
         "message_schema_bot_auth": _check("bot" in auth_types),
         "listener_mode_consistent": _check(listener_ok),
     }
-    has_group_scope = _has_group_message_scope(scopes)
+    has_schema_group_scope = _has_group_message_scope(scopes)
+    has_enabled_group_scope = _has_group_message_scope(enabled_scopes)
+    has_group_scope = has_schema_group_scope or has_enabled_group_scope
     if require_group_message_scope:
         checks["message_schema_group_message_scope"] = _check(has_group_scope)
     warnings = []
-    if not has_group_scope:
+    if not has_schema_group_scope and has_enabled_group_scope:
+        warnings.append(
+            {
+                "id": "message_schema_scope_missing_but_enabled_scope_present",
+                "detail": (
+                    "lark-cli event schema scopes still omit group-message readonly scope, but app enabled scopes "
+                    "include a broad message readonly scope. Continue with live non-@ message capture, and keep "
+                    "Feishu event-log verification as the final proof."
+                ),
+            }
+        )
+    elif not has_group_scope:
         warnings.append(
             {
                 "id": "message_schema_scope_does_not_list_group_msg_readonly",
                 "detail": (
-                    "lark-cli schema scopes do not list im:message.group_msg:readonly; verify Feishu console scopes "
-                    "and event subscription if non-@ group messages still do not arrive."
+                    "Neither lark-cli event schema scopes nor enabled app scopes list im:message.group_msg:readonly "
+                    "or im:message:readonly; verify Feishu console scopes and event subscription if non-@ group "
+                    "messages still do not arrive."
                 ),
             }
         )
@@ -121,7 +141,10 @@ def run_feishu_event_subscription_diagnostics(
     remediation = _remediation(
         planned_listener=planned_listener,
         scopes=scopes,
+        enabled_scopes=enabled_scopes,
         has_group_scope=has_group_scope,
+        has_schema_group_scope=has_schema_group_scope,
+        has_enabled_group_scope=has_enabled_group_scope,
         active_buses=active_buses,
     )
     failed = sorted(name for name, check in checks.items() if check["status"] != "pass")
@@ -144,8 +167,11 @@ def run_feishu_event_subscription_diagnostics(
             "key": MESSAGE_EVENT_KEY,
             "auth_types": auth_types,
             "scopes": scopes,
+            "enabled_scopes": _relevant_message_scopes(enabled_scopes),
             "required_console_events": required_events,
             "has_group_message_scope": has_group_scope,
+            "has_group_message_scope_from_schema": has_schema_group_scope,
+            "has_group_message_scope_from_enabled_scopes": has_enabled_group_scope,
         },
         "remediation": remediation,
         "next_step": "" if not failed else remediation["summary"],
@@ -200,10 +226,14 @@ def _remediation(
     *,
     planned_listener: str,
     scopes: list[Any],
+    enabled_scopes: list[Any],
     has_group_scope: bool,
+    has_schema_group_scope: bool,
+    has_enabled_group_scope: bool,
     active_buses: list[dict[str, Any]],
 ) -> dict[str, Any]:
     current_scopes = [str(scope) for scope in scopes]
+    current_enabled_scopes = [str(scope) for scope in enabled_scopes]
     missing_group_scope = not has_group_scope
     listener_conflict = planned_listener == "openclaw-websocket" and bool(active_buses)
     steps: list[str] = []
@@ -219,9 +249,15 @@ def _remediation(
     if listener_conflict:
         steps.append("Stop the lark-cli event bus before using OpenClaw websocket as the planned single listener.")
     if not steps:
-        steps.append(
-            "Event subscription prerequisites look ready; send a real non-@ group text and preserve the single-listener log."
-        )
+        if has_enabled_group_scope and not has_schema_group_scope:
+            steps.append(
+                "Enabled app scopes include group-message/broad message readonly permission even though event schema "
+                "metadata is stale; continue with a real non-@ group text and preserve the single-listener log."
+            )
+        else:
+            steps.append(
+                "Event subscription prerequisites look ready; send a real non-@ group text and preserve the single-listener log."
+            )
 
     if missing_group_scope:
         summary = (
@@ -236,11 +272,32 @@ def _remediation(
         "requires_external_console_change": missing_group_scope,
         "required_scopes_any_of": list(GROUP_MESSAGE_SCOPE_OPTIONS),
         "current_scopes": current_scopes,
+        "enabled_scopes": _relevant_message_scopes(current_enabled_scopes),
         "message_event_key": MESSAGE_EVENT_KEY,
         "single_listener_action_required": listener_conflict,
         "steps": steps,
         "summary": summary,
     }
+
+
+def _enabled_scopes(payload: Any) -> list[Any]:
+    if not isinstance(payload, dict):
+        return []
+    scopes: list[Any] = []
+    for key in ("tenantScopes", "userScopes", "appScopes", "scopes", "granted"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            scopes.extend(value)
+    return scopes
+
+
+def _relevant_message_scopes(scopes: list[Any]) -> list[str]:
+    relevant = []
+    for scope in scopes:
+        text = str(scope)
+        if text.startswith("im:message"):
+            relevant.append(text)
+    return sorted(set(relevant))
 
 
 def _parse_json_object(text: str) -> Any:
