@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 MESSAGE_EVENT_KEY = "im.message.receive_v1"
-GROUP_MESSAGE_SCOPE_OPTIONS = ("im:message.group_msg:readonly", "im:message:readonly")
+GROUP_MESSAGE_SCOPE_OPTIONS = ("im:message.group_msg:readonly",)
 BOUNDARY = (
     "feishu_event_subscription_diagnostics_only; read-only lark-cli event status/list/schema checks, "
     "does not start a listener or prove live passive group delivery"
@@ -115,7 +115,7 @@ def run_feishu_event_subscription_diagnostics(
                 "id": "message_schema_scope_missing_but_enabled_scope_present",
                 "detail": (
                     "lark-cli event schema scopes still omit group-message readonly scope, but app enabled scopes "
-                    "include a broad message readonly scope. Continue with live non-@ message capture, and keep "
+                    "include im:message.group_msg:readonly. Continue with live non-@ message capture, and keep "
                     "Feishu event-log verification as the final proof."
                 ),
             }
@@ -125,9 +125,9 @@ def run_feishu_event_subscription_diagnostics(
             {
                 "id": "message_schema_scope_does_not_list_group_msg_readonly",
                 "detail": (
-                    "Neither lark-cli event schema scopes nor enabled app scopes list im:message.group_msg:readonly "
-                    "or im:message:readonly; verify Feishu console scopes and event subscription if non-@ group "
-                    "messages still do not arrive."
+                    "Neither lark-cli event schema scopes nor enabled app scopes list im:message.group_msg:readonly. "
+                    "Broad im:message:readonly or user get_as_user scopes are not sufficient for bot-owned passive "
+                    "group delivery in this live gate."
                 ),
             }
         )
@@ -219,7 +219,7 @@ def _listener_status_ok(*, planned_listener: str, active_buses: list[dict[str, A
 
 
 def _has_group_message_scope(scopes: list[Any]) -> bool:
-    return any("group_msg" in str(scope) or str(scope) == "im:message:readonly" for scope in scopes)
+    return any(str(scope) == "im:message.group_msg:readonly" for scope in scopes)
 
 
 def _remediation(
