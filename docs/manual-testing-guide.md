@@ -243,7 +243,7 @@ python3 scripts/check_feishu_event_subscription_diagnostics.py \
   --json
 ```
 
-该诊断只调用 `lark-cli event status/list/schema`，不会执行 `event consume`，不会消费同一个 bot。真实非 @ 群消息扩样必须带 `--require-group-message-scope`；如果返回 `message_schema_group_message_scope=fail`，例如 schema scopes 只列出 `im:message.p2p_msg:readonly`，先去飞书开发者后台启用/确认 `im:message.group_msg:readonly` 以及 `im.message.receive_v1` 事件订阅，不要继续发送 live 证据消息。泛化的 `im:message:readonly` 或 `im:message.group_msg:get_as_user` 不能替代 bot 身份下的 group message readonly live gate。
+该诊断只调用 `lark-cli event status/list/schema`，不会执行 `event consume`，不会消费同一个 bot。真实非 @ 群消息扩样必须带 `--require-group-message-scope`；如果返回 `message_schema_group_message_scope=fail`，例如 schema scopes 只列出 `im:message.p2p_msg:readonly`，先去飞书开发者后台启用/确认 `im:message.group_msg`（官方“获取群组中所有消息（敏感权限）”；历史/离线兼容名为 `im:message.group_msg:readonly`）以及 `im.message.receive_v1` 事件订阅，不要继续发送 live 证据消息。泛化的 `im:message:readonly` 或 `im:message.group_msg:get_as_user` 不能替代 bot 身份下的 group message live gate。
 - 当前测试群已通过 reviewer/admin `/enable_memory` 启用群策略，或你只是做事件投递诊断并明确不创建 candidate。
 - 不要在消息里 `@Bot`。
 

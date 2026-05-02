@@ -185,7 +185,7 @@ def _missing_group_scope_diagnostics() -> dict[str, object]:
         },
         "remediation": {
             "requires_external_console_change": True,
-            "required_scopes_any_of": ["im:message.group_msg:readonly"],
+            "required_scopes_any_of": ["im:message.group_msg", "im:message.group_msg:readonly"],
         },
     }
 

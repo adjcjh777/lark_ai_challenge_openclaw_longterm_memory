@@ -22,7 +22,7 @@ def _event_diagnostics(
         "warnings": warning_items,
         "remediation": {
             "steps": [
-                "Enable im:message.group_msg:readonly in Feishu console.",
+                "Enable im:message.group_msg in Feishu console.",
                 "Rerun diagnostics before sending another non-@ group test message.",
             ]
         },
@@ -88,7 +88,7 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertFalse(result["ready_to_capture_live_logs"])
         self.assertEqual("fail", result["checks"]["event_subscription"]["status"])
         self.assertEqual(["event_subscription"], result["blocking_failures"])
-        self.assertIn("Enable im:message.group_msg:readonly", "\n".join(result["blocking_resolution_steps"]))
+        self.assertIn("Enable im:message.group_msg", "\n".join(result["blocking_resolution_steps"]))
 
     def test_preflight_emits_packet_and_completion_commands_without_sending_messages(self) -> None:
         with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
@@ -101,7 +101,7 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
                     failed_checks=["message_schema_group_message_scope"],
                     warnings=[
                         {
-                            "id": "message_schema_scope_does_not_list_group_msg_readonly",
+                            "id": "message_schema_scope_does_not_list_group_msg",
                             "detail": "scope should be verified in Feishu console",
                         }
                     ],

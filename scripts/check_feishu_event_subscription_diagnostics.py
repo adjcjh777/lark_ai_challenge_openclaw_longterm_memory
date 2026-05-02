@@ -10,7 +10,8 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 MESSAGE_EVENT_KEY = "im.message.receive_v1"
-GROUP_MESSAGE_SCOPE_OPTIONS = ("im:message.group_msg:readonly",)
+GROUP_MESSAGE_SCOPE_OPTIONS = ("im:message.group_msg", "im:message.group_msg:readonly")
+PRIMARY_GROUP_MESSAGE_SCOPE = GROUP_MESSAGE_SCOPE_OPTIONS[0]
 BOUNDARY = (
     "feishu_event_subscription_diagnostics_only; read-only lark-cli event status/list/schema checks, "
     "does not start a listener or prove live passive group delivery"
@@ -35,7 +36,7 @@ def main() -> int:
     parser.add_argument(
         "--require-group-message-scope",
         action="store_true",
-        help="Fail if the message event schema does not list a group-message readonly scope.",
+        help="Fail if the message event schema or enabled app scopes do not list a group-message scope.",
     )
     parser.add_argument(
         "--target-chat-id",
@@ -148,8 +149,8 @@ def run_feishu_event_subscription_diagnostics(
             {
                 "id": "message_schema_scope_missing_but_enabled_scope_present",
                 "detail": (
-                    "lark-cli event schema scopes still omit group-message readonly scope, but app enabled scopes "
-                    "include im:message.group_msg:readonly. Continue with live non-@ message capture, and keep "
+                    "lark-cli event schema scopes still omit a group-message scope, but app enabled scopes "
+                    f"include one of {', '.join(GROUP_MESSAGE_SCOPE_OPTIONS)}. Continue with live non-@ message capture, and keep "
                     "Feishu event-log verification as the final proof."
                 ),
             }
@@ -157,9 +158,9 @@ def run_feishu_event_subscription_diagnostics(
     elif not has_group_scope:
         warnings.append(
             {
-                "id": "message_schema_scope_does_not_list_group_msg_readonly",
+                "id": "message_schema_scope_does_not_list_group_msg",
                 "detail": (
-                    "Neither lark-cli event schema scopes nor enabled app scopes list im:message.group_msg:readonly. "
+                    f"Neither lark-cli event schema scopes nor enabled app scopes list one of {', '.join(GROUP_MESSAGE_SCOPE_OPTIONS)}. "
                     "Broad im:message:readonly or user get_as_user scopes are not sufficient for bot-owned passive "
                     "group delivery in this live gate."
                 ),
@@ -171,7 +172,7 @@ def run_feishu_event_subscription_diagnostics(
                 "id": "target_bot_group_messages_unreadable",
                 "detail": (
                     "Bot identity cannot read recent messages in the target group. This usually means "
-                    "im:message.group_msg:readonly is not enabled/published for the app or the app needs "
+                    f"{PRIMARY_GROUP_MESSAGE_SCOPE} is not enabled/published for the app, or the app needs "
                     "to be reinstalled in the tenant."
                 ),
             }
@@ -266,7 +267,7 @@ def _listener_status_ok(*, planned_listener: str, active_buses: list[dict[str, A
 
 
 def _has_group_message_scope(scopes: list[Any]) -> bool:
-    return any(str(scope) == "im:message.group_msg:readonly" for scope in scopes)
+    return any(str(scope) in GROUP_MESSAGE_SCOPE_OPTIONS for scope in scopes)
 
 
 def _remediation(
@@ -289,8 +290,8 @@ def _remediation(
     if missing_group_scope or target_group_unreadable:
         steps.extend(
             [
-                "In the Feishu/Lark developer console for this same bot app, enable or verify one group-message readonly permission.",
-                f"Acceptable scope options: {', '.join(GROUP_MESSAGE_SCOPE_OPTIONS)}.",
+                "In the Feishu/Lark developer console for this same bot app, enable or verify one group-message permission.",
+                f"Preferred current scope: {PRIMARY_GROUP_MESSAGE_SCOPE}; legacy/offline fallback: im:message.group_msg:readonly.",
                 f"Keep event subscription for {MESSAGE_EVENT_KEY} enabled for bot auth, then publish or reauthorize the app if the console requires it.",
                 "Rerun this diagnostic with --require-group-message-scope and --target-chat-id before sending another non-@ group test message.",
             ]
@@ -300,7 +301,7 @@ def _remediation(
     if not steps:
         if has_enabled_group_scope and not has_schema_group_scope:
             steps.append(
-                "Enabled app scopes include group-message readonly permission even though event schema "
+                "Enabled app scopes include group-message permission even though event schema "
                 "metadata is stale; continue with a real non-@ group text and preserve the single-listener log."
             )
         else:
@@ -310,12 +311,12 @@ def _remediation(
 
     if target_group_unreadable:
         summary = (
-            "Bot identity cannot read target group messages; fix im:message.group_msg:readonly app permissions, "
+            f"Bot identity cannot read target group messages; fix {PRIMARY_GROUP_MESSAGE_SCOPE} app permissions, "
             "publish/reinstall if needed, then retest passive group delivery."
         )
     elif missing_group_scope:
         summary = (
-            "Feishu message event schema lacks group-message readonly scope; fix app permissions/event subscription, "
+            "Feishu message event schema lacks group-message scope; fix app permissions/event subscription, "
             "rerun diagnostics, then retest passive group delivery."
         )
     elif listener_conflict:

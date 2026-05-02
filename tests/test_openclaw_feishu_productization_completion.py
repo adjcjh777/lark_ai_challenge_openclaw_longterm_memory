@@ -45,7 +45,7 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
                     },
                     "remediation": {
                         "requires_external_console_change": True,
-                        "required_scopes_any_of": ["im:message.group_msg:readonly"],
+                        "required_scopes_any_of": ["im:message.group_msg", "im:message.group_msg:readonly"],
                     },
                 },
             )
@@ -62,7 +62,7 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         blockers = {item["name"]: item for item in report["blockers"]}
         item = blockers["non_at_group_message_live_delivery"]
         self.assertEqual("message_schema_group_message_scope_missing", item["reason"])
-        self.assertIn("im:message.group_msg:readonly", item["next_step"])
+        self.assertIn("im:message.group_msg", item["next_step"])
         passive_item = next(entry for entry in report["items"] if entry["name"] == "non_at_group_message_live_delivery")
         diagnostic_evidence = passive_item["evidence"]["event_subscription_diagnostics"]
         self.assertEqual(["im:message.p2p_msg:readonly"], diagnostic_evidence["scopes"])

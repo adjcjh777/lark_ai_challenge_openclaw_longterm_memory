@@ -22,11 +22,11 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertEqual(0, result["event_status"]["active_bus_count"])
         self.assertFalse(result["message_event_schema"]["has_group_message_scope"])
         self.assertEqual(
-            ["message_schema_scope_does_not_list_group_msg_readonly"], [item["id"] for item in result["warnings"]]
+            ["message_schema_scope_does_not_list_group_msg"], [item["id"] for item in result["warnings"]]
         )
         self.assertTrue(result["remediation"]["requires_external_console_change"])
         self.assertEqual(
-            ["im:message.group_msg:readonly"],
+            ["im:message.group_msg", "im:message.group_msg:readonly"],
             result["remediation"]["required_scopes_any_of"],
         )
         self.assertEqual(["im:message.p2p_msg:readonly"], result["remediation"]["current_scopes"])
@@ -45,7 +45,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertFalse(result["ok"], result)
         self.assertTrue(result["require_group_message_scope"])
         self.assertIn("message_schema_group_message_scope", result["failed_checks"])
-        self.assertIn("group-message readonly scope", result["next_step"])
+        self.assertIn("group-message scope", result["next_step"])
 
     def test_broad_enabled_message_scope_does_not_satisfy_group_message_preflight(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
@@ -65,11 +65,33 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertFalse(result["message_event_schema"]["has_group_message_scope_from_enabled_scopes"])
         self.assertIn("im:message:readonly", result["remediation"]["enabled_scopes"])
         self.assertEqual(
-            ["message_schema_scope_does_not_list_group_msg_readonly"],
+            ["message_schema_scope_does_not_list_group_msg"],
             [item["id"] for item in result["warnings"]],
         )
 
-    def test_exact_enabled_group_message_scope_can_satisfy_preflight_when_schema_scope_is_stale(self) -> None:
+    def test_current_enabled_group_message_scope_can_satisfy_preflight_when_schema_scope_is_stale(self) -> None:
+        result = run_feishu_event_subscription_diagnostics(
+            planned_listener="openclaw-websocket",
+            require_group_message_scope=True,
+            runner=_runner(
+                status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
+                schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg"]},
+            ),
+        )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["failed_checks"])
+        self.assertFalse(result["message_event_schema"]["has_group_message_scope_from_schema"])
+        self.assertTrue(result["message_event_schema"]["has_group_message_scope_from_enabled_scopes"])
+        self.assertIn("im:message.group_msg", result["remediation"]["enabled_scopes"])
+        self.assertEqual(
+            ["message_schema_scope_missing_but_enabled_scope_present"],
+            [item["id"] for item in result["warnings"]],
+        )
+
+    def test_legacy_readonly_group_message_scope_still_satisfies_preflight(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
             planned_listener="openclaw-websocket",
             require_group_message_scope=True,
@@ -82,14 +104,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         )
 
         self.assertTrue(result["ok"], result)
-        self.assertEqual([], result["failed_checks"])
-        self.assertFalse(result["message_event_schema"]["has_group_message_scope_from_schema"])
         self.assertTrue(result["message_event_schema"]["has_group_message_scope_from_enabled_scopes"])
-        self.assertIn("im:message.group_msg:readonly", result["remediation"]["enabled_scopes"])
-        self.assertEqual(
-            ["message_schema_scope_missing_but_enabled_scope_present"],
-            [item["id"] for item in result["warnings"]],
-        )
 
     def test_target_chat_probe_fails_when_bot_cannot_read_group_messages(self) -> None:
         result = run_feishu_event_subscription_diagnostics(
@@ -100,7 +115,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
                 status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
                 event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
                 schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
-                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg:readonly"]},
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg"]},
                 bot_group_messages={
                     "ok": False,
                     "error": {"type": "permission", "code": 230027, "message": "Permission denied [230027]"},
@@ -124,7 +139,7 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
                 status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
                 event_list=[_message_event(scopes=["im:message.p2p_msg:readonly"])],
                 schema=_message_event(scopes=["im:message.p2p_msg:readonly"]),
-                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg:readonly"]},
+                auth_scopes={"appId": "cli_app", "userScopes": ["im:message.group_msg"]},
                 bot_group_messages={"ok": True, "data": {"messages": []}},
             ),
         )
