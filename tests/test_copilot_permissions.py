@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from memory_engine.copilot.service import CopilotService
 from memory_engine.copilot.tools import handle_tool_request
@@ -57,6 +59,13 @@ def permission_context(
 
 
 class CopilotPermissionTest(unittest.TestCase):
+    def test_service_can_disable_auto_cognee_initialization_from_environment(self) -> None:
+        with patch.dict(os.environ, {"COPILOT_AUTO_INIT_COGNEE": "0"}, clear=False):
+            with patch.object(CopilotService, "_try_auto_init_cognee") as auto_init:
+                CopilotService()
+
+        auto_init.assert_not_called()
+
     def test_search_missing_permission_context_fails_closed(self) -> None:
         response = handle_tool_request("memory.search", {"query": "部署", "scope": SCOPE})
 

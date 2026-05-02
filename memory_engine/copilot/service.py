@@ -40,6 +40,13 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
+def _env_flag_enabled(name: str, *, default: bool = True) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
 class CopilotService:
     """Application service for Copilot-owned memory contracts."""
 
@@ -64,7 +71,7 @@ class CopilotService:
         self._reminder_state: dict[str, dict[str, Any]] = {}
 
         # Auto-initialize Cognee adapter if not provided
-        if self.cognee_adapter is None and auto_init_cognee:
+        if self.cognee_adapter is None and auto_init_cognee and _env_flag_enabled("COPILOT_AUTO_INIT_COGNEE"):
             self._try_auto_init_cognee()
 
     def search(self, request: SearchRequest) -> dict[str, object]:

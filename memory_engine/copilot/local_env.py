@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parents[2]
 def load_local_env_files(*, root: Path = ROOT, override: bool = True) -> dict[str, str]:
     """Load repo-local env files, with .env.local taking precedence."""
 
+    if os.environ.get("COPILOT_SKIP_LOCAL_ENV", "").lower() in {"1", "true", "yes"}:
+        return {}
+
     loaded: dict[str, str] = {}
     for path in (root / ".env", root / ".env.local"):
         if not path.exists():

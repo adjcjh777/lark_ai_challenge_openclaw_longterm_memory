@@ -46,6 +46,17 @@ class LocalEnvTest(unittest.TestCase):
                 read_key_value_file(path),
             )
 
+    def test_skip_local_env_leaves_process_environment_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / ".env").write_text("LLM_MODEL=from-env-file\n", encoding="utf-8")
+
+            with patch.dict(os.environ, {"COPILOT_SKIP_LOCAL_ENV": "1", "LLM_MODEL": "runtime-model"}, clear=True):
+                loaded = load_local_env_files(root=root, override=True)
+
+                self.assertEqual({}, loaded)
+                self.assertEqual("runtime-model", os.environ["LLM_MODEL"])
+
     def test_embedding_env_overrides_use_runtime_names(self) -> None:
         with patch.dict(
             os.environ,
