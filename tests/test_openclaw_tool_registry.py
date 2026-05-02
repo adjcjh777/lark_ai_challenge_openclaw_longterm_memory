@@ -62,6 +62,10 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("scripts/start_copilot_admin.py", plugin_index)
         self.assertIn("./feishu_card_delivery.js", plugin_index)
         self.assertIn('api.on("before_dispatch"', plugin_index)
+        self.assertIn('api.on("message_received"', plugin_index)
+        self.assertIn("rememberFeishuMessage", plugin_index)
+        self.assertIn("lookupRecentFeishuMessageId", plugin_index)
+        self.assertIn("addFeishuTypingIndicatorViaLarkCli", plugin_index)
         self.assertIn("runPythonFeishuRouter", plugin_index)
         self.assertIn("scripts/openclaw_feishu_remember_router.py", plugin_index)
         self.assertIn("shouldRouteFeishuGroupEvent", plugin_index)
@@ -115,6 +119,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             script = """
                 import {
                   buildInteractiveCardRequestBody,
+                  addFeishuTypingIndicatorViaLarkCli,
                   buildRouterFailureFallback,
                   isRealFeishuMessageId,
                   larkCliEnvironment,
@@ -143,6 +148,22 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   delivery_mode: 'chat',
                   card: { type: 'template' },
                 }, { env: process.env });
+                const typingIndicator = await addFeishuTypingIndicatorViaLarkCli('om_demo', {
+                  env: {
+                    ...process.env,
+                    LARK_CLI_BIN: process.env.FAKE_LARK_CLI,
+                    FAKE_LARK_CAPTURE: process.env.FAKE_LARK_CAPTURE,
+                    FEISHU_REACTION_TIMEOUT_SECONDS: '2',
+                  },
+                });
+                const syntheticTypingIndicator = await addFeishuTypingIndicatorViaLarkCli('openclaw_before_dispatch_synthetic', {
+                  env: {
+                    ...process.env,
+                    LARK_CLI_BIN: process.env.FAKE_LARK_CLI,
+                    FAKE_LARK_CAPTURE: process.env.FAKE_LARK_CAPTURE,
+                    FEISHU_REACTION_TIMEOUT_SECONDS: '2',
+                  },
+                });
                 const syntheticReply = await publishInteractiveCardViaLarkCli({
                   mode: 'interactive',
                   delivery_mode: 'chat',
@@ -160,6 +181,8 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                 console.log(JSON.stringify({
                   ok,
                   missingTarget,
+                  typingIndicator,
+                  syntheticTypingIndicator,
                   syntheticReply,
                   realMessageId: isRealFeishuMessageId('om_demo'),
                   syntheticMessageId: isRealFeishuMessageId('openclaw_before_dispatch_synthetic'),
@@ -209,6 +232,9 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertIn("api", captured_command)
             self.assertIn("--profile", captured_command)
             self.assertIn("feishu-ai-challenge", captured_command)
+            self.assertEqual("typing_reaction", payload["typingIndicator"]["mode"])
+            self.assertIn("/open-apis/im/v1/messages/om_demo/reactions", payload["typingIndicator"]["command_preview"])
+            self.assertIsNone(payload["syntheticTypingIndicator"])
             self.assertIn("--profile feishu-ai-challenge", payload["ok"]["command_preview"])
             self.assertIn("POST", captured_command)
             self.assertIn("/open-apis/im/v1/messages/om_demo/reply", captured_command)

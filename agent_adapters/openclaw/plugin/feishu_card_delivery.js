@@ -95,6 +95,42 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
   };
 }
 
+export async function addFeishuTypingIndicatorViaLarkCli(messageId, options = {}) {
+  const realMessageId = isRealFeishuMessageId(messageId) ? String(messageId).trim() : "";
+  if (!realMessageId) {
+    return null;
+  }
+  const env = larkCliEnvironment(options.env || process.env);
+  const larkCli = resolveLarkCliBin(env);
+  const larkProfile = resolveLarkCliProfile(env);
+  const larkAs = env.LARK_CLI_AS || "bot";
+  const command = [
+    larkCli,
+    "--profile",
+    larkProfile,
+    "api",
+    "POST",
+    `/open-apis/im/v1/messages/${realMessageId}/reactions`,
+    "--as",
+    larkAs,
+    "--data",
+    JSON.stringify({ reaction_type: { emoji_type: "Typing" } }),
+  ];
+  const command_preview = commandPreview(command);
+  const result = await runCommand(command, {
+    cwd: options.cwd,
+    env,
+    timeoutSeconds: env.FEISHU_REACTION_TIMEOUT_SECONDS || env.FEISHU_CARD_TIMEOUT_SECONDS || 3,
+  });
+  return {
+    ...result,
+    mode: "typing_reaction",
+    command_preview,
+    message_id: realMessageId,
+    reaction_id: parseReactionId(result.stdout),
+  };
+}
+
 export function larkCliEnvironment(env = process.env) {
   const home = env.HOME || homedir() || "/Users/junhaocheng";
   const path = [
@@ -188,6 +224,15 @@ export function commandFailureReason(result) {
     return "openclaw_gateway_interactive_card_failed";
   }
   return `openclaw_gateway_interactive_card_failed: ${detail}`;
+}
+
+function parseReactionId(stdout) {
+  try {
+    const payload = JSON.parse(String(stdout || "{}"));
+    return String(payload?.data?.reaction_id || "").trim();
+  } catch (_) {
+    return "";
+  }
 }
 
 export function commandPreview(command) {

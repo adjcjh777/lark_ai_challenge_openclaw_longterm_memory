@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { jsonResult } from "openclaw/plugin-sdk/core";
 import {
+  addFeishuTypingIndicatorViaLarkCli,
   buildRouterFailureFallback,
   publishInteractiveCardViaLarkCli,
 } from "./feishu_card_delivery.js";
@@ -45,6 +46,9 @@ const FEISHU_GROUP_ROUTER_COMMANDS = new Set([
   "memory_off",
   "disable_group_memory",
 ]);
+const RECENT_FEISHU_MESSAGES_MAX = 200;
+const RECENT_FEISHU_MESSAGES_TTL_MS = 120_000;
+const recentFeishuMessagesByKey = new Map();
 
 function loadToolSpecs() {
   const raw = readFileSync(SCHEMA_PATH, "utf8");
@@ -182,14 +186,21 @@ function registerFeishuBeforeDispatchHook(api) {
     api.logger?.warn?.("typed hook API is unavailable; Feishu before_dispatch router not registered");
     return;
   }
+  api.on("message_received", async (event, context) => {
+    rememberFeishuMessage(event, context);
+  }, {
+    name: "feishu-memory-copilot-message-id-cache",
+    description: "Caches Feishu message ids so before_dispatch can react to the original message.",
+  });
   api.on("before_dispatch", async (event, context) => {
     if (!shouldRouteFeishuGroupEvent(event, context)) {
       return undefined;
     }
     try {
+      const messageId = deriveMessageId(event, context);
       const result = await runPythonFeishuRouter({
         text: String(event.content || event.body || ""),
-        message_id: deriveMessageId(event, context),
+        message_id: messageId,
         chat_id: deriveChatId(event, context),
         sender_open_id: String(event.senderId || context.senderId || ""),
         chat_type: event.isGroup ? "group" : "p2p",
@@ -197,6 +208,10 @@ function registerFeishuBeforeDispatchHook(api) {
       });
       api.logger?.info?.(`feishu-memory-copilot route result ${JSON.stringify(sanitizeRouteResult(result))}`);
       const publish = result && typeof result === "object" ? result.publish : null;
+      const typingDelivery = await maybeAddFeishuTypingIndicator(messageId, publish);
+      if (typingDelivery) {
+        api.logger?.info?.(`feishu-memory-copilot typing indicator ${JSON.stringify(sanitizeTypingDelivery(typingDelivery))}`);
+      }
       const cardDelivery = await publishInteractiveCardViaLarkCli(publish);
       if (cardDelivery) {
         api.logger?.info?.(`feishu-memory-copilot card delivery ${JSON.stringify(sanitizePublish(cardDelivery))}`);
@@ -263,6 +278,23 @@ function sanitizePublish(publish) {
     stderr: publish.stderr ? truncateForOperator(publish.stderr, 240) : undefined,
     stdout: publish.stdout ? truncateForOperator(publish.stdout, 240) : undefined,
     suppressed: publish.suppressed,
+  };
+}
+
+function sanitizeTypingDelivery(delivery) {
+  if (!delivery || typeof delivery !== "object") {
+    return {};
+  }
+  return {
+    ok: delivery.ok,
+    mode: delivery.mode,
+    message_id: redactId(delivery.message_id),
+    reaction_id: delivery.reaction_id ? "present" : "",
+    command_preview: delivery.command_preview,
+    returncode: delivery.returncode,
+    timed_out: delivery.timed_out,
+    stderr: delivery.stderr ? truncateForOperator(delivery.stderr, 240) : undefined,
+    stdout: delivery.stdout ? truncateForOperator(delivery.stdout, 240) : undefined,
   };
 }
 
@@ -383,9 +415,13 @@ function containsFirstClassToolPrompt(text) {
 }
 
 function deriveMessageId(event, context) {
-  const direct = event.messageId || context.messageId;
+  const direct = event.messageId || event.message_id || context.messageId || context.currentMessageId;
   if (direct) {
     return String(direct);
+  }
+  const recent = lookupRecentFeishuMessageId(event, context);
+  if (recent) {
+    return recent;
   }
   return `openclaw_before_dispatch_${hashString([
     event.channel,
@@ -411,6 +447,120 @@ function deriveChatId(event, context) {
     }
   }
   return String(context.conversationId || event.sessionKey || context.sessionKey || "");
+}
+
+async function maybeAddFeishuTypingIndicator(messageId, publish) {
+  if (!publish || publish.mode === "silent_no_reply" || publish.suppressed === true) {
+    return null;
+  }
+  if (!isRealFeishuMessageId(messageId)) {
+    return null;
+  }
+  return addFeishuTypingIndicatorViaLarkCli(messageId);
+}
+
+function rememberFeishuMessage(event, context) {
+  const channel = String(context.channelId || event.channel || event.metadata?.provider || "").toLowerCase();
+  if (channel !== "feishu") {
+    return;
+  }
+  const messageId = String(event.messageId || context.messageId || event.metadata?.messageId || "").trim();
+  if (!isRealFeishuMessageId(messageId)) {
+    return;
+  }
+  const keys = feishuMessageCacheKeys({
+    channel: "feishu",
+    conversationIds: [
+      context.conversationId,
+      event.metadata?.to,
+      event.metadata?.originatingTo,
+      event.from,
+      event.sessionKey,
+      context.sessionKey,
+    ],
+    senderId: event.senderId || context.senderId || event.metadata?.senderId,
+    content: event.content,
+  });
+  if (keys.length === 0) {
+    return;
+  }
+  pruneRecentFeishuMessages();
+  for (const key of keys) {
+    recentFeishuMessagesByKey.set(key, {
+      messageId,
+      timestamp: Number(event.timestamp || Date.now()),
+      cachedAt: Date.now(),
+    });
+  }
+}
+
+function lookupRecentFeishuMessageId(event, context) {
+  const keys = feishuMessageCacheKeys({
+    channel: event.channel || context.channelId,
+    conversationIds: [
+      context.conversationId,
+      event.sessionKey,
+      context.sessionKey,
+    ],
+    senderId: event.senderId || context.senderId,
+    content: event.content || event.body,
+  });
+  if (keys.length === 0) {
+    return "";
+  }
+  pruneRecentFeishuMessages();
+  for (const key of keys) {
+    const cached = recentFeishuMessagesByKey.get(key);
+    if (cached) {
+      return cached.messageId;
+    }
+  }
+  return "";
+}
+
+function feishuMessageCacheKeys({ channel, conversationIds, senderId, content }) {
+  const normalizedChannel = String(channel || "").toLowerCase();
+  const normalizedSender = String(senderId || "").trim();
+  const normalizedContent = String(content || "").trim();
+  if (!normalizedChannel || !normalizedContent) {
+    return [];
+  }
+  const keys = new Set();
+  for (const conversationId of conversationIds || []) {
+    const normalizedConversation = String(conversationId || "").trim();
+    if (!normalizedConversation) {
+      continue;
+    }
+    for (const senderPart of [normalizedSender, ""]) {
+      keys.add([
+        normalizedChannel,
+        normalizedConversation,
+        senderPart,
+        hashString(normalizedContent),
+      ].join("|"));
+    }
+  }
+  return Array.from(keys);
+}
+
+function pruneRecentFeishuMessages() {
+  const now = Date.now();
+  for (const [key, value] of recentFeishuMessagesByKey.entries()) {
+    if (!value || now - Number(value.cachedAt || 0) > RECENT_FEISHU_MESSAGES_TTL_MS) {
+      recentFeishuMessagesByKey.delete(key);
+    }
+  }
+  while (recentFeishuMessagesByKey.size > RECENT_FEISHU_MESSAGES_MAX) {
+    const oldestKey = recentFeishuMessagesByKey.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    recentFeishuMessagesByKey.delete(oldestKey);
+  }
+}
+
+function isRealFeishuMessageId(value) {
+  return /^om_[A-Za-z0-9_-]+$/.test(String(value || "").trim());
 }
 
 function hashString(input) {
