@@ -47,6 +47,11 @@ def main() -> int:
         default="",
         help="Optional second real non-reviewer open_id/user_id required for the permission-negative gate.",
     )
+    parser.add_argument(
+        "--expected-reviewer-open-id",
+        default="",
+        help="Optional reviewer/owner open_id/user_id required for the /review private DM gate.",
+    )
     parser.add_argument("--output", default="", help="Optional JSON packet output path.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -59,6 +64,7 @@ def main() -> int:
         feishu_event_diagnostics=args.feishu_event_diagnostics,
         expected_chat_id=args.expected_chat_id or None,
         expected_non_reviewer_open_id=args.expected_non_reviewer_open_id or None,
+        expected_reviewer_open_id=args.expected_reviewer_open_id or None,
     )
     if args.output:
         output = Path(args.output).expanduser()
@@ -80,6 +86,7 @@ def collect_feishu_live_evidence_packet(
     feishu_event_diagnostics: Path | None = None,
     expected_chat_id: str | None = None,
     expected_non_reviewer_open_id: str | None = None,
+    expected_reviewer_open_id: str | None = None,
 ) -> dict[str, Any]:
     reports = {
         "passive_group_message": _run_log_gate(
@@ -98,7 +105,10 @@ def collect_feishu_live_evidence_packet(
                 expected_actor_id=expected_non_reviewer_open_id,
             ),
         ),
-        "review_delivery": _run_log_gate(review_event_log, check_review_delivery_log_events),
+        "review_delivery": _run_log_gate(
+            review_event_log,
+            lambda text: check_review_delivery_log_events(text, expected_reviewer_open_id=expected_reviewer_open_id),
+        ),
     }
     diagnostics = {}
     if feishu_event_diagnostics is not None:

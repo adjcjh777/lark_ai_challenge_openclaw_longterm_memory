@@ -156,6 +156,7 @@ def prepare_live_evidence_run(
         embedding_sampler_pid_file=embedding_sampler_pid_file,
         controlled_chat_id=controlled_chat_id,
         non_reviewer_open_id=non_reviewer_open_id,
+        reviewer_open_id=reviewer_open_id,
         planned_listener=planned_listener,
     )
     return {
@@ -308,6 +309,7 @@ def _manual_steps(
     embedding_sampler_pid_file: Path | None,
     controlled_chat_id: str,
     non_reviewer_open_id: str,
+    reviewer_open_id: str,
     planned_listener: PlannedListener,
 ) -> list[dict[str, Any]]:
     chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
@@ -319,6 +321,7 @@ def _manual_steps(
     packet_actor_filter = (
         f" --expected-non-reviewer-open-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
     )
+    packet_reviewer_filter = f" --expected-reviewer-open-id {reviewer_open_id}" if reviewer_open_id else ""
     sampler_status_arg = (
         f" --cognee-sampler-status {diagnostic_paths['cognee_sampler_status']}" if embedding_sample_log else ""
     )
@@ -387,7 +390,7 @@ def _manual_steps(
                 f"--routing-event-log {log_paths['routing_event_log']} "
                 f"--permission-event-log {log_paths['permission_event_log']} "
                 f"--review-event-log {log_paths['review_event_log']}{event_diagnostics_arg} "
-                f"{packet_chat_filter}{packet_actor_filter} "
+                f"{packet_chat_filter}{packet_actor_filter}{packet_reviewer_filter} "
                 f"--output {packet_output} --json"
             ),
         },

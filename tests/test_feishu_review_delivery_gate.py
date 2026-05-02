@@ -34,7 +34,7 @@ def _candidate_result() -> dict:
     }
 
 
-def _review_dm_result() -> dict:
+def _review_dm_result(target: str = "ou_review_owner") -> dict:
     return {
         "result": {
             "ok": True,
@@ -43,8 +43,8 @@ def _review_dm_result() -> dict:
             "publish": {
                 "mode": "interactive",
                 "delivery_mode": "dm",
-                "targets": ["ou_review_owner"],
-                "card": {"open_ids": ["ou_review_owner"], "elements": []},
+                "targets": [target],
+                "card": {"open_ids": [target], "elements": []},
             },
         }
     }
@@ -109,6 +109,24 @@ class FeishuReviewDeliveryGateTest(unittest.TestCase):
         self.assertEqual(1, report["summary"]["private_review_dm_results"])
         self.assertEqual(1, report["summary"]["card_action_update_results"])
         self.assertEqual(1, report["summary"]["missing_token_fail_closed_results"])
+
+    def test_log_gate_filters_expected_reviewer_dm_target(self) -> None:
+        text = "\n".join(
+            json.dumps(item, ensure_ascii=False)
+            for item in [
+                _candidate_result(),
+                _review_dm_result(target="ou_other_reviewer"),
+                _card_update_result(),
+                _missing_token_result(),
+            ]
+        )
+
+        report = check_review_delivery_log_events(text, expected_reviewer_open_id="ou_review_owner")
+
+        self.assertFalse(report["ok"])
+        self.assertEqual("private_review_dm_target_mismatch", report["reason"])
+        self.assertEqual(0, report["summary"]["private_review_dm_results"])
+        self.assertEqual(1, report["summary"]["private_review_target_mismatch"])
 
     def test_log_gate_fails_when_only_candidate_card_is_seen(self) -> None:
         report = check_review_delivery_log_events(json.dumps(_candidate_result(), ensure_ascii=False))

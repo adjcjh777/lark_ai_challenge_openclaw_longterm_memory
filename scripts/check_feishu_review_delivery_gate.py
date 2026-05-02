@@ -48,11 +48,19 @@ def main() -> int:
         default=None,
         help="NDJSON/JSON log file to audit for real Feishu review delivery evidence. Defaults to local gate.",
     )
+    parser.add_argument(
+        "--expected-reviewer-open-id",
+        default="",
+        help="Optional reviewer/owner open_id/user_id required as the /review private DM target.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     if args.event_log:
-        report = check_review_delivery_log_events(args.event_log.read_text(encoding="utf-8"))
+        report = check_review_delivery_log_events(
+            args.event_log.read_text(encoding="utf-8"),
+            expected_reviewer_open_id=args.expected_reviewer_open_id or None,
+        )
     else:
         report = check_review_delivery_gate()
     if args.json:
@@ -205,7 +213,7 @@ def check_review_delivery_gate() -> dict[str, Any]:
     }
 
 
-def check_review_delivery_log_events(text: str) -> dict[str, Any]:
+def check_review_delivery_log_events(text: str, *, expected_reviewer_open_id: str | None = None) -> dict[str, Any]:
     payloads = list(_payloads_from_text(text))
     summary = {
         "total_payloads": len(payloads),
@@ -215,6 +223,7 @@ def check_review_delivery_log_events(text: str) -> dict[str, Any]:
         "card_action_update_results": 0,
         "missing_token_fail_closed_results": 0,
         "card_action_triggers_without_result": 0,
+        "private_review_target_mismatch": 0,
         "unsupported_payloads": 0,
     }
     checks: list[dict[str, Any]] = []
@@ -240,8 +249,11 @@ def check_review_delivery_log_events(text: str) -> dict[str, Any]:
         if result.get("tool") == "memory.review_inbox":
             summary["review_inbox_results"] += 1
             if _is_private_review_dm(result):
-                summary["private_review_dm_results"] += 1
-                _append_example(examples, result, "private_review_dm")
+                if _private_review_targets_expected(result, expected_reviewer_open_id):
+                    summary["private_review_dm_results"] += 1
+                    _append_example(examples, result, "private_review_dm")
+                else:
+                    summary["private_review_target_mismatch"] += 1
         if _is_card_action_update(result):
             summary["card_action_update_results"] += 1
             _append_example(examples, result, "card_action_update")
@@ -264,6 +276,8 @@ def check_review_delivery_log_events(text: str) -> dict[str, Any]:
         {
             "review_inbox_results": summary["review_inbox_results"],
             "private_review_dm_results": summary["private_review_dm_results"],
+            "private_review_target_mismatch": summary["private_review_target_mismatch"],
+            "expected_reviewer_open_id_configured": bool(expected_reviewer_open_id),
         },
     )
     _record_check(
@@ -494,6 +508,15 @@ def _is_private_review_dm(result: dict[str, Any]) -> bool:
     )
 
 
+def _private_review_targets_expected(result: dict[str, Any], expected_reviewer_open_id: str | None) -> bool:
+    if not expected_reviewer_open_id:
+        return True
+    publish = _publish(result)
+    targets = publish.get("targets")
+    card_open_ids = _card(result).get("open_ids")
+    return targets == [expected_reviewer_open_id] and card_open_ids == [expected_reviewer_open_id]
+
+
 def _is_card_action_update(result: dict[str, Any]) -> bool:
     publish = _publish(result)
     return (
@@ -554,6 +577,8 @@ def _append_example(examples: list[dict[str, Any]], result: dict[str, Any], kind
 
 
 def _log_failure_reason(summary: dict[str, int]) -> str:
+    if summary["private_review_target_mismatch"] and not summary["private_review_dm_results"]:
+        return "private_review_dm_target_mismatch"
     if summary["candidate_review_cards"] and not summary["private_review_dm_results"]:
         return "candidate_card_only_no_private_review_dm"
     if summary["private_review_dm_results"] and not summary["card_action_update_results"]:
@@ -566,6 +591,8 @@ def _log_failure_reason(summary: dict[str, int]) -> str:
 
 
 def _log_next_step(reason: str) -> str:
+    if reason == "private_review_dm_target_mismatch":
+        return "当前看到 /review DM，但不是本次 reviewer 目标；请用 expected reviewer 账号重跑并保留 private DM result log。"
     if reason == "candidate_card_only_no_private_review_dm":
         return "当前只看到候选审核卡；请在受控群触发 /review，并保留 private DM delivery result log。"
     if reason == "private_review_dm_without_card_action_update":
