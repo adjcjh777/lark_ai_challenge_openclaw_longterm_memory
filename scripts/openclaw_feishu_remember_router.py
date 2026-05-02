@@ -195,7 +195,7 @@ def route_gateway_message(
     enterprise memory signals.
     """
 
-    normalized_text = text.strip()
+    normalized_text = _strip_leading_mention_command(text)
     command_name, _argument = _slash_command(normalized_text)
     if command_name in {"settings", "group_settings"}:
         return route_gateway_group_settings(
@@ -822,6 +822,16 @@ def _slash_command(text: str) -> tuple[str | None, str]:
         return None, ""
     parts = body.split(maxsplit=1)
     return parts[0].strip().lower(), parts[1].strip() if len(parts) > 1 else ""
+
+
+def _strip_leading_mention_command(text: str) -> str:
+    stripped = text.strip()
+    if not stripped.startswith("@"):
+        return stripped
+    slash_index = stripped.find("/")
+    if slash_index <= 0:
+        return stripped
+    return stripped[slash_index:].strip()
 
 
 def _open_conn(db_path: str | None):

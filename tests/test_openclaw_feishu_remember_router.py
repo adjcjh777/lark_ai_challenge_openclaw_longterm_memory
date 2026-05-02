@@ -399,6 +399,30 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("reviewer_or_admin_required", audit["reason_code"])
         self.assertIn("openclaw_gateway_live", audit["source_context"])
 
+    def test_gateway_enable_memory_with_visible_mention_prefix_is_denied(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            with patch.dict("os.environ", {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
+                result = route_gateway_message(
+                    text="@测试 bot /enable_memory",
+                    message_id="om_router_enable_denied_mention_prefix",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=False,
+                    db_path=str(db_path),
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_enable_memory", result["tool"])
+        self.assertFalse(result["tool_result"]["ok"])
+        self.assertEqual("permission_denied", result["tool_result"]["status"])
+        self.assertEqual("/enable_memory", result["input_text"])
+
     def test_gateway_disable_memory_by_reviewer_closes_passive_screening(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
