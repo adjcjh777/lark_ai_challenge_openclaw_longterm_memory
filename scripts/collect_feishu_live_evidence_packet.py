@@ -41,6 +41,12 @@ def main() -> int:
         default=None,
         help="Optional JSON from check_feishu_event_subscription_diagnostics.py or prepare_feishu_live_evidence_run.py.",
     )
+    parser.add_argument("--expected-chat-id", default="", help="Optional controlled chat_id/open_chat_id to require.")
+    parser.add_argument(
+        "--expected-non-reviewer-open-id",
+        default="",
+        help="Optional second real non-reviewer open_id/user_id required for the permission-negative gate.",
+    )
     parser.add_argument("--output", default="", help="Optional JSON packet output path.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -51,6 +57,8 @@ def main() -> int:
         permission_event_log=args.permission_event_log,
         review_event_log=args.review_event_log,
         feishu_event_diagnostics=args.feishu_event_diagnostics,
+        expected_chat_id=args.expected_chat_id or None,
+        expected_non_reviewer_open_id=args.expected_non_reviewer_open_id or None,
     )
     if args.output:
         output = Path(args.output).expanduser()
@@ -70,14 +78,26 @@ def collect_feishu_live_evidence_packet(
     permission_event_log: Path,
     review_event_log: Path,
     feishu_event_diagnostics: Path | None = None,
+    expected_chat_id: str | None = None,
+    expected_non_reviewer_open_id: str | None = None,
 ) -> dict[str, Any]:
     reports = {
-        "passive_group_message": _run_log_gate(passive_event_log, check_passive_message_events),
+        "passive_group_message": _run_log_gate(
+            passive_event_log,
+            lambda text: check_passive_message_events(text, expected_chat_id=expected_chat_id),
+        ),
         "first_class_routing": _run_log_gate(
             routing_event_log,
             lambda text: check_live_routing_events(text, required_tools=REQUIRED_ROUTING_TOOLS),
         ),
-        "permission_negative": _run_log_gate(permission_event_log, check_permission_negative_events),
+        "permission_negative": _run_log_gate(
+            permission_event_log,
+            lambda text: check_permission_negative_events(
+                text,
+                expected_chat_id=expected_chat_id,
+                expected_actor_id=expected_non_reviewer_open_id,
+            ),
+        ),
         "review_delivery": _run_log_gate(review_event_log, check_review_delivery_log_events),
     }
     diagnostics = {}

@@ -315,6 +315,10 @@ def _manual_steps(
     actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
     cognee_arg = f" --cognee-long-run-evidence {cognee_long_run_evidence}" if cognee_long_run_evidence else ""
     event_diagnostics_arg = f" --feishu-event-diagnostics {diagnostic_paths['feishu_event_diagnostics']}"
+    packet_chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
+    packet_actor_filter = (
+        f" --expected-non-reviewer-open-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
+    )
     sampler_status_arg = (
         f" --cognee-sampler-status {diagnostic_paths['cognee_sampler_status']}" if embedding_sample_log else ""
     )
@@ -383,6 +387,7 @@ def _manual_steps(
                 f"--routing-event-log {log_paths['routing_event_log']} "
                 f"--permission-event-log {log_paths['permission_event_log']} "
                 f"--review-event-log {log_paths['review_event_log']}{event_diagnostics_arg} "
+                f"{packet_chat_filter}{packet_actor_filter} "
                 f"--output {packet_output} --json"
             ),
         },

@@ -92,6 +92,27 @@ class FeishuLiveEvidencePacketTest(unittest.TestCase):
         self.assertEqual(["review_delivery"], packet["failed_reports"])
         self.assertEqual("evidence_log_missing", packet["reports"]["review_delivery"]["reason"])
 
+    def test_packet_applies_chat_and_non_reviewer_filters(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_packet_") as temp_dir:
+            root = Path(temp_dir)
+            passive_log, routing_log, permission_log, review_log = _write_passing_logs(root)
+
+            packet = collect_feishu_live_evidence_packet(
+                passive_event_log=passive_log,
+                routing_event_log=routing_log,
+                permission_event_log=permission_log,
+                review_event_log=review_log,
+                expected_chat_id="oc_wrong_controlled_group",
+                expected_non_reviewer_open_id="ou_wrong_user",
+            )
+
+        self.assertFalse(packet["ok"])
+        self.assertEqual(["passive_group_message", "permission_negative"], packet["failed_reports"])
+        self.assertEqual("expected_chat_not_seen", packet["reports"]["passive_group_message"]["reason"])
+        self.assertEqual("expected_chat_not_seen", packet["reports"]["permission_negative"]["reason"])
+        self.assertEqual(1, packet["reports"]["passive_group_message"]["summary"]["chat_mismatch"])
+        self.assertEqual(1, packet["reports"]["permission_negative"]["summary"]["chat_mismatch"])
+
     def test_completion_audit_can_use_event_diagnostics_from_packet(self) -> None:
         with tempfile.TemporaryDirectory(prefix="feishu_live_packet_") as temp_dir:
             root = Path(temp_dir)

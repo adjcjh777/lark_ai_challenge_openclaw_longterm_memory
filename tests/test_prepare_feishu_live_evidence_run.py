@@ -56,6 +56,11 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertEqual([], result["blocking_failures"])
         preflight_step = next(step for step in result["manual_steps"] if step["phase"] == "preflight")
         self.assertIn("--target-chat-id oc_controlled", preflight_step["instruction"])
+        packet_step = next(
+            step for step in result["manual_steps"] if step["title"] == "Build sanitized Feishu live packet"
+        )
+        self.assertIn("--expected-chat-id oc_controlled", packet_step["instruction"])
+        self.assertIn("--expected-non-reviewer-open-id ou_non_reviewer", packet_step["instruction"])
 
     def test_preflight_blocks_repo_lark_listener_when_openclaw_is_running(self) -> None:
         result = prepare_live_evidence_run(
