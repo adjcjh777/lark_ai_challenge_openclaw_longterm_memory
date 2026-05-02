@@ -6,6 +6,8 @@
 
 本轮补齐“真实飞书可点击卡片”的受控 sandbox/pre-production 路径。此前 `memory_engine/copilot/feishu_live.py` 在 `FEISHU_CARD_MODE=interactive` 时仍主要用 `build_card_from_text(reply)` 把回复文本包成通用卡片；现在 Feishu live 回复会消费 `CopilotService` / `handle_tool_request()` 的 typed output，并生成对应的真实 interactive card。
 
+2026-05-02 补充：产品化 live 启动脚本默认 `FEISHU_CARD_MODE=interactive`；interactive card 发送失败时不再回退发送纯文本，publisher 会返回 `fallback_suppressed=true` 和 `fallback_reason`，由日志/监控处理失败，避免用户侧出现纯字符回复。
+
 完成内容：
 
 - `memory.search` 使用搜索结果卡。
@@ -49,7 +51,7 @@
 按 [手动测试指南](../../manual-testing-guide.md) 的“真实飞书互动卡片点击测试”执行：
 
 1. 确认单监听。
-2. 确认 `FEISHU_CARD_MODE=interactive`。
+2. 确认 `FEISHU_CARD_MODE=interactive`，且没有显式覆盖为 `text`。
 3. 向受控测试群或测试私聊发送 `/remember ...`。
 4. 检查候选审核卡是否出现四个按钮。
 5. 分别用新候选测试确认、拒绝、要求补证据、标记过期。

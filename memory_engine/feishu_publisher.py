@@ -124,11 +124,13 @@ class LarkCliPublisher:
                 "card_timeout_seconds": self.config.card_timeout_seconds,
             }
 
-        fallback = self._publish_text(event, text, idempotency_key=idempotency_key)
-        fallback["card_attempts"] = attempts
-        fallback["fallback_used"] = True
-        fallback["fallback_reason"] = "interactive_card_failed_after_retries"
-        return fallback
+        return _card_delivery_failed_without_text_fallback(
+            event,
+            card,
+            attempts=attempts,
+            reason="interactive_card_failed_after_retries",
+            timeout_seconds=self.config.card_timeout_seconds,
+        )
 
     def _publish_direct_interactive_with_text_fallback(
         self,
@@ -150,7 +152,7 @@ class LarkCliPublisher:
             "reply_to": None,
             "chat_id": None,
             "targets": targets,
-            "text": text if not ok else "",
+            "text": "",
             "card": card,
             "returncode": 0 if ok else 1,
             "stdout": "",
@@ -210,17 +212,23 @@ class LarkCliPublisher:
                 "card_timeout_seconds": self.config.card_timeout_seconds,
             }
 
-        fallback = self._send_direct_text(
+        failed = _card_delivery_failed_without_text_fallback(
             event,
-            target,
-            text,
-            idempotency_key=self._direct_idempotency_key(event, target, "text"),
+            card,
+            attempts=attempts,
+            reason="direct_interactive_card_failed_after_retries",
+            timeout_seconds=self.config.card_timeout_seconds,
         )
-        fallback["card_attempts"] = attempts
-        fallback["fallback_used"] = True
-        fallback["fallback_reason"] = "direct_interactive_card_failed_after_retries"
-        fallback["target"] = target
-        return fallback
+        failed.update(
+            {
+                "mode": "send_direct_card",
+                "delivery_mode": "dm",
+                "reply_to": None,
+                "chat_id": None,
+                "target": target,
+            }
+        )
+        return failed
 
     def _reply_text(self, event: FeishuTextEvent, text: str, *, idempotency_key: str) -> dict[str, Any]:
         command = self._base_command() + [
@@ -488,6 +496,35 @@ def _card_action_update_token_missing_result(
         "fallback_suppressed": True,
         "fallback_reason": "card_action_update_token_missing",
         "card_update_token": None,
+    }
+
+
+def _card_delivery_failed_without_text_fallback(
+    event: FeishuTextEvent,
+    card: dict[str, Any],
+    *,
+    attempts: list[dict[str, Any]],
+    reason: str,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "dry_run": False,
+        "mode": "interactive_card",
+        "reply_to": event.message_id,
+        "chat_id": event.chat_id,
+        "text": "",
+        "card": card,
+        "returncode": None,
+        "stdout": "",
+        "stderr": "interactive card failed; text fallback suppressed to keep Feishu replies card-only",
+        "timed_out": False,
+        "latency_ms": sum(float(attempt.get("latency_ms") or 0) for attempt in attempts),
+        "card_attempts": attempts,
+        "fallback_used": False,
+        "fallback_suppressed": True,
+        "fallback_reason": reason,
+        "card_timeout_seconds": timeout_seconds,
     }
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from memory_engine.feishu_config import FeishuConfig
 from memory_engine.feishu_events import FeishuTextEvent
@@ -105,6 +106,16 @@ def targeted_card() -> dict:
 
 
 class FeishuPublisherTest(unittest.TestCase):
+    def test_copilot_live_start_script_defaults_to_interactive_cards(self) -> None:
+        script = (Path(__file__).resolve().parents[1] / "scripts/start_copilot_feishu_live.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('export FEISHU_CARD_MODE="${FEISHU_CARD_MODE:-interactive}"', script)
+        self.assertNotIn('FEISHU_CARD_MODE="${FEISHU_CARD_MODE:-text}"', script)
+        self.assertIn('if [[ "$FEISHU_CARD_MODE" != "interactive" ]]; then', script)
+        self.assertIn("FEISHU_CARD_MODE must be interactive", script)
+
     def test_targeted_interactive_card_sends_dm_to_each_open_id_not_group(self) -> None:
         publisher = RecordingPublisher(config())
 
@@ -122,20 +133,22 @@ class FeishuPublisherTest(unittest.TestCase):
             self.assertEqual("interactive", command[command.index("--msg-type") + 1])
             json.loads(command[command.index("--content") + 1])
 
-    def test_targeted_card_failure_falls_back_only_to_dm_text(self) -> None:
-        publisher = RecordingPublisher(config(), [False, True])
+    def test_targeted_card_failure_suppresses_text_fallback(self) -> None:
+        publisher = RecordingPublisher(config(), [False])
 
-        result = publisher.publish(event(), "只能私聊 fallback", {"open_ids": ["ou_reviewer_1"]})
+        result = publisher.publish(event(), "不应发送纯文本 fallback", {"open_ids": ["ou_reviewer_1"]})
 
-        self.assertTrue(result["ok"])
+        self.assertFalse(result["ok"])
         self.assertEqual("dm", result["delivery_mode"])
-        self.assertTrue(result["target_results"][0]["fallback_used"])
-        self.assertEqual(["send_direct_card", "send_direct_text"], publisher.modes)
+        self.assertFalse(result["target_results"][0]["fallback_used"])
+        self.assertTrue(result["target_results"][0]["fallback_suppressed"])
+        self.assertEqual(["send_direct_card"], publisher.modes)
         for command in publisher.commands:
             self.assertIn("--user-id", command)
             self.assertEqual("ou_reviewer_1", command[command.index("--user-id") + 1])
             self.assertNotIn("--chat-id", command)
-        self.assertIn("--text", publisher.commands[1])
+            self.assertEqual("interactive", command[command.index("--msg-type") + 1])
+        self.assertEqual("", result["text"])
 
     def test_targeted_card_timeout_suppresses_fallback_without_group_send(self) -> None:
         publisher = RecordingPublisher(config(), [{"ok": False, "timed_out": True}])

@@ -83,7 +83,7 @@
 | P1 | 跑通真实飞书权限负例 | `scripts/check_feishu_permission_negative_gate.py` 可验证非 reviewer 真实用户 `/enable_memory` denial result，并可解析 Copilot listener `raw_line` attempt wrapper；2026-05-01 available isolated logs 只看到 reviewer/admin allow-path，后续仍需第二个真实用户账号在受控测试群执行并让 gate 返回 `non_reviewer_enable_memory_denied` |
 | P1 | 扩大真实飞书可点击卡片实测 | 本地 gate 已覆盖 card-action update-token 路径和缺 token 不改状态；后续仍需在受控测试群里用真实卡片点击覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`，并读回审计；不把一次 sandbox 点击写成生产长期运行 |
 | P1 | 扩大真实飞书审核收件箱实测 | 本地 gate 已覆盖 `/review` private card addressing、确认点击更新原卡片和缺 token fail-closed；后续仍需在受控测试群里用 `/review`、`/review conflicts`、`确认合并` 和 `/undo` 覆盖真实卡片点击与审计读回；当前只完成本地受控路径，不宣称真实 DM/群长期稳定运行 |
-| P1 | 扩大真实 DM 定向投递实测 | 在 lark-cli 认证可用后，用受控 reviewer/owner open_id 读回 DM 卡片投递和失败 fallback；当前完成 publisher 本地测试，不宣称生产长期运行 |
+| P1 | 扩大真实 DM 定向投递实测 | 在 lark-cli 认证可用后，用受控 reviewer/owner open_id 读回 DM 卡片投递；卡片发送失败时不退回纯文本，只记录 card failure；当前完成 publisher 本地测试，不宣称生产长期运行 |
 | P2 | 继续推进 productized live gate | 已完成本地 tenant policy editor；后续从 L1 internal pilot、PostgreSQL pilot、真实企业 IdP SSO 验收、审计 read-only view 中选一个小 gate 实施；仍不宣称 productized live 完成 |
 | P2 | 收敛评委版文档入口 | README 顶部保持简洁，把答辩、白皮书、详细计划放到后半段 |
 

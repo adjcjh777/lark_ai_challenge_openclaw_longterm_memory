@@ -114,7 +114,9 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("memory.search", result["tool"])
         self.assertEqual("openclaw_gateway_memory_search", result["routing_reason"])
-        self.assertEqual("reply", result["publish"]["mode"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertEqual("", result["publish"]["text"])
+        self.assertIs(result["card"], result["publish"]["card"])
         bridge = result["tool_result"]["bridge"]
         self.assertEqual("fmc_memory_search", bridge["tool"])
         self.assertEqual("allow", bridge["permission_decision"]["decision"])
@@ -141,7 +143,9 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual("memory.prefetch", result["tool"])
         self.assertEqual("openclaw_gateway_memory_prefetch", result["routing_reason"])
-        self.assertEqual("reply", result["publish"]["mode"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertEqual("", result["publish"]["text"])
+        self.assertIs(result["card"], result["publish"]["card"])
         bridge = result["tool_result"]["bridge"]
         self.assertEqual("fmc_memory_prefetch", bridge["tool"])
         self.assertEqual("allow", bridge["permission_decision"]["decision"])

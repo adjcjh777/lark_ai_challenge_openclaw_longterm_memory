@@ -28,7 +28,9 @@ from memory_engine.feishu_cards import (  # noqa: E402
     build_candidate_review_card,
     build_card_from_text,
     build_group_settings_card,
+    build_prefetch_context_card,
     build_review_inbox_card,
+    build_search_result_card,
 )
 from memory_engine.feishu_config import load_feishu_config  # noqa: E402
 from memory_engine.feishu_events import FeishuMessageEvent  # noqa: E402
@@ -354,6 +356,7 @@ def route_gateway_group_settings(
             chat_allowed=chat_allowed,
         )
     reply = _format_group_settings(tool_result)
+    card = build_group_settings_card(tool_result)
     return {
         "ok": True,
         "tool": "copilot.group_settings",
@@ -362,14 +365,14 @@ def route_gateway_group_settings(
         "routing_reason": "openclaw_gateway_group_settings",
         "source_entrypoint": "openclaw_gateway_live",
         "tool_result": tool_result,
-        "card": build_group_settings_card(tool_result),
+        "card": card,
         "disposition": "reply",
         "message_disposition": {
             "memory_path": "group_settings",
             "candidate_path": "read_only",
             "reason_code": "openclaw_gateway_group_settings",
         },
-        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply),
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
     }
 
@@ -449,6 +452,7 @@ def route_gateway_group_policy(
                 "production_boundary": "受控 OpenClaw gateway staging；不是生产长期运行。",
             }
     reply = _format_group_policy_result(tool_result)
+    card = build_card_from_text(reply)
     return {
         "ok": True,
         "tool": tool_name,
@@ -457,14 +461,14 @@ def route_gateway_group_policy(
         "routing_reason": f"openclaw_gateway_group_memory_{action}",
         "source_entrypoint": "openclaw_gateway_live",
         "tool_result": tool_result,
-        "card": build_card_from_text(reply),
+        "card": card,
         "disposition": "reply",
         "message_disposition": {
             "memory_path": "group_policy_write",
             "candidate_path": str(tool_result.get("status") or "unknown"),
             "reason_code": f"openclaw_gateway_group_memory_{action}",
         },
-        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply),
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
     }
 
@@ -502,6 +506,7 @@ def route_gateway_memory_search(
     service = CopilotService(db_path=db_path)
     tool_result = handle_tool_request("memory.search", payload, service=service)
     reply = _format_memory_search_result(tool_result)
+    card = build_search_result_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
     return {
         "ok": bool(tool_result.get("ok", True)),
         "tool": "memory.search",
@@ -510,14 +515,14 @@ def route_gateway_memory_search(
         "routing_reason": "openclaw_gateway_memory_search",
         "source_entrypoint": "openclaw_gateway_live",
         "tool_result": tool_result,
-        "card": build_card_from_text(reply),
+        "card": card,
         "disposition": "reply",
         "message_disposition": {
             "memory_path": "first_class_memory_search",
             "candidate_path": "read_only",
             "reason_code": "openclaw_gateway_memory_search",
         },
-        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply),
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
     }
 
@@ -555,6 +560,7 @@ def route_gateway_memory_prefetch(
     service = CopilotService(db_path=db_path)
     tool_result = handle_tool_request("memory.prefetch", payload, service=service)
     reply = _format_memory_prefetch_result(tool_result)
+    card = build_prefetch_context_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
     return {
         "ok": bool(tool_result.get("ok", True)),
         "tool": "memory.prefetch",
@@ -563,14 +569,14 @@ def route_gateway_memory_prefetch(
         "routing_reason": "openclaw_gateway_memory_prefetch",
         "source_entrypoint": "openclaw_gateway_live",
         "tool_result": tool_result,
-        "card": build_card_from_text(reply),
+        "card": card,
         "disposition": "reply",
         "message_disposition": {
             "memory_path": "first_class_memory_prefetch",
             "candidate_path": "read_only",
             "reason_code": "openclaw_gateway_memory_prefetch",
         },
-        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply),
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
     }
 
@@ -1032,14 +1038,23 @@ def _redacted_id(value: str) -> str:
     return f"{value[:4]}...{value[-4:]}"
 
 
-def _reply_publish_result(*, message_id: str, chat_id: str, text: str) -> dict[str, Any]:
+def _reply_publish_result(
+    *,
+    message_id: str,
+    chat_id: str,
+    text: str,
+    card: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     return {
         "ok": True,
         "dry_run": False,
-        "mode": "reply",
+        "mode": "interactive" if card else "reply",
+        "delivery_mode": "chat",
         "reply_to": message_id,
         "chat_id": chat_id,
-        "text": text,
+        "text": "" if card else text,
+        "card": card,
+        "fallback_used": False,
         "suppressed": False,
     }
 

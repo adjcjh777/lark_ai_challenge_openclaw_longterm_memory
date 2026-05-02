@@ -171,18 +171,21 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIsNotNone(result["publish"]["card"])
         json.dumps(result, ensure_ascii=False)
 
-    def test_text_fallback_runs_only_after_three_card_failures(self) -> None:
+    def test_card_failure_suppresses_text_fallback(self) -> None:
         event = message_event_from_payload(text_payload("om_card_fallback", "/remember 生产部署必须加 --canary"))
         self.assertIsNotNone(event)
-        publisher = FakePublisher(self.config, [False, False, False, True])
+        publisher = FakePublisher(self.config, [False, False, False])
 
         result = handle_message_event(self.conn, event, publisher, self.config, db_path=self.db_path)
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(["reply_card", "reply_card", "reply_card", "reply_text"], publisher.modes)
-        self.assertTrue(result["publish"]["fallback_used"])
+        self.assertFalse(result["ok"])
+        self.assertEqual(["reply_card", "reply_card", "reply_card"], publisher.modes)
+        self.assertFalse(result["publish"]["fallback_used"])
+        self.assertTrue(result["publish"]["fallback_suppressed"])
+        self.assertEqual("interactive_card_failed_after_retries", result["publish"]["fallback_reason"])
         self.assertEqual(3, len(result["publish"]["card_attempts"]))
-        self.assertEqual([2.0, 2.0, 2.0, None], publisher.timeouts)
+        self.assertEqual([2.0, 2.0, 2.0], publisher.timeouts)
+        self.assertEqual("", result["publish"]["text"])
         json.dumps(result, ensure_ascii=False)
 
     def test_targeted_review_card_failure_suppresses_public_text_fallback(self) -> None:
@@ -200,17 +203,16 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         result = publisher.publish(event, "这里包含不应回退到群聊的审核文本", card)
 
-        self.assertTrue(result["ok"])
+        self.assertFalse(result["ok"])
         self.assertEqual("direct_interactive", result["mode"])
         self.assertEqual("dm", result["delivery_mode"])
         self.assertIsNone(result["chat_id"])
         self.assertEqual(["ou_owner"], result["targets"])
-        self.assertTrue(result["fallback_used"])
-        self.assertFalse(result["fallback_suppressed"])
+        self.assertFalse(result["fallback_used"])
+        self.assertTrue(result["fallback_suppressed"])
         self.assertEqual("direct_interactive_card_failed_after_retries", result["target_results"][0]["fallback_reason"])
-        self.assertEqual(
-            ["send_direct_card", "send_direct_card", "send_direct_card", "send_direct_text"], publisher.modes
-        )
+        self.assertEqual(["send_direct_card", "send_direct_card", "send_direct_card"], publisher.modes)
+        self.assertEqual("", result["text"])
 
     def test_timeout_suppresses_text_fallback_to_avoid_double_send(self) -> None:
         event = message_event_from_payload(text_payload("om_card_timeout", "/remember 生产部署必须加 --canary"))

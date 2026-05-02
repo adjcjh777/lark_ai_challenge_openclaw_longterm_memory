@@ -104,7 +104,7 @@
 
 - 候选卡片已有 confirm / reject / source / version 等按钮基础。
 - 已完成 4 类稳定 payload builder：`search_result_payload()`、`candidate_review_payload()`、`version_chain_payload()`、`prefetch_context_payload()`。
-- Feishu live `card_mode=interactive` 已按 Copilot service output 选择 typed card builder，候选审核卡不再只是文本 fallback 卡片。
+- Feishu live `card_mode=interactive` 已按 Copilot service output 选择 typed card builder，候选审核卡不再只是文本 fallback 卡片；产品化启动脚本默认 interactive，卡片发送失败时 suppress 纯文本 fallback。
 - 卡片主内容和审计详情已分层：用户先看当前结论、证据、风险和下一步；`request_id`、`trace_id`、`permission_decision` 放入审计详情。
 - 评委版不暴露不可用按钮；候选卡只给 reviewer / owner / admin 显示确认、拒绝、要求补证据和标记过期，搜索卡只保留已有版本解释动作。
 

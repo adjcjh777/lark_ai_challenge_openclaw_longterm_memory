@@ -13,13 +13,19 @@ export COPILOT_FEISHU_ALLOWED_CHAT_QUERY="${COPILOT_FEISHU_ALLOWED_CHAT_QUERY:-F
 export COPILOT_FEISHU_ALLOWED_CHAT_IDS="${COPILOT_FEISHU_ALLOWED_CHAT_IDS:-}"
 export COPILOT_FEISHU_REVIEWER_OPEN_IDS="${COPILOT_FEISHU_REVIEWER_OPEN_IDS:-}"
 export FEISHU_BOT_MODE="${FEISHU_BOT_MODE:-reply}"
-export FEISHU_CARD_MODE="${FEISHU_CARD_MODE:-text}"
+export FEISHU_CARD_MODE="${FEISHU_CARD_MODE:-interactive}"
 export FEISHU_CARD_RETRY_COUNT="${FEISHU_CARD_RETRY_COUNT:-3}"
 export FEISHU_CARD_TIMEOUT_SECONDS="${FEISHU_CARD_TIMEOUT_SECONDS:-2}"
 export FEISHU_LOG_DIR="${FEISHU_LOG_DIR:-logs/feishu-copilot-live}"
 export COPILOT_ADMIN_ENABLED="${COPILOT_ADMIN_ENABLED:-1}"
 export COPILOT_ADMIN_HOST="${COPILOT_ADMIN_HOST:-127.0.0.1}"
 export COPILOT_ADMIN_PORT="${COPILOT_ADMIN_PORT:-8765}"
+
+if [[ "$FEISHU_CARD_MODE" != "interactive" ]]; then
+  echo "FEISHU_CARD_MODE must be interactive for productized card-only replies." >&2
+  echo "Unset FEISHU_CARD_MODE or set FEISHU_CARD_MODE=interactive before starting this live sandbox." >&2
+  exit 1
+fi
 
 if ! command -v lark-cli >/dev/null 2>&1; then
   echo "lark-cli not found in PATH" >&2

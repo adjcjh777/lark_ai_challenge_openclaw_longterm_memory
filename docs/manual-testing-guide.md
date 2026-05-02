@@ -337,7 +337,7 @@ python3 scripts/check_openclaw_feishu_productization_completion.py \
 前置条件：
 
 - 已通过“Feishu websocket 单监听检查”或 Copilot lark-cli sandbox 单监听检查。
-- `FEISHU_CARD_MODE` 保持默认 `interactive`，或显式设置为 `interactive`。
+- `FEISHU_CARD_MODE` 保持默认 `interactive`，或显式设置为 `interactive`；`scripts/start_copilot_feishu_live.sh` 的默认值必须也是 `interactive`。
 - 当前操作者在本机环境的 `COPILOT_FEISHU_REVIEWER_OPEN_IDS` 中，或测试环境明确使用 `*`。
 - 不截图提交真实 `chat_id`、`open_id`、message id、token。
 
@@ -371,7 +371,7 @@ python3 scripts/query_audit_events.py --json --limit 20
 
 | 现象 | 判断 | 下一步 |
 |---|---|---|
-| 只发出纯文本，没有卡片 | 可能 `FEISHU_CARD_MODE=text` 或 card 发送失败后 fallback | 检查启动环境和 lark-cli card 发送错误，不宣称真实可点击路径通过 |
+| 只发出纯文本，没有卡片 | 可能启动环境显式设置了 `FEISHU_CARD_MODE=text`，或走到了旧 listener / 旧 Bot 路径 | 检查启动环境、单监听 owner 和 lark-cli card 发送错误；当前产品化路径 card 失败应 suppress 纯文本 fallback，不宣称真实可点击路径通过 |
 | 点击后 permission denied | 如果操作者不是 reviewer，这是正确 fail-closed | 复核 reviewer allowlist；不要把 `current_context` 塞进按钮 value 规避权限 |
 | 点击确认但 candidate 没变 active | 状态流转或 candidate 定位失败 | 用审计 request_id / trace_id 查 `memory.confirm` 结果 |
 | 非 reviewer 也能确认 | 严重权限问题 | 停止真实飞书测试，优先查 `feishu_live.py`、`feishu_events.py`、`permissions.py` |
