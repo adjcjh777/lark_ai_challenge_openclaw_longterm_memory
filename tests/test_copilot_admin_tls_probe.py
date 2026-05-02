@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from scripts.check_copilot_admin_tls_probe import run_tls_probe
 
-
 VALID_CERT = {
     "subject": ((("commonName", "memory.company.internal"),),),
     "subjectAltName": (("DNS", "memory.company.internal"),),

@@ -75,9 +75,7 @@ def evaluate_gate(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Check readiness for the controlled real Feishu expansion smoke gate."
-    )
+    parser = argparse.ArgumentParser(description="Check readiness for the controlled real Feishu expansion smoke gate.")
     parser.add_argument(
         "--planned-listener",
         choices=("copilot-lark-cli", "legacy-lark-cli", "openclaw-websocket", "none"),

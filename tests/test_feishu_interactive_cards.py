@@ -208,7 +208,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertTrue(result["fallback_used"])
         self.assertFalse(result["fallback_suppressed"])
         self.assertEqual("direct_interactive_card_failed_after_retries", result["target_results"][0]["fallback_reason"])
-        self.assertEqual(["send_direct_card", "send_direct_card", "send_direct_card", "send_direct_text"], publisher.modes)
+        self.assertEqual(
+            ["send_direct_card", "send_direct_card", "send_direct_card", "send_direct_text"], publisher.modes
+        )
 
     def test_timeout_suppresses_text_fallback_to_avoid_double_send(self) -> None:
         event = message_event_from_payload(text_payload("om_card_timeout", "/remember 生产部署必须加 --canary"))
@@ -848,7 +850,9 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
 
         self.assertEqual("copilot_search_results", payload["surface"])
         self.assertEqual("none", payload["state_mutation"])
-        self.assertEqual("生产部署 region 用 ap-shanghai。", payload["user_content"]["results"][0]["current_conclusion"])
+        self.assertEqual(
+            "生产部署 region 用 ap-shanghai。", payload["user_content"]["results"][0]["current_conclusion"]
+        )
         self.assertTrue(payload["user_content"]["results"][0]["superseded_filtered"])
         self.assertIn("命中当前 active 记忆", payload["user_content"]["results"][0]["rank_reason"])
         self.assertIn("证据内容与问题相关", payload["user_content"]["results"][0]["rank_reason"])

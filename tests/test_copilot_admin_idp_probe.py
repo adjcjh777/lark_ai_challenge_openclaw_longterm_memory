@@ -64,7 +64,7 @@ class CopilotAdminIdpProbeTest(unittest.TestCase):
             viewer_export_denied=False,
             allowed_domains=["example.com"],
             evidence_refs=["Bearer secret"],
-            http_fetcher=lambda url, timeout: {"status": 200, "headers": {}, "body": "{\"ok\":true}"},
+            http_fetcher=lambda url, timeout: {"status": 200, "headers": {}, "body": '{"ok":true}'},
         )
 
         self.assertFalse(result["ok"], result)

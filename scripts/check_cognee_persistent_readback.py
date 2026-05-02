@@ -12,7 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from memory_engine.copilot.cognee_adapter import CogneeMemoryAdapter, load_cognee_client, _resolve_awaitable  # noqa: E402
+from memory_engine.copilot.cognee_adapter import (  # noqa: E402
+    CogneeMemoryAdapter,
+    _resolve_awaitable,
+    load_cognee_client,
+)
 from scripts.check_cognee_curated_sync_gate import (  # noqa: E402
     _configure_environment,
     apply_cognee_gate_env_defaults,

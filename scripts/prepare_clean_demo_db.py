@@ -27,7 +27,9 @@ def main() -> int:
         )
     )
     parser.add_argument("--output-db", required=True, help="Path for the clean demo SQLite DB to create.")
-    parser.add_argument("--source-db", default=str(db_path_from_env()), help="Existing DB to inspect for live-test noise.")
+    parser.add_argument(
+        "--source-db", default=str(db_path_from_env()), help="Existing DB to inspect for live-test noise."
+    )
     parser.add_argument("--scope", default=DEFAULT_SCOPE, help="Demo scope to seed.")
     parser.add_argument("--force", action="store_true", help="Replace --output-db if it already exists.")
     parser.add_argument("--json", action="store_true", help="Print JSON report.")

@@ -4,7 +4,15 @@ import hashlib
 from dataclasses import replace
 
 from .retrieval import LayerAwareRetriever, rerank_results
-from .schemas import Evidence, MemoryLayer, MemoryResult, RetrievalTrace, RetrievalTraceStep, SearchRequest, SearchResponse
+from .schemas import (
+    Evidence,
+    MemoryLayer,
+    MemoryResult,
+    RetrievalTrace,
+    RetrievalTraceStep,
+    SearchRequest,
+    SearchResponse,
+)
 
 
 class MemorySearchOrchestrator:

@@ -10,7 +10,6 @@ from typing import Any
 
 from memory_engine.copilot.admin import AdminQueryService, _redact_sensitive_text
 
-
 STATIC_SITE_BOUNDARY = (
     "static read-only knowledge site export for local/staging review; "
     "no production deployment, SSO, or productized live claim."

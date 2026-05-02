@@ -17,9 +17,9 @@ from .graph_context import review_targets_for_chat
 from .heartbeat import DEFAULT_COOLDOWN_MS, HeartbeatReminderEngine, _reminder_key, parse_review_at_ms
 from .orchestrator import MemorySearchOrchestrator
 from .permissions import check_scope_access
+from .retrieval import LayerAwareRetriever
 from .review_inbox import list_review_inbox
 from .review_policy import evaluate_review_policy
-from .retrieval import LayerAwareRetriever
 from .schemas import (
     WORKING_CONTEXT_FIELDS,
     ConfirmRequest,
@@ -160,7 +160,9 @@ class CopilotService:
                     request.current_context,
                     response,
                     target_type="candidate",
-                    event_type="limited_ingestion_candidate" if _is_real_feishu_source(request.source.source_type) else None,
+                    event_type="limited_ingestion_candidate"
+                    if _is_real_feishu_source(request.source.source_type)
+                    else None,
                 )
                 confirmed = self.confirm(
                     ConfirmRequest(

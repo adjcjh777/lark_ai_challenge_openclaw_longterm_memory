@@ -64,7 +64,9 @@ class CopilotExternalProductionEvidenceTest(unittest.TestCase):
 
         self.assertFalse(result["ok"], result)
         self.assertIn("production_monitoring", result["failed_checks"])
-        self.assertIn("grafana_dashboard_url_present", result["checks"]["production_monitoring"]["missing_or_placeholder"])
+        self.assertIn(
+            "grafana_dashboard_url_present", result["checks"]["production_monitoring"]["missing_or_placeholder"]
+        )
 
 
 def _complete_result(**overrides):

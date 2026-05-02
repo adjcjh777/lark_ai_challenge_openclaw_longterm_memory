@@ -7,7 +7,6 @@ from typing import Any
 
 from memory_engine.repository import MemoryRepository, now_ms
 
-
 ACTIVE_STATUS = "active"
 PENDING_STATUS = "pending_onboarding"
 DISABLED_STATUS = "disabled"
@@ -77,12 +76,15 @@ def ensure_group_policy(
             now,
         ),
     )
-    return get_group_policy(
-        conn,
-        chat_id=chat_id,
-        tenant_id=tenant_id,
-        organization_id=organization_id,
-    ) or {}
+    return (
+        get_group_policy(
+            conn,
+            chat_id=chat_id,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+        )
+        or {}
+    )
 
 
 def enable_group_memory(
@@ -169,12 +171,15 @@ def enable_group_memory(
         source_context={"entrypoint": source_entrypoint, "chat_id": chat_id},
         created_at=now,
     )
-    return get_group_policy(
-        conn,
-        chat_id=chat_id,
-        tenant_id=tenant_id,
-        organization_id=organization_id,
-    ) or {}
+    return (
+        get_group_policy(
+            conn,
+            chat_id=chat_id,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+        )
+        or {}
+    )
 
 
 def disable_group_memory(
@@ -241,12 +246,15 @@ def disable_group_memory(
         source_context={"entrypoint": source_entrypoint, "chat_id": chat_id},
         created_at=now,
     )
-    return get_group_policy(
-        conn,
-        chat_id=chat_id,
-        tenant_id=tenant_id,
-        organization_id=organization_id,
-    ) or {}
+    return (
+        get_group_policy(
+            conn,
+            chat_id=chat_id,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+        )
+        or {}
+    )
 
 
 def record_group_policy_denied(

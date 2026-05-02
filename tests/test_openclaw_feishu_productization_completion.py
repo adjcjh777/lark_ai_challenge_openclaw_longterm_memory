@@ -92,7 +92,9 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
 
         blockers = {item["name"]: item for item in report["blockers"]}
         self.assertEqual("listener_conflict_detected", blockers["single_feishu_listener_entry"]["reason"])
-        single_listener_item = next(entry for entry in report["items"] if entry["name"] == "single_feishu_listener_entry")
+        single_listener_item = next(
+            entry for entry in report["items"] if entry["name"] == "single_feishu_listener_entry"
+        )
         diagnostic_evidence = single_listener_item["evidence"]["event_subscription_diagnostics"]
         self.assertEqual(1, diagnostic_evidence["active_bus_count"])
         self.assertTrue(diagnostic_evidence["listener_conflict_detected"])
@@ -189,7 +191,10 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
             )
             routing_log = _write_jsonl(
                 root / "routing.ndjson",
-                [_routing_result(tool) for tool in ("fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_prefetch")],
+                [
+                    _routing_result(tool)
+                    for tool in ("fmc_memory_search", "fmc_memory_create_candidate", "fmc_memory_prefetch")
+                ],
             )
             cognee_evidence = _write_json(
                 root / "cognee-long-run.json",

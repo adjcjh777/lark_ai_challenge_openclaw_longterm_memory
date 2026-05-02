@@ -37,7 +37,9 @@ def main() -> None:
     try:
         result = asyncio.run(
             asyncio.wait_for(
-                _embed_once(model=model, endpoint=endpoint, text=args.text, api_key=os.environ.get("EMBEDDING_API_KEY")),
+                _embed_once(
+                    model=model, endpoint=endpoint, text=args.text, api_key=os.environ.get("EMBEDDING_API_KEY")
+                ),
                 timeout=args.timeout,
             )
         )

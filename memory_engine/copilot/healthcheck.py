@@ -19,7 +19,6 @@ from .permissions import demo_permission_context
 from .service import CopilotService
 from .tools import handle_tool_request
 
-
 ROOT = Path(__file__).resolve().parents[2]
 OPENCLAW_LOCK_FILE = ROOT / "agent_adapters" / "openclaw" / "openclaw-version.lock"
 OPENCLAW_SCHEMA_FILE = ROOT / "agent_adapters" / "openclaw" / "memory_tools.schema.json"
@@ -264,7 +263,9 @@ def _check_openclaw_websocket(checker: OpenClawWebsocketChecker | None) -> dict[
         "status_counts": status_counts,
         "boundary": result.get("boundary")
         or "OpenClaw Feishu websocket staging evidence only; not production deployment or productized live.",
-        "next_step": "" if status == "pass" else "查看 channels_status、health_consistency 和 Feishu gateway 日志后再判断是否重启 websocket。",
+        "next_step": ""
+        if status == "pass"
+        else "查看 channels_status、health_consistency 和 Feishu gateway 日志后再判断是否重启 websocket。",
     }
 
 
@@ -498,10 +499,18 @@ def _check_embedding_provider(path: Path, live_check: bool = False) -> dict[str,
         "runtime_fallback_available": True,
         "fallback": "DeterministicEmbeddingProvider",
         "unavailable_reason": error_info
-        or (None if ollama_available else "ollama_provider_unavailable" if litellm_available else "litellm_not_available"),
+        or (
+            None
+            if ollama_available
+            else "ollama_provider_unavailable"
+            if litellm_available
+            else "litellm_not_available"
+        ),
         "monitoring_status": "live_embedding_verified"
         if live_available is True
-        else "configuration_only" if not live_check else "fallback_or_not_configured",
+        else "configuration_only"
+        if not live_check
+        else "fallback_or_not_configured",
         "boundary": "Deterministic fallback keeps local recall usable, but it is not a long-running embedding service.",
         "next_step": (
             "运行 python3 scripts/check_embedding_provider.py 进行完整验证。"

@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.collect_feishu_live_evidence_packet import collect_feishu_live_evidence_packet
 from scripts.check_openclaw_feishu_productization_completion import build_completion_audit
+from scripts.collect_feishu_live_evidence_packet import collect_feishu_live_evidence_packet
 from tests.test_openclaw_feishu_productization_completion import (
     _candidate_result,
     _card_update_result,

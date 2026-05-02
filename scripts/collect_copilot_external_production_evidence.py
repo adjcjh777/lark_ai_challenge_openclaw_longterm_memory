@@ -30,7 +30,9 @@ def main() -> int:
     parser.add_argument("--idp-provider", required=True, help="Real enterprise IdP provider, e.g. feishu_sso.")
     parser.add_argument("--idp-login-tested-at", required=True, help="ISO-8601 real login test timestamp.")
     parser.add_argument("--idp-admin-login-passed", action="store_true", help="Set when admin login was tested.")
-    parser.add_argument("--idp-viewer-export-denied", action="store_true", help="Set when viewer export denial was tested.")
+    parser.add_argument(
+        "--idp-viewer-export-denied", action="store_true", help="Set when viewer export denial was tested."
+    )
     parser.add_argument("--idp-allowed-domain", action="append", default=[], help="Allowed enterprise domain.")
     parser.add_argument("--idp-evidence-ref", action="append", default=[], help="Non-secret IdP evidence ref.")
     parser.add_argument("--tls-url", required=True, help="Production HTTPS URL.")
@@ -43,7 +45,9 @@ def main() -> int:
     parser.add_argument("--grafana-dashboard-url", required=True, help="Production Grafana dashboard URL.")
     parser.add_argument("--alertmanager-route", required=True, help="Production Alertmanager route name.")
     parser.add_argument("--alert-delivery-tested-at", required=True, help="ISO-8601 alert delivery test timestamp.")
-    parser.add_argument("--monitoring-evidence-ref", action="append", default=[], help="Non-secret monitoring evidence ref.")
+    parser.add_argument(
+        "--monitoring-evidence-ref", action="append", default=[], help="Non-secret monitoring evidence ref."
+    )
     parser.add_argument("--output", default="", help="Optional JSON output file path.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     args = parser.parse_args()
@@ -180,7 +184,9 @@ def _idp_check(
         "allowed_domains_present": bool(allowed_domains) and all(_real_domain(domain) for domain in allowed_domains),
         "evidence_refs_present": _valid_evidence_refs(evidence_refs),
     }
-    return _section_result("Enterprise IdP evidence covers login, admin role, viewer denial, domains, and refs.", checks)
+    return _section_result(
+        "Enterprise IdP evidence covers login, admin role, viewer denial, domains, and refs.", checks
+    )
 
 
 def _tls_check(

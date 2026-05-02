@@ -124,7 +124,9 @@ def _card_action_event_from_payload(payload: dict[str, Any]) -> FeishuMessageEve
     sender_id = _string(operator.get("open_id") or operator.get("operator_id") or event.get("operator_id"))
     token = _string(event.get("token"))
     if not token:
-        fallback_id = hashlib.sha1(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
+        fallback_id = hashlib.sha1(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[
+            :24
+        ]
         return FeishuMessageEvent(
             message_id=f"card_action_missing_token_{fallback_id}",
             chat_id=chat_id,

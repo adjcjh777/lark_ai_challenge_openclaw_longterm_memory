@@ -87,7 +87,9 @@ def sample_embedding_health(
     run_checker = checker or _run_embedding_check
     clock = now_fn or (lambda: datetime.now(timezone.utc))
     sleeper = sleep_fn or time.sleep
-    command = _embedding_check_command(text=text, model=model, endpoint=endpoint, dimensions=dimensions, timeout=timeout)
+    command = _embedding_check_command(
+        text=text, model=model, endpoint=endpoint, dimensions=dimensions, timeout=timeout
+    )
     samples: list[dict[str, Any]] = []
     for index in range(sample_count):
         sampled_at = clock().astimezone(timezone.utc).isoformat()

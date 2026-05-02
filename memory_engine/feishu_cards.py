@@ -104,7 +104,9 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
     conflict = candidate_response.get("conflict") or candidate.get("conflict") or {}
     evidence = candidate_response.get("evidence") or candidate.get("evidence") or memory.get("evidence") or {}
     risk_flags = list(candidate_response.get("risk_flags") or candidate.get("risk_flags") or [])
-    permission_decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    permission_decision = (
+        bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    )
     actor = permission_decision.get("actor") if isinstance(permission_decision.get("actor"), dict) else {}
     owner_id = candidate_response.get("owner_id") or candidate.get("owner_id") or memory.get("owner_id")
     queue_views = _queue_views(risk_flags, conflict)
@@ -239,7 +241,11 @@ def version_chain_payload(explain_versions_response: dict[str, Any]) -> dict[str
         return _denied_surface_payload("copilot_version_chain", "记忆版本链不可用", explain_versions_response, bridge)
 
     versions = explain_versions_response.get("versions") or []
-    active = explain_versions_response.get("active_version") if isinstance(explain_versions_response.get("active_version"), dict) else {}
+    active = (
+        explain_versions_response.get("active_version")
+        if isinstance(explain_versions_response.get("active_version"), dict)
+        else {}
+    )
     old_versions = [item for item in versions if isinstance(item, dict) and not item.get("is_active")]
     user_explanation = explain_versions_response.get("user_explanation")
     if not isinstance(user_explanation, dict):
@@ -622,7 +628,8 @@ def build_search_result_card(search_response: dict[str, Any]) -> dict[str, Any]:
                 "tag": "div",
                 "fields": [
                     {
-                        "is_short": label not in {"当前结论 1", "当前结论 2", "当前结论 3", "为什么采用", "证据", "排序理由"},
+                        "is_short": label
+                        not in {"当前结论 1", "当前结论 2", "当前结论 3", "为什么采用", "证据", "排序理由"},
                         "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
                     }
                     for label, value in fields[:12]
@@ -721,7 +728,9 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
         return _permission_denied_card("记忆版本链", payload)
 
     user_content = payload.get("user_content") if isinstance(payload.get("user_content"), dict) else {}
-    current_version = user_content.get("current_version") if isinstance(user_content.get("current_version"), dict) else {}
+    current_version = (
+        user_content.get("current_version") if isinstance(user_content.get("current_version"), dict) else {}
+    )
     version_lines = []
     for item in user_content.get("timeline") or payload["versions"]:
         marker = "当前" if item.get("is_active") else "旧值"
@@ -1364,7 +1373,9 @@ def _candidate_review_buttons(
         {"action": "expire", "label": "标记过期", "required_for_mvp": True, "candidate_id": candidate_id},
     ]
     if has_conflict:
-        buttons.insert(0, {"action": "merge", "label": "确认合并", "required_for_mvp": True, "candidate_id": candidate_id})
+        buttons.insert(
+            0, {"action": "merge", "label": "确认合并", "required_for_mvp": True, "candidate_id": candidate_id}
+        )
     return buttons
 
 
@@ -1397,7 +1408,9 @@ def _candidate_review_status_label(payload: dict[str, Any]) -> str:
 def _compact_audit_block(audit: dict[str, Any]) -> dict[str, Any]:
     permission_decision = audit.get("permission_decision") if isinstance(audit.get("permission_decision"), dict) else {}
     decision = str(permission_decision.get("decision") or audit.get("decision") or "")
-    reason = str(permission_decision.get("reason_code") or audit.get("permission_reason") or audit.get("reason_code") or "")
+    reason = str(
+        permission_decision.get("reason_code") or audit.get("permission_reason") or audit.get("reason_code") or ""
+    )
     summary = "已记录"
     if decision:
         summary = f"已记录；权限：{decision}"

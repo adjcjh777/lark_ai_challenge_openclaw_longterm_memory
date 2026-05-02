@@ -23,11 +23,7 @@ class DryRunPublisher:
             "chat_id": None if direct_targets else event.chat_id,
             "text": text,
             "card": card,
-            "mode": (
-                "update_card"
-                if update_token
-                else ("interactive" if card else "text")
-            ),
+            "mode": ("update_card" if update_token else ("interactive" if card else "text")),
             "card_update_token": update_token,
             "delivery_mode": "dm" if direct_targets else "chat",
             "direct_mode": "direct_interactive" if direct_targets else None,

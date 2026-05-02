@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -66,10 +65,18 @@ def run_feishu_event_subscription_diagnostics(
     status_payload = _parse_json_object(status_result.get("stdout", ""))
     list_payload = _parse_json_object(list_result.get("stdout", ""))
     schema_payload = _parse_json_object(schema_result.get("stdout", ""))
-    apps = status_payload.get("apps") if isinstance(status_payload, dict) and isinstance(status_payload.get("apps"), list) else []
+    apps = (
+        status_payload.get("apps")
+        if isinstance(status_payload, dict) and isinstance(status_payload.get("apps"), list)
+        else []
+    )
     active_buses = [app for app in apps if isinstance(app, dict) and app.get("running")]
     event_keys = _event_keys(list_payload)
-    scopes = schema_payload.get("scopes") if isinstance(schema_payload, dict) and isinstance(schema_payload.get("scopes"), list) else []
+    scopes = (
+        schema_payload.get("scopes")
+        if isinstance(schema_payload, dict) and isinstance(schema_payload.get("scopes"), list)
+        else []
+    )
     required_events = (
         schema_payload.get("required_console_events")
         if isinstance(schema_payload, dict) and isinstance(schema_payload.get("required_console_events"), list)
@@ -212,7 +219,9 @@ def _remediation(
     if listener_conflict:
         steps.append("Stop the lark-cli event bus before using OpenClaw websocket as the planned single listener.")
     if not steps:
-        steps.append("Event subscription prerequisites look ready; send a real non-@ group text and preserve the single-listener log.")
+        steps.append(
+            "Event subscription prerequisites look ready; send a real non-@ group text and preserve the single-listener log."
+        )
 
     if missing_group_scope:
         summary = (

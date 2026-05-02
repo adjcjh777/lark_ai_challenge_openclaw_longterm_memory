@@ -85,7 +85,7 @@ class CogneeEmbeddingHealthSamplerTest(unittest.TestCase):
         self.assertIn("3072", command)
 
     def test_parser_accepts_noisy_stdout_before_json(self) -> None:
-        parsed = _parse_json("Provider List: https://docs.litellm.ai/docs/providers\n{\"ok\": true, \"status\": \"ready\"}\n")
+        parsed = _parse_json('Provider List: https://docs.litellm.ai/docs/providers\n{"ok": true, "status": "ready"}\n')
 
         self.assertEqual({"ok": True, "status": "ready"}, parsed)
 

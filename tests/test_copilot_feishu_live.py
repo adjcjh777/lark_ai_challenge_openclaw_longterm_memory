@@ -147,7 +147,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("ignored", result["message_disposition"]["candidate_path"])
 
     def test_natural_confirm_resolves_recent_candidate_without_internal_id(self) -> None:
-        created = self.handle("om_live_create_natural_confirm", "记住：生产部署必须加 --canary，region 用 ap-shanghai。")
+        created = self.handle(
+            "om_live_create_natural_confirm", "记住：生产部署必须加 --canary，region 用 ap-shanghai。"
+        )
         self.assertEqual("memory.create_candidate", created["tool"])
         self.assertIn("你可以直接回复：确认这条", self.reply_text(created))
 
@@ -160,7 +162,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertIn("下一步：这条记忆已经成为当前有效结论", self.reply_text(confirmed))
 
     def test_natural_reject_resolves_recent_candidate_without_internal_id(self) -> None:
-        created = self.handle("om_live_create_natural_reject", "记住：生产部署 rollback 负责人是程俊豪，截止周五，必须提前录屏。")
+        created = self.handle(
+            "om_live_create_natural_reject", "记住：生产部署 rollback 负责人是程俊豪，截止周五，必须提前录屏。"
+        )
 
         rejected = self.handle("om_live_reject_natural", "不要记这个")
 
@@ -236,7 +240,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("silent_no_reply", result["publish"]["mode"])
 
     def test_group_message_without_mention_does_not_reply_for_plain_question(self) -> None:
-        event = message_event_from_payload(payload("om_live_passive_question", "生产部署 region 是什么？", mention_bot=False))
+        event = message_event_from_payload(
+            payload("om_live_passive_question", "生产部署 region 是什么？", mention_bot=False)
+        )
         self.assertIsNotNone(event)
 
         result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
@@ -324,7 +330,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
 
     def test_non_allowlist_group_settings_returns_onboarding_status(self) -> None:
         new_chat_id = "oc_new_onboarding_group"
-        event = message_event_from_payload(payload("om_live_group_onboarding_settings", "/settings", chat_id=new_chat_id))
+        event = message_event_from_payload(
+            payload("om_live_group_onboarding_settings", "/settings", chat_id=new_chat_id)
+        )
         self.assertIsNotNone(event)
 
         with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
@@ -335,12 +343,8 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("pending_onboarding", result["tool_result"]["chat_status"])
         self.assertFalse(result["tool_result"]["passive_memory_enabled"])
         self.assertIn("新群默认 pending_onboarding", self.reply_text(result))
-        self.assertEqual(
-            0, self.conn.execute("SELECT COUNT(*) AS count FROM raw_events").fetchone()["count"]
-        )
-        self.assertEqual(
-            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"]
-        )
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM raw_events").fetchone()["count"])
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"])
 
     def test_reviewer_can_enable_non_allowlist_group_for_passive_candidates(self) -> None:
         new_chat_id = "oc_productized_any_group"
@@ -354,7 +358,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
             {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID, "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "ou_live_user"},
             clear=False,
         ):
-            enabled = handle_copilot_message_event(self.conn, enable_event, DryRunPublisher(), self.config, dry_run=True)
+            enabled = handle_copilot_message_event(
+                self.conn, enable_event, DryRunPublisher(), self.config, dry_run=True
+            )
 
         self.assertTrue(enabled["ok"])
         self.assertEqual("copilot.group_enable_memory", enabled["tool"])
@@ -371,7 +377,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         )
         self.assertIsNotNone(passive_event)
         with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
-            result = handle_copilot_message_event(self.conn, passive_event, DryRunPublisher(), self.config, dry_run=True)
+            result = handle_copilot_message_event(
+                self.conn, passive_event, DryRunPublisher(), self.config, dry_run=True
+            )
 
         self.assertTrue(result["ok"])
         self.assertEqual("memory.create_candidate", result["tool"])
@@ -421,14 +429,18 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         ):
             handle_copilot_message_event(
                 self.conn,
-                message_event_from_payload(payload("om_live_enable_before_disable", "/enable_memory", chat_id=new_chat_id)),
+                message_event_from_payload(
+                    payload("om_live_enable_before_disable", "/enable_memory", chat_id=new_chat_id)
+                ),
                 DryRunPublisher(),
                 self.config,
                 dry_run=True,
             )
             disabled = handle_copilot_message_event(
                 self.conn,
-                message_event_from_payload(payload("om_live_disable_any_group", "/disable_memory", chat_id=new_chat_id)),
+                message_event_from_payload(
+                    payload("om_live_disable_any_group", "/disable_memory", chat_id=new_chat_id)
+                ),
                 DryRunPublisher(),
                 self.config,
                 dry_run=True,
@@ -448,7 +460,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         )
         self.assertIsNotNone(passive_event)
         with patch.dict(os.environ, {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": CHAT_ID}, clear=False):
-            ignored = handle_copilot_message_event(self.conn, passive_event, DryRunPublisher(), self.config, dry_run=True)
+            ignored = handle_copilot_message_event(
+                self.conn, passive_event, DryRunPublisher(), self.config, dry_run=True
+            )
 
         self.assertTrue(ignored["ignored"])
         self.assertEqual("chat not in COPILOT_FEISHU_ALLOWED_CHAT_IDS", ignored["reason"])
@@ -496,12 +510,8 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("org:feishu-ai", node["organization_id"])
         self.assertEqual("discovered", node["status"])
         self.assertEqual(1, node["observation_count"])
-        self.assertEqual(
-            0, self.conn.execute("SELECT COUNT(*) AS count FROM raw_events").fetchone()["count"]
-        )
-        self.assertEqual(
-            0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"]
-        )
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM raw_events").fetchone()["count"])
+        self.assertEqual(0, self.conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"])
 
     def test_allowed_group_candidate_links_to_discovered_chat_graph_node(self) -> None:
         new_chat_id = "oc_allowed_product_group"
@@ -657,7 +667,10 @@ class CopilotFeishuLiveTest(unittest.TestCase):
             self.assertIsNotNone(event)
             with patch.dict(
                 os.environ,
-                {"COPILOT_FEISHU_ALLOWED_CHAT_IDS": f"{first_chat},{second_chat}", "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"},
+                {
+                    "COPILOT_FEISHU_ALLOWED_CHAT_IDS": f"{first_chat},{second_chat}",
+                    "COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*",
+                },
                 clear=False,
             ):
                 handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
@@ -799,7 +812,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertIsNotNone(card)
         action_blocks = [element for element in card["elements"] if element.get("tag") == "action"]
         self.assertEqual(1, len(action_blocks))
-        confirm_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存")
+        confirm_button = next(
+            action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存"
+        )
         self.assertEqual("confirm", confirm_button["value"]["memory_engine_action"])
         self.assertEqual(created["tool_result"]["candidate_id"], confirm_button["value"]["candidate_id"])
         self.assertNotIn("current_context", confirm_button["value"])
@@ -840,8 +855,12 @@ class CopilotFeishuLiveTest(unittest.TestCase):
             dry_run=True,
         )
         candidate_id = created["tool_result"]["candidate_id"]
-        action_blocks = [element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"]
-        confirm_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存")
+        action_blocks = [
+            element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"
+        ]
+        confirm_button = next(
+            action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存"
+        )
         raw_click = card_action_payload(confirm_button["value"])
         del raw_click["event"]["token"]
         click_event = message_event_from_payload(raw_click)
@@ -900,8 +919,12 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": ""}, clear=False):
             created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
 
-        action_blocks = [element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"]
-        confirm_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存")
+        action_blocks = [
+            element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"
+        ]
+        confirm_button = next(
+            action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认保存"
+        )
         click_event = message_event_from_payload(card_action_payload(confirm_button["value"]))
         self.assertIsNotNone(click_event)
 
@@ -930,8 +953,12 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         with patch.dict(os.environ, {"COPILOT_FEISHU_REVIEWER_OPEN_IDS": "*"}, clear=False):
             created = handle_copilot_message_event(self.conn, event, DryRunPublisher(), config, dry_run=True)
 
-        action_blocks = [element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"]
-        needs_evidence = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "要求补证据")
+        action_blocks = [
+            element for element in created["publish"]["card"]["elements"] if element.get("tag") == "action"
+        ]
+        needs_evidence = next(
+            action for action in action_blocks[0]["actions"] if action["text"]["content"] == "要求补证据"
+        )
         click_event = message_event_from_payload(card_action_payload(needs_evidence["value"]))
         self.assertIsNotNone(click_event)
 
@@ -1030,7 +1057,9 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         )
         first = handle_copilot_message_event(
             self.conn,
-            message_event_from_payload(payload("om_live_merge_old", "/remember 决定：生产部署 region 固定 cn-shanghai。")),
+            message_event_from_payload(
+                payload("om_live_merge_old", "/remember 决定：生产部署 region 固定 cn-shanghai。")
+            ),
             DryRunPublisher(),
             config,
             dry_run=True,
@@ -1038,12 +1067,16 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.handle("om_live_merge_confirm_old", f"/confirm {first['tool_result']['candidate_id']}")
         conflict = handle_copilot_message_event(
             self.conn,
-            message_event_from_payload(payload("om_live_merge_new", "/remember 不对，生产部署 region 以后统一改成 ap-shanghai。")),
+            message_event_from_payload(
+                payload("om_live_merge_new", "/remember 不对，生产部署 region 以后统一改成 ap-shanghai。")
+            ),
             DryRunPublisher(),
             config,
             dry_run=True,
         )
-        action_blocks = [element for element in conflict["publish"]["card"]["elements"] if element.get("tag") == "action"]
+        action_blocks = [
+            element for element in conflict["publish"]["card"]["elements"] if element.get("tag") == "action"
+        ]
         merge_button = next(action for action in action_blocks[0]["actions"] if action["text"]["content"] == "确认合并")
         merge_event = message_event_from_payload(card_action_payload(merge_button["value"]))
         self.assertIsNotNone(merge_event)

@@ -67,7 +67,9 @@ def run_tls_probe(
             hsts = (hsts_fetcher or _fetch_hsts)(url, timeout)
             checks["hsts"] = _hsts_check(hsts)
         except Exception as exc:  # pragma: no cover - network errors vary by platform.
-            checks["hsts"] = _fail("HTTPS endpoint responds with a valid Strict-Transport-Security header.", error=str(exc))
+            checks["hsts"] = _fail(
+                "HTTPS endpoint responds with a valid Strict-Transport-Security header.", error=str(exc)
+            )
     failed = sorted(name for name, check in checks.items() if check["status"] != "pass")
     cert_subject = _certificate_subject(cert)
     cert_expiry = _certificate_expiry_iso(cert)

@@ -344,7 +344,9 @@ def _permission_decision(
         ),
     }
     # Map to OpenClaw-facing name for schema compliance
-    summary["requested_action"] = PYTHON_TO_OPENCLAW_TOOL_NAMES.get(summary["requested_action"], summary["requested_action"])
+    summary["requested_action"] = PYTHON_TO_OPENCLAW_TOOL_NAMES.get(
+        summary["requested_action"], summary["requested_action"]
+    )
     requested_visibility = _permission_field(permission_payload, permission, "requested_visibility")
     if requested_visibility in BRIDGE_VISIBILITIES:
         summary["requested_visibility"] = requested_visibility

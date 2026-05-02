@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import importlib
 import asyncio
+import importlib
 import os
 import re
 import threading
@@ -319,7 +319,10 @@ def curated_memory_document(memory: dict[str, Any], *, metadata: dict[str, Any] 
 
 def _type_error_is_unexpected_keyword(exc: TypeError, keyword: str) -> bool:
     message = str(exc)
-    return f"unexpected keyword argument '{keyword}'" in message or f"got an unexpected keyword argument '{keyword}'" in message
+    return (
+        f"unexpected keyword argument '{keyword}'" in message
+        or f"got an unexpected keyword argument '{keyword}'" in message
+    )
 
 
 def _resolve_awaitable(value: Any) -> Any:

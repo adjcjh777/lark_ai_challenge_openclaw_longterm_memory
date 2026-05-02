@@ -35,7 +35,8 @@ def main() -> int:
     if args.openclaw_websocket_check:
         from scripts.check_openclaw_feishu_websocket import run_openclaw_feishu_websocket_check
 
-        websocket_checker = lambda: run_openclaw_feishu_websocket_check(timeout=args.openclaw_websocket_timeout)
+        def websocket_checker() -> dict:
+            return run_openclaw_feishu_websocket_check(timeout=args.openclaw_websocket_timeout)
 
     report = run_copilot_healthcheck(
         live_embedding_check=args.live_embedding_check,

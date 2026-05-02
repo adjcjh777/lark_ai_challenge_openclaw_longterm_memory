@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from scripts.check_copilot_admin_monitoring_probe import run_monitoring_probe
 
-
 VALID_METRICS = """
 # HELP copilot_admin_memory_total Total memories.
 copilot_admin_memory_total 3

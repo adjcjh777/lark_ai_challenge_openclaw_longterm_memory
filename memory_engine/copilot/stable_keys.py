@@ -70,9 +70,7 @@ def resolve_stable_memory_key(
     )
 
 
-def _slot(
-    text: str, lowered: str, subject: str | None
-) -> tuple[str, str, list[str], float, str]:
+def _slot(text: str, lowered: str, subject: str | None) -> tuple[str, str, list[str], float, str]:
     subject_norm = normalize_subject(subject or "")
     if _contains_any(lowered, _DEPLOY_REGION_MARKERS):
         return (
@@ -131,7 +129,13 @@ def _slot(
             "Benchmark 报告指标口径归为同一个报告 slot。",
         )
     if "覆盖率" in text:
-        return ("coverage_standard", "test_coverage_standard", ["测试覆盖率标准"], 0.84, "测试覆盖率标准归为 coverage slot。")
+        return (
+            "coverage_standard",
+            "test_coverage_standard",
+            ["测试覆盖率标准"],
+            0.84,
+            "测试覆盖率标准归为 coverage slot。",
+        )
     if _contains_any(lowered, _BITABLE_WRITE_MARKERS):
         return (
             "bitable_write_path",
@@ -145,30 +149,64 @@ def _slot(
     if "备份" in text and ("保留" in text or "保留期" in text):
         return ("retention_policy", "backup_retention_days", ["备份保留期"], 0.84, "备份保留期归为 retention slot。")
     if "日志" in text and ("级别" in text or "输出" in text or "info" in lowered or "warn" in lowered):
-        return ("log_level", "production_log_level", ["生产日志级别", "日志输出级别"], 0.84, "日志级别归为 logging slot。")
+        return (
+            "log_level",
+            "production_log_level",
+            ["生产日志级别", "日志输出级别"],
+            0.84,
+            "日志级别归为 logging slot。",
+        )
     if ("rpc" in lowered or "远程调用" in text) and "重试" in text:
-        return ("retry_count", "rpc_retry_count", ["RPC 重试次数", "远程调用重试次数"], 0.84, "RPC/远程调用重试次数归为 retry slot。")
+        return (
+            "retry_count",
+            "rpc_retry_count",
+            ["RPC 重试次数", "远程调用重试次数"],
+            0.84,
+            "RPC/远程调用重试次数归为 retry slot。",
+        )
     if "音频" in text and ("编码" in text or "压缩格式" in text):
         return ("codec", "audio_codec", ["音频编码格式", "音频压缩格式"], 0.84, "音频编码/压缩格式归为 codec slot。")
     if ("分块" in text or "切分" in text) and ("token" in lowered or "粒度" in text or "大小" in text):
-        return ("chunk_size", "document_chunk_size", ["文档分块大小", "文本切分粒度"], 0.84, "文档分块/文本切分粒度归为 chunk size slot。")
+        return (
+            "chunk_size",
+            "document_chunk_size",
+            ["文档分块大小", "文本切分粒度"],
+            0.84,
+            "文档分块/文本切分粒度归为 chunk size slot。",
+        )
     if ("api" in lowered or "网关" in text) and "超时" in text:
-        return ("timeout", "api_gateway_timeout", ["API 超时时间", "网关超时"], 0.84, "API/网关超时配置归为 timeout slot。")
+        return (
+            "timeout",
+            "api_gateway_timeout",
+            ["API 超时时间", "网关超时"],
+            0.84,
+            "API/网关超时配置归为 timeout slot。",
+        )
     if "缓存策略" in text or "redis" in lowered or "memcached" in lowered:
         return ("cache_strategy", "cache_strategy", ["缓存策略"], 0.84, "缓存策略归为 cache slot。")
     if "连接池" in text:
         if "应用连接池" in text:
-            return ("app_pool_size", "application_pool_size", ["应用连接池大小"], 0.84, "应用连接池大小归为 app pool slot。")
+            return (
+                "app_pool_size",
+                "application_pool_size",
+                ["应用连接池大小"],
+                0.84,
+                "应用连接池大小归为 app pool slot。",
+            )
         return ("db_pool_size", "database_pool_size", ["数据库连接池大小"], 0.82, "连接池大小归为 database pool slot。")
     if "mysql" in lowered and "版本" in text:
         return ("database_version", "mysql_version", ["MySQL 版本"], 0.84, "MySQL 版本归为 database version slot。")
     if "端口" in text:
         return ("service_port", "service_port", ["服务端口"], 0.84, "服务端口归为 port slot。")
     if "cron" in lowered or ("数据同步" in text and ("小时" in text or "频率" in text)):
-        return ("schedule", "data_sync_schedule", ["数据同步频率", "数据同步 cron"], 0.84, "数据同步 cron/频率归为 schedule slot。")
-    if _contains_any(lowered, _FEISHU_REVIEW_SUBJECT_MARKERS) and _contains_any(
-        lowered, _FEISHU_REVIEW_ACTION_MARKERS
-    ):
+        return (
+            "schedule",
+            "data_sync_schedule",
+            ["数据同步频率", "数据同步 cron"],
+            0.84,
+            "数据同步 cron/频率归为 schedule slot。",
+        )
+    if _contains_any(lowered, _FEISHU_REVIEW_SUBJECT_MARKERS) and _contains_any(lowered, _FEISHU_REVIEW_ACTION_MARKERS):
         return (
             "feishu_review_policy",
             "feishu_candidate_confirmation_policy",

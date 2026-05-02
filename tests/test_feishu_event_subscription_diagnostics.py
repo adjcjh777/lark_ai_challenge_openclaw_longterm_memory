@@ -21,7 +21,9 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertEqual([], result["failed_checks"])
         self.assertEqual(0, result["event_status"]["active_bus_count"])
         self.assertFalse(result["message_event_schema"]["has_group_message_scope"])
-        self.assertEqual(["message_schema_scope_does_not_list_group_msg_readonly"], [item["id"] for item in result["warnings"]])
+        self.assertEqual(
+            ["message_schema_scope_does_not_list_group_msg_readonly"], [item["id"] for item in result["warnings"]]
+        )
         self.assertTrue(result["remediation"]["requires_external_console_change"])
         self.assertEqual(
             ["im:message.group_msg:readonly", "im:message:readonly"],

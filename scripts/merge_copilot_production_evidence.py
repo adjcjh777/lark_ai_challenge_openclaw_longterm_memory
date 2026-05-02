@@ -192,7 +192,12 @@ def _extract_patch(payload: Any, patch_path: Path) -> dict[str, Any]:
         return {"ok": False, "path": str(patch_path), "error": "unknown_manifest_sections", "sections": unknown}
     non_object = sorted(key for key, value in patch.items() if not isinstance(value, dict))
     if non_object:
-        return {"ok": False, "path": str(patch_path), "error": "section_patch_must_be_json_object", "sections": non_object}
+        return {
+            "ok": False,
+            "path": str(patch_path),
+            "error": "section_patch_must_be_json_object",
+            "sections": non_object,
+        }
     unsafe_values = sorted({value for value in _flatten_strings(patch) if _contains_unsafe_value(value)})
     if unsafe_values:
         return {

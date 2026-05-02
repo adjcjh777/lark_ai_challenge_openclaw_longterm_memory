@@ -571,9 +571,15 @@ class LayerAwareRetriever:
 
         ordered = sorted(ranked, key=lambda item: (-item.score, item.rank, item.memory_id))
         filtered, dropped_shadowed = self._filter_shadowed_stale_results(ordered, query=query)
-        return [replace(result, rank=index) for index, result in enumerate(filtered, start=1)], dropped_missing_evidence, dropped_shadowed
+        return (
+            [replace(result, rank=index) for index, result in enumerate(filtered, start=1)],
+            dropped_missing_evidence,
+            dropped_shadowed,
+        )
 
-    def _filter_shadowed_stale_results(self, ordered: list[MemoryResult], *, query: str) -> tuple[list[MemoryResult], int]:
+    def _filter_shadowed_stale_results(
+        self, ordered: list[MemoryResult], *, query: str
+    ) -> tuple[list[MemoryResult], int]:
         if not self.scoring_config.stale_shadow_filter_enabled or len(ordered) < 2:
             return ordered, 0
 

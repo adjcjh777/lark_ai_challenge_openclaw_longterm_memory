@@ -18,11 +18,11 @@ from memory_engine.feishu_listener_guard import (  # noqa: E402
     assert_single_feishu_listener,
     listener_report,
 )
-from scripts.check_feishu_event_subscription_diagnostics import (  # noqa: E402
-    run_feishu_event_subscription_diagnostics,
-)
 from scripts.check_cognee_embedding_sampler_status import (  # noqa: E402
     check_cognee_embedding_sampler_status,
+)
+from scripts.check_feishu_event_subscription_diagnostics import (  # noqa: E402
+    run_feishu_event_subscription_diagnostics,
 )
 
 BOUNDARY = (
@@ -131,9 +131,7 @@ def prepare_live_evidence_run(
         "reviewer_open_id": _presence_check(reviewer_open_id, "Useful for /review DM target readback."),
         "cognee_long_run_evidence": _file_check(cognee_long_run_evidence),
     }
-    blocking_failures = [
-        name for name in ("single_listener", "event_subscription") if checks[name]["status"] == "fail"
-    ]
+    blocking_failures = [name for name in ("single_listener", "event_subscription") if checks[name]["status"] == "fail"]
     blocking_resolution_steps = _blocking_resolution_steps(checks)
     warnings = [name for name, check in checks.items() if check["status"] == "warning"]
     diagnostic_paths = _diagnostic_paths(evidence_dir)
@@ -316,9 +314,7 @@ def _manual_steps(
     cognee_arg = f" --cognee-long-run-evidence {cognee_long_run_evidence}" if cognee_long_run_evidence else ""
     event_diagnostics_arg = f" --feishu-event-diagnostics {diagnostic_paths['feishu_event_diagnostics']}"
     sampler_status_arg = (
-        f" --cognee-sampler-status {diagnostic_paths['cognee_sampler_status']}"
-        if embedding_sample_log
-        else ""
+        f" --cognee-sampler-status {diagnostic_paths['cognee_sampler_status']}" if embedding_sample_log else ""
     )
     steps = [
         {

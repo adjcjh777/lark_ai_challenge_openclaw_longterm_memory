@@ -181,7 +181,9 @@ def _idp_evidence_check(
         "allowed_domains_present": bool(allowed_domains) and all(_real_domain(domain) for domain in allowed_domains),
         "evidence_refs_present": _valid_evidence_refs(evidence_refs),
     }
-    return _section_result("Enterprise IdP evidence covers real login, admin role, viewer denial, domains, and refs.", checks)
+    return _section_result(
+        "Enterprise IdP evidence covers real login, admin role, viewer denial, domains, and refs.", checks
+    )
 
 
 def _unauthenticated_guard_check(response: dict[str, Any]) -> dict[str, Any]:

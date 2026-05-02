@@ -388,7 +388,9 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
     if command_name in {"settings", "group_settings"}:
         return _group_settings_invocation(event, scope, reason="explicit_group_settings")
     if command_name in {"enable_memory", "memory_on", "enable_group_memory"}:
-        return _group_policy_invocation(event, scope, "copilot.group_enable_memory", reason="explicit_group_memory_enable")
+        return _group_policy_invocation(
+            event, scope, "copilot.group_enable_memory", reason="explicit_group_memory_enable"
+        )
     if command_name in {"disable_memory", "memory_off", "disable_group_memory"}:
         return _group_policy_invocation(
             event,
@@ -411,14 +413,10 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
 
     if _looks_like_confirm(text):
         target = _natural_review_target(text, "确认")
-        return _review_invocation(
-            event, scope, "memory.confirm", target, reason="natural_confirm"
-        )
+        return _review_invocation(event, scope, "memory.confirm", target, reason="natural_confirm")
     if _looks_like_reject(text):
         target = _natural_review_target(text, "拒绝")
-        return _review_invocation(
-            event, scope, "memory.reject", target, reason="natural_reject"
-        )
+        return _review_invocation(event, scope, "memory.reject", target, reason="natural_reject")
     if _looks_like_versions_question(text):
         return _versions_invocation(event, scope, "", reason="natural_versions")
     if _looks_like_candidate(text):
@@ -763,7 +761,9 @@ def _meeting_invocation(
 ) -> CopilotFeishuInvocation:
     """处理 /meeting <minute_token> 命令，拉取飞书妙记进入 candidate pipeline。"""
     tool = "feishu.fetch_meeting"
-    context = _current_context(event, scope, "memory.create_candidate", intent="fetch_meeting", thread_topic=minute_token)
+    context = _current_context(
+        event, scope, "memory.create_candidate", intent="fetch_meeting", thread_topic=minute_token
+    )
     _extend_permission_source_context(context, meeting_id=minute_token)
     return CopilotFeishuInvocation(
         tool,
@@ -1120,7 +1120,9 @@ def _format_search(result: dict[str, Any], *, routing_reason: str) -> str:
         ]
         if routing_reason == "default_search":
             lines.insert(1, "候选判断：本次消息按查询处理，未尝试创建待确认记忆。")
-        lines.extend(_audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", "状态：not_found"]))
+        lines.extend(
+            _audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", "状态：not_found"])
+        )
         return _reply(
             "Memory Copilot 没找到当前有效记忆。",
             lines,
@@ -1140,11 +1142,13 @@ def _format_search(result: dict[str, Any], *, routing_reason: str) -> str:
                 f"{index}. {item.get('subject') or '-'}",
                 f"   结论：{item.get('current_value') or '-'}",
                 f"   证据：{_clip(quote)}",
-                f"   下一步：按这条当前结论执行；如果要看旧值，回复“为什么旧值不用了”。",
+                "   下一步：按这条当前结论执行；如果要看旧值，回复“为什么旧值不用了”。",
             ]
         )
     lines.extend(
-        _audit_lines("memory.search", result, extra=[f"查询：{result.get('query') or '-'}", f"trace：{_trace_summary(result)}"])
+        _audit_lines(
+            "memory.search", result, extra=[f"查询：{result.get('query') or '-'}", f"trace：{_trace_summary(result)}"]
+        )
     )
     return _reply("Memory Copilot 找到当前有效记忆。", lines)
 
@@ -1272,7 +1276,11 @@ def _format_versions(result: dict[str, Any]) -> str:
         _audit_lines(
             "memory.explain_versions",
             result,
-            extra=[f"主题：{result.get('subject') or '-'}", f"状态：{result.get('status') or '-'}", f"版本数量：{len(versions)}"],
+            extra=[
+                f"主题：{result.get('subject') or '-'}",
+                f"状态：{result.get('status') or '-'}",
+                f"版本数量：{len(versions)}",
+            ],
         )
     )
     return _reply("Memory Copilot 已返回版本链。", lines)
@@ -1282,7 +1290,7 @@ def _format_prefetch(result: dict[str, Any]) -> str:
     pack = result.get("context_pack") if isinstance(result.get("context_pack"), dict) else {}
     memories = pack.get("relevant_memories") if isinstance(pack.get("relevant_memories"), list) else []
     lines = [
-        f"结论：已生成任务前上下文包。",
+        "结论：已生成任务前上下文包。",
         f"证据：{pack.get('summary') or '-'}",
         "下一步：把下面相关记忆带入任务；缺失信息需要人工补充。",
     ]
@@ -1543,7 +1551,9 @@ def _group_settings_result(
 ) -> dict[str, Any]:
     tenant_id, organization_id, visibility = _feishu_identity()
     if group_policy is None:
-        group_policy = get_group_policy(conn, chat_id=event.chat_id, tenant_id=tenant_id, organization_id=organization_id)
+        group_policy = get_group_policy(
+            conn, chat_id=event.chat_id, tenant_id=tenant_id, organization_id=organization_id
+        )
     allowlist_summary = _env_list_summary("COPILOT_FEISHU_ALLOWED_CHAT_IDS")
     safe_policy = _safe_group_policy_payload(group_policy)
     return {
@@ -1560,12 +1570,10 @@ def _group_settings_result(
         "silent_screening": _group_silent_screening_status(allowlist_summary, group_policy),
         "review_delivery": "DM/private 定向给相关 owner/reviewer；本卡不修改实际投递路由。",
         "auto_confirm_policy": (
-            "低风险、低重要性、无冲突可自动确认；"
-            "项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核。"
+            "低风险、低重要性、无冲突可自动确认；项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核。"
         ),
         "onboarding_policy": (
-            "新群默认 pending_onboarding，只登记群节点和群策略；"
-            "执行 /enable_memory 后才对非 @ 消息做静默候选筛选。"
+            "新群默认 pending_onboarding，只登记群节点和群策略；执行 /enable_memory 后才对非 @ 消息做静默候选筛选。"
         ),
         "production_boundary": "受控 live sandbox / pre-production；不是生产长期运行。",
     }
@@ -1893,9 +1901,14 @@ def _looks_like_confirm(text: str) -> bool:
 
 def _looks_like_reject(text: str) -> bool:
     normalized = text.strip()
-    return normalized in {"不要记这个", "不要记这条", "别记这个", "别记这条", "拒绝这条", "拒绝这个"} or normalized.startswith(
-        "拒绝 "
-    )
+    return normalized in {
+        "不要记这个",
+        "不要记这条",
+        "别记这个",
+        "别记这条",
+        "拒绝这条",
+        "拒绝这个",
+    } or normalized.startswith("拒绝 ")
 
 
 def _natural_review_target(text: str, verb: str) -> str:
@@ -1906,9 +1919,9 @@ def _natural_review_target(text: str, verb: str) -> str:
 
 
 def _looks_like_versions_question(text: str) -> bool:
-    return ("为什么" in text and any(word in text for word in ("旧值", "旧版本", "之前", "以前", "不用了", "覆盖"))) or (
-        "版本" in text and any(word in text for word in ("解释", "为什么", "旧"))
-    )
+    return (
+        "为什么" in text and any(word in text for word in ("旧值", "旧版本", "之前", "以前", "不用了", "覆盖"))
+    ) or ("版本" in text and any(word in text for word in ("解释", "为什么", "旧")))
 
 
 def _looks_like_candidate(text: str) -> bool:

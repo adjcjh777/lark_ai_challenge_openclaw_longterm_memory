@@ -30,12 +30,16 @@ MetricsFetcher = Callable[[str, Optional[str], float], dict[str, Any]]
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Probe Copilot Admin production monitoring evidence.")
-    parser.add_argument("--base-url", required=True, help="Production Admin base URL, e.g. https://memory.company/admin/")
+    parser.add_argument(
+        "--base-url", required=True, help="Production Admin base URL, e.g. https://memory.company/admin/"
+    )
     parser.add_argument("--token", default=None, help="Optional viewer/admin token for /metrics.")
     parser.add_argument("--grafana-dashboard-url", required=True, help="Production Grafana dashboard URL.")
     parser.add_argument("--alertmanager-route", required=True, help="Production Alertmanager route name.")
     parser.add_argument("--alert-delivery-tested-at", required=True, help="ISO-8601 alert delivery test timestamp.")
-    parser.add_argument("--monitoring-evidence-ref", action="append", default=[], help="Non-secret monitoring proof ref.")
+    parser.add_argument(
+        "--monitoring-evidence-ref", action="append", default=[], help="Non-secret monitoring proof ref."
+    )
     parser.add_argument("--timeout", type=float, default=10.0, help="Network timeout in seconds.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     args = parser.parse_args()

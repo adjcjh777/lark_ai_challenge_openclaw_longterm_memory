@@ -26,7 +26,9 @@ def main() -> int:
             "Feed it a real check_cognee_curated_sync_gate JSON report and embedding sample log."
         )
     )
-    parser.add_argument("--curated-sync-report", required=True, type=Path, help="JSON from check_cognee_curated_sync_gate.")
+    parser.add_argument(
+        "--curated-sync-report", required=True, type=Path, help="JSON from check_cognee_curated_sync_gate."
+    )
     parser.add_argument(
         "--embedding-sample-log",
         required=True,
@@ -34,7 +36,9 @@ def main() -> int:
         help="JSON/NDJSON embedding sample log, usually repeated check_embedding_provider outputs.",
     )
     parser.add_argument("--store-reopened", action="store_true", help="Set only after reopening the persistent store.")
-    parser.add_argument("--reopened-search-ok", action="store_true", help="Set only after search/readback passes post-reopen.")
+    parser.add_argument(
+        "--reopened-search-ok", action="store_true", help="Set only after search/readback passes post-reopen."
+    )
     parser.add_argument(
         "--persistent-readback-report",
         type=Path,
@@ -43,7 +47,9 @@ def main() -> int:
     )
     parser.add_argument("--service-unit", default="", help="Embedding/Cognee service unit or deployment id.")
     parser.add_argument("--oncall-owner", default="", help="Human owner for the long-run window.")
-    parser.add_argument("--evidence-ref", action="append", default=[], help="Non-secret evidence ref, e.g. ops log URL/path.")
+    parser.add_argument(
+        "--evidence-ref", action="append", default=[], help="Non-secret evidence ref, e.g. ops log URL/path."
+    )
     parser.add_argument("--min-window-hours", type=float, default=24.0)
     parser.add_argument("--min-sample-count", type=int, default=3)
     parser.add_argument("--output", default="", help="Optional output JSON path for completion audit.")
@@ -65,7 +71,9 @@ def main() -> int:
     if args.output:
         output = Path(args.output).expanduser()
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(result["completion_audit_evidence"], ensure_ascii=False, indent=2), encoding="utf-8")
+        output.write_text(
+            json.dumps(result["completion_audit_evidence"], ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     else:
@@ -91,8 +99,8 @@ def collect_cognee_embedding_long_run_evidence(
     successful_samples = [sample for sample in successful_samples if sample["ok"]]
     window_hours = _sample_window_hours(successful_samples)
     cognee_sync = curated_sync_report.get("cognee_sync") if isinstance(curated_sync_report, dict) else {}
-    cognee_sync_pass = isinstance(cognee_sync, dict) and cognee_sync.get("status") == "pass" and not cognee_sync.get(
-        "fallback"
+    cognee_sync_pass = (
+        isinstance(cognee_sync, dict) and cognee_sync.get("status") == "pass" and not cognee_sync.get("fallback")
     )
     readback = persistent_readback_report or {}
     readback_checks = readback.get("checks") if isinstance(readback.get("checks"), dict) else {}

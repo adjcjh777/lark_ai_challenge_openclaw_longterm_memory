@@ -55,8 +55,7 @@ class CogneePersistentReadbackTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="cognee_readback_") as temp_dir:
             path = Path(temp_dir) / "report.json"
             path.write_text(
-                "Pipeline loaded.\n"
-                + json.dumps({"ok": True, "memory_id": "mem_noise", "data_root": "/tmp/data"}),
+                "Pipeline loaded.\n" + json.dumps({"ok": True, "memory_id": "mem_noise", "data_root": "/tmp/data"}),
                 encoding="utf-8",
             )
 

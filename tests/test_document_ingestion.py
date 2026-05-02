@@ -242,7 +242,7 @@ class DocumentIngestionTest(unittest.TestCase):
                 "doc_token",
                 current_context=permission_context(document_id="doc_token"),
                 limit=1,
-        )
+            )
 
         self.assertFalse(result["ok"])
         self.assertEqual("internal_error", result["error"]["code"])

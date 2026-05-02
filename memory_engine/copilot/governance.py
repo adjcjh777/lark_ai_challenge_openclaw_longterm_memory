@@ -81,9 +81,7 @@ class CopilotGovernance:
             organization_id,
             stable_key,
         )
-        conflict_reason = (
-            "same stable memory key already has an active value" if existing is not None else None
-        )
+        conflict_reason = "same stable memory key already has an active value" if existing is not None else None
         if existing is None:
             existing = self._find_existing(
                 parsed_scope.scope_type,
@@ -94,8 +92,10 @@ class CopilotGovernance:
                 extracted.normalized_subject,
                 allow_type_fallback=True,
             )
-        if existing is None and stable_key.confidence < _STABLE_KEY_MIN_CONFIDENCE and _is_contextual_override(
-            extracted.current_value
+        if (
+            existing is None
+            and stable_key.confidence < _STABLE_KEY_MIN_CONFIDENCE
+            and _is_contextual_override(extracted.current_value)
         ):
             existing = self._find_single_active_memory(
                 parsed_scope.scope_type,
@@ -500,7 +500,10 @@ class CopilotGovernance:
                 (memory["active_version_id"],),
             )
         return self._status_response(
-            "confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(memory["id"]), actor_id=request.actor_id
+            "confirmed",
+            self._memory_by_id(str(memory["id"])),
+            candidate_id=str(memory["id"]),
+            actor_id=request.actor_id,
         )
 
     def _confirm_candidate_version(self, request: ConfirmRequest, version: Any) -> dict[str, Any]:
@@ -541,7 +544,10 @@ class CopilotGovernance:
                 (version["value"], version["reason"], version["source_event_id"], version["id"], ts, memory["id"]),
             )
         response = self._status_response(
-            "confirmed", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]), actor_id=request.actor_id
+            "confirmed",
+            self._memory_by_id(str(memory["id"])),
+            candidate_id=str(version["id"]),
+            actor_id=request.actor_id,
         )
         response["superseded"] = {
             "version_id": old_version_id,
@@ -588,7 +594,10 @@ class CopilotGovernance:
                 (ts, memory["id"]),
             )
         response = self._status_response(
-            "rejected", self._memory_by_id(str(memory["id"])), candidate_id=str(version["id"]), actor_id=request.actor_id
+            "rejected",
+            self._memory_by_id(str(memory["id"])),
+            candidate_id=str(version["id"]),
+            actor_id=request.actor_id,
         )
         evidence = self._latest_evidence(str(memory["id"]), str(version["id"]))
         response["candidate"] = {
@@ -612,7 +621,9 @@ class CopilotGovernance:
         response["review_status"] = "rejected"
         return response
 
-    def _mark_candidate_memory(self, request: RejectRequest, memory: Any, *, status: str, action: str) -> dict[str, Any]:
+    def _mark_candidate_memory(
+        self, request: RejectRequest, memory: Any, *, status: str, action: str
+    ) -> dict[str, Any]:
         if not self._memory_scope_matches(memory, request.scope):
             return self._scope_error(request.scope)
         if memory["status"] != "candidate":
@@ -634,7 +645,9 @@ class CopilotGovernance:
             actor_id=request.actor_id,
         )
 
-    def _mark_candidate_version(self, request: RejectRequest, version: Any, *, status: str, action: str) -> dict[str, Any]:
+    def _mark_candidate_version(
+        self, request: RejectRequest, version: Any, *, status: str, action: str
+    ) -> dict[str, Any]:
         memory = self._memory_by_id(str(version["memory_id"]))
         if memory is None:
             return CopilotError("memory_not_found", "candidate parent memory was not found").to_response()
@@ -847,7 +860,9 @@ class CopilotGovernance:
             "stable_key": candidate.get("stable_key"),
         }
 
-    def _status_response(self, action: str, memory: Any, *, candidate_id: str, actor_id: str | None = None) -> dict[str, Any]:
+    def _status_response(
+        self, action: str, memory: Any, *, candidate_id: str, actor_id: str | None = None
+    ) -> dict[str, Any]:
         evidence = self._latest_evidence(str(memory["id"]), memory["active_version_id"])
         version = self._version_no(str(memory["id"]))
         status = str(memory["status"])
@@ -1313,8 +1328,7 @@ def _old_version_summary(version: dict[str, Any], *, active_version: dict[str, A
         "reason": version.get("reason"),
         "evidence": _compact_evidence(version),
         "covered_by": covered_by,
-        "inactive_reason": version.get("inactive_reason")
-        or "旧版本只保留在版本链里，用于追溯，不会进入默认搜索结果。",
+        "inactive_reason": version.get("inactive_reason") or "旧版本只保留在版本链里，用于追溯，不会进入默认搜索结果。",
     }
 
 

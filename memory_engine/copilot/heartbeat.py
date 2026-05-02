@@ -233,7 +233,9 @@ class HeartbeatReminderEngine:
             risk_flags=risk_flags,
             gates=gates,
             actions=list(REMINDER_ACTIONS),
-            next_review_at=review_state.get("next_review_at") if isinstance(review_state.get("next_review_at"), str) else None,
+            next_review_at=review_state.get("next_review_at")
+            if isinstance(review_state.get("next_review_at"), str)
+            else None,
             mute_key=mute_key,
         )
 

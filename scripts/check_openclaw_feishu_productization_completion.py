@@ -401,7 +401,9 @@ def _single_listener_diagnostic_evidence(event_diagnostics: dict[str, Any] | Non
     if not event_diagnostics:
         return {}
     checks = event_diagnostics.get("checks") if isinstance(event_diagnostics.get("checks"), dict) else {}
-    listener_check = checks.get("listener_mode_consistent") if isinstance(checks.get("listener_mode_consistent"), dict) else {}
+    listener_check = (
+        checks.get("listener_mode_consistent") if isinstance(checks.get("listener_mode_consistent"), dict) else {}
+    )
     event_status = (
         event_diagnostics.get("event_status") if isinstance(event_diagnostics.get("event_status"), dict) else {}
     )
@@ -451,7 +453,9 @@ def _clean_demo_db_item() -> dict[str, Any]:
     checks = {
         "script_exists": (ROOT / "scripts/prepare_clean_demo_db.py").exists(),
         "tests_exist": (ROOT / "tests/test_clean_demo_db.py").exists(),
-        "does_not_modify_source": _file_contains(ROOT / "scripts/prepare_clean_demo_db.py", "source_db_modified", "False"),
+        "does_not_modify_source": _file_contains(
+            ROOT / "scripts/prepare_clean_demo_db.py", "source_db_modified", "False"
+        ),
         "blocks_group_policy_noise": _file_contains(
             ROOT / "scripts/prepare_clean_demo_db.py",
             "feishu_group_policy_total",
@@ -526,7 +530,9 @@ def _cognee_long_term_item(evidence_path: Path | None, *, sampler_status_path: P
         status="pass" if ok else "fail",
         reason="long_term_cognee_embedding_evidence_seen" if ok else "long_term_cognee_embedding_evidence_incomplete",
         evidence={"path": str(evidence_path), "checks": checks},
-        next_step="" if ok else "Provide Cognee sync pass, reopened persistent-store readback, and >=24h embedding service samples.",
+        next_step=""
+        if ok
+        else "Provide Cognee sync pass, reopened persistent-store readback, and >=24h embedding service samples.",
     )
 
 
@@ -583,7 +589,9 @@ def _no_overclaim_item() -> dict[str, Any]:
         ROOT / "docs/productization/prd-completion-audit-and-gap-tasks.md",
     ]
     checks = {
-        "production_not_claimed": all(_file_contains(path, "不能说") or _file_contains(path, "不是生产") for path in docs),
+        "production_not_claimed": all(
+            _file_contains(path, "不能说") or _file_contains(path, "不是生产") for path in docs
+        ),
         "any_group_boundary_present": _file_contains(
             ROOT / "scripts/openclaw_feishu_remember_router.py",
             "passive_memory_enabled",
@@ -603,7 +611,9 @@ def _no_overclaim_item() -> dict[str, Any]:
         status="pass" if ok else "fail",
         reason="no_overclaim_boundary_present" if ok else "no_overclaim_boundary_incomplete",
         evidence={"checks": checks},
-        next_step="" if ok else "Restore README/docs/router wording that passive memory requires explicit reviewer/admin enablement.",
+        next_step=""
+        if ok
+        else "Restore README/docs/router wording that passive memory requires explicit reviewer/admin enablement.",
     )
 
 
@@ -669,9 +679,7 @@ def _load_live_packet(path: Path) -> dict[str, Any]:
 def _packet_event_diagnostics(packet: dict[str, Any]) -> dict[str, Any] | None:
     diagnostics = packet.get("diagnostics") if isinstance(packet.get("diagnostics"), dict) else {}
     event_diagnostics = (
-        diagnostics.get("event_subscription")
-        if isinstance(diagnostics.get("event_subscription"), dict)
-        else None
+        diagnostics.get("event_subscription") if isinstance(diagnostics.get("event_subscription"), dict) else None
     )
     if event_diagnostics is None:
         return None
@@ -701,7 +709,9 @@ def _diagnostics_group_scope_missing(diagnostics: dict[str, Any]) -> bool:
     if not diagnostics.get("ok") and diagnostics.get("reason"):
         return False
     failed = diagnostics.get("failed_checks") if isinstance(diagnostics.get("failed_checks"), list) else []
-    schema = diagnostics.get("message_event_schema") if isinstance(diagnostics.get("message_event_schema"), dict) else {}
+    schema = (
+        diagnostics.get("message_event_schema") if isinstance(diagnostics.get("message_event_schema"), dict) else {}
+    )
     return "message_schema_group_message_scope" in failed or schema.get("has_group_message_scope") is False
 
 

@@ -5,7 +5,6 @@ import sys
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 LINEAR_PROJECT_SLUG = "feishu-ai-challenge-785b3bb0a19d"
 

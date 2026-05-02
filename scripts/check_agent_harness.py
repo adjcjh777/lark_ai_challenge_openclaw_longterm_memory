@@ -7,10 +7,8 @@ behavior remains covered by Copilot unit tests, benchmarks, and healthchecks.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -59,7 +57,9 @@ def main() -> int:
         "checks": {
             "agents_map": "pass" if not any(item.startswith("AGENTS.md") for item in failures) else "fail",
             "required_docs": "pass" if not any(item.startswith("missing required") for item in failures) else "fail",
-            "execution_contract": "pass" if not any(item.startswith("execution contract") for item in failures) else "fail",
+            "execution_contract": "pass"
+            if not any(item.startswith("execution contract") for item in failures)
+            else "fail",
             "openclaw_lock": "pass" if not any(item.startswith("OpenClaw") for item in failures) else "fail",
             "cognee_adapter_boundary": "pass" if not any(item.startswith("Cognee") for item in failures) else "fail",
         },

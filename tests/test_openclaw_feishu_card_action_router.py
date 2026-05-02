@@ -5,7 +5,6 @@ import unittest
 from pathlib import Path
 
 from memory_engine.db import connect, init_db
-from memory_engine.repository import MemoryRepository
 from scripts.openclaw_feishu_card_action_router import route_card_action
 from scripts.openclaw_feishu_remember_router import route_remember_message
 

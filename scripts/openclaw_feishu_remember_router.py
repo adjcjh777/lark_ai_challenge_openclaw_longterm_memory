@@ -12,9 +12,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from memory_engine.copilot.feishu_live import _event_time_iso  # noqa: E402
-from memory_engine.copilot.local_env import load_local_env_files  # noqa: E402
-from memory_engine.copilot.service import CopilotService  # noqa: E402
-from memory_engine.copilot.tools import handle_tool_request  # noqa: E402
 from memory_engine.copilot.group_policies import (  # noqa: E402
     disable_group_memory,
     enable_group_memory,
@@ -23,8 +20,15 @@ from memory_engine.copilot.group_policies import (  # noqa: E402
     group_policy_allows_passive_memory,
     record_group_policy_denied,
 )
+from memory_engine.copilot.local_env import load_local_env_files  # noqa: E402
+from memory_engine.copilot.service import CopilotService  # noqa: E402
+from memory_engine.copilot.tools import handle_tool_request  # noqa: E402
 from memory_engine.db import connect, init_db  # noqa: E402
-from memory_engine.feishu_cards import build_candidate_review_card, build_card_from_text, build_group_settings_card  # noqa: E402
+from memory_engine.feishu_cards import (  # noqa: E402
+    build_candidate_review_card,
+    build_card_from_text,
+    build_group_settings_card,
+)
 from memory_engine.feishu_events import FeishuMessageEvent  # noqa: E402
 
 SCOPE = "project:feishu_ai_challenge"
@@ -520,12 +524,10 @@ def _group_settings_result(
         "silent_screening": _group_silent_screening_status(allowlist_summary, group_policy),
         "review_delivery": "DM/private 定向给相关 owner/reviewer；本卡不修改实际投递路由。",
         "auto_confirm_policy": (
-            "低风险、低重要性、无冲突可自动确认；"
-            "项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核。"
+            "低风险、低重要性、无冲突可自动确认；项目进展重要、重要角色发言、敏感/高风险或冲突必须人工审核。"
         ),
         "onboarding_policy": (
-            "新群默认 pending_onboarding，只登记群节点和群策略；"
-            "执行 /enable_memory 后才对非 @ 消息做静默候选筛选。"
+            "新群默认 pending_onboarding，只登记群节点和群策略；执行 /enable_memory 后才对非 @ 消息做静默候选筛选。"
         ),
         "production_boundary": "受控 OpenClaw gateway staging；不是生产长期运行。",
     }

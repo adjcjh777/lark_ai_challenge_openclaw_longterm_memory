@@ -8,10 +8,8 @@ runbook pointers.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 LINEAR_PROJECT_SLUG = "feishu-ai-challenge-785b3bb0a19d"
@@ -23,7 +21,7 @@ WORKFLOW_REQUIRED_TERMS = (
     f"project_slug: {LINEAR_PROJECT_SLUG}",
     "workspace:",
     "root: $SYMPHONY_WORKSPACE_ROOT",
-    "git clone --depth 1 \"$SOURCE_REPO_URL\" .",
+    'git clone --depth 1 "$SOURCE_REPO_URL" .',
     "adjcjh777/lark_ai_challenge_openclaw_longterm_memory",
     "codex",
     "app-server",

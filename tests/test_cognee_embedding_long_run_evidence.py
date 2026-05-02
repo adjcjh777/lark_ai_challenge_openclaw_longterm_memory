@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 
 from scripts.collect_cognee_embedding_long_run_evidence import (
-    collect_cognee_embedding_long_run_evidence,
     _parse_json_object,
     _read_embedding_samples,
+    collect_cognee_embedding_long_run_evidence,
 )
 
 
@@ -112,7 +112,7 @@ class CogneeEmbeddingLongRunEvidenceTest(unittest.TestCase):
         parsed = _parse_json_object(
             "User abc has registered.\n"
             "Provider List: https://docs.litellm.ai/docs/providers\n"
-            "{\"ok\": true, \"cognee_sync\": {\"status\": \"pass\", \"fallback\": null}}\n"
+            '{"ok": true, "cognee_sync": {"status": "pass", "fallback": null}}\n'
         )
 
         self.assertEqual({"ok": True, "cognee_sync": {"status": "pass", "fallback": None}}, parsed)

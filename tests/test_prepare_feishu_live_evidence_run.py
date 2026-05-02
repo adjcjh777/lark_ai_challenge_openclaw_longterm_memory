@@ -50,7 +50,9 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertTrue(result["ready_to_capture_live_logs"])
         self.assertEqual("pass", result["checks"]["single_listener"]["status"])
         self.assertEqual("pass", result["checks"]["event_subscription"]["status"])
-        self.assertEqual(["openclaw-gateway-unknown"], [item["kind"] for item in result["checks"]["single_listener"]["active"]])
+        self.assertEqual(
+            ["openclaw-gateway-unknown"], [item["kind"] for item in result["checks"]["single_listener"]["active"]]
+        )
         self.assertEqual([], result["blocking_failures"])
 
     def test_preflight_blocks_repo_lark_listener_when_openclaw_is_running(self) -> None:
@@ -94,7 +96,7 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
                             "id": "message_schema_scope_does_not_list_group_msg_readonly",
                             "detail": "scope should be verified in Feishu console",
                         }
-                    ]
+                    ],
                 ),
             )
 
@@ -110,11 +112,11 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("collect_feishu_live_evidence_packet.py", instructions)
         self.assertIn("check_openclaw_feishu_productization_completion.py", instructions)
         self.assertIn("--feishu-event-diagnostics", instructions)
-        packet_step = next(step for step in result["manual_steps"] if step["title"] == "Build sanitized Feishu live packet")
+        packet_step = next(
+            step for step in result["manual_steps"] if step["title"] == "Build sanitized Feishu live packet"
+        )
         self.assertIn("--feishu-event-diagnostics", packet_step["instruction"])
-        live_steps = [
-            step for step in result["manual_steps"] if step["phase"] in {"live_capture", "post_capture"}
-        ]
+        live_steps = [step for step in result["manual_steps"] if step["phase"] in {"live_capture", "post_capture"}]
         self.assertTrue(live_steps)
         self.assertTrue(all(step["requires_ready_to_capture_live_logs"] for step in live_steps))
         preflight_step = next(step for step in result["manual_steps"] if step["phase"] == "preflight")

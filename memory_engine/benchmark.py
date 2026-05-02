@@ -825,7 +825,11 @@ def run_copilot_heartbeat_benchmark(
                 if isinstance(item, dict)
             )
         sensitive_leak = bool(forbidden and forbidden in text)
-        duplicate_count = max(0, len(candidates) - len({item.get("mute_key") or item.get("reminder_id") for item in candidates if isinstance(item, dict)}))
+        duplicate_count = max(
+            0,
+            len(candidates)
+            - len({item.get("mute_key") or item.get("reminder_id") for item in candidates if isinstance(item, dict)}),
+        )
         expected_no_reminder = expected_trigger is None
         false_reminder = bool(expected_no_reminder and candidates)
         action_count = sum(
@@ -1687,7 +1691,9 @@ def _copilot_layer_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
     layer_passed = sum(1 for result in results if result["layer_passed"])
     forbidden_cases = [result for result in results if result.get("forbidden")]
     forbidden_leaks = [
-        result for result in forbidden_cases if _text_has_forbidden_leak(result.get("actual", ""), result.get("forbidden"))
+        result
+        for result in forbidden_cases
+        if _text_has_forbidden_leak(result.get("actual", ""), result.get("forbidden"))
     ]
     latencies = sorted(result["latency_ms"] for result in results)
     l1_latencies = sorted(result["latency_ms"] for result in results if result.get("expected_layer") == "L1")

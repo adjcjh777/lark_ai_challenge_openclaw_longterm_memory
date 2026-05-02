@@ -61,7 +61,16 @@ class CopilotBenchmarkTest(unittest.TestCase):
             self.assertTrue(case["failure_debug_hint"].strip(), msg=case["case_id"])
             self.assertIn(
                 case["failure_category"],
-                {"keyword_miss", "vector_miss", "wrong_subject_normalization", "evidence_missing", "stale_conflict", "topic_bleed", "noise_overwhelm", "result_drift"},
+                {
+                    "keyword_miss",
+                    "vector_miss",
+                    "wrong_subject_normalization",
+                    "evidence_missing",
+                    "stale_conflict",
+                    "topic_bleed",
+                    "noise_overwhelm",
+                    "result_drift",
+                },
                 msg=case["case_id"],
             )
 
@@ -83,10 +92,14 @@ class CopilotBenchmarkTest(unittest.TestCase):
             self.assertIn("failure_type", item)
 
     def test_forbidden_leak_detector_allows_explicit_rejection_context_only(self) -> None:
-        self.assertFalse(_text_has_forbidden_leak("发布 pipeline 统一用 GitHub Actions，禁止 Jenkins 触发。", "Jenkins"))
+        self.assertFalse(
+            _text_has_forbidden_leak("发布 pipeline 统一用 GitHub Actions，禁止 Jenkins 触发。", "Jenkins")
+        )
         self.assertFalse(_text_has_forbidden_leak("项目管理面板用飞书多维表格，不引入 Jira 或 Linear。", "Jira"))
         self.assertFalse(_text_has_forbidden_leak("源码仓库迁到 GitHub，GitLab 只留镜像。", "GitLab"))
-        self.assertFalse(_text_has_forbidden_leak("生产环境部署必须走审批流，任何人不能直接 push 到 main。", "直接 push"))
+        self.assertFalse(
+            _text_has_forbidden_leak("生产环境部署必须走审批流，任何人不能直接 push 到 main。", "直接 push")
+        )
         self.assertTrue(_text_has_forbidden_leak("规则：发布 pipeline 使用 Jenkins。", "Jenkins"))
         self.assertFalse(_text_has_forbidden_leak("覆盖率标准改成 90%，之前 80% 太低了。", "80%"))
         self.assertFalse(_text_has_forbidden_leak("PostgreSQL 运维文档没跟上，暂时切回 MySQL。", "PostgreSQL"))
