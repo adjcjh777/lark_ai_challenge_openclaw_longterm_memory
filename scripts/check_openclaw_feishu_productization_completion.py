@@ -386,6 +386,20 @@ def _single_listener_item(*, event_diagnostics: dict[str, Any] | None = None) ->
             evidence={"checks": checks, "event_subscription_diagnostics": diagnostic_evidence},
             next_step="Stop the conflicting lark-cli event bus or switch the planned Feishu event owner before collecting live evidence.",
         )
+    if diagnostic_evidence.get("openclaw_group_policy_unsafe"):
+        return _item(
+            item_id="2",
+            name="single_feishu_listener_entry",
+            requirement="OpenClaw gateway、Copilot lark-cli sandbox 和 legacy listener 必须三选一，冲突时 fail closed。",
+            status="fail",
+            reason="openclaw_group_policy_dispatches_generic_agent",
+            evidence={"checks": checks, "event_subscription_diagnostics": diagnostic_evidence},
+            next_step=(
+                "OpenClaw Feishu groupPolicy=open without requireMention=true dispatches non-@ group messages "
+                "to the generic agent. Use a safe Copilot-owned passive route that calls "
+                "handle_tool_request() / CopilotService silently before treating live passive evidence as complete."
+            ),
+        )
     ok = all(checks.values())
     return _item(
         item_id="2",
@@ -409,6 +423,11 @@ def _single_listener_diagnostic_evidence(event_diagnostics: dict[str, Any] | Non
         event_diagnostics.get("event_status") if isinstance(event_diagnostics.get("event_status"), dict) else {}
     )
     failed = event_diagnostics.get("failed_checks") if isinstance(event_diagnostics.get("failed_checks"), list) else []
+    openclaw_policy = (
+        event_diagnostics.get("openclaw_feishu_policy")
+        if isinstance(event_diagnostics.get("openclaw_feishu_policy"), dict)
+        else {}
+    )
     return {
         "path": event_diagnostics.get("path"),
         "planned_listener": event_diagnostics.get("planned_listener"),
@@ -416,6 +435,12 @@ def _single_listener_diagnostic_evidence(event_diagnostics: dict[str, Any] | Non
         "listener_conflict_detected": "listener_mode_consistent" in failed or listener_check.get("status") == "fail",
         "active_bus_count": event_status.get("active_bus_count"),
         "active_bus_app_ids": event_status.get("active_bus_app_ids"),
+        "openclaw_group_policy_status": openclaw_policy.get("status"),
+        "openclaw_group_policy": openclaw_policy.get("groupPolicy"),
+        "openclaw_require_mention": openclaw_policy.get("requireMention"),
+        "openclaw_group_policy_unsafe": (
+            "openclaw_feishu_group_policy_safe" in failed or openclaw_policy.get("status") == "fail"
+        ),
     }
 
 

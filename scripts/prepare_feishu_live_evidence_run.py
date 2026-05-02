@@ -22,6 +22,7 @@ from scripts.check_cognee_embedding_sampler_status import (  # noqa: E402
     check_cognee_embedding_sampler_status,
 )
 from scripts.check_feishu_event_subscription_diagnostics import (  # noqa: E402
+    DEFAULT_OPENCLAW_CONFIG,
     run_feishu_event_subscription_diagnostics,
 )
 
@@ -51,6 +52,12 @@ def main() -> int:
     parser.add_argument("--cognee-long-run-evidence", type=Path, default=None)
     parser.add_argument("--embedding-sample-log", type=Path, default=None)
     parser.add_argument("--embedding-sampler-pid-file", type=Path, default=None)
+    parser.add_argument(
+        "--openclaw-config",
+        type=Path,
+        default=DEFAULT_OPENCLAW_CONFIG,
+        help="OpenClaw config path for the read-only Feishu group policy safety preflight.",
+    )
     parser.add_argument("--create-dirs", action="store_true")
     parser.add_argument("--output", default="", help="Optional JSON manifest output path.")
     parser.add_argument("--json", action="store_true")
@@ -65,6 +72,7 @@ def main() -> int:
         cognee_long_run_evidence=args.cognee_long_run_evidence,
         embedding_sample_log=args.embedding_sample_log,
         embedding_sampler_pid_file=args.embedding_sampler_pid_file,
+        openclaw_config_path=args.openclaw_config,
         create_dirs=args.create_dirs,
     )
     if args.output:
@@ -88,6 +96,7 @@ def prepare_live_evidence_run(
     cognee_long_run_evidence: Path | None = None,
     embedding_sample_log: Path | None = None,
     embedding_sampler_pid_file: Path | None = None,
+    openclaw_config_path: Path | None = DEFAULT_OPENCLAW_CONFIG,
     create_dirs: bool = False,
     process_rows: Iterable[str] | None = None,
     event_subscription_diagnostics: dict[str, Any] | None = None,
@@ -122,6 +131,7 @@ def prepare_live_evidence_run(
     event_subscription = _event_subscription_check(
         planned_listener=planned_listener,
         controlled_chat_id=controlled_chat_id,
+        openclaw_config_path=openclaw_config_path,
         diagnostics=event_subscription_diagnostics,
     )
     checks = {
@@ -158,6 +168,7 @@ def prepare_live_evidence_run(
         non_reviewer_open_id=non_reviewer_open_id,
         reviewer_open_id=reviewer_open_id,
         planned_listener=planned_listener,
+        openclaw_config_path=openclaw_config_path,
     )
     return {
         "ok": not blocking_failures,
@@ -311,6 +322,7 @@ def _manual_steps(
     non_reviewer_open_id: str,
     reviewer_open_id: str,
     planned_listener: PlannedListener,
+    openclaw_config_path: Path | None,
 ) -> list[dict[str, Any]]:
     chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     target_chat_probe = f" --target-chat-id {controlled_chat_id}" if controlled_chat_id else ""
@@ -325,6 +337,7 @@ def _manual_steps(
     sampler_status_arg = (
         f" --cognee-sampler-status {diagnostic_paths['cognee_sampler_status']}" if embedding_sample_log else ""
     )
+    openclaw_config_arg = f" --openclaw-config {openclaw_config_path}" if openclaw_config_path else ""
     steps = [
         {
             "id": "1",
@@ -333,7 +346,8 @@ def _manual_steps(
             "requires_ready_to_capture_live_logs": False,
             "instruction": (
                 "python3 scripts/check_feishu_event_subscription_diagnostics.py "
-                f"--planned-listener {planned_listener} --require-group-message-scope{target_chat_probe} --json "
+                f"--planned-listener {planned_listener} --require-group-message-scope"
+                f"{target_chat_probe}{openclaw_config_arg} --json "
                 f"> {diagnostic_paths['feishu_event_diagnostics']}"
             ),
         },
@@ -442,6 +456,7 @@ def _event_subscription_check(
     *,
     planned_listener: PlannedListener,
     controlled_chat_id: str,
+    openclaw_config_path: Path | None,
     diagnostics: dict[str, Any] | None,
 ) -> dict[str, Any]:
     try:
@@ -449,6 +464,7 @@ def _event_subscription_check(
             planned_listener=planned_listener,
             require_group_message_scope=True,
             target_chat_id=controlled_chat_id or None,
+            openclaw_config_path=openclaw_config_path,
         )
     except Exception as exc:  # pragma: no cover - defensive shell/environment boundary.
         return {

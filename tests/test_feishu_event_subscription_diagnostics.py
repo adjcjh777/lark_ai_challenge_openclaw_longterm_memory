@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from scripts.check_feishu_event_subscription_diagnostics import run_feishu_event_subscription_diagnostics
 
@@ -200,6 +202,58 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
         self.assertFalse(result["ok"], result)
         self.assertIn("message_event_registered", result["failed_checks"])
         self.assertIn("message_schema_requires_console_event", result["failed_checks"])
+
+    def test_fails_when_openclaw_group_policy_would_dispatch_non_at_messages_to_generic_agent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_event_diag_") as temp_dir:
+            config_path = Path(temp_dir) / "openclaw.json"
+            config_path.write_text(
+                json.dumps({"channels": {"feishu": {"groupPolicy": "open", "dmPolicy": "pairing"}}}),
+                encoding="utf-8",
+            )
+            result = run_feishu_event_subscription_diagnostics(
+                planned_listener="openclaw-websocket",
+                require_group_message_scope=True,
+                openclaw_config_path=config_path,
+                runner=_runner(
+                    status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                    event_list=[_message_event(scopes=["im:message.group_msg"])],
+                    schema=_message_event(scopes=["im:message.group_msg"]),
+                ),
+            )
+
+        self.assertFalse(result["ok"], result)
+        self.assertIn("openclaw_feishu_group_policy_safe", result["failed_checks"])
+        self.assertEqual("fail", result["checks"]["openclaw_feishu_group_policy_safe"]["status"])
+        self.assertEqual("open", result["openclaw_feishu_policy"]["groupPolicy"])
+        self.assertIsNone(result["openclaw_feishu_policy"]["requireMention"])
+        self.assertTrue(result["remediation"]["openclaw_group_policy_action_required"])
+        self.assertIn(
+            "openclaw_group_policy_open_without_require_mention",
+            [item["id"] for item in result["warnings"]],
+        )
+
+    def test_allows_openclaw_group_policy_when_open_requires_mentions(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_event_diag_") as temp_dir:
+            config_path = Path(temp_dir) / "openclaw.json"
+            config_path.write_text(
+                json.dumps({"channels": {"feishu": {"groupPolicy": "open", "requireMention": True}}}),
+                encoding="utf-8",
+            )
+            result = run_feishu_event_subscription_diagnostics(
+                planned_listener="openclaw-websocket",
+                require_group_message_scope=True,
+                openclaw_config_path=config_path,
+                runner=_runner(
+                    status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                    event_list=[_message_event(scopes=["im:message.group_msg"])],
+                    schema=_message_event(scopes=["im:message.group_msg"]),
+                ),
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["failed_checks"])
+        self.assertEqual("pass", result["openclaw_feishu_policy"]["status"])
+        self.assertTrue(result["openclaw_feishu_policy"]["requireMention"])
 
 
 def _runner(

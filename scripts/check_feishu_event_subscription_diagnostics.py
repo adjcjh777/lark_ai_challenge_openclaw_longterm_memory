@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MESSAGE_EVENT_KEY = "im.message.receive_v1"
 GROUP_MESSAGE_SCOPE_OPTIONS = ("im:message.group_msg", "im:message.group_msg:readonly")
 PRIMARY_GROUP_MESSAGE_SCOPE = GROUP_MESSAGE_SCOPE_OPTIONS[0]
+DEFAULT_OPENCLAW_CONFIG = Path.home() / ".openclaw" / "openclaw.json"
 BOUNDARY = (
     "feishu_event_subscription_diagnostics_only; read-only lark-cli event status/list/schema checks, "
     "does not start a listener or prove live passive group delivery"
@@ -43,6 +44,15 @@ def main() -> int:
         default="",
         help="Optional oc_ chat_id for a read-only bot identity group-message access probe.",
     )
+    parser.add_argument(
+        "--openclaw-config",
+        type=Path,
+        default=DEFAULT_OPENCLAW_CONFIG,
+        help=(
+            "Optional OpenClaw config path for a read-only Feishu group policy safety check. "
+            "Only non-secret policy fields are reported."
+        ),
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -50,6 +60,7 @@ def main() -> int:
         planned_listener=args.planned_listener,
         require_group_message_scope=args.require_group_message_scope,
         target_chat_id=args.target_chat_id or None,
+        openclaw_config_path=args.openclaw_config,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
@@ -63,6 +74,7 @@ def run_feishu_event_subscription_diagnostics(
     planned_listener: str = "openclaw-websocket",
     require_group_message_scope: bool = False,
     target_chat_id: str | None = None,
+    openclaw_config_path: Path | None = None,
     runner: Runner | None = None,
 ) -> dict[str, Any]:
     run = runner or _run_lark_cli
@@ -136,8 +148,14 @@ def run_feishu_event_subscription_diagnostics(
         result=bot_group_messages_result,
         payload=bot_group_messages_payload,
     )
+    openclaw_policy_probe = _openclaw_feishu_policy_probe(
+        planned_listener=planned_listener,
+        config_path=openclaw_config_path,
+    )
     if bot_group_access_probe:
         checks["target_bot_group_messages_readable"] = _check(bot_group_access_probe["ok"])
+    if openclaw_policy_probe and openclaw_policy_probe.get("status") != "warning":
+        checks["openclaw_feishu_group_policy_safe"] = _check(bool(openclaw_policy_probe.get("ok")))
     has_schema_group_scope = _has_group_message_scope(scopes)
     has_enabled_group_scope = _has_group_message_scope(enabled_scopes)
     has_target_group_access = bool(bot_group_access_probe and bot_group_access_probe["ok"])
@@ -196,6 +214,25 @@ def run_feishu_event_subscription_diagnostics(
                 "detail": "OpenClaw is planned owner, so lark-cli event bus should not also consume the same bot.",
             }
         )
+    if openclaw_policy_probe:
+        if not openclaw_policy_probe.get("ok"):
+            warnings.append(
+                {
+                    "id": "openclaw_group_policy_open_without_require_mention",
+                    "detail": (
+                        "OpenClaw Feishu groupPolicy=open without requireMention=true dispatches ordinary non-@ "
+                        "group messages to the main agent. That can prove event delivery, but it is not the "
+                        "Copilot passive silent-screening path."
+                    ),
+                }
+            )
+        elif openclaw_policy_probe.get("status") == "warning":
+            warnings.append(
+                {
+                    "id": "openclaw_config_unavailable_for_group_policy_probe",
+                    "detail": str(openclaw_policy_probe.get("message") or "OpenClaw Feishu policy was not checked."),
+                }
+            )
     remediation = _remediation(
         planned_listener=planned_listener,
         scopes=scopes,
@@ -205,6 +242,7 @@ def run_feishu_event_subscription_diagnostics(
         has_enabled_group_scope=has_enabled_group_scope,
         active_buses=active_buses,
         bot_group_access_probe=bot_group_access_probe,
+        openclaw_policy_probe=openclaw_policy_probe,
     )
     failed = sorted(name for name, check in checks.items() if check["status"] != "pass")
     return {
@@ -233,6 +271,7 @@ def run_feishu_event_subscription_diagnostics(
             "has_group_message_scope_from_enabled_scopes": has_enabled_group_scope,
             "has_group_message_access_from_target_probe": has_target_group_access,
         },
+        "openclaw_feishu_policy": openclaw_policy_probe,
         "target_group_probe": bot_group_access_probe,
         "remediation": remediation,
         "next_step": "" if not failed else remediation["summary"],
@@ -293,12 +332,14 @@ def _remediation(
     has_enabled_group_scope: bool,
     active_buses: list[dict[str, Any]],
     bot_group_access_probe: dict[str, Any] | None = None,
+    openclaw_policy_probe: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current_scopes = [str(scope) for scope in scopes]
     current_enabled_scopes = [str(scope) for scope in enabled_scopes]
     missing_group_scope = not has_group_scope
     listener_conflict = planned_listener == "openclaw-websocket" and bool(active_buses)
     target_group_unreadable = bool(bot_group_access_probe and not bot_group_access_probe["ok"])
+    openclaw_group_policy_unsafe = bool(openclaw_policy_probe and not openclaw_policy_probe.get("ok"))
     steps: list[str] = []
     if missing_group_scope or target_group_unreadable:
         steps.extend(
@@ -311,6 +352,12 @@ def _remediation(
         )
     if listener_conflict:
         steps.append("Stop the lark-cli event bus before using OpenClaw websocket as the planned single listener.")
+    if openclaw_group_policy_unsafe:
+        steps.append(
+            "Change OpenClaw Feishu group handling so ordinary non-@ group messages are not dispatched to the "
+            "generic main agent; for live passive evidence use requireMention=true or a Copilot-owned route that "
+            "calls handle_tool_request() / CopilotService silently."
+        )
     if not steps:
         if (has_enabled_group_scope or bool(bot_group_access_probe and bot_group_access_probe["ok"])) and not has_schema_group_scope:
             steps.append(
@@ -335,6 +382,11 @@ def _remediation(
         )
     elif listener_conflict:
         summary = "Stop the conflicting lark-cli event bus before retesting with OpenClaw websocket as owner."
+    elif openclaw_group_policy_unsafe:
+        summary = (
+            "OpenClaw Feishu groupPolicy=open is dispatching non-@ group messages to the generic agent; "
+            "switch to a safe Copilot-owned passive route before treating the evidence as productized."
+        )
     else:
         summary = ""
     return {
@@ -345,8 +397,60 @@ def _remediation(
         "enabled_scopes": _relevant_message_scopes(current_enabled_scopes),
         "message_event_key": MESSAGE_EVENT_KEY,
         "single_listener_action_required": listener_conflict,
+        "openclaw_group_policy_action_required": openclaw_group_policy_unsafe,
         "steps": steps,
         "summary": summary,
+    }
+
+
+def _openclaw_feishu_policy_probe(
+    *,
+    planned_listener: str,
+    config_path: Path | None,
+) -> dict[str, Any] | None:
+    if planned_listener != "openclaw-websocket" or config_path is None:
+        return None
+    path = config_path.expanduser()
+    if not path.exists():
+        return {
+            "ok": True,
+            "status": "warning",
+            "path": str(path),
+            "message": "OpenClaw config path does not exist; skipped Feishu group policy probe.",
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "ok": False,
+            "status": "fail",
+            "path": str(path),
+            "message": f"Unable to read OpenClaw config JSON: {exc}",
+        }
+    feishu = payload.get("channels", {}).get("feishu") if isinstance(payload, dict) else None
+    if not isinstance(feishu, dict):
+        return {
+            "ok": True,
+            "status": "warning",
+            "path": str(path),
+            "configured": False,
+            "message": "OpenClaw config does not contain channels.feishu.",
+        }
+    group_policy = feishu.get("groupPolicy")
+    require_mention = feishu.get("requireMention")
+    unsafe_open_dispatch = str(group_policy or "").lower() == "open" and require_mention is not True
+    return {
+        "ok": not unsafe_open_dispatch,
+        "status": "pass" if not unsafe_open_dispatch else "fail",
+        "path": str(path),
+        "configured": True,
+        "groupPolicy": group_policy,
+        "requireMention": require_mention,
+        "message": (
+            "OpenClaw Feishu group policy is safe for passive evidence capture."
+            if not unsafe_open_dispatch
+            else "groupPolicy=open without requireMention=true dispatches non-@ group messages to the main agent."
+        ),
     }
 
 

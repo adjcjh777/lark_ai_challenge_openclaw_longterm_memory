@@ -105,6 +105,50 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertEqual(1, diagnostic_evidence["active_bus_count"])
         self.assertTrue(diagnostic_evidence["listener_conflict_detected"])
 
+    def test_audit_fails_single_listener_when_openclaw_group_policy_dispatches_generic_agent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
+            root = Path(temp_dir)
+            diagnostics = _write_json(
+                root / "feishu-event-diagnostics.json",
+                {
+                    "ok": False,
+                    "planned_listener": "openclaw-websocket",
+                    "failed_checks": ["openclaw_feishu_group_policy_safe"],
+                    "checks": {
+                        "listener_mode_consistent": {"status": "pass"},
+                        "openclaw_feishu_group_policy_safe": {"status": "fail"},
+                    },
+                    "event_status": {"active_bus_count": 0, "active_bus_app_ids": []},
+                    "openclaw_feishu_policy": {
+                        "status": "fail",
+                        "groupPolicy": "open",
+                        "requireMention": None,
+                    },
+                    "message_event_schema": {"has_group_message_scope": True},
+                },
+            )
+
+            report = build_completion_audit(
+                passive_event_log=None,
+                permission_event_log=None,
+                review_event_log=None,
+                routing_event_log=None,
+                feishu_event_diagnostics=diagnostics,
+                cognee_long_run_evidence=None,
+            )
+
+        blockers = {item["name"]: item for item in report["blockers"]}
+        self.assertEqual(
+            "openclaw_group_policy_dispatches_generic_agent",
+            blockers["single_feishu_listener_entry"]["reason"],
+        )
+        single_listener_item = next(
+            entry for entry in report["items"] if entry["name"] == "single_feishu_listener_entry"
+        )
+        diagnostic_evidence = single_listener_item["evidence"]["event_subscription_diagnostics"]
+        self.assertTrue(diagnostic_evidence["openclaw_group_policy_unsafe"])
+        self.assertEqual("open", diagnostic_evidence["openclaw_group_policy"])
+
     def test_audit_uses_sampler_status_for_cognee_progress_blocker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
             root = Path(temp_dir)
