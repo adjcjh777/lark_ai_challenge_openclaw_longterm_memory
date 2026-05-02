@@ -36,7 +36,8 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
   if (!publish || publish.mode !== "interactive" || !publish.card || publish.delivery_mode !== "chat") {
     return null;
   }
-  const messageId = String(publish.reply_to || "").trim();
+  const rawMessageId = String(publish.reply_to || "").trim();
+  const messageId = isRealFeishuMessageId(rawMessageId) ? rawMessageId : "";
   const chatId = String(publish.chat_id || "").trim();
   if (!messageId && !chatId) {
     return {
@@ -92,6 +93,10 @@ export function interactiveCardIdempotencyKey(publish) {
     JSON.stringify(publish.card || {}),
   ].join("|");
   return `fmc_openclaw_${hashString(raw)}`;
+}
+
+export function isRealFeishuMessageId(value) {
+  return /^om_[A-Za-z0-9_-]+$/.test(String(value || "").trim());
 }
 
 export function buildCardDeliveryFailureFallback(cardDelivery) {

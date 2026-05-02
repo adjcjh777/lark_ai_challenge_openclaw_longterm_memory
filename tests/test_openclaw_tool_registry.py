@@ -103,6 +103,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                 import {
                   buildCardDeliveryFailureFallback,
                   buildRouterFailureFallback,
+                  isRealFeishuMessageId,
                   publishInteractiveCardViaLarkCli,
                 } from './agent_adapters/openclaw/plugin/feishu_card_delivery.js';
                 const publish = {
@@ -125,13 +126,31 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   delivery_mode: 'chat',
                   card: { type: 'template' },
                 }, { env: process.env });
+                const syntheticReply = await publishInteractiveCardViaLarkCli({
+                  mode: 'interactive',
+                  delivery_mode: 'chat',
+                  reply_to: 'openclaw_before_dispatch_synthetic',
+                  chat_id: 'oc_demo',
+                  card: { type: 'template', data: { template_id: 'tpl_demo' } },
+                }, {
+                  env: {
+                    ...process.env,
+                    LARK_CLI_BIN: process.env.FAKE_LARK_CLI,
+                    FAKE_LARK_CAPTURE: process.env.FAKE_LARK_CAPTURE_SYNTHETIC,
+                    FEISHU_CARD_TIMEOUT_SECONDS: '2',
+                  },
+                });
                 console.log(JSON.stringify({
                   ok,
                   missingTarget,
+                  syntheticReply,
+                  realMessageId: isRealFeishuMessageId('om_demo'),
+                  syntheticMessageId: isRealFeishuMessageId('openclaw_before_dispatch_synthetic'),
                   cardFallback: buildCardDeliveryFailureFallback({ fallback_reason: 'boom' }),
                   routerFallback: buildRouterFailureFallback(new Error('router boom')),
                 }));
             """
+            synthetic_capture_path = tmp_path / "capture-synthetic.json"
             result = subprocess.run(
                 ["node", "--input-type=module", "-e", script],
                 cwd=ROOT,
@@ -139,6 +158,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                     **os.environ,
                     "FAKE_LARK_CLI": str(fake_cli),
                     "FAKE_LARK_CAPTURE": str(capture_path),
+                    "FAKE_LARK_CAPTURE_SYNTHETIC": str(synthetic_capture_path),
                 },
                 text=True,
                 capture_output=True,
@@ -147,6 +167,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
 
             payload = json.loads(result.stdout)
             captured_command = json.loads(capture_path.read_text(encoding="utf-8"))
+            captured_synthetic_command = json.loads(synthetic_capture_path.read_text(encoding="utf-8"))
             self.assertTrue(payload["ok"]["ok"])
             self.assertEqual("reply_card", payload["ok"]["mode"])
             self.assertFalse(payload["ok"]["fallback_suppressed"])
@@ -157,6 +178,14 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertIn("om_demo", captured_command)
             self.assertIn("--msg-type", captured_command)
             self.assertIn("interactive", captured_command)
+            self.assertTrue(payload["syntheticReply"]["ok"])
+            self.assertEqual("send_card", payload["syntheticReply"]["mode"])
+            self.assertTrue(payload["realMessageId"])
+            self.assertFalse(payload["syntheticMessageId"])
+            self.assertIn("+messages-send", captured_synthetic_command)
+            self.assertIn("--chat-id", captured_synthetic_command)
+            self.assertIn("oc_demo", captured_synthetic_command)
+            self.assertNotIn("--message-id", captured_synthetic_command)
             self.assertFalse(payload["missingTarget"]["ok"])
             self.assertTrue(payload["missingTarget"]["fallback_suppressed"])
             self.assertIn("card_delivery_failed", payload["cardFallback"])
