@@ -186,6 +186,24 @@ def route_gateway_message(
             allowlist_chat_ids=allowlist_chat_ids,
             db_path=db_path,
         )
+    if command_name in {"recall", "memory_search", "search_memory"}:
+        return route_gateway_memory_search(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            query=_argument,
+            db_path=db_path,
+        )
+    if command_name in {"prefetch", "memory_prefetch", "prefetch_memory"}:
+        return route_gateway_memory_prefetch(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            task=_argument,
+            db_path=db_path,
+        )
     if command_name in {"enable_memory", "memory_on", "enable_group_memory"}:
         return route_gateway_group_policy(
             text=normalized_text,
@@ -415,6 +433,112 @@ def route_gateway_group_policy(
     }
 
 
+def route_gateway_memory_search(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    query: str,
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    normalized_query = (query or text).strip()
+    if normalized_query.startswith("/"):
+        _, normalized_query = _slash_command(normalized_query)
+    normalized_query = normalized_query or "当前项目记忆"
+    payload = {
+        "query": normalized_query,
+        "scope": scope,
+        "top_k": 3,
+        "filters": {"status": "active"},
+        "current_context": _gateway_current_context(
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action="memory.search",
+            intent="search",
+            thread_topic=normalized_query,
+            scope=scope,
+        ),
+    }
+    service = CopilotService(db_path=db_path)
+    tool_result = handle_tool_request("memory.search", payload, service=service)
+    reply = _format_memory_search_result(tool_result)
+    return {
+        "ok": bool(tool_result.get("ok", True)),
+        "tool": "memory.search",
+        "message_id": message_id,
+        "chat_id": chat_id,
+        "routing_reason": "openclaw_gateway_memory_search",
+        "source_entrypoint": "openclaw_gateway_live",
+        "tool_result": tool_result,
+        "card": build_card_from_text(reply),
+        "disposition": "reply",
+        "message_disposition": {
+            "memory_path": "first_class_memory_search",
+            "candidate_path": "read_only",
+            "reason_code": "openclaw_gateway_memory_search",
+        },
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply),
+        "input_text": text,
+    }
+
+
+def route_gateway_memory_prefetch(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    task: str,
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    normalized_task = (task or text).strip()
+    if normalized_task.startswith("/"):
+        _, normalized_task = _slash_command(normalized_task)
+    normalized_task = normalized_task or "当前任务"
+    payload = {
+        "task": normalized_task,
+        "scope": scope,
+        "top_k": 5,
+        "current_context": _gateway_current_context(
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action="memory.prefetch",
+            intent="prefetch",
+            thread_topic=normalized_task,
+            scope=scope,
+            metadata={"current_message": normalized_task},
+        ),
+    }
+    service = CopilotService(db_path=db_path)
+    tool_result = handle_tool_request("memory.prefetch", payload, service=service)
+    reply = _format_memory_prefetch_result(tool_result)
+    return {
+        "ok": bool(tool_result.get("ok", True)),
+        "tool": "memory.prefetch",
+        "message_id": message_id,
+        "chat_id": chat_id,
+        "routing_reason": "openclaw_gateway_memory_prefetch",
+        "source_entrypoint": "openclaw_gateway_live",
+        "tool_result": tool_result,
+        "card": build_card_from_text(reply),
+        "disposition": "reply",
+        "message_disposition": {
+            "memory_path": "first_class_memory_prefetch",
+            "candidate_path": "read_only",
+            "reason_code": "openclaw_gateway_memory_prefetch",
+        },
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply),
+        "input_text": text,
+    }
+
+
 def _is_explicit_remember(text: str) -> bool:
     lowered = text.lower()
     return lowered == "/remember" or lowered.startswith("/remember ")
@@ -449,6 +573,106 @@ def _has_enterprise_memory_signal(text: str) -> bool:
 def _looks_like_question(text: str) -> bool:
     lowered = text.lower()
     return any(marker in text or marker in lowered for marker in QUESTION_MARKERS)
+
+
+def _gateway_current_context(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    action: str,
+    intent: str,
+    thread_topic: str,
+    scope: str = SCOPE,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    tenant_id, organization_id, visibility = _feishu_identity()
+    safe_action = action.replace(".", "_")
+    merged_metadata = {
+        "message_id": message_id,
+        "chat_type": "group",
+        "entrypoint": "openclaw_gateway_live",
+    }
+    if metadata:
+        merged_metadata.update(metadata)
+    return {
+        "session_id": f"feishu:{chat_id}",
+        "chat_id": chat_id,
+        "scope": scope,
+        "user_id": sender_open_id,
+        "tenant_id": tenant_id,
+        "organization_id": organization_id,
+        "visibility_policy": visibility,
+        "intent": intent,
+        "thread_topic": thread_topic[:80],
+        "allowed_scopes": [scope],
+        "metadata": merged_metadata,
+        "permission": {
+            "request_id": f"req_openclaw_{_short_id(message_id)}_{safe_action}",
+            "trace_id": f"trace_openclaw_{_short_id(message_id)}",
+            "actor": {
+                "open_id": sender_open_id or "unknown_feishu_actor",
+                "tenant_id": tenant_id,
+                "organization_id": organization_id,
+                "roles": _roles_for_sender(sender_open_id),
+            },
+            "source_context": {
+                "entrypoint": "openclaw_gateway_live",
+                "workspace_id": scope,
+                "chat_id": chat_id,
+            },
+            "requested_action": action,
+            "requested_visibility": visibility,
+            "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        },
+    }
+
+
+def _short_id(value: str) -> str:
+    return "".join(ch for ch in value if ch.isalnum())[-8:] or "unknown"
+
+
+def _format_memory_search_result(result: dict[str, Any]) -> str:
+    bridge = result.get("bridge") if isinstance(result.get("bridge"), dict) else {}
+    rows = result.get("results") if isinstance(result.get("results"), list) else []
+    lines = [
+        "Memory Copilot 已执行记忆检索。",
+        f"工具：{bridge.get('tool') or 'fmc_memory_search'}",
+        f"状态：{'ok' if result.get('ok', True) else 'failed'}",
+        f"命中数：{len(rows)}",
+    ]
+    for item in rows[:3]:
+        if isinstance(item, dict):
+            lines.append(f"- {item.get('subject') or '-'}：{item.get('current_value') or '-'}")
+    lines.extend(_bridge_trace_lines(bridge))
+    return "\n".join(lines)
+
+
+def _format_memory_prefetch_result(result: dict[str, Any]) -> str:
+    bridge = result.get("bridge") if isinstance(result.get("bridge"), dict) else {}
+    pack = result.get("context_pack") if isinstance(result.get("context_pack"), dict) else {}
+    memories = pack.get("relevant_memories") if isinstance(pack.get("relevant_memories"), list) else []
+    lines = [
+        "Memory Copilot 已生成任务前上下文包。",
+        f"工具：{bridge.get('tool') or 'fmc_memory_prefetch'}",
+        f"状态：{'ok' if result.get('ok', True) else 'failed'}",
+        f"相关记忆：{len(memories)}",
+    ]
+    summary = pack.get("summary")
+    if summary:
+        lines.append(f"摘要：{summary}")
+    lines.extend(_bridge_trace_lines(bridge))
+    return "\n".join(lines)
+
+
+def _bridge_trace_lines(bridge: dict[str, Any]) -> list[str]:
+    decision = bridge.get("permission_decision") if isinstance(bridge.get("permission_decision"), dict) else {}
+    return [
+        f"request_id：{bridge.get('request_id') or '-'}",
+        f"trace_id：{bridge.get('trace_id') or '-'}",
+        f"permission：{decision.get('decision') or '-'}",
+    ]
 
 
 def _slash_command(text: str) -> tuple[str | None, str]:

@@ -25,6 +25,12 @@ const OPENCLAW_TO_PYTHON = {
 const FEISHU_GROUP_ROUTER_COMMANDS = new Set([
   "settings",
   "group_settings",
+  "recall",
+  "memory_search",
+  "search_memory",
+  "prefetch",
+  "memory_prefetch",
+  "prefetch_memory",
   "enable_memory",
   "memory_on",
   "enable_group_memory",
@@ -181,6 +187,7 @@ function registerFeishuBeforeDispatchHook(api) {
       chat_type: event.isGroup ? "group" : "p2p",
       bot_mentioned: false,
     });
+    api.logger?.info?.(`feishu-memory-copilot route result ${JSON.stringify(sanitizeRouteResult(result))}`);
     const publish = result && typeof result === "object" ? result.publish : null;
     if (publish && publish.mode === "reply" && typeof publish.text === "string" && publish.text.trim()) {
       return { handled: true, text: publish.text };
@@ -190,6 +197,68 @@ function registerFeishuBeforeDispatchHook(api) {
     name: "feishu-memory-copilot-before-dispatch",
     description: "Routes Feishu group messages through the Copilot router before generic agent dispatch.",
   });
+}
+
+function sanitizeRouteResult(result) {
+  if (!result || typeof result !== "object") {
+    return { ok: false, reason: "non_object_result" };
+  }
+  const toolResult = result.tool_result && typeof result.tool_result === "object" ? result.tool_result : {};
+  const bridge = toolResult.bridge && typeof toolResult.bridge === "object" ? toolResult.bridge : {};
+  return {
+    ok: result.ok,
+    tool: result.tool,
+    routing_reason: result.routing_reason,
+    message_id: redactId(result.message_id),
+    chat_id: redactId(result.chat_id),
+    publish: sanitizePublish(result.publish),
+    tool_result: {
+      ok: toolResult.ok,
+      tool: toolResult.tool,
+      status: toolResult.status,
+      action: toolResult.action,
+      bridge: sanitizeBridge(bridge),
+    },
+  };
+}
+
+function sanitizePublish(publish) {
+  if (!publish || typeof publish !== "object") {
+    return {};
+  }
+  return {
+    ok: publish.ok,
+    mode: publish.mode,
+    suppressed: publish.suppressed,
+  };
+}
+
+function sanitizeBridge(bridge) {
+  const decision = bridge.permission_decision && typeof bridge.permission_decision === "object"
+    ? bridge.permission_decision
+    : {};
+  return {
+    entrypoint: bridge.entrypoint,
+    tool: bridge.tool,
+    request_id: bridge.request_id ? "present" : "",
+    trace_id: bridge.trace_id ? "present" : "",
+    permission_decision: {
+      decision: decision.decision,
+      reason_code: decision.reason_code,
+      source_entrypoint: decision.source_entrypoint,
+    },
+  };
+}
+
+function redactId(value) {
+  const raw = String(value || "");
+  if (!raw) {
+    return "";
+  }
+  if (raw.length <= 8) {
+    return "***";
+  }
+  return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
 }
 
 function shouldRouteFeishuGroupEvent(event, context) {

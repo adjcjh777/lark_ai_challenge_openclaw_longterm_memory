@@ -90,6 +90,60 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         action_blocks = [element for element in result["card"]["elements"] if element.get("tag") == "action"]
         self.assertEqual(1, len(action_blocks))
 
+    def test_gateway_recall_command_routes_to_first_class_search(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="/recall 部署参数",
+                message_id="om_router_recall",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.search", result["tool"])
+        self.assertEqual("openclaw_gateway_memory_search", result["routing_reason"])
+        self.assertEqual("reply", result["publish"]["mode"])
+        bridge = result["tool_result"]["bridge"]
+        self.assertEqual("fmc_memory_search", bridge["tool"])
+        self.assertEqual("allow", bridge["permission_decision"]["decision"])
+        self.assertEqual("openclaw_gateway_live", bridge["permission_decision"]["source_entrypoint"])
+
+    def test_gateway_prefetch_command_routes_to_first_class_prefetch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="/prefetch 生成上线 checklist",
+                message_id="om_router_prefetch",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.prefetch", result["tool"])
+        self.assertEqual("openclaw_gateway_memory_prefetch", result["routing_reason"])
+        self.assertEqual("reply", result["publish"]["mode"])
+        bridge = result["tool_result"]["bridge"]
+        self.assertEqual("fmc_memory_prefetch", bridge["tool"])
+        self.assertEqual("allow", bridge["permission_decision"]["decision"])
+        self.assertEqual("openclaw_gateway_live", bridge["permission_decision"]["source_entrypoint"])
+
     def test_gateway_unmentioned_allowlist_group_message_creates_silent_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
