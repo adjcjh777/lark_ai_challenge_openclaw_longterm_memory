@@ -59,6 +59,17 @@ ENTERPRISE_MEMORY_SIGNALS = (
     "改成",
 )
 QUESTION_MARKERS = ("？", "?", "是什么", "怎么", "是否", "吗", "是不是")
+GROUP_SETTINGS_NATURAL_QUERIES = {
+    "当前群记忆",
+    "群记忆",
+    "本群记忆",
+    "当前群设置",
+    "群记忆设置",
+    "本群记忆设置",
+    "这个群的记忆",
+    "查看当前群记忆",
+    "当前群记忆状态",
+}
 
 
 def build_remember_payload(
@@ -199,7 +210,7 @@ def route_gateway_message(
 
     normalized_text = _strip_leading_mention_command(text)
     command_name, _argument = _slash_command(normalized_text)
-    if command_name in {"settings", "group_settings"}:
+    if command_name in {"settings", "group_settings"} or _looks_like_group_settings_query(normalized_text):
         return route_gateway_group_settings(
             text=normalized_text,
             message_id=message_id,
@@ -725,6 +736,11 @@ def _has_enterprise_memory_signal(text: str) -> bool:
 def _looks_like_question(text: str) -> bool:
     lowered = text.lower()
     return any(marker in text or marker in lowered for marker in QUESTION_MARKERS)
+
+
+def _looks_like_group_settings_query(text: str) -> bool:
+    normalized = text.strip().strip("。.!！?？")
+    return normalized in GROUP_SETTINGS_NATURAL_QUERIES
 
 
 def _gateway_current_context(

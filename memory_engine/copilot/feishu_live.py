@@ -68,6 +68,17 @@ MEMORY_SIGNALS = (
     "回滚负责人",
 )
 PREFETCH_SIGNALS = ("准备", "checklist", "清单", "计划", "执行前", "任务前", "上线前")
+GROUP_SETTINGS_NATURAL_QUERIES = {
+    "当前群记忆",
+    "群记忆",
+    "本群记忆",
+    "当前群设置",
+    "群记忆设置",
+    "本群记忆设置",
+    "这个群的记忆",
+    "查看当前群记忆",
+    "当前群记忆状态",
+}
 
 
 @dataclass(frozen=True)
@@ -388,6 +399,8 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return _review_inbox_invocation(event, scope, argument, reason="explicit_review_inbox")
     if command_name in {"settings", "group_settings"}:
         return _group_settings_invocation(event, scope, reason="explicit_group_settings")
+    if _looks_like_group_settings_query(text):
+        return _group_settings_invocation(event, scope, reason="natural_group_settings")
     if command_name in {"enable_memory", "memory_on", "enable_group_memory"}:
         return _group_policy_invocation(
             event, scope, "copilot.group_enable_memory", reason="explicit_group_memory_enable"
@@ -1932,6 +1945,11 @@ def _looks_like_candidate(text: str) -> bool:
 def _looks_like_prefetch(text: str) -> bool:
     lowered = text.lower()
     return any(signal in lowered or signal in text for signal in PREFETCH_SIGNALS)
+
+
+def _looks_like_group_settings_query(text: str) -> bool:
+    normalized = text.strip().strip("。.!！?？")
+    return normalized in GROUP_SETTINGS_NATURAL_QUERIES
 
 
 def _subject_hint(text: str) -> str:

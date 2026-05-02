@@ -890,6 +890,17 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("explicit_group_settings", result["routing_reason"])
         self.assertEqual("read_only", result["message_disposition"]["candidate_path"])
 
+    def test_natural_group_memory_query_routes_to_group_settings(self) -> None:
+        event = message_event_from_payload(payload("om_live_group_settings_natural", "当前群记忆"))
+        self.assertIsNotNone(event)
+
+        result = handle_copilot_message_event(self.conn, event, DryRunPublisher(), self.config, dry_run=True)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_settings", result["tool"])
+        self.assertEqual("natural_group_settings", result["routing_reason"])
+        self.assertEqual("read_only", result["message_disposition"]["candidate_path"])
+
     def test_non_owner_without_reviewer_role_denies_confirm(self) -> None:
         created = self.handle("om_live_create_member", "/remember 决定：OpenClaw 固定 2026.4.24")
         candidate_id = created["tool_result"]["candidate_id"]

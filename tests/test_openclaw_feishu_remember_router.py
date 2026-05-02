@@ -352,6 +352,30 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertIsNotNone(result["card"])
         self.assertEqual("group_settings", result["message_disposition"]["memory_path"])
 
+    def test_gateway_natural_group_memory_query_replies_even_when_not_allowlisted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="当前群记忆",
+                message_id="om_router_natural_settings",
+                chat_id="oc_not_allowlisted_status_query",
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.group_settings", result["tool"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertEqual("group_settings", result["message_disposition"]["memory_path"])
+        self.assertEqual("pending_onboarding", result["tool_result"]["chat_status"])
+
     def test_gateway_enable_memory_by_reviewer_writes_group_policy_and_audit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
