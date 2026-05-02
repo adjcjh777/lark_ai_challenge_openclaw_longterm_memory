@@ -111,6 +111,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   buildRouterFailureFallback,
                   isRealFeishuMessageId,
                   larkCliEnvironment,
+                  commandPreview,
                   publishInteractiveCardViaLarkCli,
                   resolveLarkCliBin,
                 } from './agent_adapters/openclaw/plugin/feishu_card_delivery.js';
@@ -159,6 +160,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                     chatId: 'oc_demo',
                     uuid: 'uuid_demo',
                   }),
+                  commandPreview: commandPreview(['/opt/homebrew/bin/lark-cli', '--profile', 'feishu-ai-challenge', 'api', 'POST', '--data', '{"secret":"hidden"}']),
                   explicitCli: resolveLarkCliBin({ LARK_CLI_BIN: '/tmp/custom-lark-cli' }),
                   defaultCli: resolveLarkCliBin({}),
                   launchdEnv: larkCliEnvironment({ PATH: '/usr/bin:/bin' }),
@@ -196,6 +198,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertIn("api", captured_command)
             self.assertIn("--profile", captured_command)
             self.assertIn("feishu-ai-challenge", captured_command)
+            self.assertIn("--profile feishu-ai-challenge", payload["ok"]["command_preview"])
             self.assertIn("POST", captured_command)
             self.assertIn("/open-apis/im/v1/messages/om_demo/reply", captured_command)
             self.assertIn("--data", captured_command)
@@ -206,6 +209,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertIn("api", captured_synthetic_command)
             self.assertIn("--profile", captured_synthetic_command)
             self.assertIn("feishu-ai-challenge", captured_synthetic_command)
+            self.assertIn("--profile feishu-ai-challenge", payload["syntheticReply"]["command_preview"])
             self.assertIn("POST", captured_synthetic_command)
             self.assertIn("/open-apis/im/v1/messages", captured_synthetic_command)
             self.assertIn("--params", captured_synthetic_command)
@@ -215,6 +219,8 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertEqual("interactive", payload["requestBody"]["msg_type"])
             self.assertEqual("oc_demo", payload["requestBody"]["receive_id"])
             self.assertIsInstance(payload["requestBody"]["content"], str)
+            self.assertIn("--data <json>", payload["commandPreview"])
+            self.assertNotIn("hidden", payload["commandPreview"])
             self.assertEqual("/tmp/custom-lark-cli", payload["explicitCli"])
             self.assertIn("lark-cli", payload["defaultCli"])
             self.assertEqual("feishu-ai-challenge", payload["launchdEnv"]["LARK_CLI_PROFILE"])

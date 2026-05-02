@@ -258,6 +258,7 @@ function sanitizePublish(publish) {
     fallback_used: publish.fallback_used,
     fallback_suppressed: publish.fallback_suppressed,
     fallback_reason: publish.fallback_reason,
+    command_preview: publish.command_preview,
     returncode: publish.returncode,
     timed_out: publish.timed_out,
     stderr: publish.stderr ? truncateForOperator(publish.stderr, 240) : undefined,

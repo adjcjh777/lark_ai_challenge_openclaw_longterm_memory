@@ -74,6 +74,7 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
     messageId,
     uuid: interactiveCardIdempotencyKey(publish),
   })));
+  const command_preview = commandPreview(command);
   const result = await runCommand(command, {
     cwd: options.cwd,
     env,
@@ -83,6 +84,7 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
     ...result,
     mode: messageId ? "reply_card" : "send_card",
     delivery_mode: "chat",
+    command_preview,
     reply_to: messageId || null,
     chat_id: chatId || null,
     card: publish.card,
@@ -177,6 +179,23 @@ export function commandFailureReason(result) {
     return "openclaw_gateway_interactive_card_failed";
   }
   return `openclaw_gateway_interactive_card_failed: ${detail}`;
+}
+
+export function commandPreview(command) {
+  const preview = [];
+  for (let index = 0; index < command.length; index += 1) {
+    const value = String(command[index] || "");
+    if (index === 0) {
+      preview.push(value.split("/").pop() || value);
+      continue;
+    }
+    preview.push(value);
+    if (value === "--data" || value === "--params") {
+      index += 1;
+      preview.push("<json>");
+    }
+  }
+  return preview.join(" ");
 }
 
 export function buildRouterFailureFallback(error) {
