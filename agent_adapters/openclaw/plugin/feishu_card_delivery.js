@@ -55,11 +55,9 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
   }
   const env = larkCliEnvironment(options.env || process.env);
   const larkCli = resolveLarkCliBin(env);
+  const larkProfile = env.LARK_CLI_PROFILE || "feishu-ai-challenge";
   const larkAs = env.LARK_CLI_AS || "bot";
-  const command = [larkCli];
-  if (env.LARK_CLI_PROFILE) {
-    command.push("--profile", env.LARK_CLI_PROFILE);
-  }
+  const command = [larkCli, "--profile", larkProfile];
   command.push("api", "POST");
   if (messageId) {
     command.push(`/open-apis/im/v1/messages/${messageId}/reply`);
