@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,6 +43,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         package_json = json.loads((PLUGIN_DIR / "package.json").read_text(encoding="utf-8"))
         plugin_json = json.loads((PLUGIN_DIR / "openclaw.plugin.json").read_text(encoding="utf-8"))
         plugin_index = (PLUGIN_DIR / "index.js").read_text(encoding="utf-8")
+        delivery_helper = (PLUGIN_DIR / "feishu_card_delivery.js").read_text(encoding="utf-8")
 
         self.assertEqual("feishu-memory-copilot", manifest["plugin_id"])
         self.assertEqual("2026.4.24", manifest["openclaw_version"])
@@ -56,6 +60,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("FEISHU_MEMORY_COPILOT_ADMIN_ENABLED", plugin_index)
         self.assertIn('["1", "true", "yes", "on"]', plugin_index)
         self.assertIn("scripts/start_copilot_admin.py", plugin_index)
+        self.assertIn("./feishu_card_delivery.js", plugin_index)
         self.assertIn('api.on("before_dispatch"', plugin_index)
         self.assertIn("runPythonFeishuRouter", plugin_index)
         self.assertIn("scripts/openclaw_feishu_remember_router.py", plugin_index)
@@ -65,17 +70,97 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("sanitizeRouteResult", plugin_index)
         self.assertIn("feishu-memory-copilot route result", plugin_index)
         self.assertIn("publishInteractiveCardViaLarkCli", plugin_index)
-        self.assertIn('publish.mode !== "interactive"', plugin_index)
-        self.assertIn('"+messages-reply"', plugin_index)
-        self.assertIn('"--msg-type", "interactive"', plugin_index)
+        self.assertIn('publish.mode !== "interactive"', delivery_helper)
+        self.assertIn('"+messages-reply"', delivery_helper)
+        self.assertIn('"--msg-type", "interactive"', delivery_helper)
         self.assertIn("feishu-memory-copilot card delivery", plugin_index)
-        self.assertIn("openclaw_gateway_interactive_card_failed", plugin_index)
+        self.assertIn("openclaw_gateway_interactive_card_failed", delivery_helper)
         self.assertIn("buildCardDeliveryFailureFallback", plugin_index)
         self.assertIn("buildRouterFailureFallback", plugin_index)
-        self.assertIn("card_delivery_failed", plugin_index)
-        self.assertIn("router_failed", plugin_index)
+        self.assertIn("card_delivery_failed", delivery_helper)
+        self.assertIn("router_failed", delivery_helper)
         self.assertIn("feishu-memory-copilot router failed", plugin_index)
         self.assertIn("handle_tool_request", (ROOT / "scripts/openclaw_feishu_remember_router.py").read_text(encoding="utf-8"))
+
+    def test_interactive_card_delivery_helper_executes_cli_and_exposes_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fmc_lark_cli_") as tmpdir:
+            tmp_path = Path(tmpdir)
+            fake_cli = tmp_path / "fake-lark-cli"
+            capture_path = tmp_path / "capture.json"
+            fake_cli.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env node",
+                        "const fs = require('node:fs');",
+                        "fs.writeFileSync(process.env.FAKE_LARK_CAPTURE, JSON.stringify(process.argv.slice(2)));",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            fake_cli.chmod(fake_cli.stat().st_mode | stat.S_IXUSR)
+
+            script = """
+                import {
+                  buildCardDeliveryFailureFallback,
+                  buildRouterFailureFallback,
+                  publishInteractiveCardViaLarkCli,
+                } from './agent_adapters/openclaw/plugin/feishu_card_delivery.js';
+                const publish = {
+                  mode: 'interactive',
+                  delivery_mode: 'chat',
+                  reply_to: 'om_demo',
+                  chat_id: 'oc_demo',
+                  card: { type: 'template', data: { template_id: 'tpl_demo' } },
+                };
+                const ok = await publishInteractiveCardViaLarkCli(publish, {
+                  env: {
+                    ...process.env,
+                    LARK_CLI_BIN: process.env.FAKE_LARK_CLI,
+                    FAKE_LARK_CAPTURE: process.env.FAKE_LARK_CAPTURE,
+                    FEISHU_CARD_TIMEOUT_SECONDS: '2',
+                  },
+                });
+                const missingTarget = await publishInteractiveCardViaLarkCli({
+                  mode: 'interactive',
+                  delivery_mode: 'chat',
+                  card: { type: 'template' },
+                }, { env: process.env });
+                console.log(JSON.stringify({
+                  ok,
+                  missingTarget,
+                  cardFallback: buildCardDeliveryFailureFallback({ fallback_reason: 'boom' }),
+                  routerFallback: buildRouterFailureFallback(new Error('router boom')),
+                }));
+            """
+            result = subprocess.run(
+                ["node", "--input-type=module", "-e", script],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    "FAKE_LARK_CLI": str(fake_cli),
+                    "FAKE_LARK_CAPTURE": str(capture_path),
+                },
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            payload = json.loads(result.stdout)
+            captured_command = json.loads(capture_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["ok"]["ok"])
+            self.assertEqual("reply_card", payload["ok"]["mode"])
+            self.assertFalse(payload["ok"]["fallback_suppressed"])
+            self.assertEqual("chat", payload["ok"]["delivery_mode"])
+            self.assertIn("im", captured_command)
+            self.assertIn("+messages-reply", captured_command)
+            self.assertIn("--message-id", captured_command)
+            self.assertIn("om_demo", captured_command)
+            self.assertIn("--msg-type", captured_command)
+            self.assertIn("interactive", captured_command)
+            self.assertFalse(payload["missingTarget"]["ok"])
+            self.assertTrue(payload["missingTarget"]["fallback_suppressed"])
+            self.assertIn("card_delivery_failed", payload["cardFallback"])
+            self.assertIn("router_failed", payload["routerFallback"])
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="openclaw_tool_registry_", suffix=".sqlite") as tmp:
