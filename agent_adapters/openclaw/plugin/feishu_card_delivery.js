@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 
 export async function runCommand(command, options = {}) {
   const child = spawn(command[0], command.slice(1), {
@@ -52,7 +53,7 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
       fallback_suppressed: true,
     };
   }
-  const env = options.env || process.env;
+  const env = larkCliEnvironment(options.env || process.env);
   const larkCli = resolveLarkCliBin(env);
   const larkAs = env.LARK_CLI_AS || "bot";
   const command = [larkCli];
@@ -90,7 +91,23 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
     text: "",
     fallback_used: false,
     fallback_suppressed: !result.ok,
-    fallback_reason: result.ok ? undefined : "openclaw_gateway_interactive_card_failed",
+    fallback_reason: result.ok ? undefined : commandFailureReason(result),
+  };
+}
+
+export function larkCliEnvironment(env = process.env) {
+  const home = env.HOME || homedir() || "/Users/junhaocheng";
+  const path = [
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    env.PATH,
+  ].filter(Boolean).join(":");
+  return {
+    ...env,
+    HOME: home,
+    USER: env.USER || "junhaocheng",
+    PATH: path,
+    LARK_CLI_PROFILE: env.LARK_CLI_PROFILE || "feishu-ai-challenge",
   };
 }
 
@@ -138,7 +155,7 @@ export function isRealFeishuMessageId(value) {
 export function buildCardDeliveryFailureFallback(cardDelivery) {
   const reason = cardDelivery?.timed_out
     ? "interactive card delivery timed out"
-    : String(cardDelivery?.fallback_reason || cardDelivery?.stderr || "interactive card delivery failed");
+    : String(cardDelivery?.stderr || cardDelivery?.fallback_reason || "interactive card delivery failed");
   const cardSummary = extractCardTextFallback(cardDelivery?.card);
   const lines = [
     "Memory Copilot 已收到这条消息，但卡片投递失败。",
@@ -151,6 +168,17 @@ export function buildCardDeliveryFailureFallback(cardDelivery) {
     lines.push("", "卡片内容：", cardSummary);
   }
   return lines.join("\n");
+}
+
+export function commandFailureReason(result) {
+  const detail = truncateForOperator(
+    [result?.stderr, result?.stdout].filter(Boolean).join(" "),
+    240,
+  );
+  if (!detail) {
+    return "openclaw_gateway_interactive_card_failed";
+  }
+  return `openclaw_gateway_interactive_card_failed: ${detail}`;
 }
 
 export function buildRouterFailureFallback(error) {

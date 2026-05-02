@@ -89,12 +89,15 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             tmp_path = Path(tmpdir)
             fake_cli = tmp_path / "fake-lark-cli"
             capture_path = tmp_path / "capture.json"
+            synthetic_capture_path = tmp_path / "capture-synthetic.json"
             fake_cli.write_text(
                 "\n".join(
                     [
                         "#!/usr/bin/env node",
                         "const fs = require('node:fs');",
-                        "fs.writeFileSync(process.env.FAKE_LARK_CAPTURE, JSON.stringify(process.argv.slice(2)));",
+                        "const args = process.argv.slice(2);",
+                        f"const capture = args.includes('/open-apis/im/v1/messages/om_demo/reply') ? {json.dumps(str(capture_path))} : {json.dumps(str(synthetic_capture_path))};",
+                        "fs.writeFileSync(capture, JSON.stringify(args));",
                     ]
                 ),
                 encoding="utf-8",
@@ -107,6 +110,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   buildCardDeliveryFailureFallback,
                   buildRouterFailureFallback,
                   isRealFeishuMessageId,
+                  larkCliEnvironment,
                   publishInteractiveCardViaLarkCli,
                   resolveLarkCliBin,
                 } from './agent_adapters/openclaw/plugin/feishu_card_delivery.js';
@@ -157,6 +161,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   }),
                   explicitCli: resolveLarkCliBin({ LARK_CLI_BIN: '/tmp/custom-lark-cli' }),
                   defaultCli: resolveLarkCliBin({}),
+                  launchdEnv: larkCliEnvironment({ PATH: '/usr/bin:/bin' }),
                   cardFallback: buildCardDeliveryFailureFallback({
                     fallback_reason: 'boom',
                     card: {
@@ -167,7 +172,6 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   routerFallback: buildRouterFailureFallback(new Error('router boom')),
                 }));
             """
-            synthetic_capture_path = tmp_path / "capture-synthetic.json"
             result = subprocess.run(
                 ["node", "--input-type=module", "-e", script],
                 cwd=ROOT,
@@ -209,6 +213,9 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertIsInstance(payload["requestBody"]["content"], str)
             self.assertEqual("/tmp/custom-lark-cli", payload["explicitCli"])
             self.assertIn("lark-cli", payload["defaultCli"])
+            self.assertEqual("feishu-ai-challenge", payload["launchdEnv"]["LARK_CLI_PROFILE"])
+            self.assertIn("/opt/homebrew/bin", payload["launchdEnv"]["PATH"])
+            self.assertTrue(payload["launchdEnv"]["HOME"])
             self.assertFalse(payload["missingTarget"]["ok"])
             self.assertTrue(payload["missingTarget"]["fallback_suppressed"])
             self.assertIn("card_delivery_failed", payload["cardFallback"])

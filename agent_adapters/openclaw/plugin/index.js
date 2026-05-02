@@ -258,8 +258,20 @@ function sanitizePublish(publish) {
     fallback_used: publish.fallback_used,
     fallback_suppressed: publish.fallback_suppressed,
     fallback_reason: publish.fallback_reason,
+    returncode: publish.returncode,
+    timed_out: publish.timed_out,
+    stderr: publish.stderr ? truncateForOperator(publish.stderr, 240) : undefined,
+    stdout: publish.stdout ? truncateForOperator(publish.stdout, 240) : undefined,
     suppressed: publish.suppressed,
   };
+}
+
+function truncateForOperator(value, maxLength) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function sanitizeCard(card) {
