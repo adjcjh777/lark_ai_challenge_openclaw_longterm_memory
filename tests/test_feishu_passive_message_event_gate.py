@@ -126,6 +126,19 @@ class FeishuPassiveMessageEventGateTest(unittest.TestCase):
         self.assertEqual("passive_group_message_seen", report["reason"])
         self.assertEqual(1, report["summary"]["passive_group_text_messages"])
 
+    def test_reads_plaintext_openclaw_channel_group_message_logs(self) -> None:
+        raw_log = (
+            "2026-05-02T16:55:20.344+08:00 [feishu] "
+            "feishu[default]: Feishu[default] message in group oc_passive_gate: "
+            "决定：非 @ 群消息 live gate 测试，今天只验证事件投递。"
+        )
+
+        report = check_passive_message_events(raw_log, expected_chat_id="oc_passive_gate")
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("passive_group_message_seen", report["reason"])
+        self.assertEqual(1, report["summary"]["passive_group_text_messages"])
+
     def test_reads_openclaw_file_log_numbered_fields(self) -> None:
         wrapped = {
             "0": (

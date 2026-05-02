@@ -142,6 +142,41 @@ class FeishuPermissionNegativeGateTest(unittest.TestCase):
         self.assertEqual("non_reviewer_enable_memory_denied", report["reason"])
         self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
 
+    def test_correlates_plaintext_openclaw_context_with_route_denial(self) -> None:
+        route_result = {
+            "ok": True,
+            "tool": "copilot.group_enable_memory",
+            "chat_id": "oc_p...gate",
+            "tool_result": {"ok": False, "status": "permission_denied"},
+            "publish": {"ok": True, "mode": "reply"},
+        }
+        log = "\n".join(
+            [
+                (
+                    "2026-05-02T15:16:25.106+08:00 [feishu] feishu[default]: "
+                    f"received message from {ACTOR_ID} in {CHAT_ID} (group)"
+                ),
+                (
+                    "2026-05-02T15:16:25.144+08:00 [feishu] feishu[default]: "
+                    f"Feishu[default] message in group {CHAT_ID}: @测试 bot /enable_memory"
+                ),
+                (
+                    "2026-05-02T15:16:25.346+08:00 [plugins] "
+                    f"feishu-memory-copilot route result {json.dumps(route_result, ensure_ascii=False)}"
+                ),
+            ]
+        )
+
+        report = check_permission_negative_events(
+            log,
+            expected_chat_id=CHAT_ID,
+            expected_actor_id=ACTOR_ID,
+        )
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("non_reviewer_enable_memory_denied", report["reason"])
+        self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
+
     def test_reads_copilot_listener_raw_line_attempt_wrappers(self) -> None:
         line = json.dumps(
             {

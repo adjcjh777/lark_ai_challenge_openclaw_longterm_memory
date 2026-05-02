@@ -215,6 +215,36 @@ class FeishuReviewDeliveryGateTest(unittest.TestCase):
         self.assertEqual(1, report["summary"]["card_action_triggers_without_result"])
         self.assertEqual(1, report["summary"]["card_action_update_results"])
 
+    def test_log_gate_reads_plaintext_openclaw_route_and_card_update_logs(self) -> None:
+        text = "\n".join(
+            [
+                (
+                    "2026-05-02T13:45:22.761+08:00 [plugins] "
+                    f"feishu-memory-copilot route result {json.dumps(_candidate_result()['result'], ensure_ascii=False)}"
+                ),
+                (
+                    "2026-05-02T13:51:29.139+08:00 [plugins] "
+                    f"feishu-memory-copilot route result {json.dumps(_review_dm_result()['result'], ensure_ascii=False)}"
+                ),
+                (
+                    "2026-05-02T13:51:30.717+08:00 [feishu] feishu[default]: "
+                    "card-action intercept acknowledged immediately; async repo helper started"
+                ),
+                (
+                    "2026-05-02T13:51:40.263+08:00 [feishu] feishu[default]: "
+                    "card-action intercept asynchronously updated original card via repo helper"
+                ),
+            ]
+        )
+
+        report = check_review_delivery_log_events(text)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("review_delivery_e2e_evidence_seen", report["reason"])
+        self.assertEqual(1, report["summary"]["candidate_review_cards"])
+        self.assertEqual(1, report["summary"]["private_review_dm_results"])
+        self.assertEqual(1, report["summary"]["card_action_update_results"])
+
 
 if __name__ == "__main__":
     unittest.main()

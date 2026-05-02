@@ -162,7 +162,7 @@ def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
         if isinstance(parsed_line, dict):
             payloads.append(_payload_from_log_line(parsed_line))
         else:
-            payloads.append({"log_message": line})
+            payloads.append(_payload_from_log_line({"message": line}))
     return payloads
 
 

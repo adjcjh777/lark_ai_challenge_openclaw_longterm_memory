@@ -19,6 +19,12 @@ BOUNDARY = (
     "not production long-running authorization or full RBAC."
 )
 ID_PATTERN = re.compile(r"\b(?:ou|oc|om|cli|ou_|oc_|om_)[A-Za-z0-9_-]+\b")
+OPENCLAW_RECEIVED_PATTERN = re.compile(
+    r"received message from (?P<actor_id>ou_[A-Za-z0-9_-]+) in (?P<chat_id>oc_[A-Za-z0-9_-]+) \(group\)"
+)
+OPENCLAW_GROUP_MESSAGE_PATTERN = re.compile(
+    r"Feishu\[[^\]]+\] message in group (?P<chat_id>oc_[A-Za-z0-9_-]+):\s*(?P<text>.*)"
+)
 
 
 def main() -> int:
@@ -69,10 +75,37 @@ def check_permission_negative_events(
     }
     denied_examples: list[dict[str, Any]] = []
     event_types: dict[str, int] = {}
+    recent_group_context: dict[str, str] = {}
+    pending_enable_memory_context: dict[str, str] = {}
 
     for payload in payloads:
         event_type = _event_type(payload)
         event_types[event_type] = event_types.get(event_type, 0) + 1
+
+        if payload.get("event_type") == "openclaw_group_message_received":
+            recent_group_context = {
+                "chat_id": str(payload.get("chat_id") or ""),
+                "actor_id": str(payload.get("actor_id") or ""),
+            }
+            continue
+
+        if payload.get("event_type") == "openclaw_group_message_text":
+            text_value = str(payload.get("text") or "")
+            if "/enable_memory" in text_value:
+                context = dict(recent_group_context)
+                if payload.get("chat_id"):
+                    context["chat_id"] = str(payload.get("chat_id") or "")
+                if _matches_expected(context, expected_chat_id=expected_chat_id, expected_actor_id=expected_actor_id):
+                    pending_enable_memory_context = context
+                    summary["enable_memory_attempt_events"] += 1
+                else:
+                    _record_expected_mismatch(
+                        context,
+                        summary=summary,
+                        expected_chat_id=expected_chat_id,
+                        expected_actor_id=expected_actor_id,
+                    )
+            continue
 
         result = _result_payload(payload)
         if result is not None:
@@ -82,7 +115,10 @@ def check_permission_negative_events(
                 denied_examples=denied_examples,
                 expected_chat_id=expected_chat_id,
                 expected_actor_id=expected_actor_id,
+                context=pending_enable_memory_context,
             )
+            if result.get("tool") == "copilot.group_enable_memory":
+                pending_enable_memory_context = {}
             continue
 
         if _is_group_policy_denied_audit(payload):
@@ -144,10 +180,13 @@ def _classify_result(
     denied_examples: list[dict[str, Any]],
     expected_chat_id: str | None,
     expected_actor_id: str | None,
+    context: dict[str, str] | None = None,
 ) -> None:
     if result.get("tool") != "copilot.group_enable_memory":
         summary["unsupported_payloads"] += 1
         return
+    if context:
+        result = _result_with_context(result, context)
     if not _matches_expected(result, expected_chat_id=expected_chat_id, expected_actor_id=expected_actor_id):
         _record_expected_mismatch(
             result,
@@ -177,6 +216,15 @@ def _classify_result(
             )
     elif tool_result.get("status") in {"enabled", "active"} or tool_result.get("ok") is True:
         summary["allowed_enable_memory_results"] += 1
+
+
+def _result_with_context(result: dict[str, Any], context: dict[str, str]) -> dict[str, Any]:
+    enriched = dict(result)
+    if context.get("chat_id"):
+        enriched["chat_id"] = context["chat_id"]
+    if context.get("actor_id"):
+        enriched["actor_id"] = context["actor_id"]
+    return enriched
 
 
 def _result_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -313,7 +361,7 @@ def _payloads_from_text(text: str) -> Iterable[dict[str, Any]]:
         if isinstance(parsed_line, dict):
             payloads.append(_payload_from_log_line(parsed_line))
         else:
-            payloads.append({"log_message": line})
+            payloads.append(_payload_from_log_line({"message": line}))
     return payloads
 
 
@@ -337,6 +385,9 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
             embedded = _parse_embedded_json(value)
             if isinstance(embedded, dict):
                 return embedded
+            openclaw_context = _parse_openclaw_context_line(value)
+            if openclaw_context:
+                return openclaw_context
     numbered = _numbered_field_text(line)
     if numbered:
         parsed = _parse_json(numbered)
@@ -345,6 +396,9 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
         embedded = _parse_embedded_json(numbered)
         if isinstance(embedded, dict):
             return embedded
+        openclaw_context = _parse_openclaw_context_line(numbered)
+        if openclaw_context:
+            return openclaw_context
     return line
 
 
@@ -406,6 +460,24 @@ def _parse_embedded_json(text: str) -> Any:
     if start < 0 or end <= start:
         return None
     return _parse_json(text[start : end + 1])
+
+
+def _parse_openclaw_context_line(text: str) -> dict[str, str] | None:
+    received = OPENCLAW_RECEIVED_PATTERN.search(text)
+    if received:
+        return {
+            "event_type": "openclaw_group_message_received",
+            "actor_id": received.group("actor_id"),
+            "chat_id": received.group("chat_id"),
+        }
+    message = OPENCLAW_GROUP_MESSAGE_PATTERN.search(text)
+    if message:
+        return {
+            "event_type": "openclaw_group_message_text",
+            "chat_id": message.group("chat_id"),
+            "text": message.group("text").strip(),
+        }
+    return None
 
 
 def _numbered_field_text(payload: dict[str, Any]) -> str:
