@@ -232,6 +232,31 @@ class FeishuEventSubscriptionDiagnosticsTest(unittest.TestCase):
             [item["id"] for item in result["warnings"]],
         )
 
+    def test_allows_openclaw_group_policy_when_before_dispatch_hook_guards_group_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_event_diag_") as temp_dir:
+            config_path = Path(temp_dir) / "openclaw.json"
+            config_path.write_text(
+                json.dumps({"channels": {"feishu": {"groupPolicy": "open", "dmPolicy": "pairing"}}}),
+                encoding="utf-8",
+            )
+            result = run_feishu_event_subscription_diagnostics(
+                planned_listener="openclaw-websocket",
+                require_group_message_scope=True,
+                openclaw_config_path=config_path,
+                runner=_runner(
+                    status={"apps": [{"app_id": "cli_app", "status": "not_running", "running": False}]},
+                    event_list=[_message_event(scopes=["im:message.group_msg"])],
+                    schema=_message_event(scopes=["im:message.group_msg"]),
+                    plugin_inspect={"typedHooks": [{"name": "before_dispatch"}]},
+                ),
+            )
+
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([], result["failed_checks"])
+        self.assertEqual("pass", result["openclaw_feishu_policy"]["status"])
+        self.assertTrue(result["openclaw_feishu_policy"]["before_dispatch_hook_registered"])
+        self.assertIn("before_dispatch", result["openclaw_feishu_policy"]["typedHooks"])
+
     def test_allows_openclaw_group_policy_when_open_requires_mentions(self) -> None:
         with tempfile.TemporaryDirectory(prefix="feishu_event_diag_") as temp_dir:
             config_path = Path(temp_dir) / "openclaw.json"
@@ -264,6 +289,7 @@ def _runner(
     auth_scopes: object | None = None,
     bot_group_messages: object | None = None,
     bot_group_messages_returncode: int = 0,
+    plugin_inspect: object | None = None,
 ):
     def run(command: list[str]) -> dict[str, object]:
         joined = " ".join(command)
@@ -282,6 +308,9 @@ def _runner(
         elif "+chat-messages-list" in joined:
             payload = bot_group_messages or {}
             returncode = bot_group_messages_returncode
+        elif "plugins inspect feishu-memory-copilot" in joined:
+            payload = plugin_inspect or {}
+            returncode = 0
         else:
             payload = {}
             returncode = 0

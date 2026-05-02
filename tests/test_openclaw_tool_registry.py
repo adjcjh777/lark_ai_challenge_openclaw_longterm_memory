@@ -56,6 +56,11 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("FEISHU_MEMORY_COPILOT_ADMIN_ENABLED", plugin_index)
         self.assertIn('["1", "true", "yes", "on"]', plugin_index)
         self.assertIn("scripts/start_copilot_admin.py", plugin_index)
+        self.assertIn('api.on("before_dispatch"', plugin_index)
+        self.assertIn("runPythonFeishuRouter", plugin_index)
+        self.assertIn("scripts/openclaw_feishu_remember_router.py", plugin_index)
+        self.assertIn("shouldRouteFeishuGroupEvent", plugin_index)
+        self.assertIn("handle_tool_request", (ROOT / "scripts/openclaw_feishu_remember_router.py").read_text(encoding="utf-8"))
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="openclaw_tool_registry_", suffix=".sqlite") as tmp:

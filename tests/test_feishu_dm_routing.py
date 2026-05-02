@@ -13,6 +13,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agent_adapters.openclaw.tool_registry import (
     OPENCLAW_TO_PYTHON,
@@ -25,10 +26,15 @@ from memory_engine.copilot.tools import supported_tool_names
 from memory_engine.db import connect, init_db
 from memory_engine.repository import MemoryRepository
 from scripts.check_feishu_dm_routing import BOUNDARY, check_live_routing_events, format_human_result
+from scripts.check_feishu_dm_routing import check_before_dispatch_hook_registered
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / "agent_adapters" / "openclaw" / "plugin"
 SCOPE = "project:feishu_ai_challenge"
+
+
+def patch_run_cmd(stdout: str, *, returncode: int = 0, stderr: str = ""):
+    return patch("scripts.check_feishu_dm_routing.run_cmd", return_value=(returncode, stdout, stderr))
 
 
 class FeishuDMRoutingTest(unittest.TestCase):
@@ -138,6 +144,28 @@ class FeishuDMRoutingTest(unittest.TestCase):
                 reg.name.startswith("fmc_"),
                 f"Tool {reg.name} should start with 'fmc_' prefix",
             )
+
+    def test_plugin_registers_before_dispatch_hook_for_feishu_router_handoff(self) -> None:
+        plugin_index = (PLUGIN_DIR / "index.js").read_text(encoding="utf-8")
+
+        self.assertIn('api.on("before_dispatch"', plugin_index)
+        self.assertIn("runPythonFeishuRouter", plugin_index)
+        self.assertIn("openclaw_feishu_remember_router.py", plugin_index)
+        self.assertIn("containsFirstClassToolPrompt", plugin_index)
+        self.assertIn("return { handled: true }", plugin_index)
+
+    def test_before_dispatch_hook_check_reads_typed_hooks_from_plugin_inspect(self) -> None:
+        with patch_run_cmd(json.dumps({"typedHooks": [{"name": "before_dispatch"}]})):
+            result = check_before_dispatch_hook_registered()
+
+        self.assertTrue(result["ok"], result)
+        self.assertIn("before_dispatch", result["detail"])
+
+    def test_before_dispatch_hook_check_fails_closed_when_hook_missing(self) -> None:
+        with patch_run_cmd(json.dumps({"typedHooks": []})):
+            result = check_before_dispatch_hook_registered()
+
+        self.assertFalse(result["ok"], result)
 
     def test_all_fmc_tools_have_python_mapping(self) -> None:
         """Verify all fmc_xxx tools map to Python-side memory.xxx names."""

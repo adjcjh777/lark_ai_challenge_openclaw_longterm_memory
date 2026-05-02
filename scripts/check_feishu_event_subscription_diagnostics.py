@@ -82,6 +82,9 @@ def run_feishu_event_subscription_diagnostics(
     list_result = run(["lark-cli", "event", "list", "--json"])
     schema_result = run(["lark-cli", "event", "schema", MESSAGE_EVENT_KEY, "--json"])
     auth_scopes_result = run(["lark-cli", "auth", "scopes", "--format", "json"])
+    openclaw_plugin_result = None
+    if planned_listener == "openclaw-websocket":
+        openclaw_plugin_result = run(["openclaw", "plugins", "inspect", "feishu-memory-copilot", "--json"])
     bot_group_messages_result = None
     if target_chat_id:
         bot_group_messages_result = run(
@@ -106,6 +109,7 @@ def run_feishu_event_subscription_diagnostics(
     list_payload = _parse_json_object(list_result.get("stdout", ""))
     schema_payload = _parse_json_object(schema_result.get("stdout", ""))
     auth_scopes_payload = _parse_json_object(auth_scopes_result.get("stdout", ""))
+    openclaw_plugin_payload = _parse_command_json_payload(openclaw_plugin_result)
     bot_group_messages_payload = _parse_command_json_payload(bot_group_messages_result)
     apps = (
         status_payload.get("apps")
@@ -151,6 +155,7 @@ def run_feishu_event_subscription_diagnostics(
     openclaw_policy_probe = _openclaw_feishu_policy_probe(
         planned_listener=planned_listener,
         config_path=openclaw_config_path,
+        plugin_probe=_openclaw_feishu_plugin_probe(openclaw_plugin_result, openclaw_plugin_payload),
     )
     if bot_group_access_probe:
         checks["target_bot_group_messages_readable"] = _check(bot_group_access_probe["ok"])
@@ -407,6 +412,7 @@ def _openclaw_feishu_policy_probe(
     *,
     planned_listener: str,
     config_path: Path | None,
+    plugin_probe: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     if planned_listener != "openclaw-websocket" or config_path is None:
         return None
@@ -439,6 +445,22 @@ def _openclaw_feishu_policy_probe(
     group_policy = feishu.get("groupPolicy")
     require_mention = feishu.get("requireMention")
     unsafe_open_dispatch = str(group_policy or "").lower() == "open" and require_mention is not True
+    before_dispatch_guard = bool(plugin_probe and plugin_probe.get("before_dispatch_hook_registered"))
+    if unsafe_open_dispatch and before_dispatch_guard:
+        return {
+            "ok": True,
+            "status": "pass",
+            "path": str(path),
+            "configured": True,
+            "groupPolicy": group_policy,
+            "requireMention": require_mention,
+            "before_dispatch_hook_registered": True,
+            "typedHooks": plugin_probe.get("typedHooks"),
+            "message": (
+                "groupPolicy=open is guarded by feishu-memory-copilot before_dispatch hook; "
+                "Feishu group messages are claimed before generic agent dispatch."
+            ),
+        }
     return {
         "ok": not unsafe_open_dispatch,
         "status": "pass" if not unsafe_open_dispatch else "fail",
@@ -446,11 +468,31 @@ def _openclaw_feishu_policy_probe(
         "configured": True,
         "groupPolicy": group_policy,
         "requireMention": require_mention,
+        "before_dispatch_hook_registered": before_dispatch_guard,
+        "typedHooks": plugin_probe.get("typedHooks") if plugin_probe else [],
         "message": (
             "OpenClaw Feishu group policy is safe for passive evidence capture."
             if not unsafe_open_dispatch
             else "groupPolicy=open without requireMention=true dispatches non-@ group messages to the main agent."
         ),
+    }
+
+
+def _openclaw_feishu_plugin_probe(result: dict[str, Any] | None, payload: Any) -> dict[str, Any] | None:
+    if result is None:
+        return None
+    if result.get("returncode") != 0 or not isinstance(payload, dict):
+        return {
+            "ok": False,
+            "typedHooks": [],
+            "before_dispatch_hook_registered": False,
+        }
+    typed_hooks = payload.get("typedHooks") if isinstance(payload.get("typedHooks"), list) else []
+    hook_names = [str(item.get("name") or "") for item in typed_hooks if isinstance(item, dict)]
+    return {
+        "ok": True,
+        "typedHooks": hook_names,
+        "before_dispatch_hook_registered": "before_dispatch" in hook_names,
     }
 
 

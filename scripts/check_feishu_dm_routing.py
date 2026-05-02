@@ -112,6 +112,28 @@ def check_tools_registered() -> dict:
         return {"name": "tools_registered", "ok": False, "detail": "Failed to parse plugin inspect output"}
 
 
+def check_before_dispatch_hook_registered() -> dict:
+    """Check if the plugin owns a before_dispatch hook for Feishu group router handoff."""
+    rc, stdout, stderr = run_cmd(["openclaw", "plugins", "inspect", "feishu-memory-copilot", "--json"])
+    if rc != 0:
+        return {"name": "before_dispatch_hook_registered", "ok": False, "detail": f"Failed to inspect plugin: {stderr}"}
+    try:
+        data = json.loads(stdout)
+    except json.JSONDecodeError:
+        return {
+            "name": "before_dispatch_hook_registered",
+            "ok": False,
+            "detail": "Failed to parse plugin inspect output",
+        }
+    hooks = data.get("typedHooks") if isinstance(data.get("typedHooks"), list) else []
+    hook_names = [str(item.get("name") or "") for item in hooks if isinstance(item, dict)]
+    return {
+        "name": "before_dispatch_hook_registered",
+        "ok": "before_dispatch" in hook_names,
+        "detail": f"typedHooks={hook_names}",
+    }
+
+
 def check_tools_also_allow() -> dict:
     """Check if tools.alsoAllow includes fmc_xxx tools."""
     rc, stdout, stderr = run_cmd(["openclaw", "config", "get", "tools.alsoAllow"])
@@ -174,6 +196,7 @@ def check_feishu_dm_routing() -> dict:
         check_gateway_running(),
         check_plugin_enabled(),
         check_tools_registered(),
+        check_before_dispatch_hook_registered(),
         check_tools_also_allow(),
         check_agent_tool_list(),
         check_python_tests(),

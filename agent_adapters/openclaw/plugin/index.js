@@ -22,6 +22,17 @@ const OPENCLAW_TO_PYTHON = {
   fmc_heartbeat_review_due: "heartbeat.review_due",
 };
 
+const FEISHU_GROUP_ROUTER_COMMANDS = new Set([
+  "settings",
+  "group_settings",
+  "enable_memory",
+  "memory_on",
+  "enable_group_memory",
+  "disable_memory",
+  "memory_off",
+  "disable_group_memory",
+]);
+
 function loadToolSpecs() {
   const raw = readFileSync(SCHEMA_PATH, "utf8");
   const schema = JSON.parse(raw);
@@ -119,6 +130,149 @@ async function runPythonTool(toolName, payload) {
   }
 }
 
+async function runPythonFeishuRouter(payload) {
+  const child = spawn(PYTHON, ["scripts/openclaw_feishu_remember_router.py"], {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(":"),
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  child.stdout.on("data", (chunk) => stdoutChunks.push(chunk));
+  child.stderr.on("data", (chunk) => stderrChunks.push(chunk));
+  child.stdin.end(JSON.stringify({
+    ...payload,
+    db_path: process.env.FEISHU_MEMORY_COPILOT_DB || undefined,
+  }));
+
+  const exitCode = await new Promise((resolveExit) => {
+    child.on("close", resolveExit);
+  });
+  const stdout = Buffer.concat(stdoutChunks).toString("utf8").trim();
+  const stderr = Buffer.concat(stderrChunks).toString("utf8").trim();
+  if (exitCode !== 0) {
+    throw new Error(`Feishu Memory Copilot router failed: ${stderr || stdout || exitCode}`);
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`Feishu Memory Copilot router returned invalid JSON: ${String(error)}`);
+  }
+}
+
+function registerFeishuBeforeDispatchHook(api) {
+  if (typeof api.on !== "function") {
+    api.logger?.warn?.("typed hook API is unavailable; Feishu before_dispatch router not registered");
+    return;
+  }
+  api.on("before_dispatch", async (event, context) => {
+    if (!shouldRouteFeishuGroupEvent(event, context)) {
+      return undefined;
+    }
+    const result = await runPythonFeishuRouter({
+      text: String(event.content || event.body || ""),
+      message_id: deriveMessageId(event, context),
+      chat_id: deriveChatId(event, context),
+      sender_open_id: String(event.senderId || context.senderId || ""),
+      chat_type: event.isGroup ? "group" : "p2p",
+      bot_mentioned: false,
+    });
+    const publish = result && typeof result === "object" ? result.publish : null;
+    if (publish && publish.mode === "reply" && typeof publish.text === "string" && publish.text.trim()) {
+      return { handled: true, text: publish.text };
+    }
+    return { handled: true };
+  }, {
+    name: "feishu-memory-copilot-before-dispatch",
+    description: "Routes Feishu group messages through the Copilot router before generic agent dispatch.",
+  });
+}
+
+function shouldRouteFeishuGroupEvent(event, context) {
+  const channel = String(event.channel || context.channelId || "").toLowerCase();
+  if (channel !== "feishu") {
+    return false;
+  }
+  if (event.isGroup !== true) {
+    return false;
+  }
+  const text = String(event.content || event.body || "").trim();
+  if (!text) {
+    return false;
+  }
+  const commandName = slashCommandName(text);
+  if (commandName && FEISHU_GROUP_ROUTER_COMMANDS.has(commandName)) {
+    return true;
+  }
+  if (containsFirstClassToolPrompt(text)) {
+    return false;
+  }
+  if (isExplicitRemember(text)) {
+    return true;
+  }
+  return true;
+}
+
+function slashCommandName(text) {
+  const stripped = text.trim();
+  if (!stripped.startsWith("/")) {
+    return "";
+  }
+  return stripped.slice(1).split(/\s+/, 1)[0].trim().toLowerCase();
+}
+
+function isExplicitRemember(text) {
+  const lowered = text.trim().toLowerCase();
+  return lowered === "/remember" || lowered.startsWith("/remember ");
+}
+
+function containsFirstClassToolPrompt(text) {
+  return /\bfmc_(?:memory|heartbeat)_/.test(text) || /\bmemory\.(?:search|prefetch|create_candidate|confirm|reject|explain_versions)\b/.test(text);
+}
+
+function deriveMessageId(event, context) {
+  const direct = event.messageId || context.messageId;
+  if (direct) {
+    return String(direct);
+  }
+  return `openclaw_before_dispatch_${hashString([
+    event.channel,
+    context.conversationId,
+    event.senderId || context.senderId,
+    event.timestamp,
+    event.content || event.body || "",
+  ].join("|"))}`;
+}
+
+function deriveChatId(event, context) {
+  const candidates = [
+    context.conversationId,
+    event.sessionKey,
+    context.sessionKey,
+    event.content,
+    event.body,
+  ];
+  for (const candidate of candidates) {
+    const match = String(candidate || "").match(/\boc_[A-Za-z0-9_-]+\b/);
+    if (match) {
+      return match[0];
+    }
+  }
+  return String(context.conversationId || event.sessionKey || context.sessionKey || "");
+}
+
+function hashString(input) {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = ((hash << 5) - hash + input.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(16);
+}
+
 function startAdminDashboard() {
   if (adminDashboardStarted || !adminDashboardEnabled()) {
     return;
@@ -160,6 +314,7 @@ export default definePluginEntry({
   kind: "tool",
   register(api) {
     startAdminDashboard();
+    registerFeishuBeforeDispatchHook(api);
     api.registerTool(() => {
       const specs = loadToolSpecs();
       return specs.map(createTool);
