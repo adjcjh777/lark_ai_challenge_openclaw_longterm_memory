@@ -64,6 +64,17 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn('"memory_prefetch"', plugin_index)
         self.assertIn("sanitizeRouteResult", plugin_index)
         self.assertIn("feishu-memory-copilot route result", plugin_index)
+        self.assertIn("publishInteractiveCardViaLarkCli", plugin_index)
+        self.assertIn('publish.mode !== "interactive"', plugin_index)
+        self.assertIn('"+messages-reply"', plugin_index)
+        self.assertIn('"--msg-type", "interactive"', plugin_index)
+        self.assertIn("feishu-memory-copilot card delivery", plugin_index)
+        self.assertIn("openclaw_gateway_interactive_card_failed", plugin_index)
+        self.assertIn("buildCardDeliveryFailureFallback", plugin_index)
+        self.assertIn("buildRouterFailureFallback", plugin_index)
+        self.assertIn("card_delivery_failed", plugin_index)
+        self.assertIn("router_failed", plugin_index)
+        self.assertIn("feishu-memory-copilot router failed", plugin_index)
         self.assertIn("handle_tool_request", (ROOT / "scripts/openclaw_feishu_remember_router.py").read_text(encoding="utf-8"))
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:
