@@ -77,14 +77,15 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn('msg_type: "interactive"', delivery_helper)
         self.assertIn("feishu-memory-copilot card delivery", plugin_index)
         self.assertIn("openclaw_gateway_interactive_card_failed", delivery_helper)
-        self.assertIn("buildCardDeliveryFailureFallback", plugin_index)
+        self.assertNotIn("buildCardDeliveryFailureFallback", plugin_index)
+        self.assertNotIn("buildCardDeliveryFailureFallback", delivery_helper)
+        self.assertIn("return { handled: true };", plugin_index)
         self.assertIn("buildRouterFailureFallback", plugin_index)
-        self.assertIn("card_delivery_failed", delivery_helper)
         self.assertIn("router_failed", delivery_helper)
         self.assertIn("feishu-memory-copilot router failed", plugin_index)
         self.assertIn("handle_tool_request", (ROOT / "scripts/openclaw_feishu_remember_router.py").read_text(encoding="utf-8"))
 
-    def test_interactive_card_delivery_helper_executes_cli_and_exposes_fallbacks(self) -> None:
+    def test_interactive_card_delivery_helper_executes_cli_and_suppresses_card_text_fallbacks(self) -> None:
         with tempfile.TemporaryDirectory(prefix="fmc_lark_cli_") as tmpdir:
             tmp_path = Path(tmpdir)
             fake_cli = tmp_path / "fake-lark-cli"
@@ -96,7 +97,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                         "#!/usr/bin/env node",
                         "const fs = require('node:fs');",
                         "const args = process.argv.slice(2);",
-                        f"const capture = args.includes('/open-apis/im/v1/messages/om_demo/reply') ? {json.dumps(str(capture_path))} : {json.dumps(str(synthetic_capture_path))};",
+                        f"const capture = args.join(' ').includes('/open-apis/im/v1/messages/om_demo/reply') ? {json.dumps(str(capture_path))} : {json.dumps(str(synthetic_capture_path))};",
                         "fs.writeFileSync(capture, JSON.stringify(args));",
                     ]
                 ),
@@ -107,7 +108,6 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             script = """
                 import {
                   buildInteractiveCardRequestBody,
-                  buildCardDeliveryFailureFallback,
                   buildRouterFailureFallback,
                   isRealFeishuMessageId,
                   larkCliEnvironment,
@@ -164,13 +164,6 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   explicitCli: resolveLarkCliBin({ LARK_CLI_BIN: '/tmp/custom-lark-cli' }),
                   defaultCli: resolveLarkCliBin({}),
                   launchdEnv: larkCliEnvironment({ PATH: '/usr/bin:/bin' }),
-                  cardFallback: buildCardDeliveryFailureFallback({
-                    fallback_reason: 'boom',
-                    card: {
-                      header: { title: { tag: 'plain_text', content: '群级记忆设置' } },
-                      elements: [{ tag: 'div', fields: [{ text: { tag: 'lark_md', content: '**当前群状态**\\ndisabled' } }] }],
-                    },
-                  }),
                   routerFallback: buildRouterFailureFallback(new Error('router boom')),
                 }));
             """
@@ -228,9 +221,8 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertTrue(payload["launchdEnv"]["HOME"])
             self.assertFalse(payload["missingTarget"]["ok"])
             self.assertTrue(payload["missingTarget"]["fallback_suppressed"])
-            self.assertIn("card_delivery_failed", payload["cardFallback"])
-            self.assertIn("群级记忆设置", payload["cardFallback"])
-            self.assertIn("当前群状态", payload["cardFallback"])
+            self.assertEqual("", payload["missingTarget"].get("text", ""))
+            self.assertFalse(payload["missingTarget"].get("fallback_used", True))
             self.assertIn("router_failed", payload["routerFallback"])
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:

@@ -23,7 +23,7 @@ class OpenClawMemoryCopilotLiveReplyLogTest(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertEqual("card_delivery_ok", report["status"])
 
-    def test_passes_when_card_delivery_fails_but_visible_fallback_dispatches(self) -> None:
+    def test_fails_when_card_delivery_fails_and_visible_text_fallback_dispatches(self) -> None:
         report = check_live_reply_log(
             write_log(
                 """
@@ -34,8 +34,8 @@ class OpenClawMemoryCopilotLiveReplyLogTest(unittest.TestCase):
             )
         )
 
-        self.assertTrue(report["ok"])
-        self.assertEqual("card_delivery_failed_visible_fallback", report["status"])
+        self.assertFalse(report["ok"])
+        self.assertEqual("card_delivery_failed_visible_text_fallback", report["status"])
 
     def test_passes_when_router_fails_but_visible_fallback_dispatches(self) -> None:
         report = check_live_reply_log(

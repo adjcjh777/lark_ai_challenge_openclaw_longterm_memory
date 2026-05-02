@@ -53,7 +53,8 @@ def run_preflight(*, planned_listener: str = "openclaw-websocket") -> dict[str, 
         "checks": checks,
         "next_live_gate": (
             "Send /settings in the controlled Feishu test group and confirm gateway.log contains "
-            "feishu-memory-copilot card delivery with ok=true, or a visible card_delivery_failed/router_failed fallback."
+            "feishu-memory-copilot card delivery with ok=true. A visible text fallback after card delivery failure "
+            "is not an acceptable card reply."
         ),
     }
 

@@ -152,24 +152,6 @@ export function isRealFeishuMessageId(value) {
   return /^om_[A-Za-z0-9_-]+$/.test(String(value || "").trim());
 }
 
-export function buildCardDeliveryFailureFallback(cardDelivery) {
-  const reason = cardDelivery?.timed_out
-    ? "interactive card delivery timed out"
-    : String(cardDelivery?.stderr || cardDelivery?.fallback_reason || "interactive card delivery failed");
-  const cardSummary = extractCardTextFallback(cardDelivery?.card);
-  const lines = [
-    "Memory Copilot 已收到这条消息，但卡片投递失败。",
-    "",
-    `状态：card_delivery_failed`,
-    `原因：${truncateForOperator(reason, 180)}`,
-    "处理：OpenClaw 和 Memory Copilot 路由仍在线；已降级为文本结果。",
-  ];
-  if (cardSummary) {
-    lines.push("", "卡片内容：", cardSummary);
-  }
-  return lines.join("\n");
-}
-
 export function commandFailureReason(result) {
   const detail = truncateForOperator(
     [result?.stderr, result?.stdout].filter(Boolean).join(" "),
@@ -214,39 +196,6 @@ export function truncateForOperator(value, maxLength) {
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
-}
-
-export function extractCardTextFallback(card) {
-  const lines = [];
-  collectCardText(card?.header?.title, lines);
-  const elements = Array.isArray(card?.elements) ? card.elements : [];
-  for (const element of elements) {
-    collectCardText(element?.text, lines);
-    const fields = Array.isArray(element?.fields) ? element.fields : [];
-    for (const field of fields) {
-      collectCardText(field?.text, lines);
-    }
-    const actions = Array.isArray(element?.actions) ? element.actions : [];
-    for (const action of actions) {
-      collectCardText(action?.text, lines);
-    }
-  }
-  const normalized = lines
-    .map((line) => String(line || "").replace(/\*\*/g, "").trim())
-    .filter(Boolean);
-  return truncateForOperator(normalized.join("\n"), 1200);
-}
-
-function collectCardText(node, lines) {
-  if (!node || typeof node !== "object") {
-    return;
-  }
-  if (typeof node.content === "string") {
-    lines.push(node.content);
-  }
-  if (typeof node.text === "string") {
-    lines.push(node.text);
-  }
 }
 
 function hashString(input) {

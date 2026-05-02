@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { jsonResult } from "openclaw/plugin-sdk/core";
 import {
-  buildCardDeliveryFailureFallback,
   buildRouterFailureFallback,
   publishInteractiveCardViaLarkCli,
 } from "./feishu_card_delivery.js";
@@ -202,7 +201,7 @@ function registerFeishuBeforeDispatchHook(api) {
       if (cardDelivery) {
         api.logger?.info?.(`feishu-memory-copilot card delivery ${JSON.stringify(sanitizePublish(cardDelivery))}`);
         if (!cardDelivery.ok) {
-          return { handled: true, text: buildCardDeliveryFailureFallback(cardDelivery) };
+          return { handled: true };
         }
         return { handled: true };
       }

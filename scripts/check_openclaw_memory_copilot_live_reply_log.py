@@ -51,11 +51,13 @@ def check_live_reply_log(log_path: Path, *, since: str = "", expect_text: str = 
     router_failed = any("feishu-memory-copilot router failed" in line for line in inspected)
     fallback_dispatch = any("dispatch complete" in line and "replies=1" in line for line in inspected)
     if card_delivery and card_delivery.get("ok") is not True and fallback_dispatch:
-        return success(
-            "card_delivery_failed_visible_fallback",
-            "interactive card failed but OpenClaw logged a visible fallback reply",
-            card_delivery,
-        )
+        return {
+            "ok": False,
+            "status": "card_delivery_failed_visible_text_fallback",
+            "message": "interactive card delivery failed and OpenClaw dispatched a visible text fallback",
+            "card_delivery": card_delivery,
+            "fallback_dispatch": True,
+        }
     if router_failed and fallback_dispatch:
         return success(
             "router_failed_visible_fallback",
@@ -66,7 +68,7 @@ def check_live_reply_log(log_path: Path, *, since: str = "", expect_text: str = 
     return {
         "ok": False,
         "status": "visible_reply_unproven",
-        "message": "expected message was received, but no card delivery ok=true or visible fallback evidence was found",
+        "message": "expected message was received, but no successful interactive card delivery evidence was found",
         "route_result": route_result or {},
         "card_delivery": card_delivery or {},
         "fallback_dispatch": fallback_dispatch,
