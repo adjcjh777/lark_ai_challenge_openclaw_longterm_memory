@@ -71,8 +71,10 @@ class OpenClawToolRegistryTest(unittest.TestCase):
         self.assertIn("feishu-memory-copilot route result", plugin_index)
         self.assertIn("publishInteractiveCardViaLarkCli", plugin_index)
         self.assertIn('publish.mode !== "interactive"', delivery_helper)
-        self.assertIn('"+messages-reply"', delivery_helper)
-        self.assertIn('"--msg-type", "interactive"', delivery_helper)
+        self.assertIn("buildInteractiveCardRequestBody", delivery_helper)
+        self.assertIn("/open-apis/im/v1/messages", delivery_helper)
+        self.assertIn("receive_id_type", delivery_helper)
+        self.assertIn('msg_type: "interactive"', delivery_helper)
         self.assertIn("feishu-memory-copilot card delivery", plugin_index)
         self.assertIn("openclaw_gateway_interactive_card_failed", delivery_helper)
         self.assertIn("buildCardDeliveryFailureFallback", plugin_index)
@@ -101,6 +103,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
 
             script = """
                 import {
+                  buildInteractiveCardRequestBody,
                   buildCardDeliveryFailureFallback,
                   buildRouterFailureFallback,
                   isRealFeishuMessageId,
@@ -146,7 +149,18 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   syntheticReply,
                   realMessageId: isRealFeishuMessageId('om_demo'),
                   syntheticMessageId: isRealFeishuMessageId('openclaw_before_dispatch_synthetic'),
-                  cardFallback: buildCardDeliveryFailureFallback({ fallback_reason: 'boom' }),
+                  requestBody: buildInteractiveCardRequestBody({
+                    card: { config: {}, elements: [{ tag: 'markdown', content: 'hello' }] },
+                    chatId: 'oc_demo',
+                    uuid: 'uuid_demo',
+                  }),
+                  cardFallback: buildCardDeliveryFailureFallback({
+                    fallback_reason: 'boom',
+                    card: {
+                      header: { title: { tag: 'plain_text', content: '群级记忆设置' } },
+                      elements: [{ tag: 'div', fields: [{ text: { tag: 'lark_md', content: '**当前群状态**\\ndisabled' } }] }],
+                    },
+                  }),
                   routerFallback: buildRouterFailureFallback(new Error('router boom')),
                 }));
             """
@@ -172,23 +186,29 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertEqual("reply_card", payload["ok"]["mode"])
             self.assertFalse(payload["ok"]["fallback_suppressed"])
             self.assertEqual("chat", payload["ok"]["delivery_mode"])
-            self.assertIn("im", captured_command)
-            self.assertIn("+messages-reply", captured_command)
-            self.assertIn("--message-id", captured_command)
-            self.assertIn("om_demo", captured_command)
-            self.assertIn("--msg-type", captured_command)
-            self.assertIn("interactive", captured_command)
+            self.assertIn("api", captured_command)
+            self.assertIn("POST", captured_command)
+            self.assertIn("/open-apis/im/v1/messages/om_demo/reply", captured_command)
+            self.assertIn("--data", captured_command)
             self.assertTrue(payload["syntheticReply"]["ok"])
             self.assertEqual("send_card", payload["syntheticReply"]["mode"])
             self.assertTrue(payload["realMessageId"])
             self.assertFalse(payload["syntheticMessageId"])
-            self.assertIn("+messages-send", captured_synthetic_command)
-            self.assertIn("--chat-id", captured_synthetic_command)
-            self.assertIn("oc_demo", captured_synthetic_command)
-            self.assertNotIn("--message-id", captured_synthetic_command)
+            self.assertIn("api", captured_synthetic_command)
+            self.assertIn("POST", captured_synthetic_command)
+            self.assertIn("/open-apis/im/v1/messages", captured_synthetic_command)
+            self.assertIn("--params", captured_synthetic_command)
+            self.assertTrue(any('"receive_id_type":"chat_id"' in part for part in captured_synthetic_command))
+            self.assertIn("--data", captured_synthetic_command)
+            self.assertNotIn("+messages-reply", captured_synthetic_command)
+            self.assertEqual("interactive", payload["requestBody"]["msg_type"])
+            self.assertEqual("oc_demo", payload["requestBody"]["receive_id"])
+            self.assertIsInstance(payload["requestBody"]["content"], str)
             self.assertFalse(payload["missingTarget"]["ok"])
             self.assertTrue(payload["missingTarget"]["fallback_suppressed"])
             self.assertIn("card_delivery_failed", payload["cardFallback"])
+            self.assertIn("群级记忆设置", payload["cardFallback"])
+            self.assertIn("当前群状态", payload["cardFallback"])
             self.assertIn("router_failed", payload["routerFallback"])
 
     def test_runner_invokes_copilot_service_and_preserves_bridge_metadata(self) -> None:

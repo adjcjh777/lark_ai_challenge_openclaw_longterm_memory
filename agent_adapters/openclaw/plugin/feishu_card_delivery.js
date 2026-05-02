@@ -55,21 +55,26 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
   if (env.LARK_CLI_PROFILE) {
     command.push("--profile", env.LARK_CLI_PROFILE);
   }
-  command.push("im");
-  command.push(messageId ? "+messages-reply" : "+messages-send");
-  command.push("--as", larkAs);
+  command.push("api", "POST");
   if (messageId) {
-    command.push("--message-id", messageId);
+    command.push(`/open-apis/im/v1/messages/${messageId}/reply`);
   } else {
-    command.push("--chat-id", chatId);
+    command.push("/open-apis/im/v1/messages");
   }
-  command.push("--msg-type", "interactive");
-  command.push("--content", JSON.stringify(publish.card));
-  command.push("--idempotency-key", interactiveCardIdempotencyKey(publish));
+  command.push("--as", larkAs);
+  if (!messageId) {
+    command.push("--params", JSON.stringify({ receive_id_type: "chat_id" }));
+  }
+  command.push("--data", JSON.stringify(buildInteractiveCardRequestBody({
+    card: publish.card,
+    chatId,
+    messageId,
+    uuid: interactiveCardIdempotencyKey(publish),
+  })));
   const result = await runCommand(command, {
     cwd: options.cwd,
     env,
-    timeoutSeconds: env.FEISHU_CARD_TIMEOUT_SECONDS || 2,
+    timeoutSeconds: env.FEISHU_CARD_TIMEOUT_SECONDS || 5,
   });
   return {
     ...result,
@@ -82,6 +87,21 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
     fallback_used: false,
     fallback_suppressed: !result.ok,
     fallback_reason: result.ok ? undefined : "openclaw_gateway_interactive_card_failed",
+  };
+}
+
+export function buildInteractiveCardRequestBody({ card, chatId, messageId, uuid }) {
+  const body = {
+    msg_type: "interactive",
+    content: JSON.stringify(card || {}),
+    uuid,
+  };
+  if (messageId) {
+    return body;
+  }
+  return {
+    ...body,
+    receive_id: chatId,
   };
 }
 
@@ -103,13 +123,18 @@ export function buildCardDeliveryFailureFallback(cardDelivery) {
   const reason = cardDelivery?.timed_out
     ? "interactive card delivery timed out"
     : String(cardDelivery?.fallback_reason || cardDelivery?.stderr || "interactive card delivery failed");
-  return [
+  const cardSummary = extractCardTextFallback(cardDelivery?.card);
+  const lines = [
     "Memory Copilot 已收到这条消息，但卡片投递失败。",
     "",
     `状态：card_delivery_failed`,
     `原因：${truncateForOperator(reason, 180)}`,
-    "处理：OpenClaw 和 Memory Copilot 路由仍在线；请检查 lark-cli / interactive card 发送权限和本机日志。",
-  ].join("\n");
+    "处理：OpenClaw 和 Memory Copilot 路由仍在线；已降级为文本结果。",
+  ];
+  if (cardSummary) {
+    lines.push("", "卡片内容：", cardSummary);
+  }
+  return lines.join("\n");
 }
 
 export function buildRouterFailureFallback(error) {
@@ -128,6 +153,39 @@ export function truncateForOperator(value, maxLength) {
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+export function extractCardTextFallback(card) {
+  const lines = [];
+  collectCardText(card?.header?.title, lines);
+  const elements = Array.isArray(card?.elements) ? card.elements : [];
+  for (const element of elements) {
+    collectCardText(element?.text, lines);
+    const fields = Array.isArray(element?.fields) ? element.fields : [];
+    for (const field of fields) {
+      collectCardText(field?.text, lines);
+    }
+    const actions = Array.isArray(element?.actions) ? element.actions : [];
+    for (const action of actions) {
+      collectCardText(action?.text, lines);
+    }
+  }
+  const normalized = lines
+    .map((line) => String(line || "").replace(/\*\*/g, "").trim())
+    .filter(Boolean);
+  return truncateForOperator(normalized.join("\n"), 1200);
+}
+
+function collectCardText(node, lines) {
+  if (!node || typeof node !== "object") {
+    return;
+  }
+  if (typeof node.content === "string") {
+    lines.push(node.content);
+  }
+  if (typeof node.text === "string") {
+    lines.push(node.text);
+  }
 }
 
 function hashString(input) {
