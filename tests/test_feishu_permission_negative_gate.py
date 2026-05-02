@@ -125,6 +125,23 @@ class FeishuPermissionNegativeGateTest(unittest.TestCase):
         self.assertEqual("non_reviewer_enable_memory_denied", report["reason"])
         self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
 
+    def test_reads_openclaw_route_result_after_subsystem_json(self) -> None:
+        route_result = _denied_result()["result"]
+        line = json.dumps(
+            {
+                "0": '{"subsystem":"plugins"}',
+                "1": f"feishu-memory-copilot route result {json.dumps(route_result, ensure_ascii=False)}",
+                "_meta": {"date": "2026-05-02T04:00:00Z"},
+            },
+            ensure_ascii=False,
+        )
+
+        report = check_permission_negative_events(line)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("non_reviewer_enable_memory_denied", report["reason"])
+        self.assertEqual(1, report["summary"]["denied_enable_memory_results"])
+
     def test_reads_copilot_listener_raw_line_attempt_wrappers(self) -> None:
         line = json.dumps(
             {
