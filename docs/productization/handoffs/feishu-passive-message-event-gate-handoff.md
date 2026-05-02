@@ -47,7 +47,7 @@ python3 scripts/check_feishu_passive_message_event_gate.py \
 ```bash
 python3 scripts/check_feishu_passive_message_event_gate.py \
   --event-log /tmp/openclaw-feishu-live-after-group-scope.json \
-  --expected-chat-id oc_64758f862e79dc0200ba28b3af4c78dd \
+  --expected-chat-id <controlled_chat_id> \
   --json
 ```
 
