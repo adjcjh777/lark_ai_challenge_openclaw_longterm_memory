@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
+import types
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +11,7 @@ from memory_engine.copilot.cognee_adapter import (
     CogneeAdapterNotConfigured,
     CogneeMemoryAdapter,
     curated_memory_document,
+    _patch_cognee_embedding_batch_limit,
 )
 
 
@@ -280,6 +283,29 @@ class CogneeAdapterContractTest(unittest.TestCase):
         self.assertEqual(("mem_1",), args)
         self.assertEqual("feishu_memory_copilot_project_feishu_ai_challenge", kwargs["dataset_name"])
         self.assertEqual({"reason": "rejected"}, kwargs["metadata"])
+
+    def test_cognee_embedding_batch_limit_splits_litellm_batches(self) -> None:
+        class FakeLiteLLMEmbeddingEngine:
+            def __init__(self) -> None:
+                self.batch_sizes: list[int] = []
+
+            async def embed_text(self, text: list[str]) -> list[list[float]]:
+                self.batch_sizes.append(len(text))
+                return [[float(len(item))] for item in text]
+
+        module_name = "cognee.infrastructure.databases.vector.embeddings.LiteLLMEmbeddingEngine"
+        fake_module = types.ModuleType(module_name)
+        fake_module.LiteLLMEmbeddingEngine = FakeLiteLLMEmbeddingEngine
+
+        with patch.dict(sys.modules, {module_name: fake_module}), patch.dict(
+            os.environ, {"COGNEE_EMBEDDING_MAX_BATCH_SIZE": "3"}
+        ):
+            _patch_cognee_embedding_batch_limit()
+            engine = FakeLiteLLMEmbeddingEngine()
+            vectors = asyncio.run(engine.embed_text(["a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg"]))
+
+        self.assertEqual([[1.0], [2.0], [3.0], [4.0], [5.0], [6.0], [7.0]], vectors)
+        self.assertEqual([3, 3, 1], engine.batch_sizes)
 
 
 if __name__ == "__main__":

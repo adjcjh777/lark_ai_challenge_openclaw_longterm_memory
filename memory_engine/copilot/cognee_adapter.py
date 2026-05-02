@@ -12,6 +12,8 @@ from memory_engine.models import parse_scope
 
 from .schemas import Evidence, MemoryResult
 
+DEFAULT_COGNEE_EMBEDDING_MAX_BATCH_SIZE = 10
+
 
 class CogneeAdapterNotConfigured(RuntimeError):
     """Raised when the boundary is called before a Cognee client is injected."""
@@ -58,6 +60,8 @@ def load_cognee_client() -> CogneeClient:
         if api_key:
             cognee_module.config.set_llm_api_key(api_key)
 
+    _patch_cognee_embedding_batch_limit()
+
     return cognee_module
 
 
@@ -85,6 +89,60 @@ def _validate_cognee_configuration() -> None:
         raise CogneeConfigurationError(
             "EMBEDDING_ENDPOINT is required for local Ollama embeddings. Set it in .env file."
         )
+
+
+def _patch_cognee_embedding_batch_limit() -> None:
+    """Limit Cognee LiteLLM embedding batches for providers with small caps.
+
+    The installed Cognee SDK forwards the whole batch to LiteLLM and only
+    splits on context-window errors. Some OpenAI-compatible embedding providers
+    reject batches larger than 10 items, so keep the compatibility shim inside
+    the Cognee adapter boundary.
+    """
+
+    max_batch_size = _cognee_embedding_max_batch_size()
+    if max_batch_size <= 0:
+        return
+    try:
+        module = importlib.import_module(
+            "cognee.infrastructure.databases.vector.embeddings.LiteLLMEmbeddingEngine"
+        )
+        engine_class = getattr(module, "LiteLLMEmbeddingEngine")
+    except Exception:
+        return
+
+    original = getattr(engine_class, "_feishu_memory_original_embed_text", None)
+    if original is None:
+        original = engine_class.embed_text
+        setattr(engine_class, "_feishu_memory_original_embed_text", original)
+
+    if getattr(engine_class, "_feishu_memory_max_batch_size", None) == max_batch_size:
+        return
+
+    async def embed_text_with_batch_limit(self: Any, text: Any) -> Any:
+        if not isinstance(text, list) or len(text) <= max_batch_size:
+            return await original(self, text)
+        vectors: list[Any] = []
+        for index in range(0, len(text), max_batch_size):
+            chunk = text[index : index + max_batch_size]
+            vectors.extend(await original(self, chunk))
+        return vectors
+
+    setattr(engine_class, "embed_text", embed_text_with_batch_limit)
+    setattr(engine_class, "_feishu_memory_max_batch_size", max_batch_size)
+
+
+def _cognee_embedding_max_batch_size() -> int:
+    raw_value = (
+        os.environ.get("COGNEE_EMBEDDING_MAX_BATCH_SIZE")
+        or os.environ.get("EMBEDDING_MAX_BATCH_SIZE")
+        or str(DEFAULT_COGNEE_EMBEDDING_MAX_BATCH_SIZE)
+    )
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return DEFAULT_COGNEE_EMBEDDING_MAX_BATCH_SIZE
+    return value if value > 0 else DEFAULT_COGNEE_EMBEDDING_MAX_BATCH_SIZE
 
 
 class CogneeClient(Protocol):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -47,14 +48,25 @@ def main() -> None:
     args = parser.parse_args()
 
     with _temporary_roots(args.data_root, args.system_root) as roots:
-        report = run_gate(
-            scope=args.scope,
-            data_root=roots["data_root"],
-            system_root=roots["system_root"],
-            llm_provider=args.llm_provider,
-            llm_endpoint=args.llm_endpoint,
-            llm_model=args.llm_model,
-        )
+        if args.json:
+            with contextlib.redirect_stdout(sys.stderr):
+                report = run_gate(
+                    scope=args.scope,
+                    data_root=roots["data_root"],
+                    system_root=roots["system_root"],
+                    llm_provider=args.llm_provider,
+                    llm_endpoint=args.llm_endpoint,
+                    llm_model=args.llm_model,
+                )
+        else:
+            report = run_gate(
+                scope=args.scope,
+                data_root=roots["data_root"],
+                system_root=roots["system_root"],
+                llm_provider=args.llm_provider,
+                llm_endpoint=args.llm_endpoint,
+                llm_model=args.llm_model,
+            )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     else:
