@@ -104,6 +104,13 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                 encoding="utf-8",
             )
             fake_cli.chmod(fake_cli.stat().st_mode | stat.S_IXUSR)
+            fake_home = Path(tmpdir) / "home"
+            openclaw_lark_config = fake_home / ".lark-cli" / "openclaw" / "config.json"
+            openclaw_lark_config.parent.mkdir(parents=True)
+            openclaw_lark_config.write_text(
+                json.dumps({"apps": [{"appId": "cli_bound_demo", "brand": "feishu"}]}),
+                encoding="utf-8",
+            )
 
             script = """
                 import {
@@ -113,6 +120,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   larkCliEnvironment,
                   commandPreview,
                   publishInteractiveCardViaLarkCli,
+                  resolveLarkCliProfile,
                   resolveLarkCliBin,
                 } from './agent_adapters/openclaw/plugin/feishu_card_delivery.js';
                 const publish = {
@@ -164,6 +172,15 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                   explicitCli: resolveLarkCliBin({ LARK_CLI_BIN: '/tmp/custom-lark-cli' }),
                   defaultCli: resolveLarkCliBin({}),
                   launchdEnv: larkCliEnvironment({ PATH: '/usr/bin:/bin' }),
+                  openClawBoundProfile: resolveLarkCliProfile({
+                    HOME: process.env.FAKE_HOME,
+                    OPENCLAW_SERVICE_MARKER: 'openclaw',
+                  }),
+                  openClawBoundEnv: larkCliEnvironment({
+                    HOME: process.env.FAKE_HOME,
+                    PATH: '/usr/bin:/bin',
+                    OPENCLAW_SERVICE_MARKER: 'openclaw',
+                  }),
                   routerFallback: buildRouterFailureFallback(new Error('router boom')),
                 }));
             """
@@ -175,6 +192,7 @@ class OpenClawToolRegistryTest(unittest.TestCase):
                     "FAKE_LARK_CLI": str(fake_cli),
                     "FAKE_LARK_CAPTURE": str(capture_path),
                     "FAKE_LARK_CAPTURE_SYNTHETIC": str(synthetic_capture_path),
+                    "FAKE_HOME": str(fake_home),
                 },
                 text=True,
                 capture_output=True,
@@ -217,6 +235,8 @@ class OpenClawToolRegistryTest(unittest.TestCase):
             self.assertEqual("/tmp/custom-lark-cli", payload["explicitCli"])
             self.assertIn("lark-cli", payload["defaultCli"])
             self.assertEqual("feishu-ai-challenge", payload["launchdEnv"]["LARK_CLI_PROFILE"])
+            self.assertEqual("cli_bound_demo", payload["openClawBoundProfile"])
+            self.assertEqual("cli_bound_demo", payload["openClawBoundEnv"]["LARK_CLI_PROFILE"])
             self.assertIn("/opt/homebrew/bin", payload["launchdEnv"]["PATH"])
             self.assertTrue(payload["launchdEnv"]["HOME"])
             self.assertFalse(payload["missingTarget"]["ok"])

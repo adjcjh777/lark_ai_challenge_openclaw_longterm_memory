@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 
 export async function runCommand(command, options = {}) {
@@ -55,7 +55,7 @@ export async function publishInteractiveCardViaLarkCli(publish, options = {}) {
   }
   const env = larkCliEnvironment(options.env || process.env);
   const larkCli = resolveLarkCliBin(env);
-  const larkProfile = env.LARK_CLI_PROFILE || "feishu-ai-challenge";
+  const larkProfile = resolveLarkCliProfile(env);
   const larkAs = env.LARK_CLI_AS || "bot";
   const command = [larkCli, "--profile", larkProfile];
   command.push("api", "POST");
@@ -107,8 +107,35 @@ export function larkCliEnvironment(env = process.env) {
     HOME: home,
     USER: env.USER || "junhaocheng",
     PATH: path,
-    LARK_CLI_PROFILE: env.LARK_CLI_PROFILE || "feishu-ai-challenge",
+    LARK_CLI_PROFILE: env.LARK_CLI_PROFILE || resolveLarkCliProfile({ ...env, HOME: home }),
   };
+}
+
+export function resolveLarkCliProfile(env = process.env) {
+  if (env.LARK_CLI_PROFILE) {
+    return env.LARK_CLI_PROFILE;
+  }
+  if (env.OPENCLAW_SERVICE_MARKER || env.OPENCLAW_SERVICE_KIND) {
+    const profile = readFirstOpenClawBoundLarkProfile(env.HOME || homedir());
+    if (profile) {
+      return profile;
+    }
+  }
+  return "feishu-ai-challenge";
+}
+
+function readFirstOpenClawBoundLarkProfile(home) {
+  if (!home) {
+    return "";
+  }
+  const configPath = `${home}/.lark-cli/openclaw/config.json`;
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf8"));
+    const app = Array.isArray(raw?.apps) ? raw.apps.find((item) => item?.name || item?.appId) : null;
+    return String(app?.name || app?.appId || "").trim();
+  } catch (_) {
+    return "";
+  }
 }
 
 export function resolveLarkCliBin(env = process.env) {
