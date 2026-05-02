@@ -137,10 +137,22 @@ class FeishuReviewDeliveryGateTest(unittest.TestCase):
             [
                 "private_review_dm_seen",
                 "card_action_updates_original_card_seen",
-                "missing_card_token_fail_closed_seen",
             ],
             report["failures"],
         )
+
+    def test_log_gate_warns_but_passes_when_live_log_lacks_missing_token_negative(self) -> None:
+        text = "\n".join(
+            json.dumps(item, ensure_ascii=False)
+            for item in [_candidate_result(), _review_dm_result(), _card_update_result()]
+        )
+
+        report = check_review_delivery_log_events(text)
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual("review_delivery_e2e_evidence_seen", report["reason"])
+        self.assertEqual(["missing_card_token_fail_closed_seen"], report["warnings"])
+        self.assertEqual("warning", report["checks"][-1]["status"])
 
     def test_log_gate_reads_copilot_raw_line_wrappers(self) -> None:
         wrapped = {

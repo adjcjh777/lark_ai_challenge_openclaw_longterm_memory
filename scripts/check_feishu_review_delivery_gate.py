@@ -228,6 +228,7 @@ def check_review_delivery_log_events(text: str, *, expected_reviewer_open_id: st
     }
     checks: list[dict[str, Any]] = []
     failures: list[str] = []
+    warnings: list[str] = []
     examples: list[dict[str, Any]] = []
     event_types: dict[str, int] = {}
 
@@ -295,13 +296,19 @@ def check_review_delivery_log_events(text: str, *, expected_reviewer_open_id: st
             "card_action_triggers_without_result": summary["card_action_triggers_without_result"],
         },
     )
-    _record_check(
-        checks,
-        failures,
-        "missing_card_token_fail_closed_seen",
-        summary["missing_token_fail_closed_results"] >= 1,
-        {"count": summary["missing_token_fail_closed_results"]},
+    missing_token_seen = summary["missing_token_fail_closed_results"] >= 1
+    checks.append(
+        {
+            "name": "missing_card_token_fail_closed_seen",
+            "status": "pass" if missing_token_seen else "warning",
+            "details": {
+                "count": summary["missing_token_fail_closed_results"],
+                "covered_by": "local_feishu_review_delivery_gate",
+            },
+        }
     )
+    if not missing_token_seen:
+        warnings.append("missing_card_token_fail_closed_seen")
 
     reason = "review_delivery_e2e_evidence_seen" if not failures else _log_failure_reason(summary)
     return {
@@ -313,6 +320,7 @@ def check_review_delivery_log_events(text: str, *, expected_reviewer_open_id: st
         "event_types": event_types,
         "examples": examples,
         "failures": failures,
+        "warnings": warnings,
         "reason": reason,
         "next_step": "" if not failures else _log_next_step(reason),
     }
@@ -638,8 +646,6 @@ def _log_failure_reason(summary: dict[str, int]) -> str:
         return "private_review_dm_without_card_action_update"
     if summary["card_action_triggers_without_result"] and not summary["card_action_update_results"]:
         return "card_action_trigger_without_update_result"
-    if summary["card_action_update_results"] and not summary["missing_token_fail_closed_results"]:
-        return "card_action_update_without_missing_token_negative"
     return "review_delivery_e2e_evidence_missing"
 
 
