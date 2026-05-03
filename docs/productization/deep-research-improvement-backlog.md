@@ -15,7 +15,7 @@
 | 优先级 | 事项 | 为什么要做 | 可本地完成 | 完成标准 |
 |---|---|---|---|---|
 | P0 | 统一对外指标口径 | 深研报告指出 README、白皮书、PRD audit 和 benchmark report 对 recall/conflict 的乐观程度不一致，评委会质疑自证可信度 | 是 | 已同步 README、docs/README、benchmark report 和 UX todo；受控真实 Feishu Task smoke 后已更新，不宣称生产长期运行 |
-| P0 | 降低旧值泄漏和冲突更新风险 | recall / conflict 扩样暴露 stale leakage 与 conflict accuracy 风险，这是“记得住、改得对”的核心 | 部分可本地完成 | 已完成：conflict stale leakage = 0.0000、conflict accuracy = 1.0000；recall stale leakage = 0.0000，recall case pass rate = 1.0000 |
+| P0 | 降低旧值泄漏和冲突更新风险 | recall / conflict 扩样暴露 stale leakage 与 conflict accuracy 风险，这是“记得住、改得对”的核心 | 部分可本地完成 | recall / conflict 主 benchmark 已达标；2026-05-03 新增真实表达 pre-live 质量 gate 后发现 `old_value_leakage_rate=0.1429`，仍需修复旧 Jenkins 等真实表达泄漏样例 |
 | P0 | 让 retrieval 分数可调、可解释 | 当前 keyword、vector、evidence、layer bonus 和 hot threshold 写死，排障时难解释旧值为何排前 | 是 | 已完成：集中 scoring config、`why_ranked.score_breakdown` 和 benchmark `score_breakdown_summary` |
 | P1 | 建立稳定 memory key / alias 设计 | 只靠 `normalized_subject` 容易把同一业务槽位拆散，影响冲突识别 | 是 | 已完成设计与首版实现：`memory_engine/copilot/stable_keys.py`，通过 raw event metadata 承载，不做 schema migration |
 | P1 | 扩大 contradiction stress pack | 评委最容易追问自然表达、跨天改口、多人冲突和旧值过滤 | 是 | 已整理 35 条 conflict stress pack；runner 支持 confirm/reject 分支、stable key 输出和 forbidden-value 否定语境 |

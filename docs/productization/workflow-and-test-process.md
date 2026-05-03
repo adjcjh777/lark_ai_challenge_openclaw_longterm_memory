@@ -198,7 +198,11 @@ python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
 python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json
+python3 scripts/check_real_feishu_expression_quality_gate.py --json
 ```
+
+`check_real_feishu_expression_quality_gate.py` 是 pre-live 本地质量 gate；当前旧值泄漏率未达 0.0000 时应失败，不能用它的失败结果宣称 UX-06 已完成。
 
 完整 release 前再考虑：
 

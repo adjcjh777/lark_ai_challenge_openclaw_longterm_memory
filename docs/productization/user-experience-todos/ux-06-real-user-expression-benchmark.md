@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：已完成
+状态：进行中（样本集和 runner 已完成；pre-live 质量 gate 未通过）
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 6 个
 
@@ -27,6 +27,7 @@
 - 已新增 `copilot_real_feishu` benchmark runner，指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
 - 已补 `tests/test_copilot_benchmark.py` 回归测试，覆盖样本格式、指标输出和失败输出。
 - 已对齐 `docs/benchmark-report.md` 和上游 `docs/productization/user-experience-todo.md`。
+- 已新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把本页“指标建议”转成可执行 pre-live 质量 gate。当前 gate 返回失败：`old_value_leakage_rate=0.1429`，阈值为 `0.0000`。
 
 本地重跑结果：
 
@@ -61,6 +62,7 @@
 | 3 | 扩 benchmark runner 指标 | `tests/test_copilot_benchmark.py`、benchmark runner 相关代码 | 指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率、旧值泄漏率。 |
 | 4 | 对齐报告和阈值 | `docs/benchmark-report.md` | 报告区分 fixture benchmark 和真实表达样本；写清样本规模和不足。 |
 | 5 | 补回归测试 | `tests/test_copilot_benchmark.py`、相关 `tests/test_copilot_*` | 样本文件格式、指标计算和失败输出都有测试。 |
+| 6 | 补 pre-live 质量 gate | `scripts/check_real_feishu_expression_quality_gate.py`、`tests/test_real_feishu_expression_quality_gate.py` | Recall@3、误记率、误提醒率、解释覆盖率和旧值泄漏率按本页阈值 fail closed；当前旧值泄漏率仍阻塞完成。 |
 
 ## 样本类型建议
 
@@ -108,6 +110,14 @@ ollama ps
 python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json
 ```
 
+2026-05-03 追加 pre-live 质量 gate：
+
+```bash
+python3 scripts/check_real_feishu_expression_quality_gate.py --json
+```
+
+当前该 gate 预期失败，直到旧值泄漏率降到 `0.0000`。
+
 ## 本轮验证记录
 
 已运行：
@@ -130,6 +140,7 @@ ollama ps
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
 - 当前失败样例保留，用于暴露解释缺口、闲聊误记和旧值泄漏。
+- `scripts/check_real_feishu_expression_quality_gate.py --json` 是本地 pre-live 质量 gate，不是真实 Feishu live evidence，也不是 productized live 证明。
 - 真实飞书来源仍 candidate-only，不自动 active。
 - 不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。
 
@@ -139,6 +150,7 @@ ollama ps
 - 成功样例和失败样例都保留。
 - 指标覆盖准确率、安全性和用户负担。
 - benchmark 报告不把样本规模夸大成生产结论。
+- `scripts/check_real_feishu_expression_quality_gate.py --json` 通过，尤其旧值泄漏率必须为 `0.0000`。
 - 真实飞书来源仍 candidate-only，不自动 active。
 
 ## 失败处理
@@ -149,4 +161,4 @@ ollama ps
 
 ## 顺序执行出口
 
-完成 UX-06 后再进入 [UX-07 10 分钟评委体验包](ux-07-ten-minute-judge-experience-pack.md)。UX-07 会把前 6 个体验改进收敛成评委可执行脚本。
+完成 UX-06 质量 gate 后再把本项重新标为完成。UX-07 已有评委体验脚本，但不能用 UX-07 代替 UX-06 的真实表达质量门禁。

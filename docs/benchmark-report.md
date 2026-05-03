@@ -24,6 +24,8 @@
 
 > **UX-06 更新（2026-04-29）**：本轮新增 `benchmarks/copilot_real_feishu_cases.json` 作为脱敏真实表达样本评测入口，覆盖口语、含糊、多轮改口、闲聊误判和权限场景各 5 条。本地重跑结果为 case pass rate = 0.7600、Recall@3 = 0.8750、误记率 0.0400、误提醒率 0.0000、确认负担 2.4000、解释覆盖率 0.8500、旧值泄漏率 0.1429。该集合是人工脱敏样本和当前 baseline 标注，不是生产真实用户稳定可用结论；失败样例保留在结果中，用于继续修复解释缺口、闲聊误记和旧值泄漏。
 
+> **UX-06 quality gate 更新（2026-05-03）**：新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把真实表达样本的 Recall@3、误记率、误提醒率、解释覆盖率和旧值泄漏率变成 pre-live 本地硬门禁。当前 gate 预期失败，唯一未达硬阈值的是旧值泄漏率 0.1429 > 0.0000；因此 UX-06 只能说样本和 runner 已完成，不能说真实表达质量已达上线前门禁。
+
 > **UX-07 更新（2026-04-29）**：10 分钟评委体验包入口为 `docs/judge-10-minute-experience.md`。评委版只引用本报告已有 runner 和 UX-06 指标，不重复跑重 benchmark；讲法必须同时展示通过项和残余风险，尤其是 UX-06 旧值泄漏率 0.1429、真实表达样本 pass rate 0.7600，以及 recall / conflict 扩样后的 stale leakage 风险。
 
 ## 先看这个
@@ -44,6 +46,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json --jso
 python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json --json-output reports/copilot_prefetch.json --csv-output reports/copilot_prefetch.csv
 python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json --json-output reports/copilot_heartbeat.json --csv-output reports/copilot_heartbeat.csv
 python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json --json-output reports/copilot_real_feishu.json --csv-output reports/copilot_real_feishu.csv
+python3 scripts/check_real_feishu_expression_quality_gate.py --json
 python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 ```
 
@@ -71,7 +74,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | Real Expression False Reminder Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-04-29 重跑） | <= 0.0500 | 当前样本通过 |
 | Real Expression Confirmation Burden | `copilot_real_feishu_cases.json` | 2.4000（2026-04-29 重跑） | 先记录，不设硬阈值 | UX-06 样本入口 |
 | Real Expression Explanation Coverage | `copilot_real_feishu_cases.json` | 0.8500（2026-04-29 重跑） | >= 0.8000 | 当前样本通过，但保留解释失败样例 |
-| Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.1429（2026-04-29 重跑） | 0.0000 | 未达标，保留为残余风险 |
+| Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.1429（2026-05-03 gate 重跑） | 0.0000 | 未达标，`check_real_feishu_expression_quality_gate.py` fail closed |
 
 ## 分项结果
 
