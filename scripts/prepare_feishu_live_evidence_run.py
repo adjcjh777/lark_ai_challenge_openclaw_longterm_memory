@@ -250,7 +250,8 @@ def prepare_live_evidence_run(
         non_reviewer_open_id=non_reviewer_open_id,
         reviewer_open_id=reviewer_open_id,
     )
-    return {
+    operator_checklist_path = evidence_dir / "operator-checklist.md"
+    result = {
         "ok": not blocking_failures,
         "production_ready_claim": False,
         "boundary": BOUNDARY,
@@ -266,10 +267,18 @@ def prepare_live_evidence_run(
         "log_paths": {name: str(path) for name, path in log_paths.items()},
         "diagnostic_paths": {name: str(path) for name, path in diagnostic_paths.items()},
         "diagnostic_write_results": diagnostic_write_results,
+        "operator_checklist_path": str(operator_checklist_path),
+        "operator_checklist_write_result": {},
         "manual_steps": steps,
         "evidence_checklist": evidence_checklist,
         "next_step": "Follow manual_steps and rerun packet/completion audit after real Feishu/OpenClaw logs are captured.",
     }
+    if create_dirs:
+        result["operator_checklist_write_result"] = _write_text_file(
+            operator_checklist_path,
+            format_operator_checklist(result),
+        )
+    return result
 
 
 def format_report(result: dict[str, Any]) -> str:
@@ -299,6 +308,71 @@ def format_report(result: dict[str, Any]) -> str:
     lines.append("evidence_checklist:")
     for item in result.get("evidence_checklist", []):
         lines.append(f"  - {item['id']}: {item['status']} -> {item['evidence_path']}")
+    if result.get("operator_checklist_path"):
+        lines.append(f"operator_checklist: {result['operator_checklist_path']}")
+    return "\n".join(lines)
+
+
+def format_operator_checklist(result: dict[str, Any]) -> str:
+    lines = [
+        "# Feishu Live Evidence Operator Checklist",
+        "",
+        f"- Run ID: `{result['run_id']}`",
+        f"- Evidence dir: `{result['evidence_dir']}`",
+        f"- Ready to capture live logs: `{str(result['ready_to_capture_live_logs']).lower()}`",
+        f"- Boundary: `{result['boundary']}`",
+        "- Do not claim productized live from this checklist, preflight, or packet alone.",
+        "",
+    ]
+    if result.get("blocking_failures"):
+        lines.extend(["## Blocking Preconditions", ""])
+        for failure in result["blocking_failures"]:
+            lines.append(f"- `{failure}`")
+        for step in result.get("blocking_resolution_steps", []):
+            lines.append(f"- {step}")
+        lines.append("")
+    lines.extend(["## Manual Steps", ""])
+    for step in result["manual_steps"]:
+        lines.extend(
+            [
+                f"### {step['id']}. {step['title']}",
+                "",
+                f"- Phase: `{step.get('phase', '')}`",
+                f"- Requires live readiness: `{str(step.get('requires_ready_to_capture_live_logs', False)).lower()}`",
+                "",
+                "```text",
+                step["instruction"],
+                "```",
+                "",
+            ]
+        )
+    lines.extend(["## Evidence Checklist", ""])
+    for item in result.get("evidence_checklist", []):
+        lines.extend(
+            [
+                f"### {item['id']}",
+                "",
+                f"- Completion item: `{item['completion_item']}`",
+                f"- Status: `{item['status']}`",
+                f"- Requirement: {item['requirement']}",
+                f"- Evidence path: `{item['evidence_path']}`",
+                f"- Proxy signal warning: {item['proxy_signal_warning']}",
+                "",
+                "```bash",
+                item["gate_command"],
+                "```",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Completion Rule",
+            "",
+            "Only rerun the completion audit after the real Feishu/OpenClaw logs and Cognee long-run evidence exist.",
+            "A saved `completion-audit.json` with `goal_complete=false` is an audit artifact, not a success proof.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -390,6 +464,15 @@ def _write_json_file(path: Path, payload: dict[str, Any]) -> dict[str, str]:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     except OSError as exc:
         return {"status": "warning", "path": str(path), "detail": f"Unable to write diagnostic JSON: {exc}"}
+    return {"status": "pass", "path": str(path), "detail": "written"}
+
+
+def _write_text_file(path: Path, content: str) -> dict[str, str]:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        return {"status": "warning", "path": str(path), "detail": f"Unable to write text file: {exc}"}
     return {"status": "pass", "path": str(path), "detail": "written"}
 
 

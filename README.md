@@ -344,7 +344,7 @@ python3 scripts/check_prometheus_alert_rules.py --json
 
 `collect_feishu_live_evidence_packet.py` 会把四类 Feishu/OpenClaw live log 统一跑 gate，生成不含 raw 消息正文的 sanitized evidence packet。真实扩样时先用它生成 packet，再运行 `check_openclaw_feishu_productization_completion.py --feishu-live-evidence-packet <packet> --feishu-event-diagnostics <diag.json> --cognee-sampler-status <sampler-status.json> --cognee-long-run-evidence <json>`；packet 只是证据汇总，不能替代真实日志采集。
 
-`prepare_feishu_live_evidence_run.py` 会在真实扩样前做单监听和 Feishu group-message access preflight，并生成一次 run 的日志路径、人工消息步骤、packet 命令和 completion audit 命令。它不会发送飞书消息或点击卡片；如果只看到泛化 `openclaw-gateway`，只有 `--planned-listener openclaw-websocket` 会通过，repo 内 lark-cli listener 应继续 fail closed；如果 scope metadata 还没列出 `im:message.group_msg`，但 bot 身份已经能读目标群，诊断会允许继续真实非 @ 群文本取证并保留 stale metadata warning，最终仍以 event log gate 为准。
+`prepare_feishu_live_evidence_run.py` 会在真实扩样前做单监听和 Feishu group-message access preflight，并生成一次 run 的日志路径、人工消息步骤、packet 命令和 completion audit 命令。带 `--create-dirs` 时还会写出 `operator-checklist.md`，方便测试者逐项执行并保留 no-overclaim 边界。它不会发送飞书消息或点击卡片；如果只看到泛化 `openclaw-gateway`，只有 `--planned-listener openclaw-websocket` 会通过，repo 内 lark-cli listener 应继续 fail closed；如果 scope metadata 还没列出 `im:message.group_msg`，但 bot 身份已经能读目标群，诊断会允许继续真实非 @ 群文本取证并保留 stale metadata warning，最终仍以 event log gate 为准。
 
 `export_copilot_admin_launch_evidence.py` 会导出一个固定 JSON evidence bundle，包含 summary、Wiki、Graph、Graph Quality、Audit、Audit read-only gate、Launch readiness、deploy bundle、production evidence 和 completion audit。它只生成本地/staging launch evidence，manifest 仍会保留 `goal_complete=false` 和 production blockers，不代表生产上线完成。
 

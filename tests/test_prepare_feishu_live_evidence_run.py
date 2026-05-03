@@ -262,6 +262,30 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
             result["diagnostic_write_results"]["cognee_sampler_status"]["status"],
         )
 
+    def test_create_dirs_writes_operator_checklist_markdown(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
+            root = Path(temp_dir)
+            result = prepare_live_evidence_run(
+                planned_listener="openclaw-websocket",
+                output_dir=root,
+                controlled_chat_id="oc_controlled",
+                non_reviewer_open_id="ou_non_reviewer",
+                reviewer_open_id="ou_reviewer",
+                process_rows=[],
+                create_dirs=True,
+                event_subscription_diagnostics=_event_diagnostics(ok=False),
+            )
+
+            checklist_path = Path(result["operator_checklist_path"])
+            markdown = checklist_path.read_text(encoding="utf-8")
+
+        self.assertEqual("pass", result["operator_checklist_write_result"]["status"])
+        self.assertIn("Feishu Live Evidence Operator Checklist", markdown)
+        self.assertIn("Ready to capture live logs: `false`", markdown)
+        self.assertIn("Do not claim productized live", markdown)
+        self.assertIn("check_openclaw_feishu_productization_completion.py", markdown)
+        self.assertIn("first_class_memory_tool_live_routing", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -45,6 +45,7 @@
 | `91ab5d5` | 补齐 README、runbook 和自主审计对 completion audit `--output` 的交接说明 |
 | `ac9196b` | 修正 `evidence_checklist` 的 Cognee 长跑 gate command，改用 `--output` |
 | `c4f50ef` | 修正 `evidence_checklist` 的 first-class packet collector command，补齐 `--output`、diagnostics 和 expected filters |
+| 本轮后续 | `prepare_feishu_live_evidence_run.py --create-dirs` 会写出 `operator-checklist.md`，用于下一轮真实 Feishu/OpenClaw 采证交接 |
 
 ## UX-06 当前结果
 

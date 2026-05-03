@@ -218,7 +218,7 @@ python3 scripts/prepare_feishu_live_evidence_run.py \
 - `/review` 私聊 DM / card / update-card E2E：`check_feishu_review_delivery_gate.py`
 - Cognee 长跑：`check_openclaw_feishu_productization_completion.py --cognee-long-run-evidence ...`
 
-这个预检只生成路径、命令和防 overclaim 清单；不会发送飞书消息、不会点击卡片，也不能替代真实 live 日志。预检输出里的 completion audit 步骤会带 `--output <run-dir>/completion-audit.json`；即使审计仍是 `goal_complete=false`，也会保留完整 JSON 供 handoff 和证据包归档。
+这个预检只生成路径、命令和防 overclaim 清单；不会发送飞书消息、不会点击卡片，也不能替代真实 live 日志。带 `--create-dirs` 时会在 run 目录写出 `operator-checklist.md`，给测试者逐项执行；预检输出里的 completion audit 步骤会带 `--output <run-dir>/completion-audit.json`；即使审计仍是 `goal_complete=false`，也会保留完整 JSON 供 handoff 和证据包归档。
 
 如果 OpenClaw 插件诊断暂时卡住，但只想先生成离线采证清单，可以追加：
 
