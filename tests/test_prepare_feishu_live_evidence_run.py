@@ -62,6 +62,15 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("--expected-chat-id oc_controlled", packet_step["instruction"])
         self.assertIn("--expected-non-reviewer-open-id ou_non_reviewer", packet_step["instruction"])
         self.assertIn("--expected-reviewer-open-id ou_reviewer", packet_step["instruction"])
+        routing_item = next(
+            item for item in result["evidence_checklist"] if item["id"] == "first_class_memory_tool_live_routing"
+        )
+        self.assertIn("--output", routing_item["gate_command"])
+        self.assertIn("feishu-live-evidence-packet.json", routing_item["gate_command"])
+        self.assertIn("--feishu-event-diagnostics", routing_item["gate_command"])
+        self.assertIn("--expected-chat-id oc_controlled", routing_item["gate_command"])
+        self.assertIn("--expected-non-reviewer-open-id ou_non_reviewer", routing_item["gate_command"])
+        self.assertIn("--expected-reviewer-open-id ou_reviewer", routing_item["gate_command"])
 
     def test_preflight_blocks_repo_lark_listener_when_openclaw_is_running(self) -> None:
         result = prepare_live_evidence_run(

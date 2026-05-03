@@ -487,7 +487,7 @@ def _manual_steps(
                 f"--passive-event-log {log_paths['passive_event_log']} "
                 f"--routing-event-log {log_paths['routing_event_log']} "
                 f"--permission-event-log {log_paths['permission_event_log']} "
-                f"--review-event-log {log_paths['review_event_log']}{event_diagnostics_arg} "
+                f"--review-event-log {log_paths['review_event_log']}{event_diagnostics_arg}"
                 f"{packet_chat_filter}{packet_actor_filter}{packet_reviewer_filter} "
                 f"--output {packet_output} --json"
             ),
@@ -551,6 +551,11 @@ def _evidence_checklist(
     chat_filter = f" --target-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     passive_chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
     permission_actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
+    packet_chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
+    packet_actor_filter = (
+        f" --expected-non-reviewer-open-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
+    )
+    packet_reviewer_filter = f" --expected-reviewer-open-id {reviewer_open_id}" if reviewer_open_id else ""
     reviewer_filter = f" --expected-reviewer-open-id {reviewer_open_id}" if reviewer_open_id else ""
     cognee_evidence = cognee_long_run_evidence or Path("<pending-cognee-long-run-evidence.json>")
     return [
@@ -590,7 +595,10 @@ def _evidence_checklist(
                 f"--passive-event-log {log_paths['passive_event_log']} "
                 f"--routing-event-log {log_paths['routing_event_log']} "
                 f"--permission-event-log {log_paths['permission_event_log']} "
-                f"--review-event-log {log_paths['review_event_log']} --json"
+                f"--review-event-log {log_paths['review_event_log']} "
+                f"--feishu-event-diagnostics {diagnostic_paths['feishu_event_diagnostics']}"
+                f"{packet_chat_filter}{packet_actor_filter}{packet_reviewer_filter} "
+                f"--output {packet_output} --json"
             ),
             "manual_step_ids": ["3", "6"],
             "status": "requires_real_feishu_openclaw_result",
