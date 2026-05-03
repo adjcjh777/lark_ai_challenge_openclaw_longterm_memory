@@ -14,7 +14,17 @@
 
 状态快照：2026-05-04，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/workspace-ingestion-architecture-adr.md`、`docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md`、`docs/productization/document-writing-style-guide-opus-4-6.md`、`docs/productization/cross-platform-quick-deploy.md`、`docs/productization/deep-research-improvement-backlog.md`、`docs/productization/user-experience-todo.md` 和 `docs/productization/autonomous-improvement-audit-2026-05-03.md` 为准。
 
-### 当前真实 Feishu 使用边界
+### 先看这个
+
+当前已经可以把受控飞书来源接进同一条 Copilot 记忆链路。OpenClaw `fmc_*` 工具、`CopilotService`、权限 fail-closed、候选审核、证据、版本链、审计、检索和本地/staging gate 都已经成型。
+
+Workspace ingestion 已进入 **limited workspace pilot**。现在的主路径是 lark-cli-first：发现 Drive / Wiki / Bitable / Sheet 类资源，按类型读取内容，再统一送入 `FeishuIngestionSource -> ingest_feishu_source() -> memory.create_candidate -> CopilotService`。系统会把低风险内容自动确认，把重要、敏感或冲突内容留给 reviewer / owner。
+
+这还不是生产全量 workspace ingestion。普通 Sheet 的真实样本、真实 chat + doc/table mixed-source live sample、真实 lark-cli fetch/network latency，以及 productized live 长期运行都还没有完成。
+
+如果你要继续做 workspace 方向，先看 `docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md` 和 `docs/productization/workspace-ingestion-architecture-adr.md`。如果你要做上线或评委材料，先看 `docs/productization/full-copilot-next-execution-doc.md` 和 `docs/productization/prd-completion-audit-and-gap-tasks.md`。
+
+### 当前真实 Feishu / Workspace 使用边界
 
 按当前代码，本项目已经进入“**allowlist 群 + 已启用群策略的被动候选识别 + @Bot / 私聊主动交互**”阶段，但还不是全量 workspace ingestion。当前稳定边界是：
 

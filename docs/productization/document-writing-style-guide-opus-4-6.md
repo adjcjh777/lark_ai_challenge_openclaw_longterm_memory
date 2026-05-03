@@ -76,7 +76,7 @@ After:
 
 This slice does not rewrite every historical handoff. The repo has many archived date plans that must stay useful as audit records. Apply this style to new productization docs first, then rewrite active entry docs in this order:
 
-1. `README.md`
+1. `README.md` - first pass completed on 2026-05-04.
 2. `docs/README.md` - first pass completed on 2026-05-04.
 3. `docs/human-product-guide.md` - first pass completed on 2026-05-04.
 4. `docs/productization/full-copilot-next-execution-doc.md`
