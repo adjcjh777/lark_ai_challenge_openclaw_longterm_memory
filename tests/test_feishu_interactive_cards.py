@@ -11,6 +11,7 @@ from memory_engine.db import connect, init_db
 from memory_engine.feishu_cards import (
     build_candidate_review_card,
     build_card_from_text,
+    build_compact_search_answer_card,
     build_group_settings_card,
     build_prefetch_context_card,
     build_reminder_candidate_card,
@@ -234,6 +235,54 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertTrue(result["publish"]["fallback_suppressed"])
         self.assertEqual("interactive_card_timeout_ambiguous", result["publish"]["fallback_reason"])
         json.dumps(result, ensure_ascii=False)
+
+    def test_compact_search_answer_card_uses_single_answer_with_chat_time_evidence(self) -> None:
+        card = build_compact_search_answer_card(
+            {
+                "ok": True,
+                "query": "生产部署 region 当前是什么",
+                "results": [
+                    {
+                        "memory_id": "mem_prod_region",
+                        "subject": "生产部署",
+                        "current_value": "不对，生产部署 region 改成 ap-shanghai，仍必须加 --canary",
+                        "status": "active",
+                        "version": 5,
+                        "evidence": [
+                            {
+                                "source_type": "feishu_message",
+                                "source_id": "om_evidence",
+                                "source_chat_id": "oc_test",
+                                "source_chat_name": "Feishu Memory Engine 测试群",
+                                "created_at": "2026-04-28 10:46",
+                                "quote": "不对，生产部署 region 改成 ap-shanghai，仍必须加 --canary",
+                            }
+                        ],
+                    },
+                    {
+                        "memory_id": "mem_irrelevant",
+                        "subject": "Dashboard",
+                        "current_value": "irrelevant",
+                        "evidence": [{"quote": "irrelevant"}],
+                    },
+                ],
+                "bridge": {
+                    "request_id": "req_demo",
+                    "trace_id": "trace_demo",
+                    "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+                },
+            }
+        )
+
+        rendered = json.dumps(card, ensure_ascii=False)
+        self.assertIn("当前答案", rendered)
+        self.assertIn("不对，生产部署 region 改成 ap-shanghai，仍必须加 --canary", rendered)
+        self.assertIn("旧版本已被 superseded", rendered)
+        self.assertIn("群聊：Feishu Memory Engine 测试群", rendered)
+        self.assertIn("时间：2026-04-28 10:46", rendered)
+        self.assertIn("消息：om_evidence", rendered)
+        self.assertNotIn("当前结论 2", rendered)
+        self.assertNotIn("Dashboard", rendered)
 
     def test_long_card_action_idempotency_key_is_shortened(self) -> None:
         event = message_event_from_payload(card_action_payload("versions", "mem_demo"))

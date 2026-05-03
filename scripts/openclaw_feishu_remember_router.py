@@ -30,6 +30,7 @@ from memory_engine.db import connect, init_db  # noqa: E402
 from memory_engine.feishu_cards import (  # noqa: E402
     build_candidate_review_card,
     build_card_from_text,
+    build_compact_search_answer_card,
     build_group_settings_card,
     build_prefetch_context_card,
     build_review_inbox_card,
@@ -522,6 +523,7 @@ def route_gateway_memory_search(
     routing_reason: str = "openclaw_gateway_memory_search",
     intent_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    compact_answer = intent_resolution is not None and routing_reason == "openclaw_gateway_natural_search"
     normalized_query = (query or text).strip()
     if normalized_query.startswith("/"):
         _, normalized_query = _slash_command(normalized_query)
@@ -529,7 +531,7 @@ def route_gateway_memory_search(
     payload = {
         "query": normalized_query,
         "scope": scope,
-        "top_k": 3,
+        "top_k": 1 if compact_answer else 3,
         "filters": {"status": "active"},
         "current_context": _gateway_current_context(
             text=text,
@@ -544,8 +546,13 @@ def route_gateway_memory_search(
     }
     service = CopilotService(db_path=db_path)
     tool_result = handle_tool_request("memory.search", payload, service=service)
+    if compact_answer:
+        _enrich_search_evidence_context(tool_result, fallback_chat_id=chat_id)
     reply = _format_memory_search_result(tool_result)
-    card = build_search_result_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
+    if tool_result.get("ok", True):
+        card = build_compact_search_answer_card(tool_result) if compact_answer else build_search_result_card(tool_result)
+    else:
+        card = build_card_from_text(reply)
     result = {
         "ok": bool(tool_result.get("ok", True)),
         "tool": "memory.search",
@@ -1110,6 +1117,99 @@ def _infer_bot_mentioned_from_lark_message(message_id: str) -> bool:
         if "Feishu Memory" in name or mention_id in _known_bot_ids():
             return True
     return False
+
+
+def _enrich_search_evidence_context(result: dict[str, Any], *, fallback_chat_id: str) -> None:
+    rows = result.get("results") if isinstance(result.get("results"), list) else []
+    if not rows:
+        return
+    first = rows[0] if isinstance(rows[0], dict) else {}
+    evidence = first.get("evidence") if isinstance(first.get("evidence"), list) else []
+    if not evidence or not isinstance(evidence[0], dict):
+        return
+    item = evidence[0]
+    source_chat_id = str(item.get("source_chat_id") or fallback_chat_id or "")
+    if source_chat_id and not item.get("source_chat_name"):
+        item["source_chat_name"] = _lookup_lark_chat_name(source_chat_id) or source_chat_id
+    if item.get("created_at"):
+        item["created_at"] = _display_time(str(item["created_at"]))
+    elif str(item.get("source_id") or "").startswith("om_x"):
+        message_time = _lookup_lark_message_time(str(item["source_id"]))
+        if message_time:
+            item["created_at"] = message_time
+
+
+def _lookup_lark_chat_name(chat_id: str) -> str | None:
+    if not chat_id.startswith("oc_"):
+        return None
+    lark_cli = os.environ.get("LARK_CLI") or os.environ.get("COPILOT_LARK_CLI") or "lark-cli"
+    command = [
+        lark_cli,
+        "im",
+        "chats",
+        "get",
+        "--params",
+        json.dumps({"chat_id": chat_id}, ensure_ascii=False),
+        "--format",
+        "json",
+        "--as",
+        os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_AS", "bot"),
+    ]
+    profile = os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_PROFILE") or os.environ.get("LARK_PROFILE")
+    if profile:
+        command[1:1] = ["--profile", profile]
+    payload = _run_lark_json(command)
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    for key in ("name", "chat_name"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def _lookup_lark_message_time(message_id: str) -> str | None:
+    lark_cli = os.environ.get("LARK_CLI") or os.environ.get("COPILOT_LARK_CLI") or "lark-cli"
+    command = [
+        lark_cli,
+        "im",
+        "+messages-mget",
+        "--message-ids",
+        message_id,
+        "--format",
+        "json",
+        "--as",
+        os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_AS", "bot"),
+    ]
+    profile = os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_PROFILE") or os.environ.get("LARK_PROFILE")
+    if profile:
+        command[1:1] = ["--profile", profile]
+    payload = _run_lark_json(command)
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    messages = data.get("messages") if isinstance(data.get("messages"), list) else []
+    message = messages[0] if messages and isinstance(messages[0], dict) else {}
+    value = message.get("create_time")
+    return _display_time(str(value)) if value else None
+
+
+def _run_lark_json(command: list[str]) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(command, text=True, capture_output=True, check=False, timeout=3)
+    except Exception:
+        return {}
+    if completed.returncode != 0:
+        return {}
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _display_time(value: str) -> str:
+    normalized = value.strip()
+    if "T" in normalized:
+        return normalized.replace("T", " ")[:16]
+    return normalized
 
 
 def _known_bot_ids() -> set[str]:

@@ -201,6 +201,10 @@ def search_result_payload(search_response: dict[str, Any]) -> dict[str, Any]:
                 "subject": item.get("subject"),
                 "current_conclusion": item.get("current_value"),
                 "evidence_quote": first_evidence.get("quote"),
+                "evidence_source_id": first_evidence.get("source_id"),
+                "evidence_chat_id": first_evidence.get("source_chat_id"),
+                "evidence_chat_name": first_evidence.get("source_chat_name"),
+                "evidence_created_at": first_evidence.get("created_at"),
                 "version_status": item.get("status") or "active",
                 "version": item.get("version"),
                 "superseded_filtered": True,
@@ -650,6 +654,57 @@ def build_search_result_card(search_response: dict[str, Any]) -> dict[str, Any]:
     ]
     if actions:
         card["elements"].append({"tag": "action", "actions": actions})
+    card["elements"].append(_audit_block(payload.get("audit_details") or {}))
+    return card
+
+
+def build_compact_search_answer_card(search_response: dict[str, Any]) -> dict[str, Any]:
+    payload = search_result_payload(search_response)
+    if payload.get("status") == "permission_denied":
+        return _permission_denied_card("当前有效记忆", payload)
+
+    results = payload["user_content"]["results"]
+    if not results:
+        fields = [("状态", payload["user_content"]["empty_state"])]
+        memory_id = None
+    else:
+        item = results[0]
+        memory_id = item.get("memory_id")
+        fields = [
+            ("当前答案", str(item.get("current_conclusion") or "")),
+            ("旧值状态", "旧版本已被 superseded；默认只采用当前 active 记忆。"),
+            ("证据位置", _search_evidence_location(item)),
+            ("证据原文", str(item.get("evidence_quote") or "")),
+        ]
+    card = {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "template": "blue",
+            "title": {"tag": "plain_text", "content": "当前有效记忆"},
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {
+                        "is_short": label == "旧值状态",
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in fields
+                    if value
+                ],
+            }
+        ],
+    }
+    if memory_id:
+        card["elements"].append(
+            {
+                "tag": "action",
+                "actions": [
+                    _button("查看版本链", "default", {CARD_ACTION_KEY: "versions", "memory_id": str(memory_id)})
+                ],
+            }
+        )
     card["elements"].append(_audit_block(payload.get("audit_details") or {}))
     return card
 
@@ -1218,6 +1273,20 @@ def _search_result_explanation(item: dict[str, Any], evidence: dict[str, Any]) -
         parts.append(f"证据来自 {source}")
     parts.append("默认结果已过滤 superseded 旧值")
     return "；".join(parts) + "。"
+
+
+def _search_evidence_location(item: dict[str, Any]) -> str:
+    parts = []
+    chat_name = item.get("evidence_chat_name") or item.get("evidence_chat_id")
+    created_at = item.get("evidence_created_at")
+    source_id = item.get("evidence_source_id")
+    if chat_name:
+        parts.append(f"群聊：{chat_name}")
+    if created_at:
+        parts.append(f"时间：{created_at}")
+    if source_id:
+        parts.append(f"消息：{source_id}")
+    return "；".join(str(part) for part in parts if part) or "证据位置待补充"
 
 
 def _version_user_explanation_fallback(

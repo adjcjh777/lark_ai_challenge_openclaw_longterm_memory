@@ -321,6 +321,7 @@ class Evidence:
     source_type: str
     source_id: str | None
     quote: str | None
+    created_at: str | None = None
     source_url: str | None = None
     source_chat_id: str | None = None
     source_doc_id: str | None = None
@@ -339,6 +340,8 @@ class Evidence:
             source_type=str(source.get("source_type") or "unknown"),
             source_id=source.get("source_id"),
             quote=source.get("quote"),
+            created_at=source.get("created_at"),
+            source_chat_id=source.get("source_chat_id"),
             document_token=source.get("document_token"),
             document_title=source.get("document_title"),
         )
@@ -350,6 +353,7 @@ class Evidence:
             "quote": self.quote,
         }
         optional_values = {
+            "created_at": self.created_at,
             "source_url": self.source_url,
             "source_chat_id": self.source_chat_id,
             "source_doc_id": self.source_doc_id,

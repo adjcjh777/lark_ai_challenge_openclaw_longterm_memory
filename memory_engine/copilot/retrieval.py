@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import os
 import threading
 import time
@@ -323,10 +324,13 @@ class LayerAwareRetriever:
         return entries, None
 
     def _row_to_index_entry(self, row: Any, *, layer: MemoryLayer) -> RecallIndexEntry:
+        source = _raw_event_source(row["raw_json"])
         evidence = Evidence(
             source_type=str(row["evidence_source_type"] or "unknown"),
-            source_id=row["raw_source_id"] or row["evidence_source_event_id"],
+            source_id=row["raw_source_id"] or source.get("source_id") or row["evidence_source_event_id"],
             quote=row["evidence_quote"],
+            created_at=source.get("created_at"),
+            source_chat_id=source.get("source_chat_id"),
         )
         return RecallIndexEntry(
             memory_id=str(row["id"]),
@@ -823,6 +827,19 @@ def _load_ollama_embedding_provider() -> OllamaEmbeddingProvider | Deterministic
         )
 
     return DeterministicEmbeddingProvider()
+
+
+def _raw_event_source(raw_json: Any) -> dict[str, Any]:
+    if not raw_json:
+        return {}
+    try:
+        parsed = json.loads(str(raw_json))
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    source = parsed.get("source")
+    return source if isinstance(source, dict) else {}
 
 
 def _event_loop_is_running() -> bool:

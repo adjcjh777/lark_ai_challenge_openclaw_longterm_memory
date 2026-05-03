@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from scripts.openclaw_feishu_remember_router import (
     build_remember_payload,
     route_gateway_natural_interaction,
     route_gateway_group_policy,
+    route_gateway_memory_search,
     route_gateway_message,
     route_remember_message,
 )
@@ -153,6 +155,65 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("deterministic_fallback", result["intent_resolution"]["resolver"])
         bridge = result["tool_result"]["bridge"]
         self.assertEqual("fmc_memory_search", bridge["tool"])
+
+    def test_gateway_natural_search_uses_compact_single_answer_with_chat_time_evidence(self) -> None:
+        tool_result = {
+            "ok": True,
+            "query": "生产部署 region 当前应该是什么？",
+            "results": [
+                {
+                    "memory_id": "mem_prod_region",
+                    "subject": "生产部署",
+                    "current_value": "不对，生产部署 region 改成 ap-shanghai，仍必须加 --canary",
+                    "status": "active",
+                    "version": 5,
+                    "evidence": [
+                        {
+                            "source_type": "feishu_message",
+                            "source_id": "om_evidence",
+                            "source_chat_id": CHAT_ID,
+                            "created_at": "2026-04-28T10:46:00+08:00",
+                            "quote": "不对，生产部署 region 改成 ap-shanghai，仍必须加 --canary",
+                        }
+                    ],
+                    "matched_via": ["keyword_index"],
+                },
+                {
+                    "memory_id": "mem_irrelevant",
+                    "subject": "Dashboard",
+                    "current_value": "irrelevant",
+                    "evidence": [{"quote": "irrelevant"}],
+                },
+            ],
+            "bridge": {
+                "tool": "fmc_memory_search",
+                "request_id": "req_demo",
+                "trace_id": "trace_demo",
+                "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+            },
+        }
+        with patch("scripts.openclaw_feishu_remember_router.handle_tool_request", return_value=tool_result):
+            with patch("scripts.openclaw_feishu_remember_router._lookup_lark_chat_name", return_value="Feishu Memory Engine 测试群"):
+                result = route_gateway_memory_search(
+                    text="@Feishu Memory Engine bot 生产部署 region 当前应该是什么？",
+                    message_id="om_router_compact_natural",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    query="生产部署 region 当前应该是什么？",
+                    intent_resolution={"mode": "natural_language", "intent": "search"},
+                    routing_reason="openclaw_gateway_natural_search",
+                )
+
+        card_text = json.dumps(result["card"], ensure_ascii=False)
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertIn("当前答案", card_text)
+        self.assertIn("不对，生产部署 region 改成 ap-shanghai，仍必须加 --canary", card_text)
+        self.assertIn("群聊：Feishu Memory Engine 测试群", card_text)
+        self.assertIn("时间：2026-04-28 10:46", card_text)
+        self.assertIn("消息：om_evidence", card_text)
+        self.assertIn("旧版本已被 superseded", card_text)
+        self.assertNotIn("当前结论 2", card_text)
+        self.assertNotIn("Dashboard", card_text)
 
     def test_gateway_infers_at_mention_from_real_message_id_before_allowlist_ignore(self) -> None:
         with patch("scripts.openclaw_feishu_remember_router._infer_bot_mentioned_from_lark_message", return_value=True):
