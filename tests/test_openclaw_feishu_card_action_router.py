@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from memory_engine.db import connect, init_db
-from scripts.openclaw_feishu_card_action_router import route_card_action
+from scripts.openclaw_feishu_card_action_router import main, route_card_action
 from scripts.openclaw_feishu_remember_router import route_remember_message
 
 CHAT_ID = "oc_openclaw_card_router_test"
@@ -14,6 +18,39 @@ OTHER_OPEN_ID = "ou_other_member"
 
 
 class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
+    def test_main_keeps_stdout_json_when_route_emits_noise(self) -> None:
+        envelope = {
+            "action": "confirm",
+            "candidate_id": "mem_stdout_noise",
+            "chat_id": CHAT_ID,
+            "operator_open_id": OWNER_OPEN_ID,
+            "token": "card_action_stdout_noise",
+        }
+        tool_result = {
+            "ok": True,
+            "tool_result": {
+                "ok": True,
+                "candidate_id": "mem_stdout_noise",
+                "review_status": "confirmed",
+            },
+        }
+
+        def noisy_route(**_: object) -> dict[str, object]:
+            print("Pipeline file_load_from_filesystem emitted progress")
+            return tool_result
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch("sys.stdin", io.StringIO(json.dumps(envelope))), patch(
+            "scripts.openclaw_feishu_card_action_router.route_card_action",
+            side_effect=noisy_route,
+        ), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            exit_code = main()
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(tool_result, json.loads(stdout.getvalue()))
+        self.assertIn("Pipeline file_load_from_filesystem", stderr.getvalue())
+
     def test_owner_confirm_returns_final_status_card_without_buttons(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"

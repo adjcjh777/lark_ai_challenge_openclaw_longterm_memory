@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 from datetime import datetime
@@ -282,14 +284,19 @@ def _latest_evidence(repo: MemoryRepository, memory_id: str, version_id: str | N
 def main() -> int:
     raw = sys.stdin.read().strip()
     envelope = json.loads(raw) if raw else {}
-    result = route_card_action(
-        action=str(envelope.get("action") or ""),
-        candidate_id=str(envelope.get("candidate_id") or ""),
-        chat_id=str(envelope.get("chat_id") or ""),
-        operator_open_id=str(envelope.get("operator_open_id") or ""),
-        token=str(envelope.get("token") or ""),
-        db_path=str(envelope.get("db_path")) if envelope.get("db_path") else None,
-    )
+    noisy_stdout = io.StringIO()
+    with contextlib.redirect_stdout(noisy_stdout):
+        result = route_card_action(
+            action=str(envelope.get("action") or ""),
+            candidate_id=str(envelope.get("candidate_id") or ""),
+            chat_id=str(envelope.get("chat_id") or ""),
+            operator_open_id=str(envelope.get("operator_open_id") or ""),
+            token=str(envelope.get("token") or ""),
+            db_path=str(envelope.get("db_path")) if envelope.get("db_path") else None,
+        )
+    captured = noisy_stdout.getvalue().strip()
+    if captured:
+        print(captured, file=sys.stderr)
     print(json.dumps(result, ensure_ascii=False))
     return 0 if result.get("ok") else 1
 
