@@ -165,6 +165,7 @@ def candidate_review_payload(candidate_response: dict[str, Any]) -> dict[str, An
             "evidence_quote": evidence.get("quote") if isinstance(evidence, dict) else None,
             "risk_level": candidate_response.get("risk_level") or _risk_level(risk_flags),
             "conflict_summary": _conflict_summary(conflict),
+            "explanation": _candidate_user_explanation(candidate_response, conflict, risk_flags),
             "recommended_action": candidate_response.get("recommended_action") or candidate.get("recommended_action"),
         },
         "audit_details": _audit_details(bridge),
@@ -403,6 +404,7 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
         fields.append(("记忆内容", str(payload.get("new_value") or "")))
     fields.extend(
         [
+            ("为什么需要审核", str((payload.get("user_content") or {}).get("explanation") or "")),
             ("证据", str((payload.get("evidence") or {}).get("quote") or "")),
             ("来源", _source_summary(payload.get("evidence") or {})),
         ]
@@ -419,7 +421,7 @@ def build_candidate_review_card(candidate_response: dict[str, Any]) -> dict[str,
                 "tag": "div",
                 "fields": [
                     {
-                        "is_short": label not in {"记忆内容", "旧结论", "新结论", "证据"},
+                        "is_short": label not in {"记忆内容", "旧结论", "新结论", "为什么需要审核", "证据"},
                         "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
                     }
                     for label, value in fields
@@ -1149,6 +1151,26 @@ def _conflict_summary(conflict: dict[str, Any]) -> str:
     if old_value:
         return f"将覆盖现有 active 记忆：{old_value}"
     return "存在 active 记忆冲突，需要 reviewer 判断"
+
+
+def _candidate_user_explanation(
+    candidate_response: dict[str, Any],
+    conflict: dict[str, Any],
+    risk_flags: list[str],
+) -> str:
+    action = str(candidate_response.get("action") or "")
+    if conflict.get("has_conflict"):
+        return (
+            "这条候选与已有 active 记忆冲突；确认合并后才会覆盖旧结论，"
+            "在确认前默认搜索仍只返回当前 active 版本。"
+        )
+    if "sensitive_content" in risk_flags:
+        return "这条候选包含敏感风险，需要人工确认后才能成为当前有效记忆。"
+    if action == "created":
+        return "这条内容有长期记忆信号，但还未确认；确认前不会进入默认搜索结果。"
+    if action == "auto_confirmed":
+        return "这条低风险、低重要性内容已按 review policy 自动确认。"
+    return "这条候选需要人工审核；确认前不会进入默认 active 记忆。"
 
 
 def _rank_reason(item: dict[str, Any]) -> str:

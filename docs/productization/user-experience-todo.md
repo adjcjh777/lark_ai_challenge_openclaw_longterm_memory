@@ -263,7 +263,7 @@
 - 样本覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景各 5 条。
 - `memory_engine/benchmark.py` 已新增 `copilot_real_feishu` runner，输出 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
 - 失败样例保留，不删除失败记录来制造好看的指标。
-- 2026-05-03 新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把 UX-06 阈值变成 pre-live 本地质量 gate。当前 gate 返回 `status=pass`：Recall@3 0.8750、误记率 0.0000、误提醒率 0.0000、解释覆盖率 0.9000、旧值泄漏率 0.0000。
+- 2026-05-03 新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把 UX-06 阈值变成 pre-live 本地质量 gate。当前 gate 返回 `status=pass`：Recall@3 0.8750、误记率 0.0000、误提醒率 0.0000、解释覆盖率 0.9500、旧值泄漏率 0.0000。
 
 要做什么：
 

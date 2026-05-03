@@ -448,11 +448,11 @@
       "candidate_created": true,
       "reminder_created": false,
       "review_action_count": 2,
-      "has_user_explanation": false,
+      "has_user_explanation": true,
       "old_value_leaked": false,
       "permission_decision": "allow"
     },
-    "failure_debug_hint": "保留失败样例：候选存在但解释不足，后续补负责人变更解释。"
+    "failure_debug_hint": "已补冲突候选用户解释：说明确认合并后才覆盖旧 active，确认前默认搜索仍返回当前版本。"
   },
   {
     "case_id": "real_expr_chitchat_false_positive_001",
