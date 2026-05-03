@@ -1,7 +1,7 @@
 # 完整可用 Copilot 后续执行文档
 
 日期：2026-04-28  
-更新：2026-05-04 新增 workspace ingestion pilot，并补 source registry / run registry。当前完成的是 lark-cli-first 的受控资源发现、文档/Sheet/Bitable 类型路由、candidate-only 入口、revision 去重、unchanged skip、同 filter stale 标记、registry revocation、discovery cursor、显式 `--resource type:token[:title] --skip-discovery` 入口、Drive root/folder walk、Wiki space walk，以及当前 lark-cli 1.0.22 Bitable 输出兼容；受控 Bitable token 已在临时 SQLite 中跑通 1 个 `lark_bitable` source -> 1 个 candidate；Drive root/folder walk 已跑通 1 个 `document_feishu` source -> 2 个 candidates；Wiki `my_library` walk 已跑通 2 个 `document_feishu` sources -> 2 个 candidates，并对 sheet-backed Bitable tab 显式返回 `no_sources`；同一临时库重复 folder walk 已读回 `skipped_unchanged_count=1` / `reason=unchanged_revision`。仍不能写成生产全量 workspace ingestion。
+更新：2026-05-04 新增 workspace ingestion pilot，并补 source registry / run registry。当前完成的是 lark-cli-first 的受控资源发现、文档/Sheet/Bitable 类型路由、candidate-only 入口、revision 去重、unchanged skip、同 filter stale 标记、registry revocation、discovery cursor、显式 `--resource type:token[:title] --skip-discovery` 入口、Drive root/folder walk、Wiki space walk，以及当前 lark-cli 1.0.22 Bitable 输出兼容；受控 Bitable token 已在临时 SQLite 中跑通 1 个 `lark_bitable` source -> 1 个 candidate；Drive root/folder walk 已跑通 1 个 `document_feishu` source -> 2 个 candidates；Wiki `my_library` walk 已跑通 2 个 `document_feishu` sources -> 2 个 candidates，并对 sheet-backed Bitable tab 显式返回 `no_sources`；新增只读 registry gate，同一临时库重复 folder walk 后已读回 `run_count=2`、`ingested=1`、`skipped_unchanged=1`、`cursor_count=1`，单测覆盖 stale/failed evidence 检查。仍不能写成生产全量 workspace ingestion。
 当前目标：从“初赛 MVP 已完成”升级为“做出完整、可用、可治理、可审计的 Feishu Memory Copilot”。  
 适用方式：可以直接复制整份文档给下一轮 Codex / OpenClaw / 执行 agent 使用。
 
