@@ -111,7 +111,8 @@ def main() -> int:
 
     chats = chat_inputs_from_event_logs(args.event_log, expected_chat_id=args.expected_chat_id)
     resource_sources: list[FeishuIngestionSource] = []
-    fetch_failures: list[str] = []
+    required_fetch_failures: list[str] = []
+    optional_fetch_failures: list[str] = []
     resources = collect_reviewed_resources(
         specs=args.resource,
         queries=args.query,
@@ -139,7 +140,10 @@ def main() -> int:
                 )
             )
         except Exception as exc:
-            fetch_failures.append(type(exc).__name__)
+            if _is_explicit_resource(resource):
+                required_fetch_failures.append(type(exc).__name__)
+            else:
+                optional_fetch_failures.append(type(exc).__name__)
 
     actor = WorkspaceActor(
         user_id=args.actor_user_id,
@@ -156,7 +160,8 @@ def main() -> int:
                 conn,
                 chats=chats,
                 resource_sources=resource_sources,
-                fetch_failure_count=len(fetch_failures),
+                fetch_failure_count=len(required_fetch_failures),
+                optional_fetch_failure_count=len(optional_fetch_failures),
                 actor=actor,
                 scope=args.scope,
                 candidate_limit_per_chat=args.candidate_limit_per_chat,
@@ -264,6 +269,7 @@ def run_sample_finder(
     chats: list[ChatInput],
     resource_sources: list[FeishuIngestionSource],
     fetch_failure_count: int,
+    optional_fetch_failure_count: int = 0,
     actor: WorkspaceActor,
     scope: str,
     candidate_limit_per_chat: int = 5,
@@ -286,7 +292,7 @@ def run_sample_finder(
     checks = {
         "event_logs_have_chat_messages": _min_check(len(chats), 1),
         "chat_candidate_fact_count": _min_check(len(chat_facts), 1),
-        "resource_fetch_succeeded": _equals_check(fetch_failure_count, 0),
+        "explicit_resource_fetch_succeeded": _equals_check(fetch_failure_count, 0),
         "workspace_source_count": _min_check(len(resource_sources), 1),
         "same_fact_match_count": _min_check(len(matches), min_matches),
     }
@@ -303,6 +309,8 @@ def run_sample_finder(
             "chat_candidate_fact_count": len(chat_facts),
             "workspace_source_count": len(resource_sources),
             "resource_fetch_failure_count": fetch_failure_count,
+            "optional_resource_fetch_failure_count": optional_fetch_failure_count,
+            "total_resource_fetch_failure_count": fetch_failure_count + optional_fetch_failure_count,
             "same_fact_match_count": len(matches),
         },
         "source_type_counts": _count_source_types(resource_sources),
@@ -435,6 +443,11 @@ def _dedupe_resources(resources: list[WorkspaceResource]) -> list[WorkspaceResou
         seen.add(key)
         result.append(resource)
     return result
+
+
+def _is_explicit_resource(resource: WorkspaceResource) -> bool:
+    raw = resource.raw or {}
+    return bool(raw.get("explicit_resource_spec"))
 
 
 def _equals_check(actual: Any, expected: Any) -> dict[str, Any]:

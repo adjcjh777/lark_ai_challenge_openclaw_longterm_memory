@@ -75,6 +75,65 @@ class WorkspaceRealSameConclusionSampleFinderTest(unittest.TestCase):
         self.assertIsNone(report["strict_gate"])
         self.assertEqual(0, report["summary"]["same_fact_match_count"])
 
+    def test_optional_discovery_fetch_failures_do_not_hide_a_match(self) -> None:
+        report = self._run(
+            chats=[
+                ChatInput(
+                    message_id="msg_real_003",
+                    chat_id="chat_real",
+                    sender_id="ou_sender",
+                    text="决定：reviewer 才能启用群记忆。",
+                    created_at="2026-05-04T00:00:00+08:00",
+                    source="event_log",
+                )
+            ],
+            sources=[
+                FeishuIngestionSource(
+                    source_type="document_feishu",
+                    source_id="doc_real_003",
+                    title="Project doc",
+                    text="权限说明\n决定：reviewer 才能启用群记忆。",
+                    actor_id="ou_reviewer",
+                    created_at="2026-05-04T00:00:00+08:00",
+                )
+            ],
+            optional_fetch_failure_count=2,
+        )
+
+        self.assertTrue(report["ok"], report["failures"])
+        self.assertEqual("pass", report["checks"]["explicit_resource_fetch_succeeded"]["status"])
+        self.assertEqual(2, report["summary"]["optional_resource_fetch_failure_count"])
+        self.assertEqual(2, report["summary"]["total_resource_fetch_failure_count"])
+
+    def test_explicit_resource_fetch_failures_remain_hard_failures(self) -> None:
+        report = self._run(
+            chats=[
+                ChatInput(
+                    message_id="msg_real_004",
+                    chat_id="chat_real",
+                    sender_id="ou_sender",
+                    text="决定：reviewer 才能启用群记忆。",
+                    created_at="2026-05-04T00:00:00+08:00",
+                    source="event_log",
+                )
+            ],
+            sources=[
+                FeishuIngestionSource(
+                    source_type="document_feishu",
+                    source_id="doc_real_004",
+                    title="Project doc",
+                    text="权限说明\n决定：reviewer 才能启用群记忆。",
+                    actor_id="ou_reviewer",
+                    created_at="2026-05-04T00:00:00+08:00",
+                )
+            ],
+            fetch_failure_count=1,
+        )
+
+        self.assertFalse(report["ok"])
+        self.assertIn("explicit_resource_fetch_succeeded", report["failures"])
+        self.assertEqual("pass", report["checks"]["same_fact_match_count"]["status"])
+
     def test_collect_reviewed_resources_expands_read_only_discovery_inputs(self) -> None:
         with (
             patch(
@@ -114,7 +173,14 @@ class WorkspaceRealSameConclusionSampleFinderTest(unittest.TestCase):
         folder.assert_called_once()
         wiki.assert_called_once()
 
-    def _run(self, *, chats: list[ChatInput], sources: list[FeishuIngestionSource]) -> dict[str, object]:
+    def _run(
+        self,
+        *,
+        chats: list[ChatInput],
+        sources: list[FeishuIngestionSource],
+        fetch_failure_count: int = 0,
+        optional_fetch_failure_count: int = 0,
+    ) -> dict[str, object]:
         with tempfile.TemporaryDirectory() as temp_dir:
             conn = connect(Path(temp_dir) / "sample-finder.sqlite")
             try:
@@ -123,7 +189,8 @@ class WorkspaceRealSameConclusionSampleFinderTest(unittest.TestCase):
                     conn,
                     chats=chats,
                     resource_sources=sources,
-                    fetch_failure_count=0,
+                    fetch_failure_count=fetch_failure_count,
+                    optional_fetch_failure_count=optional_fetch_failure_count,
                     actor=WorkspaceActor(
                         user_id="ou_reviewer",
                         open_id=None,
