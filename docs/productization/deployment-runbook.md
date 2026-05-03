@@ -5,6 +5,8 @@
 适用范围：从零到可运行的完整部署步骤，新机器可按文档部署
 
 > 2026-05-01 校准：本文是 productized live 部署草案，不是当前已验证 runbook。文中 `scripts/validate_env.py`、`requirements.txt` 等命令或文件在当前仓库未实现或未作为验收入口；SQLite staging 备份/校验/恢复已落成 `scripts/backup_copilot_storage.py`，但 PostgreSQL 生产备份、PITR 和托管数据库部署仍未实施。实施前以 [productized-live-long-run-plan.md](productized-live-long-run-plan.md) 的 gate 为准，逐条校准命令后再执行。
+>
+> 2026-05-03 补充：如果目标是让队友在 macOS / Linux / Windows 新机器上快速跑到 demo / pre-production 验收状态，优先使用 [cross-platform-quick-deploy.md](cross-platform-quick-deploy.md) 和 `scripts/check_cross_platform_quick_deploy.py`。那个入口是已落地的快速部署 preflight；本文仍只作为生产化草案和后续 gate 参考。
 
 ---
 

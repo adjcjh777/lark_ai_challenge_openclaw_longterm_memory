@@ -12,7 +12,7 @@
 
 当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-状态快照：2026-05-03，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/deep-research-improvement-backlog.md`、`docs/productization/user-experience-todo.md` 和 `docs/productization/autonomous-improvement-audit-2026-05-03.md` 为准。
+状态快照：2026-05-03，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/cross-platform-quick-deploy.md`、`docs/productization/deep-research-improvement-backlog.md`、`docs/productization/user-experience-todo.md` 和 `docs/productization/autonomous-improvement-audit-2026-05-03.md` 为准。
 
 ### 当前真实 Feishu 使用边界
 
@@ -99,6 +99,15 @@ python3 scripts/check_openclaw_version.py
 python3 scripts/check_copilot_health.py --json
 python3 scripts/check_demo_readiness.py --json
 ```
+
+如果要在另一台机器上快速部署到 demo / pre-production 可验收状态，先按 [跨平台快速部署 Runbook](docs/productization/cross-platform-quick-deploy.md) 走；它覆盖 macOS、Linux 和 Windows，并提供统一 preflight：
+
+```bash
+python scripts/check_cross_platform_quick_deploy.py --profile local-demo --json
+python scripts/check_cross_platform_quick_deploy.py --profile openclaw-staging --json
+```
+
+这个 preflight 只证明新机器具备本地 demo / staging 条件，不代表生产部署、全量 Feishu workspace ingestion 或 productized live 长期运行完成。
 
 如果要人工确认自动测试背后的真实体验，按 [手动测试指南](docs/manual-testing-guide.md) 走：它覆盖本地 replay、OpenClaw `fmc_*` 工具、受控 Feishu DM、review policy、权限负例、审计读回和截图记录。
 
