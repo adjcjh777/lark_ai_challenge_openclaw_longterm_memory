@@ -12,7 +12,7 @@
 
 当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-状态快照：2026-05-01，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/deep-research-improvement-backlog.md` 和 `docs/productization/user-experience-todo.md` 为准。
+状态快照：2026-05-03，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/deep-research-improvement-backlog.md`、`docs/productization/user-experience-todo.md` 和 `docs/productization/autonomous-improvement-audit-2026-05-03.md` 为准。
 
 ### 当前真实 Feishu 使用边界
 
