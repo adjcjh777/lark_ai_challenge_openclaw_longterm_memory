@@ -284,6 +284,39 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertNotIn("当前结论 2", rendered)
         self.assertNotIn("Dashboard", rendered)
 
+    def test_compact_search_answer_card_does_not_label_file_evidence_as_chat(self) -> None:
+        card = build_compact_search_answer_card(
+            {
+                "ok": True,
+                "query": "Bitable 同步失败",
+                "results": [
+                    {
+                        "memory_id": "mem_bitable",
+                        "subject": "数据存储",
+                        "current_value": "结论：Bitable 同步失败不允许阻塞本地 Memory Engine 核心闭环。",
+                        "status": "active",
+                        "evidence": [
+                            {
+                                "source_type": "document_fixture",
+                                "source_id": "tests/fixtures/day5_doc_ingestion_fixture.md#candidate-7",
+                                "quote": "结论：Bitable 同步失败不允许阻塞本地 Memory Engine 核心闭环。",
+                            }
+                        ],
+                    }
+                ],
+                "bridge": {
+                    "request_id": "req_demo",
+                    "trace_id": "trace_demo",
+                    "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+                },
+            }
+        )
+
+        rendered = json.dumps(card, ensure_ascii=False)
+        self.assertIn("来源：document_fixture", rendered)
+        self.assertIn("tests/fixtures/day5_doc_ingestion_fixture.md#candidate-7", rendered)
+        self.assertNotIn("群聊：", rendered)
+
     def test_long_card_action_idempotency_key_is_shortened(self) -> None:
         event = message_event_from_payload(card_action_payload("versions", "mem_demo"))
         self.assertIsNotNone(event)

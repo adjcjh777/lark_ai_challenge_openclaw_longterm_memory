@@ -202,6 +202,7 @@ def search_result_payload(search_response: dict[str, Any]) -> dict[str, Any]:
                 "current_conclusion": item.get("current_value"),
                 "evidence_quote": first_evidence.get("quote"),
                 "evidence_source_id": first_evidence.get("source_id"),
+                "evidence_source_type": first_evidence.get("source_type"),
                 "evidence_chat_id": first_evidence.get("source_chat_id"),
                 "evidence_chat_name": first_evidence.get("source_chat_name"),
                 "evidence_created_at": first_evidence.get("created_at"),
@@ -1284,9 +1285,14 @@ def _search_evidence_location(item: dict[str, Any]) -> str:
         parts.append(f"群聊：{chat_name}")
     if created_at:
         parts.append(f"时间：{created_at}")
-    if source_id:
+    if source_id and (chat_name or str(source_id).startswith("om_x")):
         parts.append(f"消息：{source_id}")
-    return "；".join(str(part) for part in parts if part) or "证据位置待补充"
+    if parts:
+        return "；".join(str(part) for part in parts if part)
+    source_type = item.get("evidence_source_type") or "source"
+    if source_id:
+        return f"来源：{source_type}；ID：{source_id}"
+    return "证据位置待补充"
 
 
 def _version_user_explanation_fallback(

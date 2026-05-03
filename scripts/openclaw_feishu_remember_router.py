@@ -1128,13 +1128,16 @@ def _enrich_search_evidence_context(result: dict[str, Any], *, fallback_chat_id:
     if not evidence or not isinstance(evidence[0], dict):
         return
     item = evidence[0]
-    source_chat_id = str(item.get("source_chat_id") or fallback_chat_id or "")
+    source_type = str(item.get("source_type") or "")
+    source_id = str(item.get("source_id") or "")
+    should_use_current_chat = source_type == "feishu_message" or source_id.startswith("om_x")
+    source_chat_id = str(item.get("source_chat_id") or (fallback_chat_id if should_use_current_chat else "") or "")
     if source_chat_id and not item.get("source_chat_name"):
         item["source_chat_name"] = _lookup_lark_chat_name(source_chat_id) or source_chat_id
     if item.get("created_at"):
         item["created_at"] = _display_time(str(item["created_at"]))
-    elif str(item.get("source_id") or "").startswith("om_x"):
-        message_time = _lookup_lark_message_time(str(item["source_id"]))
+    elif source_id.startswith("om_x"):
+        message_time = _lookup_lark_message_time(source_id)
         if message_time:
             item["created_at"] = message_time
 
