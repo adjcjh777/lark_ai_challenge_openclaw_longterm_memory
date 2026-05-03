@@ -22,7 +22,7 @@
 | 自主完成代码更新 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/governance.py`、`memory_engine/models.py`、`memory_engine/extractor.py`、`scripts/check_real_feishu_expression_quality_gate.py`、`scripts/prepare_feishu_live_evidence_run.py` | 已完成并推送 |
 | 自主完成测试/benchmark 更新 | `tests/test_copilot_feishu_live.py`、`tests/test_copilot_governance.py`、`tests/test_copilot_benchmark.py`、`tests/test_real_feishu_expression_quality_gate.py`、`tests/test_prepare_feishu_live_evidence_run.py`、`benchmarks/copilot_real_feishu_cases.json` | 已完成并通过 |
 | 自主完成文档更新 | `README.md`、`docs/benchmark-report.md`、`docs/productization/user-experience-todo.md`、`docs/productization/user-experience-todos/ux-06-real-user-expression-benchmark.md`、`docs/productization/feishu-staging-runbook.md` | 已完成并推送 |
-| 同步项目看板 | 飞书 Base 记录 `recviy8YlGLdEZ` 已更新为九段提交、UX-06 指标和 live evidence preflight 边界 | 已读回确认 |
+| 同步项目看板 | 飞书 Base 记录 `recviy8YlGLdEZ` 已更新为十三段提交、UX-06 指标、live evidence preflight 和 completion audit `--output` 边界 | 已读回确认 |
 | 判断目标是否完成 | `python3 scripts/check_openclaw_feishu_productization_completion.py --json` 返回 `status=incomplete`、`goal_complete=false` | 未完成，不能调用 `update_goal` |
 
 ## 已落地提交
@@ -38,7 +38,10 @@
 | `d7ab179` | 增加“按之前说的那套收口”等自然语言 prefetch 路由 |
 | `a1006e1` | 增加 live evidence checklist preflight |
 | `d86219c` | 支持离线生成 live evidence checklist，并允许复用已有 event diagnostics JSON |
+| `29d0625` | 新增本轮自主优化审计记录 |
 | `d0546d8` | completion audit 在 `incomplete` 时输出 `next_evidence_run`，直接给出 preflight、offline checklist 和 packet collector 命令 |
+| `40dfa25` | 更新自主优化审计，记录 completion audit 下一轮采证入口 |
+| `f4bad9d` | completion audit 支持 `--output`，preflight 生成的审计步骤不再依赖 shell redirect，`incomplete` 也会写出 JSON |
 
 ## UX-06 当前结果
 
@@ -79,6 +82,16 @@ python3 scripts/check_real_feishu_expression_quality_gate.py --json
 - `next_evidence_run.preflight_command`
 - `next_evidence_run.offline_checklist_command`
 - `next_evidence_run.packet_collector_command`
+
+如果需要保存审计结果，使用：
+
+```bash
+python3 scripts/check_openclaw_feishu_productization_completion.py \
+  --output /tmp/openclaw-feishu-completion-audit.json \
+  --json
+```
+
+即使当前仍为 `goal_complete=false`，也会写出 JSON，方便交接和证据包归档。
 
 这些命令是下一轮采证入口，不是 live 证据本身。
 
