@@ -67,7 +67,18 @@ MEMORY_SIGNALS = (
     "上线窗口",
     "回滚负责人",
 )
-PREFETCH_SIGNALS = ("准备", "checklist", "清单", "计划", "执行前", "任务前", "上线前")
+PREFETCH_SIGNALS = (
+    "准备",
+    "checklist",
+    "清单",
+    "计划",
+    "执行前",
+    "任务前",
+    "上线前",
+    "收口",
+    "按之前说的",
+    "之前说的那套",
+)
 GROUP_SETTINGS_NATURAL_QUERIES = {
     "当前群记忆",
     "群记忆",

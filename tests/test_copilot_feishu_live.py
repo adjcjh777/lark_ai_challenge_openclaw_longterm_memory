@@ -215,6 +215,15 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("natural_prefetch", invocation.reason)
         self.assertEqual(SCOPE, invocation.payload["scope"])
 
+    def test_ambiguous_wrapup_request_routes_to_prefetch(self) -> None:
+        event = message_event_from_payload(payload("om_live_prefetch_wrapup", "按之前说的那套收口"))
+        self.assertIsNotNone(event)
+        invocation = invocation_from_event(event, scope=SCOPE)
+
+        self.assertEqual("memory.prefetch", invocation.tool_name)
+        self.assertEqual("natural_prefetch", invocation.reason)
+        self.assertEqual("按之前说的那套收口", invocation.payload["task"])
+
     def test_first_class_feishu_commands_route_through_single_tool_entrypoint(self) -> None:
         calls: list[tuple[str, dict[str, Any], object | None]] = []
 

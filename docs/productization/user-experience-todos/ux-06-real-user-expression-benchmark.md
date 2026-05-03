@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：已完成（样本集、runner 和 pre-live 质量 gate 已完成；仍保留残余失败样例）
+状态：已完成（样本集、runner 和 pre-live 质量 gate 已完成；当前 25 条脱敏样本通过，后续继续扩样）
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 6 个
 
@@ -34,8 +34,8 @@
 | 指标 | 结果 | 当前判断 |
 |---|---:|---|
 | 样本数 | 25 | 口语、含糊、多轮改口、闲聊误判、权限场景各 5 条 |
-| Case pass rate | 0.9600 | 保留失败样例，不作为生产结论 |
-| Recall@3 | 0.8750 | 当前样本通过 |
+| Case pass rate | 1.0000 | 当前 25 条脱敏样本通过，不作为生产结论 |
+| Recall@3 | 1.0000 | 当前样本通过 |
 | 误记率 | 0.0000 | 当前样本通过 |
 | 误提醒率 | 0.0000 | 当前样本通过 |
 | 确认负担 | 2.0000 | 每 10 条输入约 2.0 条需要人工候选处理 |
@@ -139,7 +139,7 @@ ollama ps
 验证边界：
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
-- 当前失败样例保留，用于暴露含糊上下文。
+- 当前 25 条脱敏样本已全部通过；仍需保留含糊上下文等难例并继续扩样。
 - `scripts/check_real_feishu_expression_quality_gate.py --json` 是本地 pre-live 质量 gate，不是真实 Feishu live evidence，也不是 productized live 证明。
 - 真实飞书来源仍 candidate-only，不自动 active。
 - 不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。

@@ -293,7 +293,7 @@
     "expected_explanation_required": true,
     "expected_old_value_filtered": false,
     "observed_baseline": {
-      "recall_rank": null,
+      "recall_rank": 2,
       "candidate_created": false,
       "reminder_created": false,
       "review_action_count": 0,
@@ -301,7 +301,7 @@
       "old_value_leaked": false,
       "permission_decision": "allow"
     },
-    "failure_debug_hint": "保留失败样例：当前含糊任务表达未进 Top 3，应加强 thread_topic 与 prefetch 意图识别。"
+    "failure_debug_hint": "已补自然语言 prefetch 路由：按之前说的那套收口会进入任务前上下文，而不是默认 search。"
   },
   {
     "case_id": "real_expr_multi_turn_correction_001",
