@@ -52,6 +52,10 @@ def discovery_filter_key(
     sort: str | None = None,
     explicit_resources: Iterable[str] = (),
     skip_discovery: bool = False,
+    folder_walk_tokens: Iterable[str] = (),
+    folder_walk_root: bool = False,
+    wiki_space_walk_ids: Iterable[str] = (),
+    walk_max_depth: int | None = None,
 ) -> str:
     payload = {
         "query": query or "",
@@ -73,6 +77,10 @@ def discovery_filter_key(
         "sort": sort or "",
         "explicit_resources": sorted(str(item).strip() for item in explicit_resources if str(item).strip()),
         "skip_discovery": bool(skip_discovery),
+        "folder_walk_tokens": sorted(str(item).strip() for item in folder_walk_tokens if str(item).strip()),
+        "folder_walk_root": bool(folder_walk_root),
+        "wiki_space_walk_ids": sorted(str(item).strip() for item in wiki_space_walk_ids if str(item).strip()),
+        "walk_max_depth": walk_max_depth,
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24]

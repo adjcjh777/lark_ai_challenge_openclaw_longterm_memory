@@ -45,6 +45,24 @@ class FeishuWorkspaceRegistryTest(unittest.TestCase):
 
         self.assertNotEqual(discovery_only_key, explicit_key)
 
+    def test_filter_key_separates_direct_folder_and_wiki_walks(self) -> None:
+        search_key = discovery_filter_key(query="", doc_types=["docx"])
+        folder_key = discovery_filter_key(
+            query="",
+            doc_types=["docx"],
+            folder_walk_tokens=["fld_1"],
+            walk_max_depth=2,
+        )
+        wiki_key = discovery_filter_key(
+            query="",
+            doc_types=["docx"],
+            wiki_space_walk_ids=["my_library"],
+            walk_max_depth=2,
+        )
+
+        self.assertNotEqual(search_key, folder_key)
+        self.assertNotEqual(folder_key, wiki_key)
+
     def test_registry_skips_unchanged_resources_after_ingestion(self) -> None:
         filter_key = discovery_filter_key(query="", doc_types=["docx"], edited_since="30d")
         first_run = self._start_run(filter_key)

@@ -11,6 +11,8 @@ from memory_engine.feishu_api_client import FeishuApiResult
 from memory_engine.feishu_workspace_fetcher import (
     WorkspaceActor,
     WorkspaceResource,
+    discover_drive_folder_resources,
+    discover_wiki_space_resources,
     discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
@@ -159,6 +161,91 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertIn("--sort", argv)
         self.assertIn("edit_time", argv)
 
+    def test_discovers_drive_folder_resources_and_recurses_folders(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.side_effect = [
+                _ok(
+                    {
+                        "data": {
+                            "files": [
+                                {"type": "docx", "token": "doc_1", "name": "方案"},
+                                {"type": "folder", "token": "fld_child", "name": "子目录"},
+                            ],
+                            "has_more": False,
+                        },
+                    }
+                ),
+                _ok(
+                    {
+                        "data": {
+                            "files": [
+                                {"type": "bitable", "token": "app_1", "name": "任务表"},
+                            ],
+                            "has_more": False,
+                        },
+                    }
+                ),
+            ]
+
+            resources = discover_drive_folder_resources(
+                folder_tokens=["fld_root"],
+                max_depth=1,
+                limit=10,
+                profile="feishu-ai-challenge",
+            )
+
+        self.assertEqual(["doc_1", "app_1"], [item.token for item in resources])
+        self.assertEqual(["document", "bitable"], [item.route_type for item in resources])
+        first_argv = run.call_args_list[0].args[0]
+        second_argv = run.call_args_list[1].args[0]
+        self.assertIn("drive", first_argv)
+        self.assertIn("files", first_argv)
+        self.assertTrue(any("fld_root" in item for item in first_argv))
+        self.assertTrue(any("fld_child" in item for item in second_argv))
+
+    def test_discovers_wiki_space_resources_from_nodes(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.side_effect = [
+                _ok(
+                    {
+                        "data": {
+                            "items": [
+                                {
+                                    "obj_type": "docx",
+                                    "obj_token": "doc_1",
+                                    "title": "知识库方案",
+                                    "node_token": "wik_1",
+                                    "has_child": True,
+                                },
+                            ],
+                            "has_more": False,
+                        },
+                    }
+                ),
+                _ok(
+                    {
+                        "data": {
+                            "items": [
+                                {
+                                    "obj_type": "sheet",
+                                    "obj_token": "sht_1",
+                                    "title": "指标表",
+                                    "node_token": "wik_2",
+                                },
+                            ],
+                            "has_more": False,
+                        },
+                    }
+                ),
+            ]
+
+            resources = discover_wiki_space_resources(space_ids=["space_1"], max_depth=1, limit=10)
+
+        self.assertEqual(["doc_1", "sht_1"], [item.token for item in resources])
+        self.assertEqual(["document", "sheet"], [item.route_type for item in resources])
+        self.assertTrue(any("space_1" in item for item in run.call_args_list[0].args[0]))
+        self.assertTrue(any("wik_1" in item for item in run.call_args_list[1].args[0]))
+
     @patch("memory_engine.document_ingestion.subprocess.run")
     def test_fetches_document_resource_as_feishu_source(self, subprocess_run: Mock) -> None:
         completed = Mock()
@@ -193,6 +280,44 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertEqual("sht_1", sources[0].metadata["sheet_token"])
         self.assertEqual("sh_1", sources[0].metadata["sheet_id"])
         self.assertIn("生产部署必须加审计", sources[0].text)
+
+    def test_fetches_sheet_resource_from_current_lark_cli_info_shape(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.side_effect = [
+                _ok({"data": {"sheets": {"sheets": [{"sheet_id": "sh_1", "title": "规则"}]}}}),
+                _ok({"data": {"valueRange": {"values": [["类型", "内容"], ["决定", "生产部署必须加审计"]]}}}),
+            ]
+            resource = WorkspaceResource(resource_type="sheet", token="sht_1", title="项目规则")
+
+            sources = fetch_workspace_resource_sources(resource, max_sheet_rows=20)
+
+        self.assertEqual(1, len(sources))
+        self.assertEqual("lark_sheet", sources[0].source_type)
+        self.assertEqual("sh_1", sources[0].metadata["sheet_id"])
+
+    def test_skips_bitable_backed_sheet_tabs_without_silent_failure(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "data": {
+                        "sheets": {
+                            "sheets": [
+                                {
+                                    "sheet_id": "sh_bitable",
+                                    "title": "任务跟进看板",
+                                    "resource_type": "bitable",
+                                }
+                            ]
+                        }
+                    }
+                }
+            )
+            resource = WorkspaceResource(resource_type="sheet", token="sht_1", title="项目规则")
+
+            sources = fetch_workspace_resource_sources(resource, max_sheet_rows=20)
+
+        self.assertEqual([], sources)
+        self.assertEqual(1, run.call_count)
 
     def test_fetches_bitable_resource_by_tables_and_records(self) -> None:
         with patch("memory_engine.feishu_bitable_fetcher.run_lark_cli") as run:

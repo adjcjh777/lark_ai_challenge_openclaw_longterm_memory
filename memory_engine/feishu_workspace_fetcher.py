@@ -9,6 +9,7 @@ single source of truth.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -133,6 +134,111 @@ def discover_workspace_resources(
         as_identity=as_identity,
         start_page_token=start_page_token,
     ).resources
+
+
+def discover_drive_folder_resources(
+    *,
+    folder_tokens: Iterable[str],
+    include_root: bool = False,
+    limit: int = 100,
+    max_depth: int = 2,
+    max_pages_per_folder: int = 3,
+    page_size: int = 50,
+    profile: str | None = None,
+    as_identity: str | None = None,
+) -> list[WorkspaceResource]:
+    """List Drive folders directly and return supported cloud-document resources."""
+
+    resources: list[WorkspaceResource] = []
+    queue: list[tuple[str, int]] = []
+    if include_root:
+        queue.append(("", 0))
+    queue.extend((token, 0) for token in folder_tokens if token)
+    seen_folders: set[str] = set()
+    while queue and len(resources) < limit:
+        folder_token, depth = queue.pop(0)
+        if folder_token in seen_folders:
+            continue
+        seen_folders.add(folder_token)
+        page_token: str | None = None
+        pages_seen = 0
+        while len(resources) < limit and pages_seen < max_pages_per_folder:
+            result = _drive_folder_list(
+                folder_token=folder_token,
+                page_size=page_size,
+                page_token=page_token,
+                profile=profile,
+                as_identity=as_identity,
+            )
+            if not result.ok:
+                raise ValueError(f"drive folder list failed: {result.error_message} (error_code={result.error_code})")
+            payload = result.data or {}
+            for item in _drive_files(payload):
+                resource = _resource_from_drive_file(item)
+                if resource is not None:
+                    resources.append(resource)
+                    if len(resources) >= limit:
+                        break
+                folder_child = _folder_token_from_drive_file(item)
+                if folder_child and depth < max_depth:
+                    queue.append((folder_child, depth + 1))
+            pages_seen += 1
+            page_token = _next_page_token(payload)
+            if not page_token:
+                break
+    return resources[:limit]
+
+
+def discover_wiki_space_resources(
+    *,
+    space_ids: Iterable[str],
+    limit: int = 100,
+    max_depth: int = 2,
+    max_pages_per_parent: int = 3,
+    page_size: int = 50,
+    profile: str | None = None,
+    as_identity: str | None = None,
+) -> list[WorkspaceResource]:
+    """List Wiki spaces directly and resolve nodes to their underlying cloud docs."""
+
+    resources: list[WorkspaceResource] = []
+    for space_id in [item for item in space_ids if item]:
+        queue: list[tuple[str | None, int]] = [(None, 0)]
+        seen_parents: set[str] = set()
+        while queue and len(resources) < limit:
+            parent_node_token, depth = queue.pop(0)
+            parent_key = parent_node_token or "<root>"
+            if parent_key in seen_parents:
+                continue
+            seen_parents.add(parent_key)
+            page_token: str | None = None
+            pages_seen = 0
+            while len(resources) < limit and pages_seen < max_pages_per_parent:
+                result = _wiki_nodes_list(
+                    space_id=space_id,
+                    parent_node_token=parent_node_token,
+                    page_size=page_size,
+                    page_token=page_token,
+                    profile=profile,
+                    as_identity=as_identity,
+                )
+                if not result.ok:
+                    raise ValueError(f"wiki node list failed: {result.error_message} (error_code={result.error_code})")
+                payload = result.data or {}
+                for item in _wiki_nodes(payload):
+                    resource = _resource_from_wiki_node(item)
+                    if resource is not None:
+                        resources.append(resource)
+                        if len(resources) >= limit:
+                            break
+                    child_token = _first_string(item, "node_token")
+                    if child_token and bool(item.get("has_child")) and depth < max_depth:
+                        queue.append((child_token, depth + 1))
+                pages_seen += 1
+                page_token = _next_page_token(payload)
+                if not page_token:
+                    break
+    return resources[:limit]
 
 
 def discover_workspace_resource_batch(
@@ -347,6 +453,68 @@ def _drive_search(
     return run_lark_cli(argv)
 
 
+def _drive_folder_list(
+    *,
+    folder_token: str,
+    page_size: int,
+    page_token: str | None,
+    profile: str | None,
+    as_identity: str | None,
+) -> FeishuApiResult:
+    params: dict[str, Any] = {
+        "folder_token": folder_token,
+        "page_size": page_size,
+        "order_by": "EditedTime",
+        "direction": "DESC",
+    }
+    if page_token:
+        params["page_token"] = page_token
+    argv = _build_argv(
+        [
+            "drive",
+            "files",
+            "list",
+            "--params",
+            json.dumps(params, ensure_ascii=False),
+            "--format",
+            "json",
+        ],
+        profile=profile,
+        as_identity=as_identity or "user",
+    )
+    return run_lark_cli(argv)
+
+
+def _wiki_nodes_list(
+    *,
+    space_id: str,
+    parent_node_token: str | None,
+    page_size: int,
+    page_token: str | None,
+    profile: str | None,
+    as_identity: str | None,
+) -> FeishuApiResult:
+    params: dict[str, Any] = {"space_id": space_id, "page_size": page_size}
+    if parent_node_token:
+        params["parent_node_token"] = parent_node_token
+    if page_token:
+        params["page_token"] = page_token
+    argv = _build_argv(
+        [
+            "wiki",
+            "nodes",
+            "list",
+            "--params",
+            json.dumps(params, ensure_ascii=False),
+            "--format",
+            "json",
+        ],
+        profile=profile,
+        as_identity=as_identity or "user",
+    )
+    return run_lark_cli(argv)
+
+
 def _fetch_document_resource(
     resource: WorkspaceResource,
     *,
@@ -382,6 +550,9 @@ def _fetch_sheet_resource(
     info = _sheet_info(resource.token, profile=profile, as_identity=as_identity)
     sources: list[FeishuIngestionSource] = []
     for sheet in _sheets_from_info(info.data or {}):
+        sheet_resource_type = str(sheet.get("resource_type") or "sheet").strip().lower()
+        if sheet_resource_type not in {"", "sheet"}:
+            continue
         sheet_id = str(sheet.get("sheet_id") or sheet.get("id") or "")
         if not sheet_id:
             continue
@@ -518,6 +689,22 @@ def _search_results(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _drive_files(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    value = data.get("files") if isinstance(data, dict) else None
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def _wiki_nodes(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    value = data.get("items") if isinstance(data, dict) else None
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
 def _next_page_token(payload: dict[str, Any]) -> str | None:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     if not isinstance(data, dict):
@@ -527,15 +714,71 @@ def _next_page_token(payload: dict[str, Any]) -> str | None:
     return token if isinstance(token, str) and token and has_more is not False else None
 
 
+def _resource_from_drive_file(item: dict[str, Any]) -> WorkspaceResource | None:
+    resource_type = _first_string(item, "type", "obj_type", "file_type")
+    token = _first_string(item, "token", "file_token", "obj_token", "app_token")
+    shortcut = item.get("shortcut_info") if isinstance(item.get("shortcut_info"), dict) else None
+    if shortcut:
+        resource_type = _first_string(shortcut, "target_type") or resource_type
+        token = _first_string(shortcut, "target_token") or token
+    if not resource_type or not token:
+        return None
+    normalized_type = _normalize_resource_type(resource_type)
+    if normalized_type not in {"doc", "docx", "wiki", "sheet", "bitable"}:
+        return None
+    title = _first_string(item, "name", "title") or token
+    return WorkspaceResource(
+        resource_type=normalized_type,
+        token=token,
+        title=title,
+        url=_first_string(item, "url", "link"),
+        obj_type=normalized_type,
+        raw=item,
+    )
+
+
+def _resource_from_wiki_node(item: dict[str, Any]) -> WorkspaceResource | None:
+    obj_type = _first_string(item, "obj_type")
+    obj_token = _first_string(item, "obj_token")
+    if not obj_type or not obj_token:
+        return None
+    normalized_type = _normalize_resource_type(obj_type)
+    if normalized_type not in {"doc", "docx", "sheet", "bitable"}:
+        return None
+    raw = dict(item)
+    raw["workspace_source"] = "wiki_node"
+    return WorkspaceResource(
+        resource_type=normalized_type,
+        token=obj_token,
+        title=_first_string(item, "title") or obj_token,
+        url=_first_string(item, "url", "link"),
+        obj_type=normalized_type,
+        raw=raw,
+    )
+
+
+def _folder_token_from_drive_file(item: dict[str, Any]) -> str | None:
+    resource_type = _normalize_resource_type(_first_string(item, "type", "obj_type", "file_type") or "")
+    if resource_type != "folder":
+        return None
+    return _first_string(item, "token", "file_token", "obj_token")
+
+
 def _sheets_from_info(payload: dict[str, Any]) -> list[dict[str, Any]]:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     candidates = [
         data.get("sheets") if isinstance(data, dict) else None,
         data.get("sheet") if isinstance(data, dict) else None,
     ]
+    sheets = data.get("sheets") if isinstance(data, dict) else None
+    if isinstance(sheets, dict):
+        candidates.extend([sheets.get("sheets"), sheets.get("sheet")])
     spreadsheet = data.get("spreadsheet") if isinstance(data, dict) else None
     if isinstance(spreadsheet, dict):
         candidates.extend([spreadsheet.get("sheets"), spreadsheet.get("sheet")])
+        nested_spreadsheet = spreadsheet.get("spreadsheet")
+        if isinstance(nested_spreadsheet, dict):
+            candidates.extend([nested_spreadsheet.get("sheets"), nested_spreadsheet.get("sheet")])
     for candidate in candidates:
         if isinstance(candidate, list):
             return [item for item in candidate if isinstance(item, dict)]

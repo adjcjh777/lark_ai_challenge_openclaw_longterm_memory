@@ -24,6 +24,8 @@ from memory_engine.feishu_workspace_fetcher import (
     WorkspaceActor,
     WorkspaceResource,
     WorkspaceDiscoveryBatch,
+    discover_drive_folder_resources,
+    discover_wiki_space_resources,
     discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
@@ -100,7 +102,18 @@ def main() -> int:
         default=[],
         help="Explicit resource spec type:token[:title], e.g. bitable:app_token:Task Board",
     )
-    parser.add_argument("--skip-discovery", action="store_true", help="Use only explicit --resource specs")
+    parser.add_argument("--skip-discovery", action="store_true", help="Skip drive +search discovery")
+    parser.add_argument(
+        "--folder-walk-tokens",
+        help="Comma-separated Drive folder tokens to list directly, independent of drive +search",
+    )
+    parser.add_argument("--folder-walk-root", action="store_true", help="List the current user's Drive root folder")
+    parser.add_argument(
+        "--wiki-space-walk-ids",
+        help="Comma-separated Wiki space IDs to list directly, e.g. my_library or a real space_id",
+    )
+    parser.add_argument("--walk-max-depth", type=int, default=2, help="Max folder/wiki recursion depth")
+    parser.add_argument("--walk-page-size", type=int, default=50, help="Page size for folder/wiki direct listing")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
 
     args = parser.parse_args()
@@ -127,6 +140,10 @@ def main() -> int:
         sort=args.sort,
         explicit_resources=args.resource,
         skip_discovery=args.skip_discovery,
+        folder_walk_tokens=_split_csv(args.folder_walk_tokens),
+        folder_walk_root=args.folder_walk_root,
+        wiki_space_walk_ids=_split_csv(args.wiki_space_walk_ids),
+        walk_max_depth=args.walk_max_depth,
     )
     explicit_resources = [workspace_resource_from_spec(spec) for spec in args.resource]
 
@@ -156,7 +173,9 @@ def main() -> int:
                 profile=args.profile,
                 as_identity=args.as_identity,
             )
+        resources.extend(_discover_direct_walk_resources(args, remaining=max(0, args.limit - len(resources))))
         resources.extend(explicit_resources)
+        resources = _dedupe_resources(resources)
         return _emit(
             {
                 "ok": True,
@@ -226,7 +245,11 @@ def main() -> int:
             as_identity=args.as_identity,
             start_page_token=start_page_token,
         )
-    resources = [*discovery_batch.resources, *explicit_resources]
+    direct_walk_resources = _discover_direct_walk_resources(
+        args,
+        remaining=max(0, args.limit - len(discovery_batch.resources)),
+    )
+    resources = _dedupe_resources([*discovery_batch.resources, *direct_walk_resources, *explicit_resources])
     source_results: list[dict[str, Any]] = []
     filters = {
         "edited_since": args.edited_since,
@@ -246,6 +269,11 @@ def main() -> int:
         "sort": args.sort,
         "explicit_resources": args.resource,
         "skip_discovery": args.skip_discovery,
+        "folder_walk_tokens": _split_csv(args.folder_walk_tokens),
+        "folder_walk_root": args.folder_walk_root,
+        "wiki_space_walk_ids": _split_csv(args.wiki_space_walk_ids),
+        "walk_max_depth": args.walk_max_depth,
+        "walk_page_size": args.walk_page_size,
         "resume_cursor": args.resume_cursor,
         "start_page_token": start_page_token,
     }
@@ -324,6 +352,18 @@ def main() -> int:
                     }
                 )
                 continue
+            if not sources:
+                source_results.append(
+                    {
+                        "resource": _resource_summary(resource),
+                        "ok": True,
+                        "stage": "no_sources",
+                        "candidate_count": 0,
+                        "duplicate_count": 0,
+                        "reason": "resource_fetch_returned_no_supported_text_sources",
+                    }
+                )
+                continue
             for source in sources:
                 context = workspace_current_context(scope=args.scope, actor=actor, source=source)
                 result = ingest_feishu_source(
@@ -388,7 +428,7 @@ def main() -> int:
             status="completed" if failed_count == 0 else "completed_with_errors",
             resource_count=len(resources),
             fetched_count=fetched_count,
-            ingested_count=sum(1 for item in source_results if item.get("candidate_count") is not None),
+            ingested_count=sum(1 for item in source_results if item.get("source")),
             skipped_unchanged_count=skipped_unchanged_count,
             failed_count=failed_count,
             stale_marked_count=stale_marked_count,
@@ -411,7 +451,8 @@ def main() -> int:
                 "cursor_after": cursor_after,
             },
             "resource_count": len(resources),
-            "source_count": len(source_results),
+            "source_count": sum(1 for item in source_results if item.get("source")),
+            "result_count": len(source_results),
             "fetched_count": fetched_count,
             "skipped_unchanged_count": skipped_unchanged_count,
             "failed_count": failed_count,
@@ -432,6 +473,57 @@ def _resource_summary(resource) -> dict[str, Any]:
         "title": resource.title,
         "url": resource.url,
     }
+
+
+def _discover_direct_walk_resources(args: argparse.Namespace, *, remaining: int) -> list[WorkspaceResource]:
+    if remaining <= 0:
+        return []
+    resources: list[WorkspaceResource] = []
+    folder_tokens = _split_csv(args.folder_walk_tokens)
+    if folder_tokens or args.folder_walk_root:
+        resources.extend(
+            discover_drive_folder_resources(
+                folder_tokens=folder_tokens,
+                include_root=args.folder_walk_root,
+                limit=remaining,
+                max_depth=max(0, args.walk_max_depth),
+                page_size=args.walk_page_size,
+                profile=args.profile,
+                as_identity=args.as_identity,
+            )
+        )
+    remaining_after_folders = max(0, remaining - len(resources))
+    wiki_space_ids = _split_csv(args.wiki_space_walk_ids)
+    if remaining_after_folders > 0 and wiki_space_ids:
+        resources.extend(
+            discover_wiki_space_resources(
+                space_ids=wiki_space_ids,
+                limit=remaining_after_folders,
+                max_depth=max(0, args.walk_max_depth),
+                page_size=min(max(1, args.walk_page_size), 50),
+                profile=args.profile,
+                as_identity=args.as_identity,
+            )
+        )
+    return resources
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _dedupe_resources(resources: list[WorkspaceResource]) -> list[WorkspaceResource]:
+    seen: set[tuple[str, str, str | None]] = set()
+    result: list[WorkspaceResource] = []
+    for resource in resources:
+        key = (resource.route_type, resource.token, resource.table_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(resource)
+    return result
 
 
 def _cursor_summary(cursor: dict[str, Any] | None) -> dict[str, Any] | None:
