@@ -214,6 +214,16 @@ python3 scripts/check_workspace_ingestion_goal_readiness.py \
 
 If a `sheet:<token>` spec is passed through `--resource`, the readiness gate also reuses it for the project normal Sheet evidence check. Use `--sheet-resource` only when the Sheet evidence pool should differ from the same-conclusion resource pool.
 
+If the Sheet evidence is known only through a folder or Wiki space, pass the walk input directly to the readiness gate:
+
+```bash
+  --sheet-folder-walk-tokens '<folder_token>' \
+  --sheet-wiki-space-walk-ids '<space_id_or_my_library>' \
+  --sheet-walk-max-depth 2
+```
+
+Use `--sheet-folder-walk-root` only for a controlled read-only root scan.
+
 The objective is not complete unless this returns:
 
 - `goal_complete=true`
