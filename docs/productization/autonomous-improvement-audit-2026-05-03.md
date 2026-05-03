@@ -74,7 +74,7 @@ python3 scripts/check_real_feishu_expression_quality_gate.py --json
 
 | 明确要求 / gate | 需要的真实证据 | 当前 artifact | 当前状态 |
 |---|---|---|---|
-| 普通非 `@Bot` 群消息必须进入当前监听入口 | 非 `@Bot` 普通群文本 live log，`summary.passive_group_text_messages >= 1` | `scripts/check_feishu_passive_message_event_gate.py`、`scripts/prepare_feishu_live_evidence_run.py` | 未完成，当前只看到 @Bot 群消息 |
+| 普通非 `@Bot` 群消息必须进入当前监听入口 | 非 `@Bot` 普通群文本 live log，`summary.passive_group_text_messages >= 1` | `scripts/check_feishu_passive_message_event_gate.py`、`scripts/prepare_feishu_live_evidence_run.py`；2026-05-03 read-only preflight 写出 `logs/feishu-live-evidence-runs/20260503T111326Z/operator-checklist.md` | 未完成，当前默认可用日志只看到 @Bot 群消息；新采证前还需在 Feishu console 补 bot 侧 group-message scope |
 | first-class `fmc_*` live routing 至少覆盖 search/create_candidate/prefetch | 真实 Feishu/OpenClaw result log，包含 `fmc_memory_search`、`fmc_memory_create_candidate`、`fmc_memory_prefetch` | `scripts/collect_feishu_live_evidence_packet.py`、`scripts/check_feishu_dm_routing.py`、preflight `evidence_checklist` | 未完成，缺 `fmc_memory_search` 与 `fmc_memory_prefetch` live 证据 |
 | 第二个非 reviewer 权限负例 | 第二个真实非 reviewer 用户发送 `@Bot /enable_memory` 并被拒绝 | `scripts/check_feishu_permission_negative_gate.py`、preflight `evidence_checklist` | 未完成，当前只有 reviewer/admin allow-path |
 | `/review` DM/card E2E | 真实 `/review` 私聊 DM、interactive card 点击、update_card result | `scripts/check_feishu_review_delivery_gate.py`、preflight `evidence_checklist` | 未完成，当前只有 candidate card，缺 private review DM |
