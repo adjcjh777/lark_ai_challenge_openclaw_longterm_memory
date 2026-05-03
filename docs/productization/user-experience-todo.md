@@ -29,7 +29,7 @@
 | UX-03 | 用户可理解的“为什么这样回答”解释层 | 已完成 | 是 | P1 | 主答案讲清当前结论、证据、版本覆盖和权限原因；工程字段进入审计详情；permission denied 不泄露未授权 current_value / summary / evidence |
 | UX-04 | 记忆收件箱 / 审核队列 | 已完成 | 是 | P1 | 有“待我审核、冲突需判断、高风险暂不建议确认”三类视图和候选状态流转 |
 | UX-05 | 主动提醒变成可控提醒体验 | 已完成 | 是 | P1 | reminder candidate 可确认、忽略、延后、关闭同类提醒；不直接真实群推送 |
-| UX-06 | 真实用户表达样本评测 | 已完成 | 是 | P1 | 样本集、runner 和 pre-live 质量 gate 已完成；当前旧值泄漏率 0.0000，但仍保留解释缺口、含糊上下文和闲聊误记残余样例，不代表生产真实用户稳定可用 |
+| UX-06 | 真实用户表达样本评测 | 已完成 | 是 | P1 | 样本集、runner 和 pre-live 质量 gate 已完成；当前误记率和旧值泄漏率均为 0.0000，但仍保留解释缺口和含糊上下文残余样例，不代表生产真实用户稳定可用 |
 | UX-07 | 10 分钟评委体验包 | 已完成 | 是 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、可选受控 DM allow-path、benchmark、安全边界和架构；入口为 `docs/judge-10-minute-experience.md` |
 
 ## 详细执行文档
@@ -263,7 +263,7 @@
 - 样本覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景各 5 条。
 - `memory_engine/benchmark.py` 已新增 `copilot_real_feishu` runner，输出 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
 - 失败样例保留，不删除失败记录来制造好看的指标。
-- 2026-05-03 新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把 UX-06 阈值变成 pre-live 本地质量 gate。当前 gate 返回 `status=pass`：Recall@3 0.8750、误记率 0.0400、误提醒率 0.0000、解释覆盖率 0.8500、旧值泄漏率 0.0000。
+- 2026-05-03 新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把 UX-06 阈值变成 pre-live 本地质量 gate。当前 gate 返回 `status=pass`：Recall@3 0.8750、误记率 0.0000、误提醒率 0.0000、解释覆盖率 0.8500、旧值泄漏率 0.0000。
 
 要做什么：
 
@@ -300,7 +300,7 @@
 剩余边界：
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
-- 当前失败样例包括解释缺口、含糊上下文和闲聊误记，后续应修能力而不是删样例。
+- 当前失败样例包括解释缺口和含糊上下文，后续应修能力而不是删样例。
 - 真实飞书来源先走 review policy；低重要性安全候选可自动 active，重要/敏感/冲突候选仍需人工确认。
 - 本阶段不宣称 production live、真实 Feishu DM 稳定长期路由或 productized live 长期运行完成；一次受控 DM allow-path 只覆盖 `fmc_memory_search`。
 

@@ -1295,6 +1295,8 @@ def _has_candidate_signal(text: str) -> bool:
     stripped = text.strip()
     if _looks_like_question(stripped):
         return False
+    if _looks_like_low_value_chitchat(stripped):
+        return False
     if contains_any(stripped, DECISION_WORDS + WORKFLOW_WORDS + PREFERENCE_WORDS + OVERRIDE_WORDS):
         return True
     return any(stripped.startswith(f"{prefix}:") or stripped.startswith(f"{prefix}：") for prefix in _PREFIX_SIGNALS)
@@ -1304,6 +1306,26 @@ def _looks_like_question(text: str) -> bool:
     lowered = text.lower()
     question_markers = ("？", "?", "是什么", "怎么", "是否", "吗", "是不是")
     return any(marker in text or marker in lowered for marker in question_markers)
+
+
+def _looks_like_low_value_chitchat(text: str) -> bool:
+    low_value_markers = ("哈哈", "笑死", "太好笑", "这个梗", "表情包", "咖啡机", "下午茶", "网有点卡")
+    work_markers = (
+        "openclaw",
+        "benchmark",
+        "pipeline",
+        "ci",
+        "飞书",
+        "部署",
+        "发布",
+        "生产",
+        "权限",
+        "候选",
+        "评审",
+        "负责人",
+        "截止",
+    )
+    return contains_any(text, low_value_markers) and not contains_any(text, work_markers)
 
 
 def _is_contextual_override(text: str) -> bool:

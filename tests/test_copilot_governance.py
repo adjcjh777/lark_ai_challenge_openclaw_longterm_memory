@@ -482,6 +482,18 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertEqual("ignored", result["action"])
         self.assertIn("low_memory_signal", result["risk_flags"])
 
+    def test_low_value_joke_with_remember_word_is_not_treated_as_candidate(self) -> None:
+        result = self.service.create_candidate(candidate_request("这个梗太好笑了，记住哈哈"))
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("ignored", result["action"])
+        self.assertIn("low_memory_signal", result["risk_flags"])
+
+        prefixed = self.service.create_candidate(candidate_request("决定：这个梗太好笑了，记住哈哈"))
+        self.assertTrue(prefixed["ok"])
+        self.assertEqual("ignored", prefixed["action"])
+        self.assertIn("low_memory_signal", prefixed["risk_flags"])
+
     def test_sensitive_auto_confirm_is_blocked_but_manual_review_candidate_is_allowed(self) -> None:
         text = "规则：临时测试 app_secret=abc123456789 只可放本地调试。"
 

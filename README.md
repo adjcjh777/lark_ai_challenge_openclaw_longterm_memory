@@ -80,7 +80,7 @@
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
 | P1 | 扩大真实飞书样本实测 | 已完成 1 条受控真实 Feishu Task fetch -> candidate smoke；后续继续扩到 Meeting / Bitable 和更多真实表达样本，保留 review-policy gate、失败 fallback 和 no-overclaim |
-| P1 | 扩大真实表达 pre-live 质量 gate | `scripts/check_real_feishu_expression_quality_gate.py --json` 已通过本地硬 gate：Recall@3 0.8750、误记率 0.0400、误提醒率 0.0000、解释覆盖率 0.8500、旧值泄漏率 0.0000；仍保留解释缺口、含糊上下文和闲聊误记失败样例，不能说生产真实用户稳定可用 |
+| P1 | 扩大真实表达 pre-live 质量 gate | `scripts/check_real_feishu_expression_quality_gate.py --json` 已通过本地硬 gate：Recall@3 0.8750、误记率 0.0000、误提醒率 0.0000、解释覆盖率 0.8500、旧值泄漏率 0.0000；仍保留解释缺口和含糊上下文失败样例，不能说生产真实用户稳定可用 |
 | P1 | 跑通真实飞书权限负例 | `scripts/check_feishu_permission_negative_gate.py` 可验证非 reviewer 真实用户 `/enable_memory` denial result，并可解析 Copilot listener `raw_line` attempt wrapper；2026-05-01 available isolated logs 只看到 reviewer/admin allow-path，后续仍需第二个真实用户账号在受控测试群执行并让 gate 返回 `non_reviewer_enable_memory_denied` |
 | P1 | 扩大真实飞书可点击卡片实测 | 本地 gate 已覆盖 card-action update-token 路径和缺 token 不改状态；后续仍需在受控测试群里用真实卡片点击覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`，并读回审计；不把一次 sandbox 点击写成生产长期运行 |
 | P1 | 扩大真实飞书审核收件箱实测 | 本地 gate 已覆盖 `/review` private card addressing、确认点击更新原卡片和缺 token fail-closed；后续仍需在受控测试群里用 `/review`、`/review conflicts`、`确认合并` 和 `/undo` 覆盖真实卡片点击与审计读回；当前只完成本地受控路径，不宣称真实 DM/群长期稳定运行 |

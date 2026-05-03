@@ -590,14 +590,14 @@
     "expected_old_value_filtered": false,
     "observed_baseline": {
       "recall_rank": null,
-      "candidate_created": true,
+      "candidate_created": false,
       "reminder_created": false,
-      "review_action_count": 1,
-      "has_user_explanation": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
       "old_value_leaked": false,
       "permission_decision": "allow"
     },
-    "failure_debug_hint": "保留失败样例：玩笑里的“记住”被误判，应提高低价值闲聊过滤。"
+    "failure_debug_hint": "已用低价值闲聊 guard 修复：玩笑里的“记住”不创建 candidate。"
   },
   {
     "case_id": "real_expr_permission_001",
