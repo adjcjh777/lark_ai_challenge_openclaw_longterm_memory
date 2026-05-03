@@ -1,23 +1,30 @@
 # PRD Completion Audit and Gap Tasks
 
 日期：2026-04-28
-当前事实源：仓库代码、PRD、主控计划、README、handoff、healthcheck 和本轮本地验证命令。
+更新：2026-05-04，按当前 README、主控执行文档和 workspace ingestion audit 校准。
+
+当前事实源：仓库代码、`README.md` 顶部状态、`docs/productization/full-copilot-next-execution-doc.md`、本 PRD 审计、workspace ingestion ADR / audit、handoff、healthcheck 和已记录的验证命令。
 
 ## 先看这个
 
-1. 今天的真实日期是 2026-04-28；仓库里已经存在 2026-05-03 到 2026-05-08 的计划、handoff 和交付文档，本审计按“当前仓库状态”核对完成度。
-2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
-3. 当前可以判断：MVP 的本地可复现闭环和受控飞书测试群 live sandbox 已经成型，但不能写成生产部署、全量飞书空间接入或 productized live。
-4. 三个用户关心的问题的短答案是：MVP 可演示闭环已完成；Feishu Memory Copilot 已接入受控飞书测试群；OpenClaw 产品形态已完成本地/受控 E2E 测试，但还没完成生产级 OpenClaw + 飞书全量上线。
-5. Phase A 已补齐 storage migration 和 audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee / Ollama embedding gate；Phase E 已完成 no-overclaim 审查；后期打磨已补 first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM `fmc_memory_search` allow-path live E2E 证据、P1 生产存储/索引/迁移方案、真实飞书权限映射、limited Feishu ingestion 本地底座、真实 Feishu API review-policy 拉取入口、审计查询/告警/运维 healthcheck 面、productized live 长期运行方案、真实飞书可点击卡片的受控 sandbox/pre-production 路径、Feishu 群/用户/消息作为企业图谱拓扑的本地发现能力、OpenClaw gateway 本地不 @ 静默候选筛选入口、审核卡片 publisher 层 DM/private 定向投递、群级设置/启停策略，以及本地/pre-production LLM Wiki / Graph Admin tenant policy editor。
-6. 所有未完成任务仍由程俊豪负责，后续不要把 dry-run、replay、测试群 sandbox、live embedding gate 写成生产 live。
+这份审计回答三个问题：
+
+- **MVP 是否完成？** 已完成 demo / pre-production 本地闭环，可以演示、复现、评测。
+- **是否接入飞书？** 已接入受控飞书测试群 live sandbox，并新增 limited workspace pilot；但还不是生产全量 Feishu workspace ingestion。
+- **是否接入 OpenClaw 做完整产品形态测试？** 已有 OpenClaw `fmc_*` 工具、本地 Agent 调用、websocket staging、受控真实 DM allow-path 和 demo/pre-production completion gate；但还不是生产级长期运行。
+
+当前已经成型的是一条受治理的 Copilot 主线：真实飞书来源先进入 `memory.create_candidate` 和 review policy；低风险内容可以自动确认，重要、敏感或冲突内容交给 reviewer / owner；所有 confirm / reject / undo 仍走 `CopilotService` / `handle_tool_request()`。
+
+2026-05-04 新增的重点是 workspace ingestion。当前采用 lark-cli-first pilot，已覆盖 Drive / Wiki / Docs / Sheets / Base/Bitable 的受控发现和类型路由，并有 registry skip / stale / failed / cursor、mixed-source 本地佐证和 warm-path latency gate。它仍缺普通 Sheet 真实样本、真实 mixed-source live sample 和真实 lark-cli fetch/network latency。
+
+本审计可以作为对账入口，但不要把 dry-run、replay、测试群 sandbox、live embedding gate、limited workspace pilot 写成 production live、全量 workspace ingestion 或 productized live。
 
 ## 结论总览
 
 | 问题 | 当前判断 | 证据 | 不能 overclaim 的边界 |
 |---|---|---|---|
 | 是否完成 MVP 构建？ | 已完成可演示、可本地复现、可评测的 MVP 闭环；Phase A storage/audit 本地迁移、Phase B runtime 受控证据、first-class OpenClaw tool registry、Agent 本地 `fmc_*` 工具调用验证、websocket staging 证据和一次受控真实 DM allow-path 证据已完成。 | `python3 scripts/check_demo_readiness.py --json` 通过；5 个 demo replay step 全部 pass；benchmark 六类能力全部有 runner；`python3 scripts/check_copilot_health.py --json` 中 `storage_schema.status=pass`、`audit_smoke.status=pass`、`openclaw_native_registry.status=pass`；OpenClaw Agent run `b252f11e-b49d-495c-a14f-0b823a888a5e` 通过三条 flow；`openclaw plugins inspect feishu-memory-copilot --json` 读回 7 个 `toolNames`；`scripts/check_feishu_dm_routing.py` 验证本地 Agent 可见 `fmc_*` 工具；`python3 scripts/check_openclaw_feishu_websocket.py --json --timeout 45` 返回 `ok=true`；2026-04-29 11:04 真实 DM 触发 `fmc_memory_search`，11:07 机器人回复读回 `request_id=req_feishu_dm_live_20260429_1104`、`trace_id=trace_feishu_dm_live_20260429_1104`、`permission_decision=allow/scope_access_granted`。 | 不是生产部署；不是完整多租户后台；不能把一次受控 DM 证据写成稳定长期路由。 |
-| Feishu Memory Copilot 是否接入飞书？ | 已接入受控旧飞书测试群 live sandbox，真实群消息会进入新 Copilot live 路径；定向审核卡片已在 publisher 层改为 DM/private 发送；群级设置/启停策略已有本地/pre-production 闭环：新群默认 pending_onboarding，显式启用后才做静默候选筛选。 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/group_policies.py`、`memory_engine/feishu_publisher.py`、`memory_engine/feishu_cards.py`、`scripts/start_copilot_feishu_live.sh`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_publisher.py`。 | 不是全量 Feishu workspace ingestion；不是生产推送；真实 ID 不进入仓库；DM 投递仍需受控真实环境读回。 |
+| Feishu Memory Copilot 是否接入飞书？ | 已接入受控飞书测试群 live sandbox；群消息、文档、任务、会议、Bitable 和 workspace 资源都能在受控路径里进入同一条 candidate pipeline。Workspace ingestion 当前是 limited pilot：可发现和路由 Drive / Wiki / Docs / Sheets / Base/Bitable 资源，并有 registry / mixed-source / latency 本地 gate。 | `memory_engine/copilot/feishu_live.py`、`memory_engine/copilot/group_policies.py`、`memory_engine/feishu_workspace_fetcher.py`、`memory_engine/feishu_workspace_registry.py`、`scripts/feishu_workspace_ingest.py`、`scripts/check_feishu_workspace_registry_gate.py`、`scripts/check_workspace_mixed_source_corroboration_gate.py`、`scripts/check_workspace_ingestion_latency_gate.py`、`tests/test_copilot_feishu_live.py`、`tests/test_feishu_workspace_fetcher.py`。 | 不是生产全量 Feishu workspace ingestion；不是生产推送；普通 Sheet 真实样本、真实 mixed-source live sample、真实 lark-cli fetch latency 仍缺；真实 ID 不进入仓库。 |
 | 是否接入 OpenClaw 做完整产品形态测试？ | 已完成 OpenClaw tool schema、examples、本地 bridge、demo replay、受控 live bridge、Agent runtime 受控验收、first-class tool registry 本机证据、Agent 本地 `fmc_*` 工具调用验证、websocket staging running 证据、一次受控真实 DM allow-path 证据和 live embedding gate；达到 demo/pre-production 产品形态。 | `agent_adapters/openclaw/memory_tools.schema.json` 有 7 个 OpenClaw-facing `fmc_*` 工具；`handle_tool_request()` 统一到 `CopilotService`；healthcheck 的 schema/service/smoke/registry tests 通过；Phase B evidence 记录真实 `openclaw agent` run id；`feishu-memory-copilot` 插件读回 7 个 toolNames；`tests.test_feishu_dm_routing` 覆盖 `fmc_* -> memory.*` 翻译和 bridge metadata；Phase D gate 真实返回 1024 维 embedding；websocket check 证明真实 DM 已进入 OpenClaw Agent dispatch；2026-04-29 11:04 真实 DM 进入 `fmc_memory_search` 并读回 allow-path 结果。 | 还缺生产安装包、生产级长期监控，以及更多真实 DM 工具动作和稳定性验收。 |
 
 ## PRD 要求完成度核对
@@ -35,7 +42,7 @@
 | Evaluation report | 完成 MVP 报告 | `docs/benchmark-report.md` 覆盖 recall、candidate、conflict、layer、prefetch、heartbeat。 | 复赛前扩样例规模和真实飞书项目群表达。 |
 | 生产部署和长期运行 | 未完成 | README、handoff、healthcheck 都明确声明不是 productized live。 | 进入后续产品化任务，不在 MVP 阶段冒称完成。 |
 
-## 本轮重新跑过的验证证据
+## 已记录的验证证据
 
 ```bash
 python3 scripts/check_openclaw_version.py
@@ -95,12 +102,13 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
 
 ## 仍未完成任务拆分
 
-| 任务 | 优先级 | 负责人 | 截止建议 | 文件/页面位置 | 完成标准 |
-|---|---|---|---|---|---|
-当前 P1 no-overclaim 审查已完成，剩余项只在继续产品化时启动：
+当前 P1 no-overclaim 审查已完成。剩余项只在继续产品化或 workspace ingestion 扩样时启动；不要因为 demo/pre-production gate 通过就把它们写成生产完成。
 
 | 任务 | 优先级 | 负责人 | 截止建议 | 文件/页面位置 | 完成标准 |
 |---|---|---|---|---|---|
+| 补常规 Sheet 真实样本 | P1 | 程俊豪 | 待定 | `memory_engine/feishu_workspace_fetcher.py`、`scripts/feishu_workspace_ingest.py`、`docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md` | 用已有 normal Sheet token / folder / wiki space 跑通真实只读 discovery 和 `lark_sheet` source -> candidate；如果当前账号没有样本，必须先取得用户明确同意再创建受控测试 Sheet。 |
+| 跑真实 mixed-source workspace sample | P1 | 程俊豪 | 待定 | `scripts/check_workspace_mixed_source_corroboration_gate.py`、`memory_engine/copilot/governance.py`、`docs/productization/workspace-ingestion-architecture-adr.md` | 用真实 chat + document / Sheet / Bitable 围绕同一结论证明同值佐证会追加 evidence、差异值会成为 conflict candidate 且不覆盖 active。 |
+| 扩展真实 lark-cli fetch latency 证据 | P1 | 程俊豪 | 待定 | `scripts/check_workspace_ingestion_latency_gate.py`、`scripts/feishu_workspace_ingest.py`、`memory_engine/feishu_workspace_registry.py` | 在受控真实资源上测量 discovery/fetch/network latency，保留 bounded discovery、registry skip、cursor 和 no raw-event embedding，不把本地 warm-path 5-6ms 写成生产 SLO。 |
 | 扩大真实飞书样本实测 | P1 | 程俊豪 | 待定 | `memory_engine/copilot/feishu_live.py`、`memory_engine/document_ingestion.py`、`docs/productization/feishu-staging-runbook.md` | 在已完成 Task / Meeting / Bitable fetcher 入口基础上，用受控真实资源 ID 继续扩样；失败时保留 fallback，不冒称全量 workspace ingestion。 |
 | 跑通非 @ 群消息真实投递证据 | P1 | 程俊豪 | 2026-05-02 | `scripts/check_feishu_event_subscription_diagnostics.py`、`scripts/check_feishu_passive_message_event_gate.py`、`docs/manual-testing-guide.md`、`docs/productization/feishu-staging-runbook.md` | 已在真实龙虾群发送普通非 @ 文本，OpenClaw Feishu channel log 捕获 `received message ... (group)`、正文和 `dispatching to agent`；`check_feishu_passive_message_event_gate.py --event-log /tmp/openclaw-feishu-live-after-group-scope.json --expected-chat-id ...` 返回 `ok=true`、`reason=passive_group_message_seen`。后续仍需继续读回 candidate/audit 或扩样，不把它写成生产长期运行。 |
 | 扩大真实飞书权限负例证据 | P1 | 程俊豪 | 待定 | `scripts/check_feishu_permission_negative_gate.py`、`docs/manual-testing-guide.md`、`docs/productization/feishu-staging-runbook.md` | 2026-05-02 受控 live packet 已证明第二个非 reviewer 真实用户 `/enable_memory` denial result；后续继续扩到更多群/租户/角色组合，audit-only 不算完成，仍不得冒称生产级 RBAC。 |

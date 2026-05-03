@@ -68,12 +68,12 @@ dba049f Add direct Feishu folder and wiki discovery
 | Shared database across chat/docs/tables | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/db.py`, `memory_engine/document_ingestion.py` | ADR chooses one governed ledger with raw events, memories, evidence, versions, audit events, and graph nodes; source evidence keeps source type/id/quote/tenant/org. | Complete for local/staging ledger. |
 | Corroboration and conflict handling | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/governance.py`, `scripts/check_workspace_mixed_source_corroboration_gate.py` | The gate confirms a chat source can create and confirm an active memory; a document source with the same value adds `document_feishu` evidence to the active version; a Bitable source with a different value becomes a conflict candidate and does not overwrite the active memory. | Complete for local/staging gate; still needs real mixed-source workspace samples for production confidence. |
 | Keep stability while improving response speed | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/feishu_workspace_registry.py`, `scripts/feishu_workspace_ingest.py`, `scripts/check_workspace_ingestion_latency_gate.py` | Bounded discovery, bounded fetch sizes, candidate limits, registry skip, cursor resume, no raw event embedding, same-filter stale marking, and a local warm-path latency gate reduce repeated work and detect regressions. Latest gate: `avg_ingestion_latency_ms=5.51`, `max_ingestion_latency_ms=5.599`, quality checks pass. | Complete for local warm-path baseline; production API latency and native hot-path migration remain future work. |
-| Opus 4.6-like docs, not 4.7 | `docs/productization/document-writing-style-guide-opus-4-6.md`, `workspace-ingestion-architecture-adr.md`, `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md` | Style guide exists and the new ADR uses shorter human engineering prose. It explicitly excludes Opus 4.7 voice. First-pass rewrites are complete for `README.md`, `docs/README.md`, `docs/human-product-guide.md`, and `full-copilot-next-execution-doc.md`. | Partially complete. The guide itself says every historical handoff is not rewritten; `prd-completion-audit-and-gap-tasks.md` still needs a staged rewrite pass if "all docs" is interpreted literally. |
+| Opus 4.6-like docs, not 4.7 | `docs/productization/document-writing-style-guide-opus-4-6.md`, `workspace-ingestion-architecture-adr.md`, `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, `docs/productization/prd-completion-audit-and-gap-tasks.md` | Style guide exists and the new ADR uses shorter human engineering prose. It explicitly excludes Opus 4.7 voice. First-pass rewrites are complete for `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `full-copilot-next-execution-doc.md`, and `prd-completion-audit-and-gap-tasks.md`. | Complete for active entry-doc first pass. The guide still says historical handoffs and archived plans are not rewritten unless they are promoted back into active execution. |
 | Use subagents/skills/MCP as needed | Current run used lark skill guidance and repo-local checks; previous implementation used lark-cli evidence and board sync. | No direct artifact needed, but actions stayed inside project rules. | Sufficient. |
 
 ## Verification Commands Already Proven For This Slice
 
-Latest doc/evidence sync commit `194fb7e` passed:
+An earlier doc/evidence sync commit `194fb7e` passed:
 
 ```bash
 python3 scripts/check_openclaw_version.py
@@ -108,8 +108,8 @@ python3 -m unittest tests.test_workspace_ingestion_latency_gate
 4. **Performance optimization has a local warm-path gate, but not production SLO evidence.**
    `check_workspace_ingestion_latency_gate.py` measures local document/workspace candidate ingestion after warmup. Latest evidence is green at roughly 5-6ms per fixture, but this does not include lark-cli network calls, Feishu API rate limits, production storage, or OpenClaw live routing.
 
-5. **The docs rewrite request is only partially fulfilled.**
-   New active productization docs follow the style guide. `README.md`, `docs/README.md`, `docs/human-product-guide.md`, and `docs/productization/full-copilot-next-execution-doc.md` have a first-pass human-readable rewrite. The full repo contains many historical handoffs and archived plans that intentionally remain audit records. If "all docs" means every non-archived active entry doc, the next staged rewrite target is `docs/productization/prd-completion-audit-and-gap-tasks.md`.
+5. **The active-doc rewrite request is complete for this slice.**
+   New active productization docs follow the style guide. `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, and `docs/productization/prd-completion-audit-and-gap-tasks.md` have a first-pass human-readable rewrite. The full repo contains many historical handoffs and archived plans that intentionally remain audit records; they should only be rewritten if promoted back into active execution.
 
 ## Next Required Action
 
@@ -118,6 +118,6 @@ The next product step should not be another architecture discussion. It should b
 1. **Prove normal Sheet ingestion** with an existing normal Sheet token/folder/wiki space, or with explicit user approval to create a controlled test Sheet.
 2. **Run the mixed-source gate on real sampled resources** once a matching document/table source is available.
 3. **Extend latency evidence to real lark-cli fetches** once controlled resources are available.
-4. **Finish the remaining active-doc rewrite pass** for `docs/productization/prd-completion-audit-and-gap-tasks.md` using `document-writing-style-guide-opus-4-6.md`, keeping archived plans unchanged unless promoted back into active execution.
+4. **Keep active docs aligned** when the workspace evidence changes, using `document-writing-style-guide-opus-4-6.md` and keeping archived plans unchanged unless promoted back into active execution.
 
 Until at least the Sheet and real mixed-source evidence gaps are closed, do not call the overall objective complete.
