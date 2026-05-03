@@ -38,6 +38,7 @@
 | `d7ab179` | 增加“按之前说的那套收口”等自然语言 prefetch 路由 |
 | `a1006e1` | 增加 live evidence checklist preflight |
 | `d86219c` | 支持离线生成 live evidence checklist，并允许复用已有 event diagnostics JSON |
+| `d0546d8` | completion audit 在 `incomplete` 时输出 `next_evidence_run`，直接给出 preflight、offline checklist 和 packet collector 命令 |
 
 ## UX-06 当前结果
 
@@ -72,6 +73,14 @@ python3 scripts/check_real_feishu_expression_quality_gate.py --json
 | `/review` DM/card E2E | 真实 `/review` 私聊 DM、interactive card 点击、update_card result | `scripts/check_feishu_review_delivery_gate.py`、preflight `evidence_checklist` | 未完成，当前只有 candidate card，缺 private review DM |
 | Cognee embedding 长跑 | curated sync report、persistent-store reopen/readback、>=24h embedding health samples | `scripts/collect_cognee_embedding_long_run_evidence.py`、`scripts/finalize_cognee_embedding_long_run.py`、preflight `evidence_checklist` | 未完成，缺长跑证据 |
 | 不 overclaim | README、benchmark report、runbook、看板都标注 pre-live / pre-production 边界 | `docs/productization/agent-execution-contract.md`、本文件、README、飞书看板记录 | 已完成本轮审查 |
+
+`python3 scripts/check_openclaw_feishu_productization_completion.py --json` 现在会在 `status=incomplete` 时输出：
+
+- `next_evidence_run.preflight_command`
+- `next_evidence_run.offline_checklist_command`
+- `next_evidence_run.packet_collector_command`
+
+这些命令是下一轮采证入口，不是 live 证据本身。
 
 ## 推荐下一步
 
