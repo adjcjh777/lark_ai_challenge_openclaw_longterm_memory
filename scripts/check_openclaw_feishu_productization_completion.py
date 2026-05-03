@@ -211,6 +211,8 @@ def format_report(report: dict[str, Any]) -> str:
         lines.extend(["", "next evidence run:"])
         lines.append(f"  {report['next_evidence_run']['preflight_command']}")
         lines.append(f"  {report['next_evidence_run']['offline_checklist_command']}")
+        lines.append(f"  {report['next_evidence_run']['packet_collector_command']}")
+        lines.append(f"  {report['next_evidence_run']['completion_audit_command']}")
     return "\n".join(lines)
 
 
@@ -231,7 +233,19 @@ def _next_evidence_run_hint() -> dict[str, str]:
             "--passive-event-log <01-passive-non-at-message.ndjson> "
             "--routing-event-log <02-first-class-routing.ndjson> "
             "--permission-event-log <03-non-reviewer-deny.ndjson> "
-            "--review-event-log <04-review-dm-card.ndjson> --json"
+            "--review-event-log <04-review-dm-card.ndjson> "
+            "--feishu-event-diagnostics <00-feishu-event-diagnostics.json> "
+            "--expected-chat-id <受控测试群 chat_id> "
+            "--expected-non-reviewer-open-id <第二个真实非 reviewer open_id> "
+            "--expected-reviewer-open-id <reviewer open_id> "
+            "--output <feishu-live-evidence-packet.json> --json"
+        ),
+        "completion_audit_command": (
+            "python3 scripts/check_openclaw_feishu_productization_completion.py "
+            "--feishu-live-evidence-packet <feishu-live-evidence-packet.json> "
+            "--feishu-event-diagnostics <00-feishu-event-diagnostics.json> "
+            "--cognee-long-run-evidence <cognee-long-run-evidence.json> "
+            "--output <completion-audit.json> --json"
         ),
         "boundary": (
             "preflight/offline checklist commands do not send Feishu messages, click cards, or prove productized live"

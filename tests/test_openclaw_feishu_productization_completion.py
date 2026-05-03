@@ -31,6 +31,11 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertIn("prepare_feishu_live_evidence_run.py", report["next_evidence_run"]["preflight_command"])
         self.assertIn("--skip-event-diagnostics", report["next_evidence_run"]["offline_checklist_command"])
         self.assertIn("collect_feishu_live_evidence_packet.py", report["next_evidence_run"]["packet_collector_command"])
+        self.assertIn("--feishu-event-diagnostics", report["next_evidence_run"]["packet_collector_command"])
+        self.assertIn("--output <feishu-live-evidence-packet.json>", report["next_evidence_run"]["packet_collector_command"])
+        self.assertIn("--expected-chat-id", report["next_evidence_run"]["packet_collector_command"])
+        self.assertIn("check_openclaw_feishu_productization_completion.py", report["next_evidence_run"]["completion_audit_command"])
+        self.assertIn("--output <completion-audit.json>", report["next_evidence_run"]["completion_audit_command"])
 
     def test_cli_output_writes_json_even_when_incomplete(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
@@ -66,6 +71,7 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertFalse(payload["goal_complete"])
         self.assertIn("next_evidence_run", payload)
         self.assertIn("prepare_feishu_live_evidence_run.py", payload["next_step"])
+        self.assertIn("completion_audit_command", payload["next_evidence_run"])
 
     def test_audit_uses_event_diagnostics_for_passive_group_scope_blocker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
