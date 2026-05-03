@@ -281,6 +281,8 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("群聊：Feishu Memory Engine 测试群", rendered)
         self.assertIn("时间：2026-04-28 10:46", rendered)
         self.assertIn("消息：om_evidence", rendered)
+        self.assertNotIn("审计详情", rendered)
+        self.assertNotIn("request_id", rendered)
         self.assertNotIn("当前结论 2", rendered)
         self.assertNotIn("Dashboard", rendered)
 

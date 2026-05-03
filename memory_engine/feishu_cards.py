@@ -706,7 +706,6 @@ def build_compact_search_answer_card(search_response: dict[str, Any]) -> dict[st
                 ],
             }
         )
-    card["elements"].append(_audit_block(payload.get("audit_details") or {}))
     return card
 
 
