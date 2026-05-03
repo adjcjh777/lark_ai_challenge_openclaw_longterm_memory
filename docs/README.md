@@ -1,14 +1,17 @@
 # 项目文档导航
 
-日期：2026-05-03（更新：九项 demo/pre-production completion gate 已用受控 Feishu live packet + Cognee long-run evidence 跑通）
+日期：2026-05-04
+
+这页只解决一个问题：新人、评委或后续 agent 应该先读什么。历史计划很多，不要从归档目录开始翻。
 
 ## 先看这个
 
-1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环；2026-05-03 复核九项 productization completion gate 已通过。2026-05-04 新增 workspace ingestion pilot 的架构 ADR、本地 adapter 和 registry；它能做受控资源发现、candidate-only 路由、repeat-run skip / stale / revocation 统计，但仍不是生产全量 workspace ingestion。
-2. 已完成的日期计划和 handoff 文档已归档到 `archive/` 和 `productization/handoffs/`，不再作为执行入口。
-3. 当前代码和 `docs/productization/full-copilot-next-execution-doc.md` 是事实源。
-4. 本项目由 Codex 完成主要代码和文档修改，人类接手时优先读产品指南和待办清单。
-5. 读文档时要带着当前代码边界：受控测试群是 allowlist 模式；新群默认只进入 `pending_onboarding` 群策略，不记录消息内容，只有 reviewer/admin 显式 `/enable_memory` 后才会对该群非 `@Bot` 消息做静默 candidate 探测；OpenClaw gateway 本地路由也已补静默筛选入口；命中后默认不回群消息，审核卡片优先 DM/private 定向给相关 owner/reviewer；`@Bot` / 私聊才是主动交互路径；仍然不是全量群聊被动记忆或生产长期运行。
+1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环；2026-05-03 复核九项 productization completion gate 已通过。
+2. 2026-05-04 新增的是 **limited workspace pilot**：它能发现飞书文档、云文档、Bitable 等资源，把内容按类型送进 candidate pipeline，并用 registry 记录 skip / stale / failed / cursor 证据。它还不是生产全量 workspace ingestion。
+3. Workspace 路线已经决定为 lark-cli first：当前先用 `drive +search`、Drive folder/root walk、Wiki space walk、`docs +fetch`、`sheets +read` 和 `base +record-*` 建 pilot；以后只有在长期 daemon 或高吞吐热路径上，再把子进程边界替换成 native Feishu OpenAPI / SDK。
+4. 已完成的日期计划和 handoff 文档已归档到 `archive/` 和 `productization/handoffs/`，不再作为执行入口。
+5. 当前代码、`README.md`、`productization/full-copilot-next-execution-doc.md` 和 workspace 目标审计是事实源。
+6. 读文档时要带着当前代码边界：受控测试群是 allowlist 模式；新群默认只进入 `pending_onboarding` 群策略，不记录消息内容。只有 reviewer/admin 显式 `/enable_memory` 后，该群的非 `@Bot` 消息才会做静默 candidate 探测。命中后默认不回群，审核卡片优先 DM/private 给 owner/reviewer；`@Bot` / 私聊仍是主动交互路径。
 
 ## 活跃文档入口（当前应读的）
 
@@ -21,7 +24,7 @@
 | [productization/full-copilot-next-execution-doc.md](productization/full-copilot-next-execution-doc.md) | **当前主控执行文档** | 所有产品化任务 |
 | [productization/prd-completion-audit-and-gap-tasks.md](productization/prd-completion-audit-and-gap-tasks.md) | PRD 完成度审计和未完成边界 | 复盘 / 对账 |
 
-### 产品规划（4 个）
+### 产品规划和当前扩展
 
 | 文档 | 用途 |
 |---|---|
@@ -41,7 +44,7 @@
 | [productization/workspace-ingestion-goal-completion-audit-2026-05-04.md](productization/workspace-ingestion-goal-completion-audit-2026-05-04.md) | Workspace ingestion 目标完成审计：逐条映射用户要求、当前证据和仍未完成的 Sheet / mixed-source / 文档改写缺口 |
 | [productization/document-writing-style-guide-opus-4-6.md](productization/document-writing-style-guide-opus-4-6.md) | 文档重写风格准则：按 Opus 4.6 的温和协作语气重写活跃文档，避免 4.7 风格 |
 
-### 工作流和人类入口（2 个）
+### 工作流和人类入口
 
 | 文档 | 用途 |
 |---|---|
@@ -128,3 +131,4 @@
 - 不要默认读完整个 `archive/`。
 - 不要把 `archive/plans/` 下的日期计划当成当前待办。
 - 不要把 dry-run、demo replay、测试群 sandbox 写成生产 live。
+- 不要把 workspace pilot 写成全量 workspace ingestion。普通 Sheet 真实样本、真实 mixed-source sample、真实 lark-cli fetch latency 仍是缺口。
