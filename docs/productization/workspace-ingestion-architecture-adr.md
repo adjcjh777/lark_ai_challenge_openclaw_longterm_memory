@@ -133,6 +133,8 @@ This slice adds a controlled adapter:
   - read-only gate for workspace runs, source registry rows, cursor rows, and required ingested / skipped / stale / failed evidence.
 - `scripts/check_workspace_mixed_source_corroboration_gate.py`
   - local temp-SQLite gate proving chat evidence, document evidence, and Bitable evidence share the same governed ledger: same-value document evidence corroborates the active memory, while different-value Bitable evidence becomes a conflict candidate and does not overwrite active memory.
+- `scripts/check_workspace_ingestion_latency_gate.py`
+  - local warm-path latency gate for document/workspace candidate ingestion. It reuses the existing document ingestion benchmark and checks quality plus conservative latency thresholds without calling Feishu APIs.
 - `lark_sheet` source support in schema and ingestion metadata.
 - Bitable fetch compatibility for the current lark-cli 1.0.22 output shapes: `base +table-list` can return `tables[].id`, `base +record-list` can return tabular rows plus `record_id_list`, and `base +record-get` can return fields directly under `record`.
 - Tests in `tests/test_feishu_fetchers.py`, `tests/test_feishu_workspace_fetcher.py`, and `tests/test_feishu_workspace_registry.py`.
@@ -231,6 +233,8 @@ python3 scripts/feishu_workspace_ingest.py \
 
 2026-05-04 controlled evidence: Drive root dry-run returned 8 supported resources; Wiki `my_library` dry-run returned 8 supported resources; combined dry-run returned 16 docx/sheet/bitable resources. Sheet-only direct discovery now respects `--doc-types`: Drive root returned 0 sheets, Wiki `my_library` returned 1 sheet-backed Bitable tab. Temporary SQLite smoke results: Drive folder/root walk ingested 1 docx resource into 1 `document_feishu` source and 2 candidates; Wiki walk with limit 3 fetched 3 resources, produced 2 document sources and 2 candidates, and surfaced the sheet-backed Bitable tab as `stage=no_sources` instead of treating it as a successful source. Repeating the same folder walk in the same temporary SQLite database, then running `check_feishu_workspace_registry_gate.py --min-runs 2 --require-ingested --require-skipped --require-cursor --json`, returned `ok=true`, `run_count=2`, `totals.ingested=1`, `totals.skipped_unchanged=1`, and `cursor_count=1`. A second temporary SQLite run with the same stable folder discovery filter and `--mark-missing-stale` returned `ok=true`, `run_count=2`, `totals.ingested=2`, `totals.skipped_unchanged=1`, `totals.stale_marked=3`, `cursor_count=1`, and `evidence.has_stale=true`. A failed-fetch negative smoke using an invalid explicit docx token returned latest run `status=completed_with_errors`, `totals.failed=1`, `evidence.has_failed=true`, and `status_counts.error=1`. The mixed-source gate returned `ok=true`, `active_evidence_source_types=["document_feishu","feishu_message"]`, `conflict_evidence_source_types=["lark_bitable"]`, and version status counts `active=1`, `candidate=1`. This proves deterministic folder/wiki discovery, small candidate ingestion, repeat-run skip, same-filter stale marking, failed-fetch registry evidence, and local mixed-source corroboration/conflict behavior work in the current account context; it still does not prove production full-workspace crawling, long-running scheduling, complete enterprise coverage, real normal-sheet ingestion, or real mixed-source live sampling.
 
+2026-05-04 latency evidence: `check_workspace_ingestion_latency_gate.py --json` passed after one warmup run. It reported `case_pass_rate=1.0`, `avg_quote_coverage=1.0`, `document_evidence_coverage=1.0`, `avg_ingestion_latency_ms=5.51`, and `max_ingestion_latency_ms=5.599`. This is a local hot-path regression gate, not a production SLO and not evidence for lark-cli network fetch speed.
+
 ## Performance Plan
 
 Keep the current feature stable first, then optimize the hot path:
@@ -242,6 +246,7 @@ Keep the current feature stable first, then optimize the hot path:
 5. Cache lark-cli discovery results in `feishu_workspace_source_registry` before repeated fetches.
 6. Move high-volume fetches from lark-cli subprocesses to native OpenAPI only after the pilot shows real bottlenecks.
 7. Keep embeddings limited to confirmed curated memory fields.
+8. Keep `check_workspace_ingestion_latency_gate.py --json` green before expanding workspace ingestion features; treat cold-start and network latency separately from local hot-path candidate ingestion.
 
 ## Acceptance Criteria
 
@@ -259,5 +264,6 @@ Keep the current feature stable first, then optimize the hot path:
 - Fetch permission denied / not found writes registry revocation instead of silently retrying forever.
 - A read-only registry gate can prove run, source, cursor, skip, stale, and failed evidence from SQLite.
 - A mixed-source gate can prove chat, document, and Bitable evidence share one governed ledger and handle corroboration/conflict without silent overwrite.
+- A local latency gate can prove warm-path document/workspace candidate ingestion stays within conservative local thresholds while quality checks remain green.
 - Default output says candidate-only and pilot, not production full workspace ingestion.
 - Tests cover discovery, type routing, sheet ingestion, Bitable routing, candidate-only behavior, registry skip, stale marking, revocation status, and run summary.
