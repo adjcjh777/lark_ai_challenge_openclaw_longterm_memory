@@ -150,29 +150,41 @@ def main() -> int:
     if args.dry_run:
         resources = []
         if not args.skip_discovery:
-            resources = discover_workspace_resources(
-                query=args.query,
-                doc_types=doc_types,
-                limit=args.limit,
-                max_pages=args.max_pages,
-                edited_since=args.edited_since,
-                edited_until=args.edited_until,
-                opened_since=args.opened_since,
-                opened_until=args.opened_until,
-                created_since=args.created_since,
-                created_until=args.created_until,
-                commented_since=args.commented_since,
-                commented_until=args.commented_until,
-                folder_tokens=args.folder_tokens,
-                space_ids=args.space_ids,
-                mine=args.mine,
-                creator_ids=args.creator_ids,
-                sharer_ids=args.sharer_ids,
-                chat_ids=args.chat_ids,
-                sort=args.sort,
-                profile=args.profile,
-                as_identity=args.as_identity,
-            )
+            try:
+                resources = discover_workspace_resources(
+                    query=args.query,
+                    doc_types=doc_types,
+                    limit=args.limit,
+                    max_pages=args.max_pages,
+                    edited_since=args.edited_since,
+                    edited_until=args.edited_until,
+                    opened_since=args.opened_since,
+                    opened_until=args.opened_until,
+                    created_since=args.created_since,
+                    created_until=args.created_until,
+                    commented_since=args.commented_since,
+                    commented_until=args.commented_until,
+                    folder_tokens=args.folder_tokens,
+                    space_ids=args.space_ids,
+                    mine=args.mine,
+                    creator_ids=args.creator_ids,
+                    sharer_ids=args.sharer_ids,
+                    chat_ids=args.chat_ids,
+                    sort=args.sort,
+                    profile=args.profile,
+                    as_identity=args.as_identity,
+                )
+            except ValueError as exc:
+                return _emit_error(
+                    {
+                        "ok": False,
+                        "mode": "dry_run",
+                        "boundary": "resource_discovery_only_no_fetch_no_write",
+                        "discovery_filter_key": filter_key,
+                        "error": str(exc),
+                    },
+                    as_json=args.json,
+                )
         resources.extend(
             _discover_direct_walk_resources(args, remaining=max(0, args.limit - len(resources)), doc_types=doc_types)
         )
@@ -223,30 +235,43 @@ def main() -> int:
     if args.skip_discovery:
         discovery_batch = WorkspaceDiscoveryBatch(resources=[], pages_seen=0, next_page_token=None)
     else:
-        discovery_batch = discover_workspace_resource_batch(
-            query=args.query,
-            doc_types=doc_types,
-            limit=args.limit,
-            max_pages=args.max_pages,
-            edited_since=args.edited_since,
-            edited_until=args.edited_until,
-            opened_since=args.opened_since,
-            opened_until=args.opened_until,
-            created_since=args.created_since,
-            created_until=args.created_until,
-            commented_since=args.commented_since,
-            commented_until=args.commented_until,
-            folder_tokens=args.folder_tokens,
-            space_ids=args.space_ids,
-            mine=args.mine,
-            creator_ids=args.creator_ids,
-            sharer_ids=args.sharer_ids,
-            chat_ids=args.chat_ids,
-            sort=args.sort,
-            profile=args.profile,
-            as_identity=args.as_identity,
-            start_page_token=start_page_token,
-        )
+        try:
+            discovery_batch = discover_workspace_resource_batch(
+                query=args.query,
+                doc_types=doc_types,
+                limit=args.limit,
+                max_pages=args.max_pages,
+                edited_since=args.edited_since,
+                edited_until=args.edited_until,
+                opened_since=args.opened_since,
+                opened_until=args.opened_until,
+                created_since=args.created_since,
+                created_until=args.created_until,
+                commented_since=args.commented_since,
+                commented_until=args.commented_until,
+                folder_tokens=args.folder_tokens,
+                space_ids=args.space_ids,
+                mine=args.mine,
+                creator_ids=args.creator_ids,
+                sharer_ids=args.sharer_ids,
+                chat_ids=args.chat_ids,
+                sort=args.sort,
+                profile=args.profile,
+                as_identity=args.as_identity,
+                start_page_token=start_page_token,
+            )
+        except ValueError as exc:
+            conn.close()
+            return _emit_error(
+                {
+                    "ok": False,
+                    "mode": "controlled_workspace_ingestion_pilot",
+                    "boundary": "candidate_pipeline_only_with_registry_no_production_daemon_no_raw_event_embedding",
+                    "discovery_filter_key": filter_key,
+                    "error": str(exc),
+                },
+                as_json=args.json,
+            )
     direct_walk_resources = _discover_direct_walk_resources(
         args,
         remaining=max(0, args.limit - len(discovery_batch.resources)),
@@ -613,6 +638,16 @@ def _emit(payload: dict[str, Any], *, as_json: bool) -> int:
         print(f"duplicates: {payload.get('duplicate_count', 0)}")
         print(f"failed: {payload.get('failed_count', 0)}")
     return 0
+
+
+def _emit_error(payload: dict[str, Any], *, as_json: bool) -> int:
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"mode: {payload.get('mode')}")
+        print(f"boundary: {payload.get('boundary')}")
+        print(f"error: {payload.get('error')}")
+    return 1
 
 
 if __name__ == "__main__":

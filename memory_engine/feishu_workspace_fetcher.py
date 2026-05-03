@@ -20,6 +20,7 @@ from .feishu_bitable_fetcher import fetch_bitable_record_text, list_bitable_reco
 
 
 WORKSPACE_DOC_TYPES = ("doc", "docx", "wiki", "sheet", "bitable")
+DRIVE_SEARCH_QUERY_MAX_LENGTH = 30
 
 
 @dataclass(frozen=True)
@@ -451,6 +452,7 @@ def _drive_search(
     profile: str | None,
     as_identity: str | None,
 ) -> FeishuApiResult:
+    _validate_drive_search_query(query)
     argv = _build_argv(
         [
             "drive",
@@ -490,6 +492,14 @@ def _drive_search(
         if value:
             argv.extend([flag, value])
     return run_lark_cli(argv)
+
+
+def _validate_drive_search_query(query: str) -> None:
+    if len(query) > DRIVE_SEARCH_QUERY_MAX_LENGTH:
+        raise ValueError(
+            "drive +search query exceeds Feishu's 30-character limit; "
+            "split broad OR queries into multiple shorter searches"
+        )
 
 
 def _drive_folder_list(

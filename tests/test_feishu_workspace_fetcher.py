@@ -162,6 +162,13 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertIn("--sort", argv)
         self.assertIn("edit_time", argv)
 
+    def test_drive_search_rejects_queries_over_feishu_limit(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            with self.assertRaisesRegex(ValueError, "30-character limit"):
+                discover_workspace_resources(query="飞书挑战赛 OR OpenClaw OR memory OR copilot", limit=5)
+
+        run.assert_not_called()
+
     def test_discovers_workspace_resources_from_current_drive_search_shape(self) -> None:
         with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
             run.return_value = _ok(
