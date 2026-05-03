@@ -78,7 +78,7 @@ python3 scripts/check_real_feishu_expression_quality_gate.py --json
 | first-class `fmc_*` live routing 至少覆盖 search/create_candidate/prefetch | 真实 Feishu/OpenClaw result log，包含 `fmc_memory_search`、`fmc_memory_create_candidate`、`fmc_memory_prefetch` | `scripts/collect_feishu_live_evidence_packet.py`、`scripts/check_feishu_dm_routing.py`、preflight `evidence_checklist` | 未完成，缺 `fmc_memory_search` 与 `fmc_memory_prefetch` live 证据 |
 | 第二个非 reviewer 权限负例 | 第二个真实非 reviewer 用户发送 `@Bot /enable_memory` 并被拒绝 | `scripts/check_feishu_permission_negative_gate.py`、preflight `evidence_checklist` | 未完成，当前只有 reviewer/admin allow-path |
 | `/review` DM/card E2E | 真实 `/review` 私聊 DM、interactive card 点击、update_card result | `scripts/check_feishu_review_delivery_gate.py`、preflight `evidence_checklist` | 未完成，当前只有 candidate card，缺 private review DM |
-| Cognee embedding 长跑 | curated sync report、persistent-store reopen/readback、>=24h embedding health samples | `scripts/collect_cognee_embedding_long_run_evidence.py`、`scripts/finalize_cognee_embedding_long_run.py`、preflight `evidence_checklist` | 未完成，缺长跑证据 |
+| Cognee embedding 长跑 | curated sync report、persistent-store reopen/readback、>=24h embedding health samples | `logs/cognee-embedding-long-run/2026-05-02-sampler/cognee-long-run-evidence.json`、`scripts/collect_cognee_embedding_long_run_evidence.py`、`scripts/finalize_cognee_embedding_long_run.py` | 本地/staging 证据已可让 completion audit item 8 pass；仍不是生产持久化 Cognee 服务 |
 | 不 overclaim | README、benchmark report、runbook、看板都标注 pre-live / pre-production 边界 | `docs/productization/agent-execution-contract.md`、本文件、README、飞书看板记录 | 已完成本轮审查 |
 
 `python3 scripts/check_openclaw_feishu_productization_completion.py --json` 现在会在 `status=incomplete` 时输出：
@@ -127,4 +127,4 @@ python3 scripts/prepare_feishu_live_evidence_run.py \
 
 ## 当前结论
 
-本轮自主优化已经把 UX-06 脱敏真实表达 gate 收到 25/25，并把下一轮真实 live 采证路径做成可执行 checklist。整体产品仍未完成 productized live：缺真实 Feishu/OpenClaw live 日志和 Cognee/embedding 长跑证据，不能声明 production live、真实 Feishu DM 稳定路由或 productized live 长期运行完成。
+本轮自主优化已经把 UX-06 脱敏真实表达 gate 收到 25/25，并把下一轮真实 live 采证路径做成可执行 checklist。Cognee/embedding 本地/staging 长跑证据已可让 completion audit item 8 pass，但整体产品仍未完成 productized live：仍缺真实 Feishu/OpenClaw live 日志，不能声明 production live、真实 Feishu DM 稳定路由、生产级长期 embedding 服务或 productized live 长期运行完成。
