@@ -8,6 +8,7 @@ from unittest.mock import patch
 from memory_engine.feishu_workspace_fetcher import WorkspaceResource
 from scripts.check_workspace_ingestion_goal_readiness import (
     build_readiness_report,
+    collect_corroboration_resources,
     collect_project_sheet_resources,
     sheet_resources_from_specs,
 )
@@ -104,6 +105,47 @@ class WorkspaceIngestionGoalReadinessTest(unittest.TestCase):
         search.assert_called_once()
         folder.assert_called_once()
         wiki.assert_called_once()
+
+    def test_corroboration_resources_include_search_folder_and_wiki_walks(self) -> None:
+        with patch(
+            "scripts.check_workspace_ingestion_goal_readiness.collect_reviewed_resources",
+            return_value=[
+                WorkspaceResource(resource_type="docx", token="doc_explicit", title="Explicit Doc"),
+                WorkspaceResource(resource_type="sheet", token="sht_wiki", title="Wiki Sheet"),
+            ],
+        ) as collect:
+            resources = collect_corroboration_resources(
+                resources=["docx:doc_explicit:Explicit Doc"],
+                queries=["OpenClaw"],
+                doc_types=["doc", "docx", "sheet", "bitable"],
+                opened_since="365d",
+                limit=50,
+                max_pages=3,
+                folder_walk_root=True,
+                folder_walk_tokens="fld_1",
+                wiki_space_walk_ids="my_library",
+                walk_max_depth=2,
+                walk_page_size=50,
+                profile=None,
+                as_identity="user",
+            )
+
+        self.assertEqual(["doc_explicit", "sht_wiki"], [resource.token for resource in resources])
+        collect.assert_called_once_with(
+            specs=["docx:doc_explicit:Explicit Doc"],
+            queries=["OpenClaw"],
+            doc_types=["doc", "docx", "sheet", "bitable"],
+            opened_since="365d",
+            limit=50,
+            max_pages=3,
+            folder_walk_root=True,
+            folder_walk_tokens="fld_1",
+            wiki_space_walk_ids="my_library",
+            walk_max_depth=2,
+            walk_page_size=50,
+            profile=None,
+            as_identity="user",
+        )
 
     def _project_root(self, root: Path) -> Path:
         productization = root / "docs/productization"

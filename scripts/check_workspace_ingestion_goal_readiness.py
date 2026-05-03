@@ -41,6 +41,9 @@ from scripts.check_workspace_project_sheet_evidence_gate import (  # noqa: E402
 )
 from scripts.check_workspace_real_same_conclusion_sample_finder import (  # noqa: E402
     chat_inputs_from_event_logs,
+    collect_reviewed_resources,
+    _doc_types,
+    _is_explicit_resource,
     run_sample_finder,
 )
 
@@ -71,6 +74,16 @@ def main() -> int:
     parser.add_argument("--max-sheet-rows", type=int, default=20)
     parser.add_argument("--max-bitable-records", type=int, default=3)
     parser.add_argument("--candidate-limit-per-chat", type=int, default=5)
+    parser.add_argument("--corroboration-query", action="append", default=[])
+    parser.add_argument("--corroboration-doc-types", default="doc,docx,wiki,sheet,bitable")
+    parser.add_argument("--corroboration-opened-since", default="90d")
+    parser.add_argument("--corroboration-limit", type=int, default=50)
+    parser.add_argument("--corroboration-max-pages", type=int, default=3)
+    parser.add_argument("--corroboration-folder-walk-root", action="store_true")
+    parser.add_argument("--corroboration-folder-walk-tokens")
+    parser.add_argument("--corroboration-wiki-space-walk-ids")
+    parser.add_argument("--corroboration-walk-max-depth", type=int, default=2)
+    parser.add_argument("--corroboration-walk-page-size", type=int, default=50)
     parser.add_argument("--sheet-query", action="append")
     parser.add_argument("--project-keyword", action="append")
     parser.add_argument("--sheet-resource", action="append", default=[])
@@ -123,6 +136,16 @@ def main() -> int:
         max_sheet_rows=args.max_sheet_rows,
         max_bitable_records=args.max_bitable_records,
         candidate_limit_per_chat=args.candidate_limit_per_chat,
+        corroboration_queries=args.corroboration_query,
+        corroboration_doc_types=_doc_types(args.corroboration_doc_types),
+        corroboration_opened_since=args.corroboration_opened_since,
+        corroboration_limit=args.corroboration_limit,
+        corroboration_max_pages=args.corroboration_max_pages,
+        corroboration_folder_walk_root=args.corroboration_folder_walk_root,
+        corroboration_folder_walk_tokens=args.corroboration_folder_walk_tokens,
+        corroboration_wiki_space_walk_ids=args.corroboration_wiki_space_walk_ids,
+        corroboration_walk_max_depth=args.corroboration_walk_max_depth,
+        corroboration_walk_page_size=args.corroboration_walk_page_size,
     )
     report = build_readiness_report(
         project_root=PROJECT_ROOT,
@@ -278,12 +301,37 @@ def run_same_conclusion_check(
     max_sheet_rows: int,
     max_bitable_records: int,
     candidate_limit_per_chat: int,
+    corroboration_queries: list[str],
+    corroboration_doc_types: list[str],
+    corroboration_opened_since: str | None,
+    corroboration_limit: int,
+    corroboration_max_pages: int,
+    corroboration_folder_walk_root: bool,
+    corroboration_folder_walk_tokens: str | None,
+    corroboration_wiki_space_walk_ids: str | None,
+    corroboration_walk_max_depth: int,
+    corroboration_walk_page_size: int,
 ) -> dict[str, Any]:
     chats = chat_inputs_from_event_logs(event_logs, expected_chat_id=expected_chat_id)
+    reviewed_resources = collect_corroboration_resources(
+        resources=resources,
+        queries=corroboration_queries,
+        doc_types=corroboration_doc_types,
+        opened_since=corroboration_opened_since,
+        limit=corroboration_limit,
+        max_pages=corroboration_max_pages,
+        folder_walk_root=corroboration_folder_walk_root,
+        folder_walk_tokens=corroboration_folder_walk_tokens,
+        wiki_space_walk_ids=corroboration_wiki_space_walk_ids,
+        walk_max_depth=corroboration_walk_max_depth,
+        walk_page_size=corroboration_walk_page_size,
+        profile=profile,
+        as_identity=as_identity,
+    )
     resource_sources = []
-    fetch_failures = 0
-    for spec in resources:
-        resource = workspace_resource_from_spec(spec)
+    required_fetch_failures = 0
+    optional_fetch_failures = 0
+    for resource in reviewed_resources:
         try:
             resource_sources.extend(
                 fetch_workspace_resource_sources(
@@ -295,7 +343,10 @@ def run_same_conclusion_check(
                 )
             )
         except Exception:
-            fetch_failures += 1
+            if _is_explicit_resource(resource):
+                required_fetch_failures += 1
+            else:
+                optional_fetch_failures += 1
     with tempfile.TemporaryDirectory() as temp_dir:
         conn = connect(Path(temp_dir) / "workspace-readiness.sqlite")
         try:
@@ -304,13 +355,49 @@ def run_same_conclusion_check(
                 conn,
                 chats=chats,
                 resource_sources=resource_sources,
-                fetch_failure_count=fetch_failures,
+                fetch_failure_count=required_fetch_failures,
+                optional_fetch_failure_count=optional_fetch_failures,
                 actor=actor,
                 scope=scope,
                 candidate_limit_per_chat=candidate_limit_per_chat,
             )
         finally:
             conn.close()
+
+
+def collect_corroboration_resources(
+    *,
+    resources: list[str],
+    queries: list[str],
+    doc_types: list[str],
+    opened_since: str | None,
+    limit: int,
+    max_pages: int,
+    folder_walk_root: bool,
+    folder_walk_tokens: str | None,
+    wiki_space_walk_ids: str | None,
+    walk_max_depth: int,
+    walk_page_size: int,
+    profile: str | None,
+    as_identity: str | None,
+) -> list[WorkspaceResource]:
+    """Collect reviewed resources for the same-conclusion portion of the readiness gate."""
+
+    return collect_reviewed_resources(
+        specs=resources,
+        queries=queries,
+        doc_types=doc_types,
+        opened_since=opened_since,
+        limit=limit,
+        max_pages=max_pages,
+        folder_walk_root=folder_walk_root,
+        folder_walk_tokens=folder_walk_tokens,
+        wiki_space_walk_ids=wiki_space_walk_ids,
+        walk_max_depth=walk_max_depth,
+        walk_page_size=walk_page_size,
+        profile=profile,
+        as_identity=as_identity,
+    )
 
 
 def build_readiness_report(

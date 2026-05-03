@@ -224,6 +224,17 @@ If the Sheet evidence is known only through a folder or Wiki space, pass the wal
 
 Use `--sheet-folder-walk-root` only for a controlled read-only root scan.
 
+If the same-conclusion resource pool also needs read-only expansion, pass the corroboration inputs directly to the same readiness gate:
+
+```bash
+  --corroboration-query '' \
+  --corroboration-folder-walk-tokens '<folder_token>' \
+  --corroboration-wiki-space-walk-ids '<space_id_or_my_library>' \
+  --corroboration-walk-max-depth 2
+```
+
+These inputs only expand the reviewed workspace sources used to search for a chat/doc/table same-fact match. Explicit `--resource` fetch failures remain hard failures; optional discovery fetch failures are counted separately as `optional_resource_fetch_failure_count`.
+
 The objective is not complete unless this returns:
 
 - `goal_complete=true`
