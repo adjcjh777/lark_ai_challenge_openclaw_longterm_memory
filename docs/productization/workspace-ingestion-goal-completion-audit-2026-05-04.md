@@ -32,9 +32,11 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `memory_engine/copilot/tools.py`
 - `scripts/feishu_workspace_ingest.py`
 - `scripts/check_feishu_workspace_registry_gate.py`
+- `scripts/check_workspace_mixed_source_corroboration_gate.py`
 - `tests/test_feishu_workspace_fetcher.py`
 - `tests/test_feishu_workspace_registry.py`
 - `tests/test_feishu_workspace_registry_gate.py`
+- `tests/test_workspace_mixed_source_corroboration_gate.py`
 
 Recent implementation commits inspected:
 
@@ -62,7 +64,7 @@ dba049f Add direct Feishu folder and wiki discovery
 | What should be remembered | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/review_policy.py`, `memory_engine/document_ingestion.py` | ADR defines durable decisions, workflow rules, project facts, conflicts, risks, and preferences as memory candidates, and excludes chatter, raw tables, inaccessible content, and secrets. Review policy can auto-confirm low-risk content and hold important/sensitive/conflict content as candidates. | Complete for policy. |
 | Route should reuse group-chat architecture | `docs/productization/workspace-ingestion-architecture-adr.md`, `scripts/feishu_workspace_ingest.py`, `memory_engine/document_ingestion.py`, `memory_engine/copilot/tools.py` | Workspace fetches become `FeishuIngestionSource`, then `ingest_feishu_source()`, then `memory.create_candidate`, then `CopilotService` and review policy. | Complete for pilot. |
 | Shared database across chat/docs/tables | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/db.py`, `memory_engine/document_ingestion.py` | ADR chooses one governed ledger with raw events, memories, evidence, versions, audit events, and graph nodes; source evidence keeps source type/id/quote/tenant/org. | Complete for local/staging ledger. |
-| Corroboration and conflict handling | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/governance.py` | ADR states matching sources add evidence/confidence, contradictions create conflict candidates rather than silent overwrite, and revoked evidence can make active memory stale. | Complete at design and governance level; needs more mixed-source live samples for stronger evidence. |
+| Corroboration and conflict handling | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/governance.py`, `scripts/check_workspace_mixed_source_corroboration_gate.py` | The gate confirms a chat source can create and confirm an active memory; a document source with the same value adds `document_feishu` evidence to the active version; a Bitable source with a different value becomes a conflict candidate and does not overwrite the active memory. | Complete for local/staging gate; still needs real mixed-source workspace samples for production confidence. |
 | Keep stability while improving response speed | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/feishu_workspace_registry.py`, `scripts/feishu_workspace_ingest.py` | Bounded discovery, bounded fetch sizes, candidate limits, registry skip, cursor resume, no raw event embedding, and same-filter stale marking reduce repeated work. | Partially complete. More performance measurement and native API hot-path migration are future work. |
 | Opus 4.6-like docs, not 4.7 | `docs/productization/document-writing-style-guide-opus-4-6.md`, `workspace-ingestion-architecture-adr.md`, active README updates | Style guide exists and the new ADR uses shorter human engineering prose. It explicitly excludes Opus 4.7 voice. | Partially complete. The guide itself says every historical handoff is not rewritten; active entry docs still need staged rewriting if "all docs" is interpreted literally. |
 | Use subagents/skills/MCP as needed | Current run used lark skill guidance and repo-local checks; previous implementation used lark-cli evidence and board sync. | No direct artifact needed, but actions stayed inside project rules. | Sufficient. |
@@ -84,6 +86,8 @@ python3 -m compileall memory_engine scripts
 python3 -m unittest tests.test_feishu_workspace_fetcher tests.test_feishu_workspace_registry_gate
 python3 -m unittest tests.test_feishu_workspace_registry_gate tests.test_feishu_workspace_registry tests.test_feishu_workspace_fetcher
 python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_permissions tests.test_copilot_governance
+python3 scripts/check_workspace_mixed_source_corroboration_gate.py --json
+python3 -m unittest tests.test_workspace_mixed_source_corroboration_gate
 ```
 
 ## Missing Or Weakly Verified Requirements
@@ -94,8 +98,8 @@ python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.te
 2. **"Full workspace ingestion" is not achieved.**
    The system has deterministic discovery, registry, cursoring, stale marking, and failed fetch evidence for a limited pilot. It does not yet have a production long-running daemon, full enterprise coverage guarantees, production rate-limit handling, monitoring, or operational SLOs.
 
-3. **Mixed-source corroboration needs real samples.**
-   The architecture and governance model support corroboration and conflicts across chat, docs, sheets, Bitable, tasks, and meetings. The current workspace pilot has not yet proven a real case where a chat memory and document/table memory support or contradict the same active conclusion.
+3. **Mixed-source corroboration is locally proven but not yet live-proven.**
+   `check_workspace_mixed_source_corroboration_gate.py` proves the ledger behavior in a temp SQLite DB. It still does not prove that real Feishu chat, document, Sheet, and Bitable objects from the same workspace have been sampled around the same conclusion.
 
 4. **Performance optimization is structural, not benchmarked.**
    Registry skip/cursor/bounded fetch reduce unnecessary work, but there is no before/after latency benchmark for workspace ingestion or live recall.
@@ -108,8 +112,8 @@ python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.te
 The next product step should not be another architecture discussion. It should be one of:
 
 1. **Prove normal Sheet ingestion** with an existing normal Sheet token/folder/wiki space, or with explicit user approval to create a controlled test Sheet.
-2. **Add a mixed-source corroboration smoke** where one chat/source and one document/table source support the same memory, then verify evidence count and conflict behavior from SQLite.
+2. **Run the mixed-source gate on real sampled resources** once a matching document/table source is available.
 3. **Add a small latency benchmark** for workspace discovery/fetch/candidate ingestion before adding more features.
 4. **Start the active-doc rewrite pass** using `document-writing-style-guide-opus-4-6.md`, keeping archived plans unchanged unless promoted back into active execution.
 
-Until at least the Sheet and mixed-source evidence gaps are closed, do not call the overall objective complete.
+Until at least the Sheet and real mixed-source evidence gaps are closed, do not call the overall objective complete.
