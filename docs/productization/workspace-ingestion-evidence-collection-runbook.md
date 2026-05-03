@@ -204,12 +204,15 @@ python3 scripts/check_workspace_ingestion_goal_readiness.py \
   --json \
   --event-log '<real_event_log.ndjson>' \
   --resource '<reviewed_doc_or_sheet_or_bitable>' \
+  --resource 'sheet:<sheet_token>:<reviewed_title>' \
   --actor-open-id '<reviewer_open_id>' \
   --roles reviewer \
   --scope workspace:feishu \
   --max-bitable-records 3 \
   --max-sheet-rows 20
 ```
+
+If a `sheet:<token>` spec is passed through `--resource`, the readiness gate also reuses it for the project normal Sheet evidence check. Use `--sheet-resource` only when the Sheet evidence pool should differ from the same-conclusion resource pool.
 
 The objective is not complete unless this returns:
 
@@ -244,4 +247,3 @@ If scripts or Python changed, also run:
 python3 -m compileall memory_engine scripts
 python3 -m unittest tests.test_workspace_real_same_conclusion_sample_finder tests.test_workspace_ingestion_goal_readiness
 ```
-

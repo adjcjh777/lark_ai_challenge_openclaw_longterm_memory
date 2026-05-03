@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.check_workspace_ingestion_goal_readiness import build_readiness_report
+from scripts.check_workspace_ingestion_goal_readiness import build_readiness_report, sheet_resources_from_specs
 
 
 class WorkspaceIngestionGoalReadinessTest(unittest.TestCase):
@@ -48,6 +48,18 @@ class WorkspaceIngestionGoalReadinessTest(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertIn("lark_cli_first_architecture_decision", report["failures"])
+
+    def test_sheet_specs_are_reused_from_resource_inputs(self) -> None:
+        specs = sheet_resources_from_specs(
+            resources=[
+                "docx:doc_1:Project doc",
+                "sheet:sht_1:Project Sheet",
+                "bitable:base_1:Project Base",
+            ],
+            sheet_resources=["sheet:sht_2:Metrics Sheet", "sheet:sht_1:Project Sheet"],
+        )
+
+        self.assertEqual(["sheet:sht_2:Metrics Sheet", "sheet:sht_1:Project Sheet"], specs)
 
     def _project_root(self, root: Path) -> Path:
         productization = root / "docs/productization"

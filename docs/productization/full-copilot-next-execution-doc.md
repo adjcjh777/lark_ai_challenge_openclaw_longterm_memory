@@ -33,7 +33,7 @@ Workspace ingestion 的当前选择是 **lark-cli first**。原因很直接：la
 2. 用 `check_workspace_real_same_conclusion_gate.py` 跑真实飞书 chat + document / Sheet / Bitable 围绕同一个结论的 live sample，证明“佐证追加”在真实来源上成立；再用 mixed-source gate 证明差异值会进入 conflict 而不覆盖 active。
 3. 把真实 lark-cli fetch latency gate 继续扩到项目/企业 workspace 资源，保持 bounded discovery、registry skip 和 no raw-event embedding。
 
-具体采证步骤看 `docs/productization/workspace-ingestion-evidence-collection-runbook.md`。它把 normal Sheet 样本、同结论样本、strict gate、readiness gate、文档更新和看板同步拆成可执行命令，避免把“缺样本”误写成完成。
+具体采证步骤看 `docs/productization/workspace-ingestion-evidence-collection-runbook.md`。它把 normal Sheet 样本、同结论样本、strict gate、readiness gate、文档更新和看板同步拆成可执行命令，避免把“缺样本”误写成完成。总 readiness gate 现在会复用 `--resource sheet:<token>:<title>` 做项目 normal Sheet evidence；只有 Sheet evidence 和同结论 evidence 都通过时，才能把 workspace 目标标记完成。
 
 如果要继续文档重写，按 `docs/productization/document-writing-style-guide-opus-4-6.md` 只改活跃入口文档。历史 handoff 和 archived plans 保留审计用途，除非被重新提升为当前执行入口。
 

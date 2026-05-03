@@ -91,7 +91,7 @@ def main() -> int:
     sheet_report = run_project_sheet_check(
         queries=args.sheet_query or list(DEFAULT_PROJECT_QUERIES),
         project_keywords=args.project_keyword or list(DEFAULT_PROJECT_KEYWORDS),
-        explicit_resources=args.sheet_resource,
+        explicit_resources=sheet_resources_from_specs(args.resource, args.sheet_resource),
         opened_since=args.sheet_opened_since,
         limit=args.sheet_limit,
         max_pages=args.sheet_max_pages,
@@ -176,6 +176,20 @@ def run_project_sheet_check(
         project_keywords=project_keywords,
         allow_cross_tenant=allow_cross_tenant,
     )
+
+
+def sheet_resources_from_specs(resources: list[str], sheet_resources: list[str]) -> list[str]:
+    """Return explicit Sheet specs from both readiness resource inputs.
+
+    `--resource sheet:...` should count for the project normal Sheet evidence
+    gate as well as same-conclusion source fetching. `--sheet-resource` remains
+    as a dedicated override for operators that want the Sheet evidence pool to
+    differ from the same-conclusion resource pool.
+    """
+
+    specs = list(sheet_resources)
+    specs.extend(spec for spec in resources if _resource_type_from_spec(spec) in {"sheet", "sheets", "spreadsheet"})
+    return _dedupe_specs(specs)
 
 
 def run_same_conclusion_check(
@@ -314,6 +328,21 @@ def _read(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
+
+
+def _resource_type_from_spec(spec: str) -> str:
+    return spec.split(":", 1)[0].strip().lower()
+
+
+def _dedupe_specs(specs: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for spec in specs:
+        if spec in seen:
+            continue
+        seen.add(spec)
+        result.append(spec)
+    return result
 
 
 def _equals_check(actual: Any, expected: Any) -> dict[str, Any]:
