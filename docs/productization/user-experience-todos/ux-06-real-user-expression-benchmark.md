@@ -34,12 +34,12 @@
 | 指标 | 结果 | 当前判断 |
 |---|---:|---|
 | 样本数 | 25 | 口语、含糊、多轮改口、闲聊误判、权限场景各 5 条 |
-| Case pass rate | 0.9200 | 保留失败样例，不作为生产结论 |
+| Case pass rate | 0.9600 | 保留失败样例，不作为生产结论 |
 | Recall@3 | 0.8750 | 当前样本通过 |
 | 误记率 | 0.0000 | 当前样本通过 |
 | 误提醒率 | 0.0000 | 当前样本通过 |
 | 确认负担 | 2.0000 | 每 10 条输入约 2.0 条需要人工候选处理 |
-| 解释覆盖率 | 0.9500 | 当前样本通过，但保留解释缺口 |
+| 解释覆盖率 | 1.0000 | 当前样本通过 |
 | 旧值泄漏率 | 0.0000 | 当前样本通过 |
 
 ## 为什么现在做
@@ -139,7 +139,7 @@ ollama ps
 验证边界：
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
-- 当前失败样例保留，用于暴露解释缺口和含糊上下文。
+- 当前失败样例保留，用于暴露含糊上下文。
 - `scripts/check_real_feishu_expression_quality_gate.py --json` 是本地 pre-live 质量 gate，不是真实 Feishu live evidence，也不是 productized live 证明。
 - 真实飞书来源仍 candidate-only，不自动 active。
 - 不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。

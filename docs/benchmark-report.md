@@ -22,11 +22,11 @@
 
 > **UX-05 更新（2026-04-29）**：本轮把 `heartbeat.review_due` 收敛为可控提醒体验，仍只生成 reminder candidate，不做真实群推送，不自动 active。`copilot_heartbeat_cases.json` 扩到 20 条，并新增 False Reminder Rate、Duplicate Reminder Rate、User Confirmation Burden 三个 UX 指标；本地重跑结果为 case pass rate = 1.0000、误提醒率 0.0000、敏感泄漏率 0.0000、重复提醒率 0.0000、用户确认负担 4.0000。
 
-> **UX-06 更新（2026-04-29）**：本轮新增 `benchmarks/copilot_real_feishu_cases.json` 作为脱敏真实表达样本评测入口，覆盖口语、含糊、多轮改口、闲聊误判和权限场景各 5 条。2026-05-03 修复 CI 工具改口 stable key、current_value 归一化、低价值闲聊 guard、source revoked 权限解释和冲突候选审核解释后，本地重跑结果为 case pass rate = 0.9200、Recall@3 = 0.8750、误记率 0.0000、误提醒率 0.0000、确认负担 2.0000、解释覆盖率 0.9500、旧值泄漏率 0.0000。该集合是人工脱敏样本和当前 baseline 标注，不是生产真实用户稳定可用结论；失败样例保留在结果中，用于继续修复解释缺口和含糊上下文。
+> **UX-06 更新（2026-04-29）**：本轮新增 `benchmarks/copilot_real_feishu_cases.json` 作为脱敏真实表达样本评测入口，覆盖口语、含糊、多轮改口、闲聊误判和权限场景各 5 条。2026-05-03 修复 CI 工具改口 stable key、current_value 归一化、低价值闲聊 guard、source revoked 权限解释、冲突候选审核解释和搜索结果解释后，本地重跑结果为 case pass rate = 0.9600、Recall@3 = 0.8750、误记率 0.0000、误提醒率 0.0000、确认负担 2.0000、解释覆盖率 1.0000、旧值泄漏率 0.0000。该集合是人工脱敏样本和当前 baseline 标注，不是生产真实用户稳定可用结论；失败样例保留在结果中，用于继续修复含糊上下文。
 
 > **UX-06 quality gate 更新（2026-05-03）**：新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把真实表达样本的 Recall@3、误记率、误提醒率、解释覆盖率和旧值泄漏率变成 pre-live 本地硬门禁。当前 gate 已通过：旧值泄漏率 0.0000，其他硬阈值也通过；这仍只是脱敏样本的 pre-live 本地门禁，不是真实 Feishu live evidence 或 productized live 证明。
 
-> **UX-07 更新（2026-04-29）**：10 分钟评委体验包入口为 `docs/judge-10-minute-experience.md`。评委版只引用本报告已有 runner 和 UX-06 指标，不重复跑重 benchmark；讲法必须同时展示通过项和残余风险，尤其是 UX-06 真实表达样本 pass rate 0.9200、解释缺口/含糊上下文残余样例，以及真实 Feishu live evidence 仍未覆盖全链路。
+> **UX-07 更新（2026-04-29）**：10 分钟评委体验包入口为 `docs/judge-10-minute-experience.md`。评委版只引用本报告已有 runner 和 UX-06 指标，不重复跑重 benchmark；讲法必须同时展示通过项和残余风险，尤其是 UX-06 真实表达样本 pass rate 0.9600、含糊上下文残余样例，以及真实 Feishu live evidence 仍未覆盖全链路。
 
 ## 先看这个
 
@@ -73,8 +73,8 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | Real Expression False Memory Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-05-03 重跑） | <= 0.0500 | 当前样本通过 |
 | Real Expression False Reminder Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-04-29 重跑） | <= 0.0500 | 当前样本通过 |
 | Real Expression Confirmation Burden | `copilot_real_feishu_cases.json` | 2.0000（2026-05-03 重跑） | 先记录，不设硬阈值 | UX-06 样本入口 |
-| Real Expression Explanation Coverage | `copilot_real_feishu_cases.json` | 0.9500（2026-05-03 重跑） | >= 0.8000 | 当前样本通过，但保留解释失败样例 |
-| Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.1429（2026-05-03 gate 重跑） | 0.0000 | 未达标，`check_real_feishu_expression_quality_gate.py` fail closed |
+| Real Expression Explanation Coverage | `copilot_real_feishu_cases.json` | 1.0000（2026-05-03 重跑） | >= 0.8000 | 当前样本通过 |
+| Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-05-03 gate 重跑） | 0.0000 | 当前样本通过 |
 
 ## 分项结果
 
@@ -86,7 +86,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | copilot_layer | 15 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 1.602 ms | 无失败 |
 | copilot_prefetch | 20 | 1.0000 | Context-required cases = 18；Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
 | copilot_heartbeat | 20 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000；False Reminder Rate = 0.0000；Duplicate Reminder Rate = 0.0000；User Confirmation Burden = 4.0000 | 无失败 |
-| copilot_real_feishu | 25 | 0.9200 | Recall@3 = 0.8750；误记率 = 0.0000；误提醒率 = 0.0000；确认负担 = 2.0000；解释覆盖率 = 0.9500；旧值泄漏率 = 0.0000 | `user_expression_explanation_missing` 1；`user_expression_context_miss` 1 |
+| copilot_real_feishu | 25 | 0.9600 | Recall@3 = 0.8750；误记率 = 0.0000；误提醒率 = 0.0000；确认负担 = 2.0000；解释覆盖率 = 1.0000；旧值泄漏率 = 0.0000 | `user_expression_context_miss` 1 |
 | day1 fallback | 10 | 1.0000 | 旧本地 memory demo 仍可复现 | 无失败 |
 
 ## 样例证据
@@ -146,7 +146,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 - 这是 fixture benchmark 与真实表达样本的连接层，不是生产真实用户稳定可用结论。
 - `observed_baseline` 是当前本地能力的标注，用于让 runner 计算 UX 指标和暴露失败类别。
-- 失败样例必须保留，例如解释缺口和含糊上下文，不为了好看的 pass rate 删除。
+- 失败样例必须保留，例如含糊上下文，不为了好看的 pass rate 删除。
 - 真实飞书来源仍只能 candidate-only；多轮改口不会自动覆盖 active memory。
 - 本报告不宣称真实 Feishu DM 到本项目 `fmc_*` / `memory.*` live E2E 或 productized live 已完成。
 
@@ -157,7 +157,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | 现场问题 | 评委版回答 |
 |---|---|
 | 你们怎么证明不是临场 demo？ | 每条演示能力都能映射到 `benchmarks/copilot_*_cases.json` 和本文档的指标表；`reports/` 只是本地运行证据，不提交。 |
-| 指标是不是全部达标？ | 不是。heartbeat、candidate、prefetch 等当前样本通过；UX-06 pre-live 硬 gate 已通过，但真实表达样本 pass rate = 0.9200，仍保留解释缺口和含糊上下文残余样例。 |
+| 指标是不是全部达标？ | 不是。heartbeat、candidate、prefetch 等当前样本通过；UX-06 pre-live 硬 gate 已通过，但真实表达样本 pass rate = 0.9600，仍保留含糊上下文残余样例。 |
 | 真实用户表达覆盖了吗？ | UX-06 有 25 条脱敏样本，覆盖口语、含糊、多轮改口、闲聊误判和权限场景；这是 baseline，不是生产稳定结论。 |
 | 安全边界是什么？ | 权限拒绝不能泄露未授权内容；真实飞书来源 candidate-only；reminder 只生成 candidate；不宣称 production live 或真实 DM 到 `fmc_*` / `memory.*` live E2E 已完成。 |
 
@@ -212,7 +212,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json -
 |---|---|---|---|
 | User Explanation Coverage | 用户主内容中能解释当前结论、证据来源、版本覆盖或权限拒绝原因的样例占比 | `tests.test_feishu_interactive_cards` 验证 search result payload、version chain payload/card 和 permission denied card | 现有 `memory_engine benchmark run` 仍主要评测 recall/conflict，不自动汇总解释覆盖率 |
 | Unauthorized Value Leakage Rate | permission denied payload/card 中出现未授权 `current_value`、`summary`、`evidence.quote` 明文的比例 | version-chain denied card 单测用敏感字段注入，渲染结果不包含这些明文 | 还需要在 UX-06 真实表达样本里扩到更多入口和更多权限失败原因 |
-| Stale / Superseded Leakage Rate | 旧值可出现在 `memory.explain_versions` 版本链解释里，但不能出现在默认 search / prefetch 当前答案里 | recall、conflict、prefetch benchmark 已有 stale/superseded 检查；搜索卡明确标记旧值已过滤 | 样例规模仍小，真实飞书表达扩样后可能暴露新的归一化或解释缺口 |
+| Stale / Superseded Leakage Rate | 旧值可出现在 `memory.explain_versions` 版本链解释里，但不能出现在默认 search / prefetch 当前答案里 | recall、conflict、prefetch benchmark 已有 stale/superseded 检查；搜索卡明确标记旧值已过滤 | 样例规模仍小，真实飞书表达扩样后可能暴露新的归一化或含糊上下文缺口 |
 
 ## Bitable Dry-Run 对齐
 

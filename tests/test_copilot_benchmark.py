@@ -198,7 +198,9 @@ class CopilotBenchmarkTest(unittest.TestCase):
         self.assertIn("old_value_leakage_rate", summary)
         self.assertEqual(0.0, summary["old_value_leakage_rate"])
         self.assertEqual(0.0, summary["false_memory_rate"])
-        self.assertGreater(summary["failure_type_counts"].get("user_expression_explanation_missing", 0), 0)
+        self.assertEqual(1.0, summary["explanation_coverage"])
+        self.assertGreater(summary["failure_type_counts"].get("user_expression_context_miss", 0), 0)
+        self.assertNotIn("user_expression_explanation_missing", summary["failure_type_counts"])
         self.assertNotIn("false_positive_candidate", summary["failure_type_counts"])
         self.assertNotIn("user_expression_old_value_leaked", summary["failure_type_counts"])
         for item in result["results"]:

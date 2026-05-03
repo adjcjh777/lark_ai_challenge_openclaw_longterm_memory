@@ -115,11 +115,11 @@
       "candidate_created": false,
       "reminder_created": false,
       "review_action_count": 0,
-      "has_user_explanation": false,
+      "has_user_explanation": true,
       "old_value_leaked": false,
       "permission_decision": "allow"
     },
-    "failure_debug_hint": "保留失败样例：当前能召回但缺用户解释，后续应补解释模板。"
+    "failure_debug_hint": "已补文本搜索回复解释：返回为什么采用该 active 记忆，并说明默认搜索过滤候选和旧版本。"
   },
   {
     "case_id": "real_expr_colloquial_recall_005",

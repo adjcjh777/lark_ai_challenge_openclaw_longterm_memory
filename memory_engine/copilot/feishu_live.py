@@ -1155,6 +1155,7 @@ def _format_search(result: dict[str, Any], *, routing_reason: str) -> str:
             [
                 f"{index}. {item.get('subject') or '-'}",
                 f"   结论：{item.get('current_value') or '-'}",
+                f"   为什么采用：{_search_result_user_explanation(item, quote)}",
                 f"   证据：{_clip(quote)}",
                 "   下一步：按这条当前结论执行；如果要看旧值，回复“为什么旧值不用了”。",
             ]
@@ -1165,6 +1166,21 @@ def _format_search(result: dict[str, Any], *, routing_reason: str) -> str:
         )
     )
     return _reply("Memory Copilot 找到当前有效记忆。", lines)
+
+
+def _search_result_user_explanation(item: dict[str, Any], quote: str) -> str:
+    if item.get("explanation"):
+        return str(item["explanation"])
+    status = item.get("status") or "active"
+    matched = item.get("matched_via") if isinstance(item.get("matched_via"), list) else []
+    if matched:
+        return (
+            f"这条记忆当前是 {status} 状态，命中线索：{', '.join(str(value) for value in matched[:3])}；"
+            "默认搜索已过滤 candidate 和旧版本。"
+        )
+    if quote and quote != "-":
+        return f"这条记忆当前是 {status} 状态，并带有可追溯证据；默认搜索已过滤 candidate 和旧版本。"
+    return f"这条记忆当前是 {status} 状态；默认搜索只返回 active 当前结论。"
 
 
 def _format_candidate(result: dict[str, Any]) -> str:

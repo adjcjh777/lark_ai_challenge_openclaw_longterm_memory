@@ -132,6 +132,8 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         self.assertEqual("memory.search", search["tool"])
         self.assertIn("只返回 active 当前结论", self.reply_text(search))
         self.assertIn("本次消息按查询处理，未尝试创建待确认记忆", self.reply_text(search))
+        self.assertIn("为什么采用", self.reply_text(search))
+        self.assertIn("默认搜索已过滤 candidate 和旧版本", self.reply_text(search))
         self.assertIn("--canary", self.reply_text(search))
         self.assertIn("request_id", search["tool_result"]["bridge"])
         self.assertEqual("search_only", search["message_disposition"]["memory_path"])
