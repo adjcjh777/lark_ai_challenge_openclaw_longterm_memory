@@ -220,6 +220,17 @@ python3 scripts/prepare_feishu_live_evidence_run.py \
 
 这个预检只生成路径、命令和防 overclaim 清单；不会发送飞书消息、不会点击卡片，也不能替代真实 live 日志。
 
+如果 OpenClaw 插件诊断暂时卡住，但只想先生成离线采证清单，可以追加：
+
+```bash
+python3 scripts/prepare_feishu_live_evidence_run.py \
+  --planned-listener openclaw-websocket \
+  --skip-event-diagnostics \
+  --json
+```
+
+这种模式会保持 `ready_to_capture_live_logs=false`，只能用于准备路径和 checklist；正式发送真实消息前必须重新跑通过事件订阅诊断。已有诊断 JSON 时可用 `--event-diagnostics-file <path>` 复用，避免重复探测。
+
 ### 3.4 数据库损坏
 
 **症状**：SQLite 报错 "database disk image is malformed"

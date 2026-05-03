@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.prepare_feishu_live_evidence_run import prepare_live_evidence_run
+from scripts.prepare_feishu_live_evidence_run import event_subscription_diagnostics_from_cli, prepare_live_evidence_run
 
 
 def _event_diagnostics(
@@ -89,6 +89,35 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertEqual("fail", result["checks"]["event_subscription"]["status"])
         self.assertEqual(["event_subscription"], result["blocking_failures"])
         self.assertIn("Enable im:message.group_msg", "\n".join(result["blocking_resolution_steps"]))
+
+    def test_cli_skip_event_diagnostics_still_emits_blocked_checklist(self) -> None:
+        diagnostics = event_subscription_diagnostics_from_cli(None, skip=True)
+        result = prepare_live_evidence_run(
+            planned_listener="openclaw-websocket",
+            output_dir=Path("/tmp/feishu-live-preflight"),
+            process_rows=[],
+            event_subscription_diagnostics=diagnostics,
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["ready_to_capture_live_logs"])
+        self.assertEqual(["event_subscription"], result["blocking_failures"])
+        self.assertIn("event_subscription_diagnostics_skipped", result["checks"]["event_subscription"]["detail"])
+        self.assertTrue(result["evidence_checklist"])
+
+    def test_cli_event_diagnostics_file_loads_existing_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
+            path = Path(temp_dir) / "diagnostics.json"
+            diagnostics = _event_diagnostics()
+            path.write_text(json.dumps(diagnostics), encoding="utf-8")
+
+            loaded = event_subscription_diagnostics_from_cli(path, skip=False)
+
+        self.assertEqual(diagnostics, loaded)
+
+    def test_cli_event_diagnostics_options_are_mutually_exclusive(self) -> None:
+        with self.assertRaises(ValueError):
+            event_subscription_diagnostics_from_cli(Path("/tmp/diagnostics.json"), skip=True)
 
     def test_preflight_emits_packet_and_completion_commands_without_sending_messages(self) -> None:
         with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:

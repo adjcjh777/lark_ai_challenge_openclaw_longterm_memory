@@ -58,10 +58,29 @@ def main() -> int:
         default=DEFAULT_OPENCLAW_CONFIG,
         help="OpenClaw config path for the read-only Feishu group policy safety preflight.",
     )
+    parser.add_argument(
+        "--event-diagnostics-file",
+        type=Path,
+        default=None,
+        help="Use an existing check_feishu_event_subscription_diagnostics.py JSON file instead of probing live.",
+    )
+    parser.add_argument(
+        "--skip-event-diagnostics",
+        action="store_true",
+        help="Generate the checklist without probing Feishu/OpenClaw diagnostics; live capture remains blocked.",
+    )
     parser.add_argument("--create-dirs", action="store_true")
     parser.add_argument("--output", default="", help="Optional JSON manifest output path.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+
+    try:
+        event_subscription_diagnostics = event_subscription_diagnostics_from_cli(
+            args.event_diagnostics_file,
+            skip=args.skip_event_diagnostics,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     result = prepare_live_evidence_run(
         planned_listener=args.planned_listener,
@@ -74,6 +93,7 @@ def main() -> int:
         embedding_sampler_pid_file=args.embedding_sampler_pid_file,
         openclaw_config_path=args.openclaw_config,
         create_dirs=args.create_dirs,
+        event_subscription_diagnostics=event_subscription_diagnostics,
     )
     if args.output:
         output = Path(args.output).expanduser()
@@ -84,6 +104,55 @@ def main() -> int:
     else:
         print(format_report(result))
     return 0 if result["ok"] else 1
+
+
+def event_subscription_diagnostics_from_cli(path: Path | None, *, skip: bool) -> dict[str, Any] | None:
+    if path is not None and skip:
+        raise ValueError("--event-diagnostics-file and --skip-event-diagnostics cannot be used together")
+    if path is not None:
+        return _load_event_diagnostics_file(path)
+    if skip:
+        return _skipped_event_diagnostics()
+    return None
+
+
+def _load_event_diagnostics_file(path: Path) -> dict[str, Any]:
+    resolved = path.expanduser()
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"unable to read --event-diagnostics-file {resolved}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"--event-diagnostics-file must be valid JSON: {resolved}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"--event-diagnostics-file must contain a JSON object: {resolved}")
+    return payload
+
+
+def _skipped_event_diagnostics() -> dict[str, Any]:
+    return {
+        "ok": False,
+        "skipped": True,
+        "failed_checks": ["event_subscription_diagnostics_skipped"],
+        "warnings": [
+            {
+                "id": "event_subscription_diagnostics_skipped",
+                "detail": "Checklist was generated without probing live Feishu/OpenClaw event diagnostics.",
+            }
+        ],
+        "checks": {
+            "event_subscription_diagnostics": {
+                "status": "fail",
+                "detail": "skipped by --skip-event-diagnostics",
+            }
+        },
+        "remediation": {
+            "steps": [
+                "Run scripts/check_feishu_event_subscription_diagnostics.py before sending real live test messages.",
+                "Keep ready_to_capture_live_logs=false until event diagnostics pass.",
+            ]
+        },
+    }
 
 
 def prepare_live_evidence_run(
