@@ -1,0 +1,115 @@
+# Workspace Ingestion Goal Completion Audit
+
+Date: 2026-05-04
+
+Status: Not complete. The repo now has a limited workspace pilot with real controlled evidence, but it does not yet satisfy the user's full objective.
+
+## Objective Restated
+
+The user asked for a Feishu workspace ingestion product path that covers:
+
+1. Decide how to connect the full Feishu workspace, especially whether the pilot should use lark-cli or native Feishu API.
+2. Ingest enterprise knowledge sources such as Feishu documents, cloud documents, Sheets, and Bitable/Base.
+3. Decide what should become memory and what should stay out.
+4. Reuse the earlier group-chat memory routing where possible.
+5. Combine document/table/workspace memory with group-chat memory in a shared governed memory system, including corroboration and conflict handling.
+6. Keep the current product stable while improving response speed.
+7. Rewrite active docs in a Claude Opus 4.6-like human engineering voice, explicitly not Opus 4.7.
+8. Think as architect and product manager, but keep evidence, permissions, audit, and no-overclaim boundaries intact.
+
+## Evidence Inspected In This Audit
+
+- `AGENTS.md`
+- `README.md`
+- `docs/productization/agent-execution-contract.md`
+- `docs/productization/full-copilot-next-execution-doc.md`
+- `docs/productization/prd-completion-audit-and-gap-tasks.md`
+- `docs/productization/workspace-ingestion-architecture-adr.md`
+- `docs/productization/document-writing-style-guide-opus-4-6.md`
+- `memory_engine/feishu_workspace_fetcher.py`
+- `memory_engine/feishu_workspace_registry.py`
+- `memory_engine/document_ingestion.py`
+- `memory_engine/copilot/tools.py`
+- `scripts/feishu_workspace_ingest.py`
+- `scripts/check_feishu_workspace_registry_gate.py`
+- `tests/test_feishu_workspace_fetcher.py`
+- `tests/test_feishu_workspace_registry.py`
+- `tests/test_feishu_workspace_registry_gate.py`
+
+Recent implementation commits inspected:
+
+```text
+194fb7e Document Feishu workspace stale and failed evidence
+83c3fd3 Respect doc type filters in direct workspace discovery
+f62dc87 Add Feishu workspace registry evidence gate
+c0a2309 Document Feishu workspace repeat discovery evidence
+dba049f Add direct Feishu folder and wiki discovery
+6736030 Add explicit Feishu workspace resource ingestion
+002ee0d Persist Feishu workspace discovery cursors
+4e3e054 Add Feishu workspace discovery filters
+```
+
+## Prompt-To-Artifact Checklist
+
+| User requirement | Current artifact | Evidence | Audit result |
+|---|---|---|---|
+| Choose lark-cli vs native API | `docs/productization/workspace-ingestion-architecture-adr.md` | ADR chooses lark-cli first for the OpenClaw-native pilot and native OpenAPI/SDK for production hot paths or long-running daemon needs. | Complete for architecture decision. |
+| Reference docs when deciding | `docs/productization/workspace-ingestion-architecture-adr.md`, `document-writing-style-guide-opus-4-6.md`, local lark skills, current `lark-cli --help` derived command choices | ADR names `drive +search`, `drive files list`, `wiki nodes list`, `docs +fetch`, `sheets +info/+read`, and `base +record-*`. | Complete enough for pilot; production API research remains a future implementation gate, not a missing pilot decision. |
+| Discover and route Feishu documents/cloud docs | `memory_engine/feishu_workspace_fetcher.py`, `scripts/feishu_workspace_ingest.py` | Drive root/folder walk and Wiki `my_library` walk discovered docx resources; temporary SQLite smokes produced `document_feishu` sources and candidates. | Pilot complete; not production full workspace crawler. |
+| Discover and route Bitable/Base | `memory_engine/feishu_bitable_fetcher.py`, `memory_engine/feishu_workspace_fetcher.py`, `scripts/feishu_workspace_ingest.py` | Explicit reviewed Bitable resource smoke produced 1 `lark_bitable` source and 1 candidate in a temporary SQLite DB; current lark-cli 1.0.22 output shapes are handled. | Pilot complete for Bitable. |
+| Discover and route normal Sheet | `memory_engine/feishu_workspace_fetcher.py`, `document_ingestion.py`, `tests/test_feishu_workspace_fetcher.py` | Code supports `lark_sheet`, `sheets +info`, `sheets +read`, source context, metadata, and tests. Real read-only discovery found Drive root 0 normal Sheets and Wiki `my_library` 1 sheet-backed Bitable tab, which correctly returned `no_sources`. | Incomplete for real evidence. Needs existing normal Sheet token/folder/wiki space or explicit approval to create a controlled test Sheet. |
+| Full workspace registry and cursoring | `memory_engine/feishu_workspace_registry.py`, `scripts/check_feishu_workspace_registry_gate.py` | Registry records runs, source keys, status, cursors, revision skip, same-filter stale, and failed fetch evidence. Real temporary DB gates read back skip/cursor, stale, and failed evidence. | Pilot complete; not production scheduler or all-enterprise coverage. |
+| What should be remembered | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/review_policy.py`, `memory_engine/document_ingestion.py` | ADR defines durable decisions, workflow rules, project facts, conflicts, risks, and preferences as memory candidates, and excludes chatter, raw tables, inaccessible content, and secrets. Review policy can auto-confirm low-risk content and hold important/sensitive/conflict content as candidates. | Complete for policy. |
+| Route should reuse group-chat architecture | `docs/productization/workspace-ingestion-architecture-adr.md`, `scripts/feishu_workspace_ingest.py`, `memory_engine/document_ingestion.py`, `memory_engine/copilot/tools.py` | Workspace fetches become `FeishuIngestionSource`, then `ingest_feishu_source()`, then `memory.create_candidate`, then `CopilotService` and review policy. | Complete for pilot. |
+| Shared database across chat/docs/tables | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/db.py`, `memory_engine/document_ingestion.py` | ADR chooses one governed ledger with raw events, memories, evidence, versions, audit events, and graph nodes; source evidence keeps source type/id/quote/tenant/org. | Complete for local/staging ledger. |
+| Corroboration and conflict handling | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/governance.py` | ADR states matching sources add evidence/confidence, contradictions create conflict candidates rather than silent overwrite, and revoked evidence can make active memory stale. | Complete at design and governance level; needs more mixed-source live samples for stronger evidence. |
+| Keep stability while improving response speed | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/feishu_workspace_registry.py`, `scripts/feishu_workspace_ingest.py` | Bounded discovery, bounded fetch sizes, candidate limits, registry skip, cursor resume, no raw event embedding, and same-filter stale marking reduce repeated work. | Partially complete. More performance measurement and native API hot-path migration are future work. |
+| Opus 4.6-like docs, not 4.7 | `docs/productization/document-writing-style-guide-opus-4-6.md`, `workspace-ingestion-architecture-adr.md`, active README updates | Style guide exists and the new ADR uses shorter human engineering prose. It explicitly excludes Opus 4.7 voice. | Partially complete. The guide itself says every historical handoff is not rewritten; active entry docs still need staged rewriting if "all docs" is interpreted literally. |
+| Use subagents/skills/MCP as needed | Current run used lark skill guidance and repo-local checks; previous implementation used lark-cli evidence and board sync. | No direct artifact needed, but actions stayed inside project rules. | Sufficient. |
+
+## Verification Commands Already Proven For This Slice
+
+Latest doc/evidence sync commit `194fb7e` passed:
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
+git diff --check
+```
+
+Earlier workspace implementation commits also passed the relevant Python compile and unit suites, including:
+
+```bash
+python3 -m compileall memory_engine scripts
+python3 -m unittest tests.test_feishu_workspace_fetcher tests.test_feishu_workspace_registry_gate
+python3 -m unittest tests.test_feishu_workspace_registry_gate tests.test_feishu_workspace_registry tests.test_feishu_workspace_fetcher
+python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools tests.test_copilot_permissions tests.test_copilot_governance
+```
+
+## Missing Or Weakly Verified Requirements
+
+1. **Normal Sheet real evidence is missing.**
+   The code path exists and tests pass, but the current accessible workspace did not expose a regular Sheet sample. The only Sheet-like object discovered in Wiki was a sheet-backed Bitable tab, and the system correctly returned `no_sources`.
+
+2. **"Full workspace ingestion" is not achieved.**
+   The system has deterministic discovery, registry, cursoring, stale marking, and failed fetch evidence for a limited pilot. It does not yet have a production long-running daemon, full enterprise coverage guarantees, production rate-limit handling, monitoring, or operational SLOs.
+
+3. **Mixed-source corroboration needs real samples.**
+   The architecture and governance model support corroboration and conflicts across chat, docs, sheets, Bitable, tasks, and meetings. The current workspace pilot has not yet proven a real case where a chat memory and document/table memory support or contradict the same active conclusion.
+
+4. **Performance optimization is structural, not benchmarked.**
+   Registry skip/cursor/bounded fetch reduce unnecessary work, but there is no before/after latency benchmark for workspace ingestion or live recall.
+
+5. **The docs rewrite request is only partially fulfilled.**
+   New active productization docs follow the style guide. The full repo contains many historical handoffs and archived plans that intentionally remain audit records. If "all docs" means every non-archived active entry doc, the next staged rewrite targets are `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, and `docs/productization/prd-completion-audit-and-gap-tasks.md`.
+
+## Next Required Action
+
+The next product step should not be another architecture discussion. It should be one of:
+
+1. **Prove normal Sheet ingestion** with an existing normal Sheet token/folder/wiki space, or with explicit user approval to create a controlled test Sheet.
+2. **Add a mixed-source corroboration smoke** where one chat/source and one document/table source support the same memory, then verify evidence count and conflict behavior from SQLite.
+3. **Add a small latency benchmark** for workspace discovery/fetch/candidate ingestion before adding more features.
+4. **Start the active-doc rewrite pass** using `document-writing-style-guide-opus-4-6.md`, keeping archived plans unchanged unless promoted back into active execution.
+
+Until at least the Sheet and mixed-source evidence gaps are closed, do not call the overall objective complete.

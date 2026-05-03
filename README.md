@@ -12,7 +12,7 @@
 
 当前状态：**MVP / Demo / Pre-production 闭环已完成，生产级长期运行还未完成。**
 
-状态快照：2026-05-04，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/workspace-ingestion-architecture-adr.md`、`docs/productization/document-writing-style-guide-opus-4-6.md`、`docs/productization/cross-platform-quick-deploy.md`、`docs/productization/deep-research-improvement-backlog.md`、`docs/productization/user-experience-todo.md` 和 `docs/productization/autonomous-improvement-audit-2026-05-03.md` 为准。
+状态快照：2026-05-04，以当前代码、`docs/productization/full-copilot-next-execution-doc.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/workspace-ingestion-architecture-adr.md`、`docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md`、`docs/productization/document-writing-style-guide-opus-4-6.md`、`docs/productization/cross-platform-quick-deploy.md`、`docs/productization/deep-research-improvement-backlog.md`、`docs/productization/user-experience-todo.md` 和 `docs/productization/autonomous-improvement-audit-2026-05-03.md` 为准。
 
 ### 当前真实 Feishu 使用边界
 
@@ -655,6 +655,7 @@ scripts/start_copilot_feishu_live.sh
 | Benchmark report | `docs/benchmark-report.md` | 指标和评测证据 |
 | Memory 白皮书 | `docs/memory-definition-and-architecture-whitepaper.md` | Define it / Build it / Prove it |
 | PRD 完成度审计 | `docs/productization/prd-completion-audit-and-gap-tasks.md` | 当前完成度和未完成边界 |
+| Workspace ingestion 目标审计 | `docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md` | 用户全量 workspace 接入目标的证据映射和缺口 |
 | 产品化执行文档 | `docs/productization/full-copilot-next-execution-doc.md` | 后续执行主线 |
 | OpenClaw runtime evidence | `docs/productization/openclaw-runtime-evidence.md` | OpenClaw Agent 受控验收证据 |
 | Feishu websocket handoff | `docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
