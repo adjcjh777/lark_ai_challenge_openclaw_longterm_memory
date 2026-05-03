@@ -29,6 +29,10 @@ from memory_engine.document_ingestion import FeishuIngestionSource, extract_cand
 from memory_engine.feishu_events import message_event_from_payload  # noqa: E402
 from memory_engine.feishu_workspace_fetcher import (  # noqa: E402
     WorkspaceActor,
+    WorkspaceResource,
+    discover_drive_folder_resources,
+    discover_wiki_space_resources,
+    discover_workspace_resources,
     fetch_workspace_resource_sources,
     workspace_resource_from_spec,
 )
@@ -64,9 +68,24 @@ def main() -> int:
     parser.add_argument(
         "--resource",
         action="append",
-        required=True,
+        default=[],
         help="Reviewed workspace resource spec type:token[:title]. Resource identifiers are not echoed in the report.",
     )
+    parser.add_argument(
+        "--query",
+        action="append",
+        default=[],
+        help="Optional read-only Drive search query for reviewed resource expansion.",
+    )
+    parser.add_argument("--doc-types", default="doc,docx,wiki,sheet,bitable")
+    parser.add_argument("--opened-since", default="90d")
+    parser.add_argument("--limit", type=int, default=50)
+    parser.add_argument("--max-pages", type=int, default=3)
+    parser.add_argument("--folder-walk-root", action="store_true")
+    parser.add_argument("--folder-walk-tokens")
+    parser.add_argument("--wiki-space-walk-ids")
+    parser.add_argument("--walk-max-depth", type=int, default=2)
+    parser.add_argument("--walk-page-size", type=int, default=50)
     parser.add_argument("--scope", default="workspace:feishu")
     parser.add_argument("--actor-user-id")
     parser.add_argument("--actor-open-id")
@@ -84,12 +103,31 @@ def main() -> int:
 
     if not (args.actor_user_id or args.actor_open_id):
         parser.error("--actor-user-id or --actor-open-id is required")
+    if not (args.resource or args.query or args.folder_walk_root or args.folder_walk_tokens or args.wiki_space_walk_ids):
+        parser.error(
+            "at least one reviewed resource input is required: --resource, --query, "
+            "--folder-walk-root, --folder-walk-tokens, or --wiki-space-walk-ids"
+        )
 
     chats = chat_inputs_from_event_logs(args.event_log, expected_chat_id=args.expected_chat_id)
     resource_sources: list[FeishuIngestionSource] = []
     fetch_failures: list[str] = []
-    for spec in args.resource:
-        resource = workspace_resource_from_spec(spec)
+    resources = collect_reviewed_resources(
+        specs=args.resource,
+        queries=args.query,
+        doc_types=_doc_types(args.doc_types),
+        opened_since=args.opened_since,
+        limit=args.limit,
+        max_pages=args.max_pages,
+        folder_walk_root=args.folder_walk_root,
+        folder_walk_tokens=args.folder_walk_tokens,
+        wiki_space_walk_ids=args.wiki_space_walk_ids,
+        walk_max_depth=args.walk_max_depth,
+        walk_page_size=args.walk_page_size,
+        profile=args.profile,
+        as_identity=args.as_identity,
+    )
+    for resource in resources:
         try:
             resource_sources.extend(
                 fetch_workspace_resource_sources(
@@ -158,6 +196,66 @@ def chat_inputs_from_event_logs(paths: list[Path], *, expected_chat_id: str | No
                 )
             )
     return chats
+
+
+def collect_reviewed_resources(
+    *,
+    specs: list[str],
+    queries: list[str],
+    doc_types: list[str],
+    opened_since: str | None,
+    limit: int,
+    max_pages: int,
+    folder_walk_root: bool,
+    folder_walk_tokens: str | None,
+    wiki_space_walk_ids: str | None,
+    walk_max_depth: int,
+    walk_page_size: int,
+    profile: str | None,
+    as_identity: str | None,
+) -> list[WorkspaceResource]:
+    """Collect reviewed resources without exposing identifiers in the report."""
+
+    resources = [workspace_resource_from_spec(spec) for spec in specs]
+    for query in queries:
+        resources.extend(
+            discover_workspace_resources(
+                query=query,
+                doc_types=doc_types,
+                limit=limit,
+                max_pages=max_pages,
+                opened_since=opened_since,
+                sort="edit_time",
+                profile=profile,
+                as_identity=as_identity,
+            )
+        )
+    if folder_walk_root or folder_walk_tokens:
+        resources.extend(
+            discover_drive_folder_resources(
+                folder_tokens=_split_csv(folder_walk_tokens),
+                include_root=folder_walk_root,
+                doc_types=doc_types,
+                limit=limit,
+                max_depth=walk_max_depth,
+                page_size=walk_page_size,
+                profile=profile,
+                as_identity=as_identity,
+            )
+        )
+    if wiki_space_walk_ids:
+        resources.extend(
+            discover_wiki_space_resources(
+                space_ids=_split_csv(wiki_space_walk_ids),
+                doc_types=doc_types,
+                limit=limit,
+                max_depth=walk_max_depth,
+                page_size=walk_page_size,
+                profile=profile,
+                as_identity=as_identity,
+            )
+        )
+    return _dedupe_resources(resources)
 
 
 def run_sample_finder(
@@ -315,6 +413,28 @@ def _count_source_types(sources: list[FeishuIngestionSource]) -> dict[str, int]:
     for source in sources:
         counts[source.source_type] = counts.get(source.source_type, 0) + 1
     return counts
+
+
+def _doc_types(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _dedupe_resources(resources: list[WorkspaceResource]) -> list[WorkspaceResource]:
+    seen: set[tuple[str, str, str | None]] = set()
+    result: list[WorkspaceResource] = []
+    for resource in resources:
+        key = (resource.route_type, resource.token, resource.table_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(resource)
+    return result
 
 
 def _equals_check(actual: Any, expected: Any) -> dict[str, Any]:

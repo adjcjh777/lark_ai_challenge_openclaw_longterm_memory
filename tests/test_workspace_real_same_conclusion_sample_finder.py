@@ -3,12 +3,13 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from memory_engine.db import connect, init_db
 from memory_engine.document_ingestion import FeishuIngestionSource
-from memory_engine.feishu_workspace_fetcher import WorkspaceActor
+from memory_engine.feishu_workspace_fetcher import WorkspaceActor, WorkspaceResource
 from scripts.check_workspace_real_chat_resource_gate import ChatInput
-from scripts.check_workspace_real_same_conclusion_sample_finder import run_sample_finder
+from scripts.check_workspace_real_same_conclusion_sample_finder import collect_reviewed_resources, run_sample_finder
 
 
 class WorkspaceRealSameConclusionSampleFinderTest(unittest.TestCase):
@@ -73,6 +74,45 @@ class WorkspaceRealSameConclusionSampleFinderTest(unittest.TestCase):
         self.assertIn("same_fact_match_count", report["failures"])
         self.assertIsNone(report["strict_gate"])
         self.assertEqual(0, report["summary"]["same_fact_match_count"])
+
+    def test_collect_reviewed_resources_expands_read_only_discovery_inputs(self) -> None:
+        with (
+            patch(
+                "scripts.check_workspace_real_same_conclusion_sample_finder.discover_workspace_resources",
+                return_value=[
+                    WorkspaceResource(resource_type="docx", token="doc_1", title="Project doc"),
+                    WorkspaceResource(resource_type="docx", token="doc_1", title="Project doc duplicate"),
+                ],
+            ) as search,
+            patch(
+                "scripts.check_workspace_real_same_conclusion_sample_finder.discover_drive_folder_resources",
+                return_value=[WorkspaceResource(resource_type="sheet", token="sht_1", title="Project sheet")],
+            ) as folder,
+            patch(
+                "scripts.check_workspace_real_same_conclusion_sample_finder.discover_wiki_space_resources",
+                return_value=[WorkspaceResource(resource_type="bitable", token="base_1", title="Project base")],
+            ) as wiki,
+        ):
+            resources = collect_reviewed_resources(
+                specs=["docx:doc_1:Reviewed doc"],
+                queries=["OpenClaw"],
+                doc_types=["docx", "sheet", "bitable"],
+                opened_since="365d",
+                limit=20,
+                max_pages=2,
+                folder_walk_root=True,
+                folder_walk_tokens="fld_1",
+                wiki_space_walk_ids="my_library",
+                walk_max_depth=2,
+                walk_page_size=50,
+                profile=None,
+                as_identity="user",
+            )
+
+        self.assertEqual(["doc_1", "sht_1", "base_1"], [resource.token for resource in resources])
+        search.assert_called_once()
+        folder.assert_called_once()
+        wiki.assert_called_once()
 
     def _run(self, *, chats: list[ChatInput], sources: list[FeishuIngestionSource]) -> dict[str, object]:
         with tempfile.TemporaryDirectory() as temp_dir:
