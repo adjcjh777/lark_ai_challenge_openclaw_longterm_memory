@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -35,6 +36,7 @@ from memory_engine.feishu_cards import (  # noqa: E402
     build_prefetch_context_card,
     build_review_inbox_card,
     build_search_result_card,
+    build_version_chain_card,
 )
 from memory_engine.feishu_config import load_feishu_config  # noqa: E402
 from memory_engine.feishu_events import FeishuMessageEvent  # noqa: E402
@@ -228,6 +230,17 @@ def route_gateway_message(
     """
 
     normalized_text = _strip_leading_mention_command(text)
+    card_action = _card_action_payload_from_text(normalized_text)
+    if card_action is not None:
+        return route_gateway_card_action(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action_payload=card_action,
+            db_path=db_path,
+        )
+
     command_name, _argument = _slash_command(normalized_text)
     if command_name in {"settings", "group_settings"} or _looks_like_group_settings_query(normalized_text):
         return route_gateway_group_settings(
@@ -361,6 +374,182 @@ def route_gateway_message(
             "reason_code": "passive_group_detection",
         },
         "publish": _silent_publish_result(message_id=message_id, chat_id=chat_id),
+    }
+
+
+def route_gateway_card_action(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    action_payload: dict[str, Any],
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    """Route card button payloads that OpenClaw surfaces as JSON text.
+
+    The OpenClaw Feishu bridge currently logs card clicks, then forwards the
+    button value as a normal group message. This adapter-level fallback keeps
+    the review action visible even when the original Feishu card update token is
+    unavailable by sending a result card back to the chat.
+    """
+
+    action = str(action_payload.get("memory_engine_action") or "").strip()
+    if action == "versions":
+        return route_gateway_version_action(
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            memory_id=str(action_payload.get("memory_id") or action_payload.get("candidate_id") or "").strip(),
+            db_path=db_path,
+            scope=scope,
+        )
+
+    from scripts.openclaw_feishu_card_action_router import ACTION_TO_TOOL, route_card_action  # noqa: PLC0415
+
+    candidate_id = str(action_payload.get("candidate_id") or "").strip()
+    if action not in ACTION_TO_TOOL or not candidate_id:
+        reply = "\n".join(
+            [
+                "卡片动作未处理。",
+                f"原因：unsupported_card_action:{action or 'missing'}",
+                f"candidate_id：{candidate_id or '-'}",
+            ]
+        )
+        card = build_card_from_text(reply)
+        return {
+            "ok": True,
+            "tool": "memory.card_action",
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "routing_reason": "openclaw_gateway_card_action_invalid",
+            "source_entrypoint": "openclaw_gateway_card_action_text",
+            "tool_result": {
+                "ok": False,
+                "error": {
+                    "code": "unsupported_card_action",
+                    "action": action,
+                    "candidate_id": candidate_id,
+                },
+            },
+            "card": card,
+            "disposition": "reply",
+            "message_disposition": {
+                "memory_path": "card_action",
+                "candidate_path": "invalid",
+                "reason_code": "openclaw_gateway_card_action_invalid",
+            },
+            "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
+            "input_text": text,
+        }
+
+    result = route_card_action(
+        action=action,
+        candidate_id=candidate_id,
+        chat_id=chat_id,
+        operator_open_id=sender_open_id,
+        token=_card_action_token(message_id, action_payload),
+        db_path=db_path,
+    )
+    tool_result = result.get("tool_result") if isinstance(result.get("tool_result"), dict) else {}
+    card = result.get("card") if isinstance(result.get("card"), dict) else build_card_from_text(_format_card_action_result(tool_result))
+    return {
+        "ok": True,
+        "tool": str(tool_result.get("tool") or "memory.card_action"),
+        "message_id": message_id,
+        "chat_id": chat_id,
+        "routing_reason": "openclaw_gateway_card_action_text",
+        "source_entrypoint": "openclaw_gateway_card_action_text",
+        "tool_result": tool_result,
+        "card": card,
+        "disposition": "reply",
+        "message_disposition": {
+            "memory_path": "card_action",
+            "candidate_path": str(tool_result.get("review_status") or tool_result.get("status") or "attempted"),
+            "reason_code": "openclaw_gateway_card_action_text",
+        },
+        "publish": _reply_publish_result(
+            message_id=message_id,
+            chat_id=chat_id,
+            text=_format_card_action_result(tool_result),
+            card=card,
+        ),
+        "input_text": text,
+        "card_action_payload": action_payload,
+    }
+
+
+def route_gateway_version_action(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    memory_id: str,
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    if not memory_id:
+        reply = "版本链未展示。\n原因：memory_id 缺失。"
+        card = build_card_from_text(reply)
+        return {
+            "ok": True,
+            "tool": "memory.explain_versions",
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "routing_reason": "openclaw_gateway_card_action_versions_invalid",
+            "source_entrypoint": "openclaw_gateway_card_action_text",
+            "tool_result": {"ok": False, "error": {"code": "memory_id_required"}},
+            "card": card,
+            "disposition": "reply",
+            "message_disposition": {
+                "memory_path": "version_chain",
+                "candidate_path": "read_only",
+                "reason_code": "openclaw_gateway_card_action_versions_invalid",
+            },
+            "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
+            "input_text": text,
+        }
+
+    payload = {
+        "memory_id": memory_id,
+        "scope": scope,
+        "include_archived": True,
+        "current_context": _gateway_current_context(
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action="memory.explain_versions",
+            intent="explain_versions",
+            thread_topic=memory_id,
+            scope=scope,
+            metadata={"entrypoint": "openclaw_gateway_card_action_text"},
+        ),
+    }
+    service = CopilotService(db_path=db_path)
+    tool_result = handle_tool_request("memory.explain_versions", payload, service=service)
+    reply = _format_version_action_result(tool_result, memory_id=memory_id)
+    card = build_version_chain_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
+    return {
+        "ok": True,
+        "tool": "memory.explain_versions",
+        "message_id": message_id,
+        "chat_id": chat_id,
+        "routing_reason": "openclaw_gateway_card_action_versions",
+        "source_entrypoint": "openclaw_gateway_card_action_text",
+        "tool_result": tool_result,
+        "card": card,
+        "disposition": "reply",
+        "message_disposition": {
+            "memory_path": "version_chain",
+            "candidate_path": "read_only",
+            "reason_code": "openclaw_gateway_card_action_versions",
+        },
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
+        "input_text": text,
     }
 
 
@@ -858,6 +1047,74 @@ def _review_inbox_view(argument: str) -> str:
 def _review_delivery_dry_run() -> bool:
     value = os.environ.get("OPENCLAW_FEISHU_REVIEW_DRY_RUN", "").strip().lower()
     return value in {"1", "true", "yes", "on"}
+
+
+def _card_action_payload_from_text(text: str) -> dict[str, Any] | None:
+    stripped = text.strip()
+    if not (stripped.startswith("{") and stripped.endswith("}")):
+        return None
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    if not parsed.get("memory_engine_action"):
+        return None
+    return parsed
+
+
+def _card_action_token(message_id: str, action_payload: dict[str, Any]) -> str:
+    target = str(action_payload.get("candidate_id") or action_payload.get("memory_id") or "")
+    action = str(action_payload.get("memory_engine_action") or "action")
+    if message_id:
+        return f"openclaw_card_action_{_short_id(message_id)}_{action}_{_short_id(target)}"
+    return f"openclaw_card_action_missing_message_{action}_{_short_id(target)}"
+
+
+def _format_card_action_result(result: dict[str, Any]) -> str:
+    if not result.get("ok"):
+        error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        return "\n".join(
+            [
+                "卡片动作处理失败。",
+                f"理由：{error.get('code') or 'unknown'}",
+                f"状态：{result.get('status') or result.get('review_status') or 'failed'}",
+            ]
+        )
+    memory = result.get("memory") if isinstance(result.get("memory"), dict) else {}
+    return "\n".join(
+        [
+            "卡片动作已处理。",
+            f"处理结果：{result.get('action') or result.get('review_status') or '-'}",
+            f"状态：{result.get('review_status') or result.get('status') or memory.get('status') or '-'}",
+            f"主题：{memory.get('subject') or result.get('candidate_id') or '-'}",
+            f"当前结论：{memory.get('current_value') or '-'}",
+        ]
+    )
+
+
+def _format_version_action_result(result: dict[str, Any], *, memory_id: str) -> str:
+    if not result.get("ok", True):
+        error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        return "\n".join(
+            [
+                "版本链未展示。",
+                f"原因：{error.get('code') or 'unknown'}",
+                f"memory_id：{memory_id}",
+            ]
+        )
+    active = result.get("active_version") if isinstance(result.get("active_version"), dict) else {}
+    versions = result.get("versions") if isinstance(result.get("versions"), list) else []
+    return "\n".join(
+        [
+            "版本链已展示。",
+            f"memory_id：{memory_id}",
+            f"当前结论：{active.get('value') or '-'}",
+            f"版本数量：{len(versions)}",
+            f"状态：{result.get('status') or '-'}",
+        ]
+    )
 
 
 def _gateway_group_policy_for_chat(

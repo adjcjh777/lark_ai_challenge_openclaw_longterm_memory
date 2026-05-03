@@ -96,6 +96,92 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         action_blocks = [element for element in result["card"]["elements"] if element.get("tag") == "action"]
         self.assertEqual(1, len(action_blocks))
 
+    def test_gateway_card_action_json_routes_before_allowlist_silence(self) -> None:
+        tool_result = {
+            "ok": True,
+            "tool": "memory.confirm",
+            "candidate_id": "ver_card_action_json",
+            "memory_id": "mem_card_action_json",
+            "review_status": "confirmed",
+            "status": "active",
+            "action": "confirmed",
+            "memory": {
+                "subject": "OpenClaw 卡片点击",
+                "current_value": "OpenClaw 卡片点击 JSON 必须进入审核动作。",
+                "status": "active",
+            },
+        }
+        card_action_result = {"ok": True, "tool_result": tool_result, "card": {"elements": []}}
+        with patch("scripts.openclaw_feishu_card_action_router.route_card_action", return_value=card_action_result) as routed:
+            payload = {"candidate_id": "ver_card_action_json", "memory_engine_action": "merge"}
+            result = route_gateway_message(
+                text=json.dumps(payload, ensure_ascii=False),
+                message_id="openclaw_before_dispatch_card_action",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("openclaw_gateway_card_action_text", result["routing_reason"])
+        self.assertEqual("confirmed", result["tool_result"]["review_status"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertFalse(result["publish"]["suppressed"])
+        self.assertIs(result["card"], result["publish"]["card"])
+        routed.assert_called_once()
+        self.assertEqual("merge", routed.call_args.kwargs["action"])
+        self.assertEqual("ver_card_action_json", routed.call_args.kwargs["candidate_id"])
+
+    def test_gateway_versions_card_action_json_routes_to_version_chain(self) -> None:
+        tool_result = {
+            "ok": True,
+            "memory_id": "mem_versions_json",
+            "scope": SCOPE,
+            "subject": "OpenClaw 版本链",
+            "status": "active",
+            "active_version": {
+                "version": 1,
+                "version_no": 1,
+                "status": "active",
+                "value": "OpenClaw 版本链按钮必须给出可见回复。",
+                "is_active": True,
+            },
+            "versions": [
+                {
+                    "version": 1,
+                    "version_no": 1,
+                    "status": "active",
+                    "value": "OpenClaw 版本链按钮必须给出可见回复。",
+                    "is_active": True,
+                }
+            ],
+            "bridge": {
+                "tool": "fmc_memory_explain_versions",
+                "request_id": "req_versions_json",
+                "trace_id": "trace_versions_json",
+                "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+            },
+        }
+        with patch("scripts.openclaw_feishu_remember_router.handle_tool_request", return_value=tool_result) as handled:
+            result = route_gateway_message(
+                text=json.dumps({"memory_id": "mem_versions_json", "memory_engine_action": "versions"}),
+                message_id="openclaw_before_dispatch_versions_click",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.explain_versions", result["tool"])
+        self.assertEqual("openclaw_gateway_card_action_versions", result["routing_reason"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertIn("记忆版本链", json.dumps(result["card"], ensure_ascii=False))
+        handled.assert_called_once()
+
     def test_gateway_recall_command_routes_to_first_class_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
