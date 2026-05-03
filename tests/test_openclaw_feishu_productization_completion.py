@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +31,41 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertIn("prepare_feishu_live_evidence_run.py", report["next_evidence_run"]["preflight_command"])
         self.assertIn("--skip-event-diagnostics", report["next_evidence_run"]["offline_checklist_command"])
         self.assertIn("collect_feishu_live_evidence_packet.py", report["next_evidence_run"]["packet_collector_command"])
+
+    def test_cli_output_writes_json_even_when_incomplete(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:
+            root = Path(temp_dir)
+            output = root / "completion-audit.json"
+            missing_log = root / "missing.ndjson"
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/check_openclaw_feishu_productization_completion.py",
+                    "--passive-event-log",
+                    str(missing_log),
+                    "--permission-event-log",
+                    str(missing_log),
+                    "--review-event-log",
+                    str(missing_log),
+                    "--routing-event-log",
+                    str(missing_log),
+                    "--output",
+                    str(output),
+                    "--json",
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(output.read_text(encoding="utf-8"))
+
+        self.assertEqual(1, completed.returncode)
+        self.assertFalse(payload["goal_complete"])
+        self.assertIn("next_evidence_run", payload)
+        self.assertIn("prepare_feishu_live_evidence_run.py", payload["next_step"])
 
     def test_audit_uses_event_diagnostics_for_passive_group_scope_blocker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:

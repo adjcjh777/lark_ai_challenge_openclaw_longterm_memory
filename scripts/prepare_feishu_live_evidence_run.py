@@ -529,7 +529,7 @@ def _manual_steps(
             "instruction": (
                 "python3 scripts/check_openclaw_feishu_productization_completion.py "
                 f"--feishu-live-evidence-packet {packet_output}{event_diagnostics_arg}{sampler_status_arg}{cognee_arg} "
-                f"--json > {completion_output}"
+                f"--output {completion_output} --json"
             ),
         },
     )

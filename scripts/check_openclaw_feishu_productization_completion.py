@@ -78,6 +78,7 @@ def main() -> int:
             "when final long-run evidence is not ready."
         ),
     )
+    parser.add_argument("--output", type=Path, default=None, help="Optional JSON audit output path.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -91,6 +92,10 @@ def main() -> int:
         cognee_long_run_evidence=args.cognee_long_run_evidence,
         cognee_sampler_status=args.cognee_sampler_status,
     )
+    if args.output:
+        output = args.output.expanduser()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     else:
