@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | 1 | 修掉会让展示翻车的硬问题 | 已补本地代码和回归测试 | 跨租户不能按 ID 确认/解释别人的记忆；同 scope 同 subject 可在不同 tenant/org 并存；gateway `/enable_memory` 后的群策略能放行非 allowlist 群的静默候选识别 | `python3 -m unittest tests.test_copilot_permissions tests.test_copilot_governance tests.test_openclaw_feishu_remember_router` |
 | 2 | 准备一条评委能看懂的 Demo 路线 | 已收敛为 8 步脚本 | 不要求评委复制内部 ID；能看到群策略开启、被动识别、候选审核、确认、搜索、版本解释、prefetch 和审计边界 | 本文 `2. 评委 8 步路线` |
-| 3 | 补真实 Feishu / OpenClaw 证据 | 本地采集 gate 已有；真实证据仍需要受控飞书账号现场执行 | 不伪造 live；用同一单监听入口导出日志，并让 evidence packet 和 completion audit gate 读到 pass reason | 本文 `3. 真实证据采集` |
+| 3 | 补真实 Feishu / OpenClaw 证据 | 2026-05-02 受控 live evidence packet 已覆盖四类核心 Feishu/OpenClaw 证据；后续仍要继续扩样 | 不伪造 live；用同一单监听入口导出日志，并让 evidence packet 和 completion audit gate 读到 pass reason | 本文 `3. 真实证据采集` |
 | 4 | 准备评委材料 | 已有入口；本文补齐最终讲法 | 10 分钟脚本、架构图、边界页、验收命令和 fallback 都能定位 | `docs/judge-10-minute-experience.md`、`docs/human-product-guide.md`、`docs/diagrams/` |
 
 ## 2. 评委 8 步路线
@@ -30,7 +30,7 @@
 
 ## 3. 真实证据采集
 
-这一步必须用真实飞书受控账号和当前单监听入口完成，不能由本地单测代替。
+这一步必须用真实飞书受控账号和当前单监听入口完成，不能由本地单测代替。2026-05-02 受控 live packet 已完成一轮四类核心证据；后续 demo 前仍建议按同一流程重跑扩样。
 
 先做只读预检：
 
@@ -48,20 +48,23 @@ python3 scripts/prepare_feishu_live_evidence_run.py --json
 | 权限负例 | 第二个非 reviewer 用户发送 `/enable_memory` | `check_feishu_permission_negative_gate.py` 返回 `non_reviewer_enable_memory_denied` |
 | `/review` DM/card | reviewer 执行 `/review` 并点击一次确认或拒绝 | `check_feishu_review_delivery_gate.py --event-log` 同时看到 private review DM、card action update 和 audit |
 
-收包和总审计：
+本轮已通过的收包和总审计：
 
 ```bash
-python3 scripts/collect_feishu_live_evidence_packet.py --help
-python3 scripts/check_openclaw_feishu_productization_completion.py --json
+python3 scripts/check_openclaw_feishu_productization_completion.py \
+  --feishu-live-evidence-packet logs/feishu-live-evidence-runs/20260502T085247Z/feishu-live-evidence-packet.json \
+  --feishu-event-diagnostics logs/feishu-live-evidence-runs/20260502T085247Z/00-feishu-event-diagnostics.json \
+  --cognee-long-run-evidence logs/cognee-embedding-long-run/2026-05-02-sampler/cognee-long-run-evidence.json \
+  --json
 ```
 
-如果真实日志不齐，结论只能写“本地/pre-production gate 已准备好，live 证据缺口待补”，不能写“真实飞书长期稳定运行已完成”。
+当前结果为 `goal_complete=true`、`blockers=[]`。如果后续扩样真实日志不齐，结论只能写“本地/pre-production gate 已准备好，live 证据缺口待补”，不能写“真实飞书长期稳定运行已完成”。
 
-2026-05-02 当前只读 preflight 结果：
+2026-05-02/2026-05-03 当前 preflight 结果：
 
-- 单监听检查通过：当前看到 `openclaw-gateway`，计划 listener 应保持 `openclaw-websocket`，不要再启动 lark-cli listener 抢同一个 bot。
-- 真实 live 采集暂时不能开始：`prepare_feishu_live_evidence_run.py --json` 返回 `ready_to_capture_live_logs=false`，阻塞点是 Feishu message event schema 没有列出 group-message scope。
-- 需要在同一个飞书/Lark 开发者后台补齐或确认 `im:message.group_msg`，旧版 fallback 为 `im:message.group_msg:readonly`；保留 `im.message.receive_v1` 事件订阅，发布或重新授权后再重跑 preflight。
+- 2026-05-02 带目标群读权限证明的 event diagnostics 通过：enabled app scopes / target group probe 可支持受控非 @ 群消息采证。
+- 2026-05-03 未带目标群证明的泛化 read-only preflight 会因 schema 只列 `im:message.p2p_msg:readonly` 而 fail closed，并写出 operator checklist / remediation guide；这是为了防止换群或换环境时误采证。
+- 当前看到 `openclaw-gateway`，计划 listener 应保持 `openclaw-websocket`，不要再启动 lark-cli listener 抢同一个 bot。
 
 ## 4. 评委材料入口
 
@@ -86,5 +89,5 @@ git diff --check
 
 展示话术边界：
 
-- 可以说：MVP / Demo / Pre-production 闭环已完成，OpenClaw first-class 工具、本地 gateway、受控飞书测试群 sandbox 和本地审计治理都已有。
-- 不能说：生产部署、全量 Feishu workspace 接入、完整多租户后台、长期 embedding 服务、真实 Feishu DM 稳定长期路由或 productized live 已完成。
+- 可以说：MVP / Demo / Pre-production 闭环已完成，OpenClaw first-class 工具、本地 gateway、受控飞书测试群 sandbox、本地审计治理、2026-05-02 受控 live packet 和 Cognee 本地/staging 24h+ 长跑证据都已有。
+- 不能说：生产部署、全量 Feishu workspace 接入、完整多租户后台、生产级长期 embedding 服务、真实 Feishu DM 长期稳定路由或 productized live 已完成。

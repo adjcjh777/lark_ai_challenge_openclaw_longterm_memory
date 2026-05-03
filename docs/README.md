@@ -1,10 +1,10 @@
 # 项目文档导航
 
-日期：2026-05-01（更新：deep research 改进闭环、stable memory key、真实飞书扩样 gate、审计 read-only live gate）
+日期：2026-05-03（更新：九项 demo/pre-production completion gate 已用受控 Feishu live packet + Cognee long-run evidence 跑通）
 
 ## 先看这个
 
-1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环，后续重点是补齐真实飞书集成和产品化硬缺口。
+1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环；2026-05-03 复核九项 productization completion gate 已通过，后续重点是扩样和生产级 productized live gate。
 2. 已完成的日期计划和 handoff 文档已归档到 `archive/` 和 `productization/handoffs/`，不再作为执行入口。
 3. 当前代码和 `docs/productization/full-copilot-next-execution-doc.md` 是事实源。
 4. 本项目由 Codex 完成主要代码和文档修改，人类接手时优先读产品指南和待办清单。
@@ -33,6 +33,7 @@
 | [productization/stable-memory-key-alias-design.md](productization/stable-memory-key-alias-design.md) | 稳定 memory key / alias 层设计，用于降低 subject normalization 和旧值泄漏风险 |
 | [productization/real-feishu-controlled-expansion-checklist.md](productization/real-feishu-controlled-expansion-checklist.md) | 真实飞书受控扩样 gate，列出 smoke matrix、读回证据和凭据/资源 ID 阻塞 |
 | [productization/product-demo-completion-checklist.md](productization/product-demo-completion-checklist.md) | 产品展示完成清单：四件事、8 步 demo 路线、真实证据采集和评委材料入口 |
+| [productization/handoffs/openclaw-feishu-completion-gate-handoff.md](productization/handoffs/openclaw-feishu-completion-gate-handoff.md) | 九项 demo/pre-production completion gate 的通过命令、证据路径和 no-overclaim 边界 |
 | [productization/audit-read-only-live-gate.md](productization/audit-read-only-live-gate.md) | productized live 小步实施 gate：审计 read-only view，不宣称生产长期运行 |
 | [productization/productized-live-long-run-plan.md](productization/productized-live-long-run-plan.md) | Productized live 长期运行方案；只定义 gate 和运行边界，不代表已上线 |
 
