@@ -118,6 +118,7 @@ This slice adds a controlled adapter:
   - dry-run discovery mode;
   - controlled candidate-only ingestion mode requiring an actor id.
   - registry-backed repeat-run summary with fetched, skipped, failed, and stale counts.
+  - Drive search scan filters for `--mine`, creator/sharer/chat IDs, sort, and since/until time windows.
 - `lark_sheet` source support in schema and ingestion metadata.
 - Tests in `tests/test_feishu_workspace_fetcher.py` and `tests/test_feishu_workspace_registry.py`.
 
@@ -126,7 +127,9 @@ Example dry run:
 ```bash
 python3 scripts/feishu_workspace_ingest.py \
   --query "" \
-  --edited-since 30d \
+  --mine \
+  --opened-since 30d \
+  --sort edit_time \
   --limit 20 \
   --profile feishu-ai-challenge \
   --dry-run \
@@ -138,7 +141,9 @@ Example controlled ingestion:
 ```bash
 python3 scripts/feishu_workspace_ingest.py \
   --query "" \
-  --edited-since 30d \
+  --mine \
+  --opened-since 30d \
+  --sort edit_time \
   --limit 20 \
   --profile feishu-ai-challenge \
   --actor-open-id "$COPILOT_REVIEWER_OPEN_ID" \
@@ -152,7 +157,9 @@ Example repeat run with registry stale marking:
 ```bash
 python3 scripts/feishu_workspace_ingest.py \
   --query "" \
-  --edited-since 30d \
+  --mine \
+  --opened-since 30d \
+  --sort edit_time \
   --limit 20 \
   --profile feishu-ai-challenge \
   --actor-open-id "$COPILOT_REVIEWER_OPEN_ID" \
@@ -177,6 +184,7 @@ Keep the current feature stable first, then optimize the hot path:
 ## Acceptance Criteria
 
 - Discovery can list doc/docx/wiki/sheet/bitable resources without writing the DB.
+- Operators can scope discovery with `--mine`, creator/sharer/chat IDs, folder/wiki filters, sort, and since/until time windows.
 - Document, Sheet, and Bitable resources can become `FeishuIngestionSource` objects.
 - Every source fetch has a matching source-context permission key.
 - Candidate creation still goes through `ingest_feishu_source()` and `CopilotService`.

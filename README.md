@@ -81,7 +81,7 @@
 | 优先级 | 任务 | 完成标准 |
 |---|---|---|
 | P1 | 扩大真实飞书样本实测 | 已完成 1 条受控真实 Feishu Task fetch -> candidate smoke；后续继续扩到 Meeting / Bitable 和更多真实表达样本，保留 review-policy gate、失败 fallback 和 no-overclaim |
-| P1 | 扩大 workspace ingestion pilot 实测 | 先用 `scripts/feishu_workspace_ingest.py --dry-run --json` 在受控 folder/wiki space 上读回资源发现，再用 reviewer/operator actor id 小批量跑 doc/sheet/bitable candidate-only ingestion；第二次运行必须读回 registry skip / stale / failed 统计，保留 evidence、audit、失败 fallback 和 no-overclaim |
+| P1 | 扩大 workspace ingestion pilot 实测 | 先用 `scripts/feishu_workspace_ingest.py --dry-run --mine --opened-since 30d --sort edit_time --json` 或受控 folder/wiki space 读回资源发现，再用 reviewer/operator actor id 小批量跑 doc/sheet/bitable candidate-only ingestion；第二次运行必须读回 registry skip / stale / failed 统计，保留 evidence、audit、失败 fallback 和 no-overclaim |
 | P1 | 扩大真实表达 pre-live 质量 gate | `scripts/check_real_feishu_expression_quality_gate.py --json` 已通过本地硬 gate：Recall@3 1.0000、误记率 0.0000、误提醒率 0.0000、解释覆盖率 1.0000、旧值泄漏率 0.0000；当前 25 条脱敏样本全部通过，后续仍需继续扩样，不能说生产真实用户稳定可用 |
 | P1 | 扩大真实飞书权限负例样本 | 2026-05-02 受控 live packet 已证明第二个非 reviewer `/enable_memory` 被拒绝；后续继续扩到更多群/租户/角色组合，并保留 deny result、审计和 no-overclaim |
 | P1 | 扩大真实飞书可点击卡片实测 | 2026-05-02 受控 live packet 已覆盖 private review DM、candidate card、card action update result 和 review inbox；后续继续覆盖 `确认保存`、`拒绝候选`、`要求补证据`、`标记过期`、冲突合并和撤销，不把一次 sandbox 点击写成生产长期运行 |

@@ -48,10 +48,20 @@ def main() -> int:
         help="Comma-separated drive doc types for discovery",
     )
     parser.add_argument("--edited-since", help="Filter resources edited since this time, e.g. 30d")
+    parser.add_argument("--edited-until", help="Filter resources edited before this time")
     parser.add_argument("--opened-since", help="Filter resources opened since this time, e.g. 30d")
+    parser.add_argument("--opened-until", help="Filter resources opened before this time")
     parser.add_argument("--created-since", help="Filter resources created since this time, e.g. 2026-05-01")
+    parser.add_argument("--created-until", help="Filter resources created before this time")
+    parser.add_argument("--commented-since", help="Filter resources commented since this time")
+    parser.add_argument("--commented-until", help="Filter resources commented before this time")
     parser.add_argument("--folder-tokens", help="Comma-separated Drive folder tokens")
     parser.add_argument("--space-ids", help="Comma-separated Wiki space IDs")
+    parser.add_argument("--mine", action="store_true", help="Restrict discovery to docs created by the current user")
+    parser.add_argument("--creator-ids", help="Comma-separated creator open_ids")
+    parser.add_argument("--sharer-ids", help="Comma-separated sharer open_ids")
+    parser.add_argument("--chat-ids", help="Comma-separated chat IDs")
+    parser.add_argument("--sort", help="Drive search sort: default, edit_time, edit_time_asc, open_time, create_time")
     parser.add_argument("--limit", type=int, default=20, help="Maximum resources to discover")
     parser.add_argument("--max-pages", type=int, default=3, help="Maximum drive search pages")
     parser.add_argument("--max-sheet-rows", type=int, default=80, help="Maximum rows read from each sheet")
@@ -86,10 +96,20 @@ def main() -> int:
         query=args.query,
         doc_types=doc_types,
         edited_since=args.edited_since,
+        edited_until=args.edited_until,
         opened_since=args.opened_since,
+        opened_until=args.opened_until,
         created_since=args.created_since,
+        created_until=args.created_until,
+        commented_since=args.commented_since,
+        commented_until=args.commented_until,
         folder_tokens=args.folder_tokens,
         space_ids=args.space_ids,
+        mine=args.mine,
+        creator_ids=args.creator_ids,
+        sharer_ids=args.sharer_ids,
+        chat_ids=args.chat_ids,
+        sort=args.sort,
     )
 
     resources = discover_workspace_resources(
@@ -98,10 +118,20 @@ def main() -> int:
         limit=args.limit,
         max_pages=args.max_pages,
         edited_since=args.edited_since,
+        edited_until=args.edited_until,
         opened_since=args.opened_since,
+        opened_until=args.opened_until,
         created_since=args.created_since,
+        created_until=args.created_until,
+        commented_since=args.commented_since,
+        commented_until=args.commented_until,
         folder_tokens=args.folder_tokens,
         space_ids=args.space_ids,
+        mine=args.mine,
+        creator_ids=args.creator_ids,
+        sharer_ids=args.sharer_ids,
+        chat_ids=args.chat_ids,
+        sort=args.sort,
         profile=args.profile,
         as_identity=args.as_identity,
     )
@@ -139,10 +169,20 @@ def main() -> int:
         doc_types=doc_types,
         filters={
             "edited_since": args.edited_since,
+            "edited_until": args.edited_until,
             "opened_since": args.opened_since,
+            "opened_until": args.opened_until,
             "created_since": args.created_since,
+            "created_until": args.created_until,
+            "commented_since": args.commented_since,
+            "commented_until": args.commented_until,
             "folder_tokens": args.folder_tokens,
             "space_ids": args.space_ids,
+            "mine": args.mine,
+            "creator_ids": args.creator_ids,
+            "sharer_ids": args.sharer_ids,
+            "chat_ids": args.chat_ids,
+            "sort": args.sort,
         },
         mode="controlled_workspace_ingestion_pilot",
         boundary="candidate_pipeline_only_with_registry_no_production_daemon_no_raw_event_embedding",

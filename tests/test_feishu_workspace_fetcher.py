@@ -91,6 +91,37 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertEqual(["doc_1", "sheet_1"], [item.token for item in resources])
         self.assertIn("--page-token", run.call_args_list[1].args[0])
 
+    def test_discovers_workspace_resources_with_scan_filters(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok({"results": [], "has_more": False})
+
+            discover_workspace_resources(
+                query="",
+                limit=5,
+                mine=True,
+                opened_since="30d",
+                opened_until="2026-05-04",
+                creator_ids="ou_creator",
+                sharer_ids="ou_sharer",
+                chat_ids="oc_chat",
+                sort="edit_time",
+            )
+
+        argv = run.call_args.args[0]
+        self.assertIn("--mine", argv)
+        self.assertIn("--opened-since", argv)
+        self.assertIn("30d", argv)
+        self.assertIn("--opened-until", argv)
+        self.assertIn("2026-05-04", argv)
+        self.assertIn("--creator-ids", argv)
+        self.assertIn("ou_creator", argv)
+        self.assertIn("--sharer-ids", argv)
+        self.assertIn("ou_sharer", argv)
+        self.assertIn("--chat-ids", argv)
+        self.assertIn("oc_chat", argv)
+        self.assertIn("--sort", argv)
+        self.assertIn("edit_time", argv)
+
     @patch("memory_engine.document_ingestion.subprocess.run")
     def test_fetches_document_resource_as_feishu_source(self, subprocess_run: Mock) -> None:
         completed = Mock()
