@@ -51,7 +51,7 @@ def fetch_bitable_record_text(
         raise ValueError("获取 Bitable 记录失败: 记录数据为空")
 
     # 提取字段文本
-    fields = record.get("fields", {})
+    fields = record.get("fields", record)
     if not fields:
         raise ValueError("获取 Bitable 记录失败: 记录字段为空")
 
@@ -125,8 +125,21 @@ def list_bitable_records(
     if not data or "data" not in data:
         return []
 
-    items = data["data"].get("items", [])
+    payload = data["data"]
+    items = payload.get("items", [])
     records = []
+
+    if not items and isinstance(payload.get("data"), list):
+        field_names = [str(item) for item in payload.get("fields", [])]
+        record_ids = [str(item) for item in payload.get("record_id_list", [])]
+        for index, row in enumerate(payload.get("data", [])):
+            values = row if isinstance(row, list) else []
+            items.append(
+                {
+                    "record_id": record_ids[index] if index < len(record_ids) else "",
+                    "fields": dict(zip(field_names, values)),
+                }
+            )
 
     for item in items:
         record_id = item.get("record_id", "")
@@ -189,11 +202,12 @@ def list_bitable_tables(
     if not data or "data" not in data:
         return []
 
-    items = data["data"].get("items", [])
+    payload = data["data"]
+    items = payload.get("items") or payload.get("tables") or []
     tables = []
 
     for item in items:
-        table_id = item.get("table_id", "")
+        table_id = item.get("table_id") or item.get("id") or ""
         name = item.get("name", "")
         revision = item.get("revision", 0)
 

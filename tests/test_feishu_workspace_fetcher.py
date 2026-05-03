@@ -14,6 +14,7 @@ from memory_engine.feishu_workspace_fetcher import (
     discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
+    workspace_resource_from_spec,
     workspace_current_context,
 )
 from memory_engine.repository import MemoryRepository
@@ -26,6 +27,18 @@ def _ok(data: dict) -> FeishuApiResult:
 
 
 class FeishuWorkspaceFetcherTest(unittest.TestCase):
+    def test_parses_explicit_workspace_resource_spec(self) -> None:
+        resource = workspace_resource_from_spec("bitable:app_1:项目看板")
+
+        self.assertEqual("bitable", resource.resource_type)
+        self.assertEqual("app_1", resource.token)
+        self.assertEqual("项目看板", resource.title)
+        self.assertEqual("bitable", resource.route_type)
+
+    def test_explicit_workspace_resource_spec_requires_type_and_token(self) -> None:
+        with self.assertRaises(ValueError):
+            workspace_resource_from_spec("bitable")
+
     def test_discovers_workspace_resources_with_drive_search(self) -> None:
         with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
             run.return_value = _ok(

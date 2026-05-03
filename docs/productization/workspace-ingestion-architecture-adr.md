@@ -8,7 +8,7 @@ Status: Accepted for L2 limited workspace pilot. This is not production full-wor
 
 Use **lark-cli first** for the current OpenClaw-native pilot, and keep the architecture ready to move hot paths to native Feishu OpenAPI / SDK when the pilot becomes a long-running service.
 
-The reason is practical. `lark-cli` already wraps the Feishu operations this project needs for controlled ingestion: `drive +search` for resource discovery, `docs +fetch --api-version v2` for document content, `sheets +info/+read` for spreadsheet content, and `base +table-list/+record-list/+record-get` for Bitable. It is easy for OpenClaw, scripts, and operators to run, inspect, and replay.
+The reason is practical. `lark-cli` already wraps the Feishu operations this project needs for controlled ingestion: `drive +search` for resource discovery, `docs +fetch --api-version v2` for document content, `sheets +info/+read` for spreadsheet content, and `base +table-list/+record-list/+record-get` for Bitable. It is easy for OpenClaw, scripts, and operators to run, inspect, and replay. When Drive discovery returns zero resources or the operator already has a reviewed token, the script also supports explicit resources through `--resource type:token[:title] --skip-discovery`; that is an operator-scoped pilot path, not a hidden full-workspace crawler.
 
 Native Feishu OpenAPI remains the production direction for a daemon because it gives tighter control over pagination, cursor state, retries, rate limits, event subscriptions, telemetry, and deployment. Do not force a binary choice: keep `lark-cli` as the pilot and operations adapter, then replace the subprocess boundary only where the service needs production-grade throughput or lifecycle control.
 
@@ -121,8 +121,10 @@ This slice adds a controlled adapter:
   - registry-backed repeat-run summary with fetched, skipped, failed, and stale counts.
   - Drive search scan filters for `--mine`, creator/sharer/chat IDs, sort, and since/until time windows.
   - `--resume-cursor` / `--reset-cursor` for long scans across multiple runs.
+  - `--resource type:token[:title]` and `--skip-discovery` for explicit, reviewed resources when Drive search is not the right entry point.
 - `lark_sheet` source support in schema and ingestion metadata.
-- Tests in `tests/test_feishu_workspace_fetcher.py` and `tests/test_feishu_workspace_registry.py`.
+- Bitable fetch compatibility for the current lark-cli 1.0.22 output shapes: `base +table-list` can return `tables[].id`, `base +record-list` can return tabular rows plus `record_id_list`, and `base +record-get` can return fields directly under `record`.
+- Tests in `tests/test_feishu_fetchers.py`, `tests/test_feishu_workspace_fetcher.py`, and `tests/test_feishu_workspace_registry.py`.
 
 Example dry run:
 
@@ -189,6 +191,21 @@ python3 scripts/feishu_workspace_ingest.py \
 
 The cursor is keyed by tenant, organization, workspace id, and the discovery filter hash. Changing query, doc types, time windows, folder/wiki space, creator/sharer/chat filters, or sort creates a different cursor.
 
+Example explicit resource smoke when a reviewed Base token is already known:
+
+```bash
+MEMORY_DB_PATH="$(mktemp -t fmc-workspace-smoke.XXXXXX.sqlite)" \
+python3 scripts/feishu_workspace_ingest.py \
+  --skip-discovery \
+  --resource bitable:"$BITABLE_APP_TOKEN":"飞书挑战赛任务跟进看板" \
+  --max-bitable-records 1 \
+  --candidate-limit 2 \
+  --actor-open-id "$COPILOT_REVIEWER_OPEN_ID" \
+  --json
+```
+
+2026-05-04 controlled evidence: using a temporary SQLite database and a reviewed Bitable token, this path produced `resource_count=1`, `source_count=1`, `fetched_count=1`, `candidate_count=1`, `failed_count=0`, and no writes to the default project database. The same day `drive +search` still returned zero resources for the available account context, so the correct claim is "explicit resource candidate smoke works"; it is not "full workspace discovery is complete."
+
 ## Performance Plan
 
 Keep the current feature stable first, then optimize the hot path:
@@ -205,6 +222,7 @@ Keep the current feature stable first, then optimize the hot path:
 
 - Discovery can list doc/docx/wiki/sheet/bitable resources without writing the DB.
 - Operators can scope discovery with `--mine`, creator/sharer/chat IDs, folder/wiki filters, sort, and since/until time windows.
+- Operators can ingest reviewed explicit resources with `--resource type:token[:title] --skip-discovery` when Drive discovery is empty or intentionally bypassed.
 - Document, Sheet, and Bitable resources can become `FeishuIngestionSource` objects.
 - Every source fetch has a matching source-context permission key.
 - Candidate creation still goes through `ingest_feishu_source()` and `CopilotService`.

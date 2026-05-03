@@ -505,6 +505,26 @@ class BitableFetcherTest(unittest.TestCase):
         self.assertEqual(source.metadata["record_id"], "rec_001")
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
+    def test_fetch_bitable_record_text_accepts_current_lark_cli_shape(self, mock_run: Mock) -> None:
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "record": {
+                        "任务描述": "D1 本地 Memory Engine 最小闭环",
+                        "状态": ["已完成"],
+                        "备注": "SQLite schema、remember/recall、版本链已验收。",
+                    },
+                },
+            }
+        )
+
+        source = fetch_bitable_record_text("app_token", "tbl_1", "rec_001")
+
+        self.assertIn("本地 Memory Engine", source.text)
+        self.assertIn("已完成", source.text)
+        self.assertEqual(["任务描述", "状态", "备注"], source.metadata["field_names"])
+
+    @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_fetch_bitable_record_api_error(self, mock_run: Mock) -> None:
         mock_run.return_value = _error_result("resource_not_found", "记录不存在")
 
@@ -555,6 +575,24 @@ class BitableFetcherTest(unittest.TestCase):
         self.assertIn("记录一", records[0]["summary"])
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
+    def test_list_bitable_records_accepts_current_lark_cli_shape(self, mock_run: Mock) -> None:
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "data": [["D1 本地 Memory Engine 最小闭环", ["已完成"]]],
+                    "fields": ["任务描述", "状态"],
+                    "record_id_list": ["rec_1"],
+                },
+            }
+        )
+
+        records = list_bitable_records("app", "tbl", limit=10)
+
+        self.assertEqual(1, len(records))
+        self.assertEqual("rec_1", records[0]["record_id"])
+        self.assertIn("D1 本地 Memory Engine", records[0]["summary"])
+
+    @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_list_bitable_tables_success(self, mock_run: Mock) -> None:
         mock_run.return_value = _ok_result(
             {
@@ -570,6 +608,25 @@ class BitableFetcherTest(unittest.TestCase):
         tables = list_bitable_tables("app_token")
 
         self.assertEqual(2, len(tables))
+        self.assertEqual("tbl_a", tables[0]["table_id"])
+        self.assertEqual("任务表", tables[0]["name"])
+
+    @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
+    def test_list_bitable_tables_accepts_current_lark_cli_shape(self, mock_run: Mock) -> None:
+        mock_run.return_value = _ok_result(
+            {
+                "data": {
+                    "tables": [
+                        {"id": "tbl_a", "name": "任务表"},
+                    ],
+                    "total": 1,
+                },
+            }
+        )
+
+        tables = list_bitable_tables("app_token")
+
+        self.assertEqual(1, len(tables))
         self.assertEqual("tbl_a", tables[0]["table_id"])
         self.assertEqual("任务表", tables[0]["name"])
 

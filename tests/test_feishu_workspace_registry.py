@@ -34,6 +34,17 @@ class FeishuWorkspaceRegistryTest(unittest.TestCase):
         self.addCleanup(self.conn.close)
         init_db(self.conn)
 
+    def test_filter_key_separates_explicit_resources_from_discovery_scan(self) -> None:
+        discovery_only_key = discovery_filter_key(query="", doc_types=["bitable"])
+        explicit_key = discovery_filter_key(
+            query="",
+            doc_types=["bitable"],
+            explicit_resources=["bitable:app_1:任务看板"],
+            skip_discovery=True,
+        )
+
+        self.assertNotEqual(discovery_only_key, explicit_key)
+
     def test_registry_skips_unchanged_resources_after_ingestion(self) -> None:
         filter_key = discovery_filter_key(query="", doc_types=["docx"], edited_since="30d")
         first_run = self._start_run(filter_key)

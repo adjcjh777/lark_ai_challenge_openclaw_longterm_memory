@@ -63,6 +63,23 @@ class WorkspaceDiscoveryBatch:
         return self.next_page_token is None
 
 
+def workspace_resource_from_spec(spec: str) -> WorkspaceResource:
+    """Parse an explicit resource spec: type:token[:title]."""
+
+    parts = spec.split(":", 2)
+    if len(parts) < 2 or not parts[0].strip() or not parts[1].strip():
+        raise ValueError("resource spec must be type:token[:title]")
+    resource_type = _normalize_resource_type(parts[0])
+    title = parts[2].strip() if len(parts) > 2 and parts[2].strip() else parts[1].strip()
+    return WorkspaceResource(
+        resource_type=resource_type,
+        token=parts[1].strip(),
+        title=title,
+        obj_type=resource_type,
+        raw={"explicit_resource_spec": spec},
+    )
+
+
 def discover_workspace_resources(
     *,
     query: str = "",

@@ -50,6 +50,8 @@ def discovery_filter_key(
     sharer_ids: str | None = None,
     chat_ids: str | None = None,
     sort: str | None = None,
+    explicit_resources: Iterable[str] = (),
+    skip_discovery: bool = False,
 ) -> str:
     payload = {
         "query": query or "",
@@ -69,6 +71,8 @@ def discovery_filter_key(
         "sharer_ids": sharer_ids or "",
         "chat_ids": chat_ids or "",
         "sort": sort or "",
+        "explicit_resources": sorted(str(item).strip() for item in explicit_resources if str(item).strip()),
+        "skip_discovery": bool(skip_discovery),
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24]

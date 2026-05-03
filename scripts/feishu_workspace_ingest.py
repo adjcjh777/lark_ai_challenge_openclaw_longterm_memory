@@ -23,9 +23,11 @@ from memory_engine.document_ingestion import FeishuIngestionSource, ingest_feish
 from memory_engine.feishu_workspace_fetcher import (
     WorkspaceActor,
     WorkspaceResource,
+    WorkspaceDiscoveryBatch,
     discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
+    workspace_resource_from_spec,
     workspace_current_context,
 )
 from memory_engine.feishu_workspace_registry import (
@@ -92,6 +94,13 @@ def main() -> int:
     )
     parser.add_argument("--resume-cursor", action="store_true", help="Resume discovery from the saved page token")
     parser.add_argument("--reset-cursor", action="store_true", help="Clear the saved cursor before this run")
+    parser.add_argument(
+        "--resource",
+        action="append",
+        default=[],
+        help="Explicit resource spec type:token[:title], e.g. bitable:app_token:Task Board",
+    )
+    parser.add_argument("--skip-discovery", action="store_true", help="Use only explicit --resource specs")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
 
     args = parser.parse_args()
@@ -116,32 +125,38 @@ def main() -> int:
         sharer_ids=args.sharer_ids,
         chat_ids=args.chat_ids,
         sort=args.sort,
+        explicit_resources=args.resource,
+        skip_discovery=args.skip_discovery,
     )
+    explicit_resources = [workspace_resource_from_spec(spec) for spec in args.resource]
 
     if args.dry_run:
-        resources = discover_workspace_resources(
-            query=args.query,
-            doc_types=doc_types,
-            limit=args.limit,
-            max_pages=args.max_pages,
-            edited_since=args.edited_since,
-            edited_until=args.edited_until,
-            opened_since=args.opened_since,
-            opened_until=args.opened_until,
-            created_since=args.created_since,
-            created_until=args.created_until,
-            commented_since=args.commented_since,
-            commented_until=args.commented_until,
-            folder_tokens=args.folder_tokens,
-            space_ids=args.space_ids,
-            mine=args.mine,
-            creator_ids=args.creator_ids,
-            sharer_ids=args.sharer_ids,
-            chat_ids=args.chat_ids,
-            sort=args.sort,
-            profile=args.profile,
-            as_identity=args.as_identity,
-        )
+        resources = []
+        if not args.skip_discovery:
+            resources = discover_workspace_resources(
+                query=args.query,
+                doc_types=doc_types,
+                limit=args.limit,
+                max_pages=args.max_pages,
+                edited_since=args.edited_since,
+                edited_until=args.edited_until,
+                opened_since=args.opened_since,
+                opened_until=args.opened_until,
+                created_since=args.created_since,
+                created_until=args.created_until,
+                commented_since=args.commented_since,
+                commented_until=args.commented_until,
+                folder_tokens=args.folder_tokens,
+                space_ids=args.space_ids,
+                mine=args.mine,
+                creator_ids=args.creator_ids,
+                sharer_ids=args.sharer_ids,
+                chat_ids=args.chat_ids,
+                sort=args.sort,
+                profile=args.profile,
+                as_identity=args.as_identity,
+            )
+        resources.extend(explicit_resources)
         return _emit(
             {
                 "ok": True,
@@ -184,31 +199,34 @@ def main() -> int:
         )
         if cursor_before and cursor_before.get("status") == "active":
             start_page_token = str(cursor_before.get("page_token") or "") or None
-    discovery_batch = discover_workspace_resource_batch(
-        query=args.query,
-        doc_types=doc_types,
-        limit=args.limit,
-        max_pages=args.max_pages,
-        edited_since=args.edited_since,
-        edited_until=args.edited_until,
-        opened_since=args.opened_since,
-        opened_until=args.opened_until,
-        created_since=args.created_since,
-        created_until=args.created_until,
-        commented_since=args.commented_since,
-        commented_until=args.commented_until,
-        folder_tokens=args.folder_tokens,
-        space_ids=args.space_ids,
-        mine=args.mine,
-        creator_ids=args.creator_ids,
-        sharer_ids=args.sharer_ids,
-        chat_ids=args.chat_ids,
-        sort=args.sort,
-        profile=args.profile,
-        as_identity=args.as_identity,
-        start_page_token=start_page_token,
-    )
-    resources = discovery_batch.resources
+    if args.skip_discovery:
+        discovery_batch = WorkspaceDiscoveryBatch(resources=[], pages_seen=0, next_page_token=None)
+    else:
+        discovery_batch = discover_workspace_resource_batch(
+            query=args.query,
+            doc_types=doc_types,
+            limit=args.limit,
+            max_pages=args.max_pages,
+            edited_since=args.edited_since,
+            edited_until=args.edited_until,
+            opened_since=args.opened_since,
+            opened_until=args.opened_until,
+            created_since=args.created_since,
+            created_until=args.created_until,
+            commented_since=args.commented_since,
+            commented_until=args.commented_until,
+            folder_tokens=args.folder_tokens,
+            space_ids=args.space_ids,
+            mine=args.mine,
+            creator_ids=args.creator_ids,
+            sharer_ids=args.sharer_ids,
+            chat_ids=args.chat_ids,
+            sort=args.sort,
+            profile=args.profile,
+            as_identity=args.as_identity,
+            start_page_token=start_page_token,
+        )
+    resources = [*discovery_batch.resources, *explicit_resources]
     source_results: list[dict[str, Any]] = []
     filters = {
         "edited_since": args.edited_since,
@@ -226,6 +244,8 @@ def main() -> int:
         "sharer_ids": args.sharer_ids,
         "chat_ids": args.chat_ids,
         "sort": args.sort,
+        "explicit_resources": args.resource,
+        "skip_discovery": args.skip_discovery,
         "resume_cursor": args.resume_cursor,
         "start_page_token": start_page_token,
     }
