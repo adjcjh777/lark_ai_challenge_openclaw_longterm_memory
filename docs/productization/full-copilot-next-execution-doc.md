@@ -1,22 +1,57 @@
 # 完整可用 Copilot 后续执行文档
 
 日期：2026-04-28  
-更新：2026-05-04 新增 workspace ingestion pilot，并补 source registry / run registry。当前完成的是 lark-cli-first 的受控资源发现、文档/Sheet/Bitable 类型路由、candidate-only 入口、revision 去重、unchanged skip、同 filter stale 标记、registry revocation、discovery cursor、显式 `--resource type:token[:title] --skip-discovery` 入口、Drive root/folder walk、Wiki space walk，以及当前 lark-cli 1.0.22 Bitable 输出兼容；direct walk 已遵守 `--doc-types`；受控 Bitable token 已在临时 SQLite 中跑通 1 个 `lark_bitable` source -> 1 个 candidate；Drive root/folder walk 已跑通 1 个 `document_feishu` source -> 2 个 candidates；Wiki `my_library` walk 已跑通 2 个 `document_feishu` sources -> 2 个 candidates，并对 sheet-backed Bitable tab 显式返回 `no_sources`；新增只读 registry gate，同一临时库重复 folder walk 后已读回 `run_count=2`、`ingested=1`、`skipped_unchanged=1`、`cursor_count=1`；同 filter stale 真实临时库 gate 已读回 `stale_marked=3`、`has_stale=true`；显式无效 docx token 负例 gate 已读回 latest run `completed_with_errors`、`failed=1`、`has_failed=true`；mixed-source gate 已在临时 SQLite 中证明 `feishu_message` + `document_feishu` 能共同佐证同一 active memory，`lark_bitable` 差异值会成为 conflict candidate 且不覆盖 active；本地 warm-path latency gate 已读回平均 5.51ms、最大 5.599ms 且质量指标全绿；sheet-only 只读扩样显示当前账号尚未找到常规 Sheet 正常读取真实样本。仍不能写成生产全量 workspace ingestion。
-当前目标：从“初赛 MVP 已完成”升级为“做出完整、可用、可治理、可审计的 Feishu Memory Copilot”。  
-适用方式：可以直接复制整份文档给下一轮 Codex / OpenClaw / 执行 agent 使用。
+更新：2026-05-04，已把 workspace ingestion 方向纳入当前主控文档。
+
+这份文档是后续 agent 的产品化执行入口。它不再用来证明“初赛 MVP 能跑”；那个阶段已经有 demo / pre-production 证据。现在要继续推进的是：在不破坏现有稳定闭环的前提下，把飞书文档、云文档、Bitable、Sheet 和群聊来源放进同一条受治理的企业记忆链路。
 
 ## 一句话目标
 
-我们现在不再满足于“初赛完成 MVP”。接下来要把 Feishu Memory Copilot 做成一个完整可用的产品：OpenClaw Agent 能在真实任务中调用企业记忆，飞书里能完成受控搜索、候选确认、版本解释、任务前上下文预取和提醒候选审核，Copilot Core 有权限、证据、状态机、审计和健康检查闭环。
+把 Feishu Memory Copilot 做成一个完整可用的 OpenClaw-native 企业记忆产品：Agent 能调用带权限、证据、版本和审计的团队记忆；飞书侧能在受控范围内发现候选、搜索当前结论、解释版本、预取任务上下文，并把需要人工判断的内容交给 reviewer / owner。
 
 ## 先看这个
 
-1. 今天的真实日期是 2026-04-28；仓库中已有未来日期计划和 handoff，但本轮以当前仓库代码和最新文档为事实源。
-2. 2026-05-05 及以前的 implementation plan 已经全部完成，不再需要执行；它们只保留为历史计划、验收证据和风险参考。
-3. 初赛 MVP、Benchmark Report、Demo replay、白皮书、受控飞书测试群 live sandbox 已经成型，不要重复做“证明能跑”的 demo。
-4. Phase A 已补齐 storage migration + audit table；Phase B 已补真实 OpenClaw Agent runtime 受控证据；Phase D 已补 live Cognee/Ollama embedding gate；Phase E 已完成 no-overclaim 交付物审查；后期打磨 P0 已补 `memory.*` first-class OpenClaw 原生工具注册本机证据、OpenClaw Feishu websocket running 本机 staging 证据、Agent 本地 `fmc_*` 工具调用验证，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 证据；后期打磨 P1 已补生产存储、索引和迁移方案的本地入口；后期打磨 P0 已补真实飞书权限映射本地闭环；后期打磨 P1 已补 limited Feishu ingestion 本地底座；2026-04-29 已补审计查询、告警和运维 healthcheck 面、productized live 长期运行方案、真实飞书可点击卡片的受控 sandbox/pre-production 路径，以及 Feishu 群/用户/消息作为企业图谱拓扑的本地发现能力；2026-04-30 已补 OpenClaw gateway 本地不 @ 静默候选筛选入口、审核卡片 publisher 层 DM/private 定向投递、以及只读群级设置卡片；2026-05-01 已补任意群 onboarding 的本地/pre-production 群策略：新群默认 pending_onboarding，不记录消息内容，reviewer/admin 显式 `/enable_memory` 后才允许当前群静默候选筛选，并可在 Admin Groups 视图查看策略状态；OpenClaw gateway 本地路由也已补 `/settings`、`/enable_memory`、`/disable_memory`，gateway 抢到群设置事件时不再必然回落旧 agent 路径。2026-05-02 已补九项 productization completion audit gate 和受控 Feishu live evidence packet；2026-05-03 结合 Cognee 24h+ 本地/staging 长跑 evidence 复核，completion audit 返回 `goal_complete=true`。当前最大的后续产品化缺口是：继续扩大真实 Feishu 样本、真实卡片点击和真实 DM 投递实测，以及选择一个长期运行 gate 做受控实施。
-5. 所有真实飞书数据仍先进入 `memory.create_candidate` 和 review policy；低重要性、无冲突、无敏感风险内容可以自动确认成 active，项目进展重要、重要角色发言、敏感/高风险或冲突内容必须停在 candidate；confirm/reject/undo 必须走 `CopilotService` / `handle_tool_request()`。
-6. 不要把 demo replay、dry-run、测试群 sandbox 写成 production live、全量 Feishu workspace ingestion 或完整多租户后台。
+当前状态是 **demo / pre-production 闭环已完成，workspace ingestion 进入 limited pilot，生产全量 workspace ingestion 还未完成**。
+
+已成型的主线包括：OpenClaw `fmc_*` 工具、本地 bridge、`CopilotService` 权限门控、候选记忆、版本链、审计、检索、受控飞书测试群 live sandbox、first-class OpenClaw tool registry、本机 websocket staging 证据、一次受控真实 Feishu DM allow-path、Cognee 本地/staging 长跑证据，以及九项 demo/pre-production completion audit gate。
+
+Workspace ingestion 的当前选择是 **lark-cli first**。原因很直接：lark-cli 已经把 Drive、Wiki、Docs、Sheets、Base/Bitable 等操作包装成适合 OpenClaw 调用的命令，能更快做出可审计 pilot。native Feishu OpenAPI / SDK 后续只在长期 daemon、高吞吐热路径、rate-limit 管理或更强错误分类需要时替换子进程边界。
+
+当前 workspace pilot 已有这些证据：Drive root / folder walk、Wiki space walk、显式 `--resource type:token[:title]`、doc/docx/wiki/sheet/bitable 类型路由、source registry / run registry、revision 去重、unchanged skip、同 filter stale 标记、failed fetch 记录、discovery cursor、registry gate、mixed-source 本地佐证 gate、warm-path latency gate。最近 latency gate 读回平均 5.51ms、最大 5.599ms，质量指标全绿。
+
+还不能说完成的是：生产全量 workspace ingestion、普通 Sheet 真实样本、真实 chat + doc/table mixed-source live sample、真实 lark-cli fetch/network latency、生产 DB / 生产监控 / productized live 长期运行、完整多租户企业后台。
+
+所有真实飞书来源仍必须先进入 `memory.create_candidate` 和 review policy。低重要性、无冲突、无敏感风险内容可以自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容必须停在 candidate；confirm / reject / undo 必须走 `CopilotService` / `handle_tool_request()`。
+
+已完成并归档的日期计划只作为历史证据，不再作为默认执行入口。如果历史计划和当前代码或本文件冲突，以当前代码、`README.md` 顶部状态和本文件为准。
+
+## 下一步怎么选
+
+如果要继续 workspace ingestion，优先做这三类实证，而不是再写一轮架构讨论：
+
+1. 用已有常规 Sheet token / folder / wiki space 证明 normal Sheet ingestion，或在用户明确同意后创建受控测试 Sheet。
+2. 用真实飞书 chat + document / Sheet / Bitable 围绕同一个结论跑 mixed-source live sample，证明“佐证追加”和“冲突不覆盖 active”在真实来源上成立。
+3. 把 latency gate 从本地 warm path 扩到真实 lark-cli fetch/network path，继续保持 bounded discovery、registry skip 和 no raw-event embedding。
+
+如果要继续文档重写，按 `docs/productization/document-writing-style-guide-opus-4-6.md` 只改活跃入口文档。历史 handoff 和 archived plans 保留审计用途，除非被重新提升为当前执行入口。
+
+## 本轮验证底线
+
+文档-only 改动至少运行：
+
+```bash
+python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
+git diff --check
+```
+
+改 Python、脚本、schema 或 benchmark runner 时，追加：
+
+```bash
+python3 -m compileall memory_engine scripts
+```
+
+改 Copilot schema / tools / service、权限、治理或候选记忆时，再按 `AGENTS.md` 和 `docs/productization/agent-execution-contract.md` 追加对应 unittest。
 
 ## 必读文件
 
@@ -43,7 +78,7 @@ docs/plans/2026-05-08-demo-readiness-handoff.md
 docs/productization/feishu-single-listener-handoff.md
 ```
 
-如果这些文件与当前代码冲突，以当前代码和本执行文档的产品化目标为准；2026-05-05 及以前日期计划和旧 Day1-Day7 文档只作 reference，不要回到 CLI-first / Bot-first 主线。
+如果这些文件与当前代码冲突，以当前代码和本执行文档的产品化目标为准；已完成的日期计划和旧 Day1-Day7 文档只作 reference，不要回到旧 CLI-first / Bot-first 主线。这里的旧 CLI-first 指 legacy Bot / legacy CLI 主线，不是当前 workspace pilot 的 lark-cli-first adapter。
 
 ## 当前事实基线
 
