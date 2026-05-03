@@ -170,6 +170,17 @@ def prepare_live_evidence_run(
         planned_listener=planned_listener,
         openclaw_config_path=openclaw_config_path,
     )
+    evidence_checklist = _evidence_checklist(
+        log_paths=log_paths,
+        diagnostic_paths=diagnostic_paths,
+        packet_output=packet_output,
+        completion_output=completion_output,
+        cognee_long_run_evidence=cognee_long_run_evidence,
+        embedding_sample_log=embedding_sample_log,
+        controlled_chat_id=controlled_chat_id,
+        non_reviewer_open_id=non_reviewer_open_id,
+        reviewer_open_id=reviewer_open_id,
+    )
     return {
         "ok": not blocking_failures,
         "production_ready_claim": False,
@@ -187,6 +198,7 @@ def prepare_live_evidence_run(
         "diagnostic_paths": {name: str(path) for name, path in diagnostic_paths.items()},
         "diagnostic_write_results": diagnostic_write_results,
         "manual_steps": steps,
+        "evidence_checklist": evidence_checklist,
         "next_step": "Follow manual_steps and rerun packet/completion audit after real Feishu/OpenClaw logs are captured.",
     }
 
@@ -215,6 +227,9 @@ def format_report(result: dict[str, Any]) -> str:
         phase = f" [{step.get('phase')}]" if step.get("phase") else ""
         lines.append(f"  {step['id']}. {step['title']}{phase}{ready_marker}")
         lines.append(f"     {step['instruction']}")
+    lines.append("evidence_checklist:")
+    for item in result.get("evidence_checklist", []):
+        lines.append(f"  - {item['id']}: {item['status']} -> {item['evidence_path']}")
     return "\n".join(lines)
 
 
@@ -450,6 +465,109 @@ def _manual_steps(
         },
     )
     return steps
+
+
+def _evidence_checklist(
+    *,
+    log_paths: dict[str, Path],
+    diagnostic_paths: dict[str, Path],
+    packet_output: Path,
+    completion_output: Path,
+    cognee_long_run_evidence: Path | None,
+    embedding_sample_log: Path | None,
+    controlled_chat_id: str,
+    non_reviewer_open_id: str,
+    reviewer_open_id: str,
+) -> list[dict[str, Any]]:
+    chat_filter = f" --target-chat-id {controlled_chat_id}" if controlled_chat_id else ""
+    passive_chat_filter = f" --expected-chat-id {controlled_chat_id}" if controlled_chat_id else ""
+    permission_actor_filter = f" --expected-actor-id {non_reviewer_open_id}" if non_reviewer_open_id else ""
+    reviewer_filter = f" --expected-reviewer-open-id {reviewer_open_id}" if reviewer_open_id else ""
+    cognee_evidence = cognee_long_run_evidence or Path("<pending-cognee-long-run-evidence.json>")
+    return [
+        {
+            "id": "event_subscription_preflight",
+            "completion_item": "1",
+            "requirement": "Feishu app event subscription and group-message scope are readable before live capture.",
+            "evidence_path": str(diagnostic_paths["feishu_event_diagnostics"]),
+            "gate_command": (
+                "python3 scripts/check_feishu_event_subscription_diagnostics.py "
+                f"--require-group-message-scope{chat_filter} --json"
+            ),
+            "manual_step_ids": ["1"],
+            "status": "preflight_required",
+            "proxy_signal_warning": "Read-only diagnostics do not prove non-@ group message delivery.",
+        },
+        {
+            "id": "non_at_group_message_live_delivery",
+            "completion_item": "1",
+            "requirement": "A real non-@ group text message reaches the current single listener.",
+            "evidence_path": str(log_paths["passive_event_log"]),
+            "gate_command": (
+                "python3 scripts/check_feishu_passive_message_event_gate.py "
+                f"--event-log {log_paths['passive_event_log']}{passive_chat_filter} --json"
+            ),
+            "manual_step_ids": ["2", "7"],
+            "status": "requires_real_feishu_message",
+            "proxy_signal_warning": "At-mention messages, reaction events, and unit tests are insufficient.",
+        },
+        {
+            "id": "first_class_memory_tool_live_routing",
+            "completion_item": "3",
+            "requirement": "Real Feishu/OpenClaw path emits fmc_memory_search, fmc_memory_create_candidate, and fmc_memory_prefetch results.",
+            "evidence_path": str(log_paths["routing_event_log"]),
+            "gate_command": (
+                "python3 scripts/collect_feishu_live_evidence_packet.py "
+                f"--passive-event-log {log_paths['passive_event_log']} "
+                f"--routing-event-log {log_paths['routing_event_log']} "
+                f"--permission-event-log {log_paths['permission_event_log']} "
+                f"--review-event-log {log_paths['review_event_log']} --json"
+            ),
+            "manual_step_ids": ["3", "6"],
+            "status": "requires_real_feishu_openclaw_result",
+            "proxy_signal_warning": "Local fmc tool registry and dry-run bridge results are insufficient.",
+        },
+        {
+            "id": "live_negative_permission_second_user",
+            "completion_item": "4",
+            "requirement": "A second real non-reviewer user is denied when sending @Bot /enable_memory.",
+            "evidence_path": str(log_paths["permission_event_log"]),
+            "gate_command": (
+                "python3 scripts/check_feishu_permission_negative_gate.py "
+                f"--event-log {log_paths['permission_event_log']}{passive_chat_filter}{permission_actor_filter} --json"
+            ),
+            "manual_step_ids": ["4", "7"],
+            "status": "requires_second_real_user",
+            "proxy_signal_warning": "Reviewer/admin allow-path logs do not cover the negative permission requirement.",
+        },
+        {
+            "id": "review_dm_card_e2e",
+            "completion_item": "5",
+            "requirement": "Real /review produces private DM/card delivery and card action update result.",
+            "evidence_path": str(log_paths["review_event_log"]),
+            "gate_command": (
+                "python3 scripts/check_feishu_review_delivery_gate.py "
+                f"--event-log {log_paths['review_event_log']}{reviewer_filter} --json"
+            ),
+            "manual_step_ids": ["5", "6"],
+            "status": "requires_real_review_dm_and_click",
+            "proxy_signal_warning": "Candidate review card creation alone is insufficient.",
+        },
+        {
+            "id": "cognee_embedding_long_term_service",
+            "completion_item": "8",
+            "requirement": "Cognee curated sync has persistent-store readback and >=24h embedding health evidence.",
+            "evidence_path": str(cognee_evidence),
+            "gate_command": (
+                "python3 scripts/check_openclaw_feishu_productization_completion.py "
+                f"--feishu-live-evidence-packet {packet_output} "
+                f"--cognee-long-run-evidence {cognee_evidence} --json > {completion_output}"
+            ),
+            "manual_step_ids": ["8", "9"] if embedding_sample_log else ["8"],
+            "status": "requires_24h_long_run_evidence",
+            "proxy_signal_warning": "Live embedding dimension checks and Cognee dry-run are insufficient.",
+        },
+    ]
 
 
 def _event_subscription_check(

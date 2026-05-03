@@ -196,6 +196,30 @@ python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/
 
 这个 gate 只证明捕获到的事件形态，不等于生产长期运行，也不替代单监听检查。
 
+### 3.3.2 统一 live evidence 采集预检
+
+在下一次真实 Feishu / OpenClaw 采证前，先生成一次预检清单：
+
+```bash
+python3 scripts/prepare_feishu_live_evidence_run.py \
+  --planned-listener openclaw-websocket \
+  --controlled-chat-id <受控测试群 chat_id> \
+  --non-reviewer-open-id <第二个真实非 reviewer open_id> \
+  --reviewer-open-id <reviewer open_id> \
+  --create-dirs \
+  --json
+```
+
+输出里的 `evidence_checklist` 会把每个未完成项映射到具体证据文件和 gate 命令：
+
+- 非 `@Bot` 群消息投递：`check_feishu_passive_message_event_gate.py`
+- first-class `fmc_memory_search` / `fmc_memory_create_candidate` / `fmc_memory_prefetch` live routing：`collect_feishu_live_evidence_packet.py`
+- 第二个非 reviewer 权限负例：`check_feishu_permission_negative_gate.py`
+- `/review` 私聊 DM / card / update-card E2E：`check_feishu_review_delivery_gate.py`
+- Cognee 长跑：`check_openclaw_feishu_productization_completion.py --cognee-long-run-evidence ...`
+
+这个预检只生成路径、命令和防 overclaim 清单；不会发送飞书消息、不会点击卡片，也不能替代真实 live 日志。
+
 ### 3.4 数据库损坏
 
 **症状**：SQLite 报错 "database disk image is malformed"

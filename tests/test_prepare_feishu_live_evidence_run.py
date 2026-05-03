@@ -120,6 +120,16 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("collect_feishu_live_evidence_packet.py", instructions)
         self.assertIn("check_openclaw_feishu_productization_completion.py", instructions)
         self.assertIn("--feishu-event-diagnostics", instructions)
+        checklist = {item["id"]: item for item in result["evidence_checklist"]}
+        self.assertIn("non_at_group_message_live_delivery", checklist)
+        self.assertIn("first_class_memory_tool_live_routing", checklist)
+        self.assertIn("live_negative_permission_second_user", checklist)
+        self.assertIn("review_dm_card_e2e", checklist)
+        self.assertIn("cognee_embedding_long_term_service", checklist)
+        self.assertEqual("requires_second_real_user", checklist["live_negative_permission_second_user"]["status"])
+        self.assertIn("proxy_signal_warning", checklist["first_class_memory_tool_live_routing"])
+        self.assertIn("check_feishu_passive_message_event_gate.py", checklist["non_at_group_message_live_delivery"]["gate_command"])
+        self.assertIn("check_feishu_review_delivery_gate.py", checklist["review_dm_card_e2e"]["gate_command"])
         packet_step = next(
             step for step in result["manual_steps"] if step["title"] == "Build sanitized Feishu live packet"
         )
