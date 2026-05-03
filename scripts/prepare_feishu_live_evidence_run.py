@@ -251,6 +251,7 @@ def prepare_live_evidence_run(
         reviewer_open_id=reviewer_open_id,
     )
     operator_checklist_path = evidence_dir / "operator-checklist.md"
+    remediation_guide_path = evidence_dir / "feishu-console-remediation.md"
     result = {
         "ok": not blocking_failures,
         "production_ready_claim": False,
@@ -269,6 +270,8 @@ def prepare_live_evidence_run(
         "diagnostic_write_results": diagnostic_write_results,
         "operator_checklist_path": str(operator_checklist_path),
         "operator_checklist_write_result": {},
+        "remediation_guide_path": str(remediation_guide_path),
+        "remediation_guide_write_result": {},
         "manual_steps": steps,
         "evidence_checklist": evidence_checklist,
         "next_step": "Follow manual_steps and rerun packet/completion audit after real Feishu/OpenClaw logs are captured.",
@@ -278,6 +281,11 @@ def prepare_live_evidence_run(
             operator_checklist_path,
             format_operator_checklist(result),
         )
+        if _has_feishu_console_remediation(result):
+            result["remediation_guide_write_result"] = _write_text_file(
+                remediation_guide_path,
+                format_feishu_console_remediation(result),
+            )
     return result
 
 
@@ -310,6 +318,8 @@ def format_report(result: dict[str, Any]) -> str:
         lines.append(f"  - {item['id']}: {item['status']} -> {item['evidence_path']}")
     if result.get("operator_checklist_path"):
         lines.append(f"operator_checklist: {result['operator_checklist_path']}")
+    if result.get("remediation_guide_write_result", {}).get("status") == "pass":
+        lines.append(f"remediation_guide: {result['remediation_guide_path']}")
     return "\n".join(lines)
 
 
@@ -374,6 +384,70 @@ def format_operator_checklist(result: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def format_feishu_console_remediation(result: dict[str, Any]) -> str:
+    diagnostics = result["checks"]["event_subscription"].get("diagnostics") or {}
+    remediation = diagnostics.get("remediation") if isinstance(diagnostics, dict) else {}
+    schema = diagnostics.get("message_event_schema") if isinstance(diagnostics, dict) else {}
+    required_scopes = (remediation.get("required_scopes_any_of") if isinstance(remediation, dict) else []) or []
+    current_scopes = (remediation.get("current_scopes") if isinstance(remediation, dict) else schema.get("scopes", [])) or []
+    enabled_scopes = (
+        remediation.get("enabled_scopes") if isinstance(remediation, dict) else schema.get("enabled_scopes", [])
+    ) or []
+    steps = (remediation.get("steps") if isinstance(remediation, dict) else []) or []
+    warnings = diagnostics.get("warnings") if isinstance(diagnostics, dict) else []
+    lines = [
+        "# Feishu Console Remediation",
+        "",
+        f"- Run ID: `{result['run_id']}`",
+        f"- Ready to capture live logs: `{str(result['ready_to_capture_live_logs']).lower()}`",
+        f"- Event subscription status: `{result['checks']['event_subscription']['status']}`",
+        "- This guide is a remediation artifact, not live evidence.",
+        "",
+        "## Required Console Change",
+        "",
+        "- Enable or verify bot-side group-message access for the same Feishu/Lark app.",
+        "- Keep `im.message.receive_v1` subscribed for bot auth, then publish or reauthorize if the console requires it.",
+        "",
+        "## Scope Diff",
+        "",
+        f"- Required any of: `{', '.join(str(scope) for scope in required_scopes) or '<unknown>'}`",
+        f"- Current message event schema scopes: `{', '.join(str(scope) for scope in current_scopes) or '<none>'}`",
+        f"- Enabled app scopes observed by CLI: `{', '.join(str(scope) for scope in enabled_scopes) or '<none>'}`",
+        "",
+    ]
+    if warnings:
+        lines.extend(["## Warnings", ""])
+        for warning in warnings:
+            if isinstance(warning, dict):
+                lines.append(f"- `{warning.get('id', 'warning')}`: {warning.get('detail', '')}")
+        lines.append("")
+    if steps:
+        lines.extend(["## Steps", ""])
+        for step in steps:
+            lines.append(f"- {step}")
+        lines.append("")
+    lines.extend(
+        [
+            "## Rerun",
+            "",
+            "```bash",
+            result["manual_steps"][0]["instruction"],
+            "```",
+            "",
+            "Only send real non-@ group messages after this diagnostic passes.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _has_feishu_console_remediation(result: dict[str, Any]) -> bool:
+    event_subscription = result.get("checks", {}).get("event_subscription", {})
+    diagnostics = event_subscription.get("diagnostics") if isinstance(event_subscription, dict) else None
+    remediation = diagnostics.get("remediation") if isinstance(diagnostics, dict) else None
+    return event_subscription.get("status") == "fail" and isinstance(remediation, dict)
 
 
 def _log_paths(evidence_dir: Path) -> dict[str, Path]:

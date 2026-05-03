@@ -286,6 +286,48 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("check_openclaw_feishu_productization_completion.py", markdown)
         self.assertIn("first_class_memory_tool_live_routing", markdown)
 
+    def test_create_dirs_writes_feishu_console_remediation_when_scope_blocks_live_capture(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="feishu_live_preflight_") as temp_dir:
+            root = Path(temp_dir)
+            diagnostics = _event_diagnostics(
+                ok=False,
+                failed_checks=["message_schema_group_message_scope"],
+                warnings=[
+                    {
+                        "id": "message_schema_scope_does_not_list_group_msg",
+                        "detail": "group-message scope is missing",
+                    }
+                ],
+            )
+            diagnostics["message_event_schema"] = {
+                "scopes": ["im:message.p2p_msg:readonly"],
+                "enabled_scopes": ["im:message", "im:message:readonly"],
+            }
+            diagnostics["remediation"] = {
+                "required_scopes_any_of": ["im:message.group_msg", "im:message.group_msg:readonly"],
+                "current_scopes": ["im:message.p2p_msg:readonly"],
+                "enabled_scopes": ["im:message", "im:message:readonly"],
+                "steps": ["Enable im:message.group_msg in the Feishu console."],
+            }
+
+            result = prepare_live_evidence_run(
+                planned_listener="openclaw-websocket",
+                output_dir=root,
+                process_rows=[],
+                create_dirs=True,
+                event_subscription_diagnostics=diagnostics,
+            )
+
+            guide_path = Path(result["remediation_guide_path"])
+            markdown = guide_path.read_text(encoding="utf-8")
+
+        self.assertEqual("pass", result["remediation_guide_write_result"]["status"])
+        self.assertIn("Feishu Console Remediation", markdown)
+        self.assertIn("im:message.group_msg", markdown)
+        self.assertIn("im:message.p2p_msg:readonly", markdown)
+        self.assertIn("group-message scope is missing", markdown)
+        self.assertIn("Only send real non-@ group messages after this diagnostic passes", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()
