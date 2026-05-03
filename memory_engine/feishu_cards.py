@@ -779,7 +779,7 @@ def build_reminder_candidate_card(reminder: dict[str, Any]) -> dict[str, Any]:
     return card
 
 
-def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[str, Any]:
+def build_version_chain_card(explain_versions_response: dict[str, Any], *, expanded: bool = False) -> dict[str, Any]:
     payload = version_chain_payload(explain_versions_response)
     if payload.get("status") == "permission_denied":
         return _permission_denied_card("记忆版本链", payload)
@@ -788,25 +788,48 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
     current_version = (
         user_content.get("current_version") if isinstance(user_content.get("current_version"), dict) else {}
     )
-    version_lines = []
-    for item in user_content.get("timeline") or payload["versions"]:
-        marker = "当前" if item.get("is_active") else "旧值"
-        inactive = f"；{item['inactive_reason']}" if item.get("inactive_reason") else ""
-        version = item.get("version") or item.get("version_no")
-        version_lines.append(f"v{version} [{item.get('status')}] {marker}：{item.get('value')}{inactive}")
+    timeline = [
+        item
+        for item in (user_content.get("timeline") or payload.get("versions") or [])
+        if isinstance(item, dict)
+    ]
+    current_timeline = next((item for item in timeline if item.get("is_active")), {})
+    historical_versions = [item for item in timeline if not item.get("is_active")]
+    key_historical_versions = historical_versions if expanded else historical_versions[-3:]
+    folded_count = 0 if expanded else max(0, len(historical_versions) - len(key_historical_versions))
 
     explanation_fields = [
-        ("当前结论", str(current_version.get("value") or (payload.get("active_version") or {}).get("value") or "")),
-        ("为什么采用", str(user_content.get("override_reason") or payload.get("explanation") or "")),
-        ("证据说明", str(user_content.get("evidence_summary") or "")),
+        (
+            "当前结论",
+            _shorten_card_text(str(current_version.get("value") or (payload.get("active_version") or {}).get("value") or ""), 180),
+        ),
+        ("为什么采用", _shorten_card_text(str(user_content.get("override_reason") or payload.get("explanation") or ""), 220)),
+        ("证据说明", _shorten_card_text(str(user_content.get("evidence_summary") or ""), 180)),
         ("搜索边界", str(user_content.get("search_boundary") or "默认搜索只返回当前 active 版本。")),
     ]
+    version_fields = [
+        (
+            _version_card_label(current_timeline or current_version, prefix="当前版本"),
+            _shorten_card_text(str((current_timeline or current_version).get("value") or ""), 180),
+        )
+    ]
+    for item in key_historical_versions:
+        inactive = str(item.get("inactive_reason") or "不是当前有效版本。")
+        value = str(item.get("value") or "")
+        version_fields.append(
+            (
+                _version_card_label(item, prefix="关键旧版本"),
+                _shorten_card_text(f"{value}\n{inactive}", 190),
+            )
+        )
+    if folded_count:
+        version_fields.append(("已折叠历史", f"还有 {folded_count} 条更早版本未在聊天卡片展开，可在审计或后台查看完整链路。"))
 
-    return {
+    card = {
         "config": {"wide_screen_mode": True},
         "header": {
             "template": "blue",
-            "title": {"tag": "plain_text", "content": "记忆版本链"},
+            "title": {"tag": "plain_text", "content": "完整版本链" if expanded else "记忆版本链"},
         },
         "elements": [
             {
@@ -817,6 +840,7 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
                         "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
                     }
                     for label, value in explanation_fields
+                    if value
                 ],
             },
             {
@@ -834,11 +858,32 @@ def build_version_chain_card(explain_versions_response: dict[str, Any]) -> dict[
             },
             {
                 "tag": "div",
-                "text": {"tag": "lark_md", "content": "\n".join(version_lines)},
+                "fields": [
+                    {
+                        "is_short": False,
+                        "text": {"tag": "lark_md", "content": f"**{label}**\n{value}"},
+                    }
+                    for label, value in version_fields
+                    if value
+                ],
             },
-            _audit_block(payload.get("audit_details") or {}),
         ],
     }
+    memory_id = str(payload.get("memory_id") or "")
+    if not expanded and folded_count and memory_id:
+        card["elements"].append(
+            {
+                "tag": "action",
+                "actions": [
+                    _button(
+                        "展开完整版本链",
+                        "default",
+                        {CARD_ACTION_KEY: "versions_full", "memory_id": memory_id},
+                    )
+                ],
+            }
+        )
+    return card
 
 
 def build_prefetch_context_card(prefetch_response: dict[str, Any]) -> dict[str, Any]:
@@ -1340,6 +1385,19 @@ def _version_timeline_item(item: dict[str, Any]) -> dict[str, Any]:
         "inactive_reason": item.get("inactive_reason"),
         "is_active": bool(item.get("is_active")),
     }
+
+
+def _version_card_label(item: dict[str, Any], *, prefix: str) -> str:
+    version = item.get("version") or item.get("version_no") or "-"
+    status = item.get("status") or "-"
+    return f"{prefix} v{version} [{status}]"
+
+
+def _shorten_card_text(value: str, limit: int) -> str:
+    text = " ".join(value.split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
 
 
 def _compact_context_item(item: dict[str, Any]) -> dict[str, Any]:

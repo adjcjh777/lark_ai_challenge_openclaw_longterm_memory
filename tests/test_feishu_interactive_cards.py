@@ -1321,7 +1321,43 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertIn("默认搜索只返回当前 active 版本", payload["user_content"]["search_boundary"])
         self.assertIn("为什么采用", rendered)
         self.assertIn("当前采用 v2：ap-shanghai", rendered)
+        self.assertIn("关键旧版本 v1 [superseded]", rendered)
         self.assertIn("superseded", rendered)
+
+    def test_copilot_version_chain_card_folds_long_history_behind_button(self) -> None:
+        response = {
+            "ok": True,
+            "memory_id": "mem_long_versions",
+            "scope": "project:feishu_ai_challenge",
+            "subject": "Benchmark",
+            "type": "workflow",
+            "status": "active",
+            "active_version": {"version_id": "ver_5", "version": 5, "value": "current", "status": "active"},
+            "versions": [
+                {
+                    "version_id": f"ver_{version}",
+                    "version": version,
+                    "value": f"value {version}",
+                    "status": "active" if version == 5 else "superseded",
+                    "is_active": version == 5,
+                    "inactive_reason": "旧版本只保留在版本链里。",
+                }
+                for version in range(1, 6)
+            ],
+            "explanation": "当前有效值是 v5。",
+        }
+
+        compact = build_version_chain_card(response)
+        expanded = build_version_chain_card(response, expanded=True)
+        compact_rendered = json.dumps(compact, ensure_ascii=False)
+        expanded_rendered = json.dumps(expanded, ensure_ascii=False)
+
+        self.assertIn("已折叠历史", compact_rendered)
+        self.assertIn("versions_full", compact_rendered)
+        self.assertNotIn("value 1", compact_rendered)
+        self.assertIn("完整版本链", expanded_rendered)
+        self.assertIn("value 1", expanded_rendered)
+        self.assertNotIn("versions_full", expanded_rendered)
 
     def test_copilot_version_chain_payload_redacts_permission_denied_output(self) -> None:
         denied = {

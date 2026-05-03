@@ -160,7 +160,7 @@ def _command_from_card_value(value: dict[str, Any]) -> str:
     if action in {"confirm", "reject", "needs_evidence", "expire", "undo", "merge"}:
         candidate_id = _string(value.get("candidate_id") or value.get("memory_id"))
         return f"/{action} {candidate_id}" if candidate_id else ""
-    if action == "versions":
+    if action in {"versions", "versions_full"}:
         memory_id = _string(value.get("memory_id"))
         return f"/versions {memory_id}" if memory_id else ""
     return ""

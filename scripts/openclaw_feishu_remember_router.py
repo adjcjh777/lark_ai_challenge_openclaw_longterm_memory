@@ -396,13 +396,14 @@ def route_gateway_card_action(
     """
 
     action = str(action_payload.get("memory_engine_action") or "").strip()
-    if action == "versions":
+    if action in {"versions", "versions_full"}:
         return route_gateway_version_action(
             text=text,
             message_id=message_id,
             chat_id=chat_id,
             sender_open_id=sender_open_id,
             memory_id=str(action_payload.get("memory_id") or action_payload.get("candidate_id") or "").strip(),
+            expanded=action == "versions_full",
             db_path=db_path,
             scope=scope,
         )
@@ -488,6 +489,7 @@ def route_gateway_version_action(
     chat_id: str,
     sender_open_id: str,
     memory_id: str,
+    expanded: bool = False,
     db_path: str | None = None,
     scope: str = SCOPE,
 ) -> dict[str, Any]:
@@ -532,7 +534,7 @@ def route_gateway_version_action(
     service = CopilotService(db_path=db_path)
     tool_result = handle_tool_request("memory.explain_versions", payload, service=service)
     reply = _format_version_action_result(tool_result, memory_id=memory_id)
-    card = build_version_chain_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
+    card = build_version_chain_card(tool_result, expanded=expanded) if tool_result.get("ok", True) else build_card_from_text(reply)
     return {
         "ok": True,
         "tool": "memory.explain_versions",
