@@ -159,6 +159,10 @@ class PrepareFeishuLiveEvidenceRunTest(unittest.TestCase):
         self.assertIn("proxy_signal_warning", checklist["first_class_memory_tool_live_routing"])
         self.assertIn("check_feishu_passive_message_event_gate.py", checklist["non_at_group_message_live_delivery"]["gate_command"])
         self.assertIn("check_feishu_review_delivery_gate.py", checklist["review_dm_card_e2e"]["gate_command"])
+        cognee_gate = checklist["cognee_embedding_long_term_service"]["gate_command"]
+        self.assertIn("--output", cognee_gate)
+        self.assertIn("completion-audit.json", cognee_gate)
+        self.assertNotIn(" > ", cognee_gate)
         packet_step = next(
             step for step in result["manual_steps"] if step["title"] == "Build sanitized Feishu live packet"
         )

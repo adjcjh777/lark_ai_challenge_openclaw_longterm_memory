@@ -630,7 +630,7 @@ def _evidence_checklist(
             "gate_command": (
                 "python3 scripts/check_openclaw_feishu_productization_completion.py "
                 f"--feishu-live-evidence-packet {packet_output} "
-                f"--cognee-long-run-evidence {cognee_evidence} --json > {completion_output}"
+                f"--cognee-long-run-evidence {cognee_evidence} --output {completion_output} --json"
             ),
             "manual_step_ids": ["8", "9"] if embedding_sample_log else ["8"],
             "status": "requires_24h_long_run_evidence",
