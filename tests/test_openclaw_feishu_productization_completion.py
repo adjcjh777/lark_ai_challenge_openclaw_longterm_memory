@@ -25,6 +25,10 @@ class OpenClawFeishuProductizationCompletionTest(unittest.TestCase):
         self.assertEqual("evidence_log_not_configured", blockers["live_negative_permission_second_user"])
         self.assertEqual("evidence_log_not_configured", blockers["review_dm_card_e2e"])
         self.assertEqual("long_term_cognee_embedding_evidence_missing", blockers["cognee_embedding_long_term_service"])
+        self.assertIn("prepare_feishu_live_evidence_run.py", report["next_step"])
+        self.assertIn("prepare_feishu_live_evidence_run.py", report["next_evidence_run"]["preflight_command"])
+        self.assertIn("--skip-event-diagnostics", report["next_evidence_run"]["offline_checklist_command"])
+        self.assertIn("collect_feishu_live_evidence_packet.py", report["next_evidence_run"]["packet_collector_command"])
 
     def test_audit_uses_event_diagnostics_for_passive_group_scope_blocker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="openclaw_completion_audit_") as temp_dir:

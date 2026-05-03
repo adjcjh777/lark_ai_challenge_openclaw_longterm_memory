@@ -169,6 +169,7 @@ def build_completion_audit(
         if item["status"] != "pass"
     ]
     goal_complete = not blockers
+    evidence_run = _next_evidence_run_hint()
     return {
         "ok": goal_complete,
         "goal_complete": goal_complete,
@@ -177,9 +178,13 @@ def build_completion_audit(
         "required_routing_tools": list(REQUIRED_ROUTING_TOOLS),
         "items": items,
         "blockers": blockers,
+        "next_evidence_run": evidence_run,
         "next_step": ""
         if goal_complete
-        else "Collect the missing real Feishu/OpenClaw live logs and Cognee/embedding long-run evidence, then rerun.",
+        else (
+            "Collect the missing real Feishu/OpenClaw live logs and Cognee/embedding long-run evidence, then rerun. "
+            f"Start with: {evidence_run['preflight_command']}"
+        ),
     }
 
 
@@ -198,7 +203,35 @@ def format_report(report: dict[str, Any]) -> str:
         lines.extend(["", "blockers:"])
         for blocker in report["blockers"]:
             lines.append(f"  {blocker['item']}. {blocker['name']}: {blocker['next_step']}")
+        lines.extend(["", "next evidence run:"])
+        lines.append(f"  {report['next_evidence_run']['preflight_command']}")
+        lines.append(f"  {report['next_evidence_run']['offline_checklist_command']}")
     return "\n".join(lines)
+
+
+def _next_evidence_run_hint() -> dict[str, str]:
+    return {
+        "preflight_command": (
+            "python3 scripts/prepare_feishu_live_evidence_run.py --planned-listener openclaw-websocket "
+            "--controlled-chat-id <受控测试群 chat_id> "
+            "--non-reviewer-open-id <第二个真实非 reviewer open_id> "
+            "--reviewer-open-id <reviewer open_id> --create-dirs --json"
+        ),
+        "offline_checklist_command": (
+            "python3 scripts/prepare_feishu_live_evidence_run.py --planned-listener openclaw-websocket "
+            "--skip-event-diagnostics --json"
+        ),
+        "packet_collector_command": (
+            "python3 scripts/collect_feishu_live_evidence_packet.py "
+            "--passive-event-log <01-passive-non-at-message.ndjson> "
+            "--routing-event-log <02-first-class-routing.ndjson> "
+            "--permission-event-log <03-non-reviewer-deny.ndjson> "
+            "--review-event-log <04-review-dm-card.ndjson> --json"
+        ),
+        "boundary": (
+            "preflight/offline checklist commands do not send Feishu messages, click cards, or prove productized live"
+        ),
+    }
 
 
 def _live_gate_item(
