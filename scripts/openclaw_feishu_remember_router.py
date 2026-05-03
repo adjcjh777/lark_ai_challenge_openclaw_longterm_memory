@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
+
+import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -59,6 +62,21 @@ ENTERPRISE_MEMORY_SIGNALS = (
     "改成",
 )
 QUESTION_MARKERS = ("？", "?", "是什么", "怎么", "是否", "吗", "是不是")
+PREFETCH_SIGNALS = (
+    "准备",
+    "checklist",
+    "清单",
+    "计划",
+    "执行前",
+    "任务前",
+    "上线前",
+    "收口",
+    "按之前说的",
+    "之前说的那套",
+)
+REVIEW_INBOX_SIGNALS = ("待审核", "审核队列", "审核收件箱", "看看审核", "需要我审核")
+NATURAL_ENABLE_SIGNALS = ("开启记忆", "启用记忆", "打开记忆", "让这个群记忆", "让本群记忆")
+NATURAL_DISABLE_SIGNALS = ("关闭记忆", "禁用记忆", "停止记忆", "不要记这个群", "不要记本群")
 GROUP_SETTINGS_NATURAL_QUERIES = {
     "当前群记忆",
     "群记忆",
@@ -274,11 +292,19 @@ def route_gateway_message(
             db_path=db_path,
         )
 
+    if chat_type == "group" and not bot_mentioned:
+        bot_mentioned = _infer_bot_mentioned_from_lark_message(message_id)
+
     if chat_type != "group" or bot_mentioned:
-        return _ignored_result(
+        return route_gateway_natural_interaction(
+            text=normalized_text,
             message_id=message_id,
             chat_id=chat_id,
-            reason_code="not_passive_group_message",
+            sender_open_id=sender_open_id,
+            chat_type=chat_type,
+            bot_mentioned=bot_mentioned,
+            allowlist_chat_ids=allowlist_chat_ids,
+            db_path=db_path,
         )
 
     group_policy: dict[str, Any] | None = None
@@ -493,6 +519,8 @@ def route_gateway_memory_search(
     query: str,
     db_path: str | None = None,
     scope: str = SCOPE,
+    routing_reason: str = "openclaw_gateway_memory_search",
+    intent_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_query = (query or text).strip()
     if normalized_query.startswith("/"):
@@ -518,12 +546,12 @@ def route_gateway_memory_search(
     tool_result = handle_tool_request("memory.search", payload, service=service)
     reply = _format_memory_search_result(tool_result)
     card = build_search_result_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
-    return {
+    result = {
         "ok": bool(tool_result.get("ok", True)),
         "tool": "memory.search",
         "message_id": message_id,
         "chat_id": chat_id,
-        "routing_reason": "openclaw_gateway_memory_search",
+        "routing_reason": routing_reason,
         "source_entrypoint": "openclaw_gateway_live",
         "tool_result": tool_result,
         "card": card,
@@ -531,11 +559,14 @@ def route_gateway_memory_search(
         "message_disposition": {
             "memory_path": "first_class_memory_search",
             "candidate_path": "read_only",
-            "reason_code": "openclaw_gateway_memory_search",
+            "reason_code": routing_reason,
         },
         "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
     }
+    if intent_resolution is not None:
+        result["intent_resolution"] = intent_resolution
+    return result
 
 
 def route_gateway_memory_prefetch(
@@ -547,6 +578,8 @@ def route_gateway_memory_prefetch(
     task: str,
     db_path: str | None = None,
     scope: str = SCOPE,
+    routing_reason: str = "openclaw_gateway_memory_prefetch",
+    intent_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_task = (task or text).strip()
     if normalized_task.startswith("/"):
@@ -572,12 +605,12 @@ def route_gateway_memory_prefetch(
     tool_result = handle_tool_request("memory.prefetch", payload, service=service)
     reply = _format_memory_prefetch_result(tool_result)
     card = build_prefetch_context_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
-    return {
+    result = {
         "ok": bool(tool_result.get("ok", True)),
         "tool": "memory.prefetch",
         "message_id": message_id,
         "chat_id": chat_id,
-        "routing_reason": "openclaw_gateway_memory_prefetch",
+        "routing_reason": routing_reason,
         "source_entrypoint": "openclaw_gateway_live",
         "tool_result": tool_result,
         "card": card,
@@ -585,11 +618,150 @@ def route_gateway_memory_prefetch(
         "message_disposition": {
             "memory_path": "first_class_memory_prefetch",
             "candidate_path": "read_only",
-            "reason_code": "openclaw_gateway_memory_prefetch",
+            "reason_code": routing_reason,
         },
         "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
     }
+    if intent_resolution is not None:
+        result["intent_resolution"] = intent_resolution
+    return result
+
+
+def route_gateway_natural_interaction(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    chat_type: str,
+    bot_mentioned: bool,
+    allowlist_chat_ids: Sequence[str] | None = None,
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    """Route visible natural-language Feishu chat into a Copilot tool reply.
+
+    This path is intentionally separate from the passive group-message probe:
+    if a user mentions the bot or sends a DM, silence is a product bug. The
+    optional LLM classifier can refine the intent, but deterministic fallback
+    still returns a visible reply when the LLM is unavailable or slow.
+    """
+
+    normalized_text = _strip_leading_mention_command(text)
+    if not normalized_text:
+        return _ignored_result(message_id=message_id, chat_id=chat_id, reason_code="empty_natural_language")
+
+    intent = _classify_natural_language_intent(normalized_text)
+    resolution = {
+        "mode": "natural_language",
+        "intent": intent["intent"],
+        "resolver": intent["resolver"],
+        "latency_class": "natural_language_slow_path",
+        "visible_reply_required": True,
+        "llm_error": intent.get("error"),
+        "bot_mentioned": bot_mentioned,
+        "chat_type": chat_type,
+    }
+    resolved_query = str(intent.get("query") or normalized_text).strip() or normalized_text
+
+    if intent["intent"] == "group_settings":
+        result = route_gateway_group_settings(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            allowlist_chat_ids=allowlist_chat_ids,
+            db_path=db_path,
+            scope=scope,
+        )
+        result["routing_reason"] = "openclaw_gateway_natural_group_settings"
+        result["intent_resolution"] = resolution
+        result["message_disposition"]["reason_code"] = "openclaw_gateway_natural_group_settings"
+        return result
+    if intent["intent"] == "enable_memory":
+        result = route_gateway_group_policy(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action="enable",
+            db_path=db_path,
+            scope=scope,
+        )
+        result["routing_reason"] = "openclaw_gateway_natural_group_memory_enable"
+        result["intent_resolution"] = resolution
+        result["message_disposition"]["reason_code"] = "openclaw_gateway_natural_group_memory_enable"
+        return result
+    if intent["intent"] == "disable_memory":
+        result = route_gateway_group_policy(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            action="disable",
+            db_path=db_path,
+            scope=scope,
+        )
+        result["routing_reason"] = "openclaw_gateway_natural_group_memory_disable"
+        result["intent_resolution"] = resolution
+        result["message_disposition"]["reason_code"] = "openclaw_gateway_natural_group_memory_disable"
+        return result
+    if intent["intent"] == "review_inbox":
+        result = route_gateway_review_inbox(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            view=resolved_query,
+            db_path=db_path,
+            scope=scope,
+        )
+        result["routing_reason"] = "openclaw_gateway_natural_review_inbox"
+        result["intent_resolution"] = resolution
+        result["message_disposition"]["reason_code"] = "openclaw_gateway_natural_review_inbox"
+        return result
+    if intent["intent"] == "prefetch":
+        return route_gateway_memory_prefetch(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            task=resolved_query,
+            db_path=db_path,
+            scope=scope,
+            routing_reason="openclaw_gateway_natural_prefetch",
+            intent_resolution=resolution,
+        )
+    if intent["intent"] == "create_candidate":
+        result = route_remember_message(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            db_path=db_path,
+        )
+        result["routing_reason"] = "openclaw_gateway_natural_candidate"
+        result["source_entrypoint"] = "openclaw_gateway_live"
+        result["intent_resolution"] = resolution
+        result["message_disposition"] = {
+            "memory_path": "candidate_review",
+            "candidate_path": str(result.get("tool_result", {}).get("action") or "attempted"),
+            "reason_code": "openclaw_gateway_natural_candidate",
+        }
+        return result
+
+    return route_gateway_memory_search(
+        text=normalized_text,
+        message_id=message_id,
+        chat_id=chat_id,
+        sender_open_id=sender_open_id,
+        query=resolved_query,
+        db_path=db_path,
+        scope=scope,
+        routing_reason="openclaw_gateway_natural_search",
+        intent_resolution=resolution,
+    )
 
 
 def route_gateway_review_inbox(
@@ -731,6 +903,219 @@ def _has_enterprise_memory_signal(text: str) -> bool:
     if not stripped or _looks_like_question(stripped):
         return False
     return any(signal in stripped for signal in ENTERPRISE_MEMORY_SIGNALS)
+
+
+def _classify_natural_language_intent(text: str) -> dict[str, Any]:
+    llm_result = _classify_natural_language_intent_with_llm(text)
+    if llm_result:
+        return llm_result
+    return _classify_natural_language_intent_fallback(text, resolver="deterministic_fallback")
+
+
+def _classify_natural_language_intent_with_llm(text: str) -> dict[str, Any] | None:
+    if not _truthy_env("OPENCLAW_FEISHU_NL_INTENT_LLM_ENABLED"):
+        return None
+    endpoint = (
+        os.environ.get("OPENCLAW_FEISHU_NL_INTENT_ENDPOINT")
+        or os.environ.get("LLM_ENDPOINT")
+        or os.environ.get("OPENAI_BASE_URL")
+    )
+    model = os.environ.get("OPENCLAW_FEISHU_NL_INTENT_MODEL") or os.environ.get("LLM_MODEL")
+    api_key = (
+        os.environ.get("OPENCLAW_FEISHU_NL_INTENT_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+    )
+    if not endpoint or not model or not api_key:
+        return None
+    try:
+        timeout = float(os.environ.get("OPENCLAW_FEISHU_NL_INTENT_TIMEOUT_SECONDS", "3"))
+    except ValueError:
+        timeout = 3.0
+    try:
+        response = httpx.post(
+            _chat_completions_url(endpoint),
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "temperature": 0,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是 Feishu Memory Copilot 的意图分类器。"
+                            "只输出 JSON：{\"intent\":\"search|create_candidate|prefetch|review_inbox|"
+                            "group_settings|enable_memory|disable_memory\",\"query\":\"...\"}。"
+                            "问题、历史决策查询、当前有效值查询默认 search；明确要记住/约定/决定且不是问题时 create_candidate；"
+                            "任务前、checklist、计划类请求 prefetch。"
+                        ),
+                    },
+                    {"role": "user", "content": text},
+                ],
+            },
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        choices = payload.get("choices") if isinstance(payload, dict) else None
+        content = ""
+        if isinstance(choices, list) and choices:
+            message = choices[0].get("message") if isinstance(choices[0], dict) else {}
+            content = str(message.get("content") or "").strip()
+        parsed = _json_from_llm_content(content)
+        intent = str(parsed.get("intent") or "").strip()
+        if intent not in {
+            "search",
+            "create_candidate",
+            "prefetch",
+            "review_inbox",
+            "group_settings",
+            "enable_memory",
+            "disable_memory",
+        }:
+            return _classify_natural_language_intent_fallback(
+                text,
+                resolver="deterministic_fallback_after_llm_invalid",
+                error=f"invalid_llm_intent:{intent or 'empty'}",
+            )
+        query = str(parsed.get("query") or text).strip() or text
+        return {"intent": intent, "query": query, "resolver": "llm"}
+    except Exception as exc:
+        return _classify_natural_language_intent_fallback(
+            text,
+            resolver="deterministic_fallback_after_llm_error",
+            error=exc.__class__.__name__,
+        )
+
+
+def _classify_natural_language_intent_fallback(
+    text: str,
+    *,
+    resolver: str,
+    error: str | None = None,
+) -> dict[str, Any]:
+    normalized = text.strip()
+    if _looks_like_group_settings_query(normalized):
+        intent = "group_settings"
+    elif _looks_like_natural_group_enable(normalized):
+        intent = "enable_memory"
+    elif _looks_like_natural_group_disable(normalized):
+        intent = "disable_memory"
+    elif _looks_like_review_inbox(normalized):
+        intent = "review_inbox"
+    elif _looks_like_prefetch(normalized):
+        intent = "prefetch"
+    elif _has_enterprise_memory_signal(normalized):
+        intent = "create_candidate"
+    else:
+        intent = "search"
+    result = {"intent": intent, "query": normalized, "resolver": resolver}
+    if error:
+        result["error"] = error
+    return result
+
+
+def _looks_like_review_inbox(text: str) -> bool:
+    return any(signal in text for signal in REVIEW_INBOX_SIGNALS)
+
+
+def _looks_like_prefetch(text: str) -> bool:
+    lowered = text.lower()
+    return any(signal in text or signal in lowered for signal in PREFETCH_SIGNALS)
+
+
+def _looks_like_natural_group_enable(text: str) -> bool:
+    return any(signal in text for signal in NATURAL_ENABLE_SIGNALS)
+
+
+def _looks_like_natural_group_disable(text: str) -> bool:
+    return any(signal in text for signal in NATURAL_DISABLE_SIGNALS)
+
+
+def _truthy_env(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _chat_completions_url(endpoint: str) -> str:
+    base = endpoint.rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base}/chat/completions"
+    return f"{base}/v1/chat/completions"
+
+
+def _json_from_llm_content(content: str) -> dict[str, Any]:
+    if not content:
+        return {}
+    stripped = content.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", stripped, flags=re.DOTALL)
+        if not match:
+            return {}
+        try:
+            parsed = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _infer_bot_mentioned_from_lark_message(message_id: str) -> bool:
+    if not message_id.startswith("om_x"):
+        return False
+    lark_cli = os.environ.get("LARK_CLI") or os.environ.get("COPILOT_LARK_CLI") or "lark-cli"
+    command = [
+        lark_cli,
+        "im",
+        "+messages-mget",
+        "--message-ids",
+        message_id,
+        "--format",
+        "json",
+        "--as",
+        os.environ.get("OPENCLAW_FEISHU_MENTION_LOOKUP_AS", "bot"),
+    ]
+    profile = os.environ.get("OPENCLAW_FEISHU_MENTION_LOOKUP_PROFILE") or os.environ.get("LARK_PROFILE")
+    if profile:
+        command[1:1] = ["--profile", profile]
+    try:
+        completed = subprocess.run(command, text=True, capture_output=True, check=False, timeout=3)
+    except Exception:
+        return False
+    if completed.returncode != 0:
+        return False
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return False
+    data = payload.get("data") if isinstance(payload, dict) else {}
+    messages = data.get("messages") if isinstance(data, dict) else []
+    if not isinstance(messages, list) or not messages:
+        return False
+    message = messages[0] if isinstance(messages[0], dict) else {}
+    content = str(message.get("content") or "")
+    if content.startswith("@Feishu Memory Engine bot") or content.startswith("@Feishu Memory Copilot"):
+        return True
+    mentions = message.get("mentions") if isinstance(message.get("mentions"), list) else []
+    for mention in mentions:
+        if not isinstance(mention, dict):
+            continue
+        name = str(mention.get("name") or "")
+        mention_id = str(mention.get("id") or "")
+        if "Feishu Memory" in name or mention_id in _known_bot_ids():
+            return True
+    return False
+
+
+def _known_bot_ids() -> set[str]:
+    values = _csv_env("OPENCLAW_FEISHU_BOT_IDS")
+    values.extend(["cli_a961a18dbebadcd1", "ou_09341ad938b76680c036bfea8dc2c62c"])
+    return {value for value in values if value}
 
 
 def _looks_like_question(text: str) -> bool:
@@ -880,7 +1265,18 @@ def _strip_leading_mention_command(text: str) -> str:
         return stripped
     slash_index = stripped.find("/")
     if slash_index <= 0:
-        return stripped
+        known_prefixes = (
+            "@Feishu Memory Engine bot",
+            "@Feishu Memory Copilot",
+            "@Memory Copilot",
+        )
+        for prefix in known_prefixes:
+            if stripped.startswith(prefix):
+                return stripped[len(prefix) :].strip()
+        bot_index = stripped.lower().find(" bot ")
+        if 0 < bot_index < 80:
+            return stripped[bot_index + len(" bot ") :].strip()
+        return stripped.split(maxsplit=1)[1].strip() if len(stripped.split(maxsplit=1)) > 1 else ""
     return stripped[slash_index:].strip()
 
 

@@ -8,6 +8,7 @@ from unittest.mock import patch
 from memory_engine.db import connect, init_db
 from scripts.openclaw_feishu_remember_router import (
     build_remember_payload,
+    route_gateway_natural_interaction,
     route_gateway_group_policy,
     route_gateway_message,
     route_remember_message,
@@ -121,6 +122,163 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("fmc_memory_search", bridge["tool"])
         self.assertEqual("allow", bridge["permission_decision"]["decision"])
         self.assertEqual("openclaw_gateway_live", bridge["permission_decision"]["source_entrypoint"])
+        self.assertNotIn("intent_resolution", result)
+
+    def test_gateway_bot_mentioned_natural_question_routes_to_search_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="@Feishu Memory Engine bot 生产部署 region 当前应该是什么？",
+                message_id="om_router_natural_search",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=True,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.search", result["tool"])
+        self.assertEqual("openclaw_gateway_natural_search", result["routing_reason"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertFalse(result["publish"]["suppressed"])
+        self.assertEqual("natural_language", result["intent_resolution"]["mode"])
+        self.assertEqual("natural_language_slow_path", result["intent_resolution"]["latency_class"])
+        self.assertEqual("search", result["intent_resolution"]["intent"])
+        self.assertEqual("deterministic_fallback", result["intent_resolution"]["resolver"])
+        bridge = result["tool_result"]["bridge"]
+        self.assertEqual("fmc_memory_search", bridge["tool"])
+
+    def test_gateway_infers_at_mention_from_real_message_id_before_allowlist_ignore(self) -> None:
+        with patch("scripts.openclaw_feishu_remember_router._infer_bot_mentioned_from_lark_message", return_value=True):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                db_path = Path(temp_dir) / "memory.sqlite"
+                conn = connect(db_path)
+                init_db(conn)
+                conn.close()
+
+                result = route_gateway_message(
+                    text="生产部署 region 当前应该是什么？",
+                    message_id="om_router_inferred_mention",
+                    chat_id="oc_not_allowlisted_but_mentioned",
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=False,
+                    allowlist_chat_ids=[],
+                    db_path=str(db_path),
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.search", result["tool"])
+        self.assertEqual("openclaw_gateway_natural_search", result["routing_reason"])
+        self.assertFalse(result["publish"]["suppressed"])
+        self.assertTrue(result["intent_resolution"]["visible_reply_required"])
+
+    def test_gateway_direct_message_natural_question_routes_to_search_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="生产部署 region 当前应该是什么？",
+                message_id="om_router_dm_natural_search",
+                chat_id="oc_dm_thread",
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="p2p",
+                bot_mentioned=False,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.search", result["tool"])
+        self.assertEqual("openclaw_gateway_natural_search", result["routing_reason"])
+        self.assertFalse(result["publish"]["suppressed"])
+
+    def test_gateway_bot_mentioned_natural_candidate_returns_visible_review_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="记住：生产部署 region 以后统一改成 ap-shanghai，仍必须加 --canary。",
+                message_id="om_router_natural_candidate",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=True,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.create_candidate", result["tool"])
+        self.assertEqual("openclaw_gateway_natural_candidate", result["routing_reason"])
+        self.assertEqual("create_candidate", result["intent_resolution"]["intent"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertFalse(result["publish"]["suppressed"])
+        self.assertIsNotNone(result["card"])
+
+    def test_gateway_bot_mentioned_natural_prefetch_routes_to_prefetch_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="请准备今天上线前 checklist",
+                message_id="om_router_natural_prefetch",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="group",
+                bot_mentioned=True,
+                allowlist_chat_ids=[],
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.prefetch", result["tool"])
+        self.assertEqual("openclaw_gateway_natural_prefetch", result["routing_reason"])
+        self.assertEqual("prefetch", result["intent_resolution"]["intent"])
+        self.assertEqual("interactive", result["publish"]["mode"])
+        self.assertFalse(result["publish"]["suppressed"])
+
+    def test_gateway_natural_router_uses_llm_intent_when_enabled(self) -> None:
+        with patch(
+            "scripts.openclaw_feishu_remember_router._classify_natural_language_intent_with_llm",
+            return_value={"intent": "prefetch", "query": "LLM 识别的上线任务", "resolver": "llm"},
+        ):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                db_path = Path(temp_dir) / "memory.sqlite"
+                conn = connect(db_path)
+                init_db(conn)
+                conn.close()
+
+                result = route_gateway_natural_interaction(
+                    text="帮我处理一下今天上线",
+                    message_id="om_router_llm_natural_prefetch",
+                    chat_id=CHAT_ID,
+                    sender_open_id=SENDER_OPEN_ID,
+                    chat_type="group",
+                    bot_mentioned=True,
+                    allowlist_chat_ids=[],
+                    db_path=str(db_path),
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("memory.prefetch", result["tool"])
+        self.assertEqual("llm", result["intent_resolution"]["resolver"])
+        self.assertEqual("LLM 识别的上线任务", result["tool_result"]["task"])
 
     def test_gateway_prefetch_command_routes_to_first_class_prefetch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
