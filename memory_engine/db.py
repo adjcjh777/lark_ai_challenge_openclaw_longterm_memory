@@ -8,7 +8,7 @@ DEFAULT_DB_PATH = Path("data/memory.sqlite")
 DEFAULT_TENANT_ID = "tenant:demo"
 DEFAULT_ORGANIZATION_ID = "org:demo"
 DEFAULT_VISIBILITY_POLICY = "team"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 SCHEMA = """
@@ -263,6 +263,24 @@ CREATE TABLE IF NOT EXISTS feishu_workspace_source_registry (
   UNIQUE(tenant_id, organization_id, workspace_id, source_key)
 );
 
+CREATE TABLE IF NOT EXISTS feishu_workspace_discovery_cursors (
+  cursor_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'tenant:demo',
+  organization_id TEXT NOT NULL DEFAULT 'org:demo',
+  workspace_id TEXT NOT NULL,
+  discovery_filter_key TEXT NOT NULL,
+  page_token TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  page_count INTEGER NOT NULL DEFAULT 0,
+  resource_count INTEGER NOT NULL DEFAULT 0,
+  last_run_id TEXT,
+  first_seen_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  filters_json TEXT NOT NULL DEFAULT '{}',
+  UNIQUE(tenant_id, organization_id, workspace_id, discovery_filter_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_raw_events_scope_time
   ON raw_events(scope_type, scope_id, event_time);
 
@@ -298,6 +316,9 @@ CREATE INDEX IF NOT EXISTS idx_feishu_workspace_registry_status
 
 CREATE INDEX IF NOT EXISTS idx_feishu_workspace_runs_scope
   ON feishu_workspace_ingestion_runs(tenant_id, organization_id, workspace_id, started_at);
+
+CREATE INDEX IF NOT EXISTS idx_feishu_workspace_cursors_status
+  ON feishu_workspace_discovery_cursors(tenant_id, organization_id, workspace_id, status);
 """
 
 

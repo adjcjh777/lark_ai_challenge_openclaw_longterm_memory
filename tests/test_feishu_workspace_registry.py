@@ -10,10 +10,13 @@ from memory_engine.feishu_workspace_fetcher import WorkspaceResource
 from memory_engine.feishu_workspace_registry import (
     discovery_filter_key,
     finish_workspace_ingestion_run,
+    get_workspace_discovery_cursor,
     mark_missing_sources_stale,
+    record_workspace_discovery_cursor,
     record_discovered_resource,
     record_fetch_error,
     record_source_ingested,
+    reset_workspace_discovery_cursor,
     start_workspace_ingestion_run,
 )
 
@@ -250,6 +253,96 @@ class FeishuWorkspaceRegistryTest(unittest.TestCase):
         self.assertEqual(3, row["resource_count"])
         self.assertEqual(1, row["skipped_unchanged_count"])
         self.assertEqual(1, row["failed_count"])
+
+    def test_discovery_cursor_records_active_and_completed_resume_state(self) -> None:
+        filter_key = discovery_filter_key(query="", doc_types=["docx"])
+        first_run = self._start_run(filter_key)
+
+        active = record_workspace_discovery_cursor(
+            self.conn,
+            workspace_id=SCOPE,
+            tenant_id=TENANT,
+            organization_id=ORG,
+            filter_key=filter_key,
+            run_id=first_run,
+            page_token="next_1",
+            pages_seen=2,
+            resource_count=40,
+            filters={"opened_since": "30d"},
+        )
+        cursor = get_workspace_discovery_cursor(
+            self.conn,
+            workspace_id=SCOPE,
+            tenant_id=TENANT,
+            organization_id=ORG,
+            filter_key=filter_key,
+        )
+
+        self.assertEqual("active", active["status"])
+        self.assertEqual("next_1", cursor["page_token"])
+        self.assertEqual(2, cursor["page_count"])
+        self.assertEqual(40, cursor["resource_count"])
+
+        second_run = self._start_run(filter_key)
+        completed = record_workspace_discovery_cursor(
+            self.conn,
+            workspace_id=SCOPE,
+            tenant_id=TENANT,
+            organization_id=ORG,
+            filter_key=filter_key,
+            run_id=second_run,
+            page_token=None,
+            pages_seen=1,
+            resource_count=3,
+            filters={"opened_since": "30d"},
+        )
+        cursor = get_workspace_discovery_cursor(
+            self.conn,
+            workspace_id=SCOPE,
+            tenant_id=TENANT,
+            organization_id=ORG,
+            filter_key=filter_key,
+        )
+
+        self.assertEqual("completed", completed["status"])
+        self.assertIsNone(cursor["page_token"])
+        self.assertEqual("completed", cursor["status"])
+        self.assertEqual(3, cursor["page_count"])
+        self.assertEqual(43, cursor["resource_count"])
+
+    def test_discovery_cursor_can_be_reset_for_filter(self) -> None:
+        filter_key = discovery_filter_key(query="", doc_types=["docx"])
+        run_id = self._start_run(filter_key)
+        record_workspace_discovery_cursor(
+            self.conn,
+            workspace_id=SCOPE,
+            tenant_id=TENANT,
+            organization_id=ORG,
+            filter_key=filter_key,
+            run_id=run_id,
+            page_token="next_1",
+            pages_seen=1,
+            resource_count=1,
+            filters={},
+        )
+
+        reset_workspace_discovery_cursor(
+            self.conn,
+            workspace_id=SCOPE,
+            tenant_id=TENANT,
+            organization_id=ORG,
+            filter_key=filter_key,
+        )
+
+        self.assertIsNone(
+            get_workspace_discovery_cursor(
+                self.conn,
+                workspace_id=SCOPE,
+                tenant_id=TENANT,
+                organization_id=ORG,
+                filter_key=filter_key,
+            )
+        )
 
     def _start_run(self, filter_key: str) -> str:
         return start_workspace_ingestion_run(

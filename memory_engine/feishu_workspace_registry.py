@@ -155,6 +155,109 @@ def finish_workspace_ingestion_run(
     conn.commit()
 
 
+def get_workspace_discovery_cursor(
+    conn: sqlite3.Connection,
+    *,
+    workspace_id: str,
+    tenant_id: str,
+    organization_id: str,
+    filter_key: str,
+) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT *
+        FROM feishu_workspace_discovery_cursors
+        WHERE tenant_id = ?
+          AND organization_id = ?
+          AND workspace_id = ?
+          AND discovery_filter_key = ?
+        """,
+        (tenant_id, organization_id, workspace_id, filter_key),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def reset_workspace_discovery_cursor(
+    conn: sqlite3.Connection,
+    *,
+    workspace_id: str,
+    tenant_id: str,
+    organization_id: str,
+    filter_key: str,
+) -> None:
+    conn.execute(
+        """
+        DELETE FROM feishu_workspace_discovery_cursors
+        WHERE tenant_id = ?
+          AND organization_id = ?
+          AND workspace_id = ?
+          AND discovery_filter_key = ?
+        """,
+        (tenant_id, organization_id, workspace_id, filter_key),
+    )
+    conn.commit()
+
+
+def record_workspace_discovery_cursor(
+    conn: sqlite3.Connection,
+    *,
+    workspace_id: str,
+    tenant_id: str,
+    organization_id: str,
+    filter_key: str,
+    run_id: str,
+    page_token: str | None,
+    pages_seen: int,
+    resource_count: int,
+    filters: dict[str, Any],
+) -> dict[str, Any]:
+    ts = now_ms()
+    status = "active" if page_token else "completed"
+    completed_at = ts if status == "completed" else None
+    conn.execute(
+        """
+        INSERT INTO feishu_workspace_discovery_cursors (
+          cursor_id, tenant_id, organization_id, workspace_id, discovery_filter_key,
+          page_token, status, page_count, resource_count, last_run_id,
+          first_seen_at, updated_at, completed_at, filters_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(tenant_id, organization_id, workspace_id, discovery_filter_key) DO UPDATE SET
+          page_token = excluded.page_token,
+          status = excluded.status,
+          page_count = feishu_workspace_discovery_cursors.page_count + excluded.page_count,
+          resource_count = feishu_workspace_discovery_cursors.resource_count + excluded.resource_count,
+          last_run_id = excluded.last_run_id,
+          updated_at = excluded.updated_at,
+          completed_at = excluded.completed_at,
+          filters_json = excluded.filters_json
+        """,
+        (
+            f"wscur_{uuid.uuid4().hex[:16]}",
+            tenant_id,
+            organization_id,
+            workspace_id,
+            filter_key,
+            page_token,
+            status,
+            pages_seen,
+            resource_count,
+            run_id,
+            ts,
+            ts,
+            completed_at,
+            json.dumps(filters, ensure_ascii=False, sort_keys=True),
+        ),
+    )
+    conn.commit()
+    return {
+        "status": status,
+        "next_page_token": page_token,
+        "pages_seen": pages_seen,
+        "resource_count": resource_count,
+    }
+
+
 def record_discovered_resource(
     conn: sqlite3.Connection,
     *,

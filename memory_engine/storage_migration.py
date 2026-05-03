@@ -16,6 +16,7 @@ REQUIRED_TABLES = (
     "feishu_group_policies",
     "feishu_workspace_ingestion_runs",
     "feishu_workspace_source_registry",
+    "feishu_workspace_discovery_cursors",
 )
 REQUIRED_INDEXES = {
     "idx_memories_tenant_org_scope_status",
@@ -29,6 +30,7 @@ REQUIRED_INDEXES = {
     "idx_feishu_workspace_registry_seen",
     "idx_feishu_workspace_registry_status",
     "idx_feishu_workspace_runs_scope",
+    "idx_feishu_workspace_cursors_status",
 }
 
 

@@ -11,6 +11,7 @@ from memory_engine.feishu_api_client import FeishuApiResult
 from memory_engine.feishu_workspace_fetcher import (
     WorkspaceActor,
     WorkspaceResource,
+    discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
     workspace_current_context,
@@ -90,6 +91,29 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
 
         self.assertEqual(["doc_1", "sheet_1"], [item.token for item in resources])
         self.assertIn("--page-token", run.call_args_list[1].args[0])
+
+    def test_discovers_resumable_batch_with_next_page_token(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "results": [{"type": "docx", "token": "doc_2"}],
+                    "has_more": True,
+                    "page_token": "next_2",
+                }
+            )
+
+            batch = discover_workspace_resource_batch(
+                limit=1,
+                max_pages=1,
+                start_page_token="next_1",
+            )
+
+        self.assertEqual(["doc_2"], [item.token for item in batch.resources])
+        self.assertEqual(1, batch.pages_seen)
+        self.assertEqual("next_2", batch.next_page_token)
+        self.assertFalse(batch.exhausted)
+        self.assertIn("--page-token", run.call_args.args[0])
+        self.assertIn("next_1", run.call_args.args[0])
 
     def test_discovers_workspace_resources_with_scan_filters(self) -> None:
         with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:

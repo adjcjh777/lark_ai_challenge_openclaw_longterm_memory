@@ -111,6 +111,7 @@ This slice adds a controlled adapter:
 - `memory_engine/feishu_workspace_registry.py`
   - records workspace ingestion runs;
   - stores discovered resource keys and fetched source keys;
+  - stores resumable discovery cursors by discovery filter key;
   - skips unchanged versioned resources on repeat runs;
   - marks sources stale only inside the same discovery filter when explicitly requested;
   - records fetch permission denied / not found as registry revocation.
@@ -119,6 +120,7 @@ This slice adds a controlled adapter:
   - controlled candidate-only ingestion mode requiring an actor id.
   - registry-backed repeat-run summary with fetched, skipped, failed, and stale counts.
   - Drive search scan filters for `--mine`, creator/sharer/chat IDs, sort, and since/until time windows.
+  - `--resume-cursor` / `--reset-cursor` for long scans across multiple runs.
 - `lark_sheet` source support in schema and ingestion metadata.
 - Tests in `tests/test_feishu_workspace_fetcher.py` and `tests/test_feishu_workspace_registry.py`.
 
@@ -169,6 +171,24 @@ python3 scripts/feishu_workspace_ingest.py \
 
 Only use `--mark-missing-stale` when the query/folder/wiki-space filter is stable and represents the set you want to compare. It does not mean the whole Feishu workspace was scanned.
 
+Example cursor resume:
+
+```bash
+python3 scripts/feishu_workspace_ingest.py \
+  --query "" \
+  --mine \
+  --opened-since 30d \
+  --sort edit_time \
+  --limit 20 \
+  --max-pages 3 \
+  --profile feishu-ai-challenge \
+  --actor-open-id "$COPILOT_REVIEWER_OPEN_ID" \
+  --resume-cursor \
+  --json
+```
+
+The cursor is keyed by tenant, organization, workspace id, and the discovery filter hash. Changing query, doc types, time windows, folder/wiki space, creator/sharer/chat filters, or sort creates a different cursor.
+
 ## Performance Plan
 
 Keep the current feature stable first, then optimize the hot path:
@@ -189,6 +209,7 @@ Keep the current feature stable first, then optimize the hot path:
 - Every source fetch has a matching source-context permission key.
 - Candidate creation still goes through `ingest_feishu_source()` and `CopilotService`.
 - Repeat runs can skip unchanged versioned resources from the registry.
+- Long discovery can resume from the last saved Drive `page_token` for the same discovery filter.
 - Missing sources are marked stale only when the operator explicitly asks for stale marking and uses the same discovery filter.
 - Fetch permission denied / not found writes registry revocation instead of silently retrying forever.
 - Default output says candidate-only and pilot, not production full workspace ingestion.

@@ -23,6 +23,7 @@ from memory_engine.document_ingestion import FeishuIngestionSource, ingest_feish
 from memory_engine.feishu_workspace_fetcher import (
     WorkspaceActor,
     WorkspaceResource,
+    discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
     workspace_current_context,
@@ -30,9 +31,12 @@ from memory_engine.feishu_workspace_fetcher import (
 from memory_engine.feishu_workspace_registry import (
     discovery_filter_key,
     finish_workspace_ingestion_run,
+    get_workspace_discovery_cursor,
+    record_workspace_discovery_cursor,
     record_discovered_resource,
     record_fetch_error,
     record_source_ingested,
+    reset_workspace_discovery_cursor,
     start_workspace_ingestion_run,
     mark_missing_sources_stale,
 )
@@ -86,6 +90,8 @@ def main() -> int:
         action="store_true",
         help="Mark registry sources from the same discovery filter stale when absent from this run",
     )
+    parser.add_argument("--resume-cursor", action="store_true", help="Resume discovery from the saved page token")
+    parser.add_argument("--reset-cursor", action="store_true", help="Clear the saved cursor before this run")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON summary")
 
     args = parser.parse_args()
@@ -112,30 +118,30 @@ def main() -> int:
         sort=args.sort,
     )
 
-    resources = discover_workspace_resources(
-        query=args.query,
-        doc_types=doc_types,
-        limit=args.limit,
-        max_pages=args.max_pages,
-        edited_since=args.edited_since,
-        edited_until=args.edited_until,
-        opened_since=args.opened_since,
-        opened_until=args.opened_until,
-        created_since=args.created_since,
-        created_until=args.created_until,
-        commented_since=args.commented_since,
-        commented_until=args.commented_until,
-        folder_tokens=args.folder_tokens,
-        space_ids=args.space_ids,
-        mine=args.mine,
-        creator_ids=args.creator_ids,
-        sharer_ids=args.sharer_ids,
-        chat_ids=args.chat_ids,
-        sort=args.sort,
-        profile=args.profile,
-        as_identity=args.as_identity,
-    )
     if args.dry_run:
+        resources = discover_workspace_resources(
+            query=args.query,
+            doc_types=doc_types,
+            limit=args.limit,
+            max_pages=args.max_pages,
+            edited_since=args.edited_since,
+            edited_until=args.edited_until,
+            opened_since=args.opened_since,
+            opened_until=args.opened_until,
+            created_since=args.created_since,
+            created_until=args.created_until,
+            commented_since=args.commented_since,
+            commented_until=args.commented_until,
+            folder_tokens=args.folder_tokens,
+            space_ids=args.space_ids,
+            mine=args.mine,
+            creator_ids=args.creator_ids,
+            sharer_ids=args.sharer_ids,
+            chat_ids=args.chat_ids,
+            sort=args.sort,
+            profile=args.profile,
+            as_identity=args.as_identity,
+        )
         return _emit(
             {
                 "ok": True,
@@ -158,7 +164,71 @@ def main() -> int:
     conn = connect(db_path_from_env())
     init_db(conn)
     repo = MemoryRepository(conn)
+    cursor_before: dict[str, Any] | None = None
+    if args.reset_cursor:
+        reset_workspace_discovery_cursor(
+            conn,
+            workspace_id=args.scope,
+            tenant_id=args.tenant_id,
+            organization_id=args.organization_id,
+            filter_key=filter_key,
+        )
+    start_page_token = None
+    if args.resume_cursor:
+        cursor_before = get_workspace_discovery_cursor(
+            conn,
+            workspace_id=args.scope,
+            tenant_id=args.tenant_id,
+            organization_id=args.organization_id,
+            filter_key=filter_key,
+        )
+        if cursor_before and cursor_before.get("status") == "active":
+            start_page_token = str(cursor_before.get("page_token") or "") or None
+    discovery_batch = discover_workspace_resource_batch(
+        query=args.query,
+        doc_types=doc_types,
+        limit=args.limit,
+        max_pages=args.max_pages,
+        edited_since=args.edited_since,
+        edited_until=args.edited_until,
+        opened_since=args.opened_since,
+        opened_until=args.opened_until,
+        created_since=args.created_since,
+        created_until=args.created_until,
+        commented_since=args.commented_since,
+        commented_until=args.commented_until,
+        folder_tokens=args.folder_tokens,
+        space_ids=args.space_ids,
+        mine=args.mine,
+        creator_ids=args.creator_ids,
+        sharer_ids=args.sharer_ids,
+        chat_ids=args.chat_ids,
+        sort=args.sort,
+        profile=args.profile,
+        as_identity=args.as_identity,
+        start_page_token=start_page_token,
+    )
+    resources = discovery_batch.resources
     source_results: list[dict[str, Any]] = []
+    filters = {
+        "edited_since": args.edited_since,
+        "edited_until": args.edited_until,
+        "opened_since": args.opened_since,
+        "opened_until": args.opened_until,
+        "created_since": args.created_since,
+        "created_until": args.created_until,
+        "commented_since": args.commented_since,
+        "commented_until": args.commented_until,
+        "folder_tokens": args.folder_tokens,
+        "space_ids": args.space_ids,
+        "mine": args.mine,
+        "creator_ids": args.creator_ids,
+        "sharer_ids": args.sharer_ids,
+        "chat_ids": args.chat_ids,
+        "sort": args.sort,
+        "resume_cursor": args.resume_cursor,
+        "start_page_token": start_page_token,
+    }
     run_id = start_workspace_ingestion_run(
         conn,
         workspace_id=args.scope,
@@ -167,26 +237,11 @@ def main() -> int:
         filter_key=filter_key,
         query=args.query,
         doc_types=doc_types,
-        filters={
-            "edited_since": args.edited_since,
-            "edited_until": args.edited_until,
-            "opened_since": args.opened_since,
-            "opened_until": args.opened_until,
-            "created_since": args.created_since,
-            "created_until": args.created_until,
-            "commented_since": args.commented_since,
-            "commented_until": args.commented_until,
-            "folder_tokens": args.folder_tokens,
-            "space_ids": args.space_ids,
-            "mine": args.mine,
-            "creator_ids": args.creator_ids,
-            "sharer_ids": args.sharer_ids,
-            "chat_ids": args.chat_ids,
-            "sort": args.sort,
-        },
+        filters=filters,
         mode="controlled_workspace_ingestion_pilot",
         boundary="candidate_pipeline_only_with_registry_no_production_daemon_no_raw_event_embedding",
     )
+    cursor_after: dict[str, Any] | None = None
     fetched_count = 0
     skipped_unchanged_count = 0
     failed_count = 0
@@ -256,7 +311,7 @@ def main() -> int:
                     source,
                     scope=args.scope,
                     current_context=context,
-                        limit=args.candidate_limit,
+                    limit=args.candidate_limit,
                 )
                 if result.get("ok"):
                     record_source_ingested(
@@ -294,6 +349,18 @@ def main() -> int:
                 filter_key=filter_key,
                 run_id=run_id,
             )
+        cursor_after = record_workspace_discovery_cursor(
+            conn,
+            workspace_id=args.scope,
+            tenant_id=args.tenant_id,
+            organization_id=args.organization_id,
+            filter_key=filter_key,
+            run_id=run_id,
+            page_token=discovery_batch.next_page_token,
+            pages_seen=discovery_batch.pages_seen,
+            resource_count=len(resources),
+            filters=filters,
+        )
     finally:
         finish_workspace_ingestion_run(
             conn,
@@ -315,6 +382,14 @@ def main() -> int:
             "boundary": "candidate_pipeline_only_with_registry_no_production_daemon_no_raw_event_embedding",
             "run_id": run_id,
             "discovery_filter_key": filter_key,
+            "discovery": {
+                "pages_seen": discovery_batch.pages_seen,
+                "start_page_token": start_page_token,
+                "next_page_token": discovery_batch.next_page_token,
+                "exhausted": discovery_batch.exhausted,
+                "cursor_before": _cursor_summary(cursor_before),
+                "cursor_after": cursor_after,
+            },
             "resource_count": len(resources),
             "source_count": len(source_results),
             "fetched_count": fetched_count,
@@ -336,6 +411,18 @@ def _resource_summary(resource) -> dict[str, Any]:
         "token": resource.token,
         "title": resource.title,
         "url": resource.url,
+    }
+
+
+def _cursor_summary(cursor: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not cursor:
+        return None
+    return {
+        "status": cursor.get("status"),
+        "page_token": cursor.get("page_token"),
+        "page_count": cursor.get("page_count"),
+        "resource_count": cursor.get("resource_count"),
+        "last_run_id": cursor.get("last_run_id"),
     }
 
 
@@ -396,6 +483,9 @@ def _emit(payload: dict[str, Any], *, as_json: bool) -> int:
     if "source_count" in payload:
         print(f"sources: {payload['source_count']}")
         print(f"run_id: {payload.get('run_id')}")
+        discovery = payload.get("discovery") if isinstance(payload.get("discovery"), dict) else {}
+        print(f"next_page_token: {discovery.get('next_page_token')}")
+        print(f"discovery_exhausted: {str(discovery.get('exhausted')).lower()}")
         print(f"skipped_unchanged: {payload.get('skipped_unchanged_count', 0)}")
         print(f"candidates: {payload.get('candidate_count', 0)}")
         print(f"duplicates: {payload.get('duplicate_count', 0)}")

@@ -52,6 +52,17 @@ class WorkspaceActor:
     roles: tuple[str, ...] = ("member", "reviewer")
 
 
+@dataclass(frozen=True)
+class WorkspaceDiscoveryBatch:
+    resources: list[WorkspaceResource]
+    pages_seen: int
+    next_page_token: str | None
+
+    @property
+    def exhausted(self) -> bool:
+        return self.next_page_token is None
+
+
 def discover_workspace_resources(
     *,
     query: str = "",
@@ -76,11 +87,67 @@ def discover_workspace_resources(
     sort: str | None = None,
     profile: str | None = None,
     as_identity: str | None = None,
+    start_page_token: str | None = None,
 ) -> list[WorkspaceResource]:
     """Discover Feishu Drive/Wiki resources through `lark-cli drive +search`."""
 
+    return discover_workspace_resource_batch(
+        query=query,
+        doc_types=doc_types,
+        limit=limit,
+        max_pages=max_pages,
+        page_size=page_size,
+        edited_since=edited_since,
+        edited_until=edited_until,
+        opened_since=opened_since,
+        opened_until=opened_until,
+        created_since=created_since,
+        created_until=created_until,
+        commented_since=commented_since,
+        commented_until=commented_until,
+        folder_tokens=folder_tokens,
+        space_ids=space_ids,
+        mine=mine,
+        creator_ids=creator_ids,
+        sharer_ids=sharer_ids,
+        chat_ids=chat_ids,
+        sort=sort,
+        profile=profile,
+        as_identity=as_identity,
+        start_page_token=start_page_token,
+    ).resources
+
+
+def discover_workspace_resource_batch(
+    *,
+    query: str = "",
+    doc_types: Iterable[str] = WORKSPACE_DOC_TYPES,
+    limit: int = 100,
+    max_pages: int = 5,
+    page_size: int = 20,
+    edited_since: str | None = None,
+    edited_until: str | None = None,
+    opened_since: str | None = None,
+    opened_until: str | None = None,
+    created_since: str | None = None,
+    created_until: str | None = None,
+    commented_since: str | None = None,
+    commented_until: str | None = None,
+    folder_tokens: str | None = None,
+    space_ids: str | None = None,
+    mine: bool = False,
+    creator_ids: str | None = None,
+    sharer_ids: str | None = None,
+    chat_ids: str | None = None,
+    sort: str | None = None,
+    profile: str | None = None,
+    as_identity: str | None = None,
+    start_page_token: str | None = None,
+) -> WorkspaceDiscoveryBatch:
+    """Discover one resumable batch of Feishu Drive/Wiki resources."""
+
     resources: list[WorkspaceResource] = []
-    page_token: str | None = None
+    page_token: str | None = start_page_token
     pages_seen = 0
     while len(resources) < limit and pages_seen < max_pages:
         result = _drive_search(
@@ -115,7 +182,7 @@ def discover_workspace_resources(
         page_token = _next_page_token(payload)
         if not page_token:
             break
-    return resources[:limit]
+    return WorkspaceDiscoveryBatch(resources=resources[:limit], pages_seen=pages_seen, next_page_token=page_token)
 
 
 def fetch_workspace_resource_sources(
