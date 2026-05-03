@@ -14,6 +14,8 @@ REQUIRED_TABLES = (
     "knowledge_graph_edges",
     "tenant_admin_policies",
     "feishu_group_policies",
+    "feishu_workspace_ingestion_runs",
+    "feishu_workspace_source_registry",
 )
 REQUIRED_INDEXES = {
     "idx_memories_tenant_org_scope_status",
@@ -24,6 +26,9 @@ REQUIRED_INDEXES = {
     "idx_kg_edges_tenant_org_type",
     "idx_tenant_admin_policies_tenant_org",
     "idx_feishu_group_policies_tenant_org_status",
+    "idx_feishu_workspace_registry_seen",
+    "idx_feishu_workspace_registry_status",
+    "idx_feishu_workspace_runs_scope",
 }
 
 

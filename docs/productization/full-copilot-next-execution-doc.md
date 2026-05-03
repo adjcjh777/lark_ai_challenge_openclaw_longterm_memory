@@ -1,7 +1,7 @@
 # 完整可用 Copilot 后续执行文档
 
 日期：2026-04-28  
-更新：2026-05-04 新增 workspace ingestion pilot。当前完成的是 lark-cli-first 的受控资源发现、文档/Sheet/Bitable 类型路由和 candidate-only 入口；仍不能写成生产全量 workspace ingestion。
+更新：2026-05-04 新增 workspace ingestion pilot，并补 source registry / run registry。当前完成的是 lark-cli-first 的受控资源发现、文档/Sheet/Bitable 类型路由、candidate-only 入口、revision 去重、unchanged skip、同 filter stale 标记和 registry revocation；仍不能写成生产全量 workspace ingestion。
 当前目标：从“初赛 MVP 已完成”升级为“做出完整、可用、可治理、可审计的 Feishu Memory Copilot”。  
 适用方式：可以直接复制整份文档给下一轮 Codex / OpenClaw / 执行 agent 使用。
 

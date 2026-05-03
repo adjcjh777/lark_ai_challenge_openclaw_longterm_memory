@@ -4,7 +4,7 @@
 
 ## 先看这个
 
-1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环；2026-05-03 复核九项 productization completion gate 已通过。2026-05-04 新增 workspace ingestion pilot 的架构 ADR 和本地 adapter；它能做受控资源发现与 candidate-only 路由，但仍不是生产全量 workspace ingestion。
+1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环；2026-05-03 复核九项 productization completion gate 已通过。2026-05-04 新增 workspace ingestion pilot 的架构 ADR、本地 adapter 和 registry；它能做受控资源发现、candidate-only 路由、repeat-run skip / stale / revocation 统计，但仍不是生产全量 workspace ingestion。
 2. 已完成的日期计划和 handoff 文档已归档到 `archive/` 和 `productization/handoffs/`，不再作为执行入口。
 3. 当前代码和 `docs/productization/full-copilot-next-execution-doc.md` 是事实源。
 4. 本项目由 Codex 完成主要代码和文档修改，人类接手时优先读产品指南和待办清单。

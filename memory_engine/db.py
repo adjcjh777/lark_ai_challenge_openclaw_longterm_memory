@@ -8,7 +8,7 @@ DEFAULT_DB_PATH = Path("data/memory.sqlite")
 DEFAULT_TENANT_ID = "tenant:demo"
 DEFAULT_ORGANIZATION_ID = "org:demo"
 DEFAULT_VISIBILITY_POLICY = "team"
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 SCHEMA = """
@@ -202,6 +202,67 @@ CREATE TABLE IF NOT EXISTS feishu_group_policies (
   UNIQUE(tenant_id, organization_id, chat_id)
 );
 
+CREATE TABLE IF NOT EXISTS feishu_workspace_ingestion_runs (
+  run_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'tenant:demo',
+  organization_id TEXT NOT NULL DEFAULT 'org:demo',
+  workspace_id TEXT NOT NULL,
+  discovery_filter_key TEXT NOT NULL,
+  query TEXT NOT NULL DEFAULT '',
+  doc_types_json TEXT NOT NULL DEFAULT '[]',
+  filters_json TEXT NOT NULL DEFAULT '{}',
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  boundary TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  finished_at INTEGER,
+  resource_count INTEGER NOT NULL DEFAULT 0,
+  fetched_count INTEGER NOT NULL DEFAULT 0,
+  ingested_count INTEGER NOT NULL DEFAULT 0,
+  skipped_unchanged_count INTEGER NOT NULL DEFAULT 0,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  stale_marked_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS feishu_workspace_source_registry (
+  registry_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL DEFAULT 'tenant:demo',
+  organization_id TEXT NOT NULL DEFAULT 'org:demo',
+  workspace_id TEXT NOT NULL,
+  discovery_filter_key TEXT NOT NULL,
+  source_key TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  route_type TEXT NOT NULL,
+  source_type TEXT,
+  source_id TEXT,
+  token TEXT NOT NULL,
+  title TEXT,
+  url TEXT,
+  obj_type TEXT,
+  table_id TEXT,
+  sheet_id TEXT,
+  app_token TEXT,
+  record_id TEXT,
+  revision TEXT,
+  content_fingerprint TEXT,
+  status TEXT NOT NULL DEFAULT 'discovered',
+  candidate_count INTEGER NOT NULL DEFAULT 0,
+  duplicate_count INTEGER NOT NULL DEFAULT 0,
+  error_code TEXT,
+  error_message TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  first_seen_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  last_fetched_at INTEGER,
+  last_ingested_at INTEGER,
+  stale_at INTEGER,
+  revoked_at INTEGER,
+  last_seen_run_id TEXT,
+  last_fetched_run_id TEXT,
+  last_ingested_run_id TEXT,
+  UNIQUE(tenant_id, organization_id, workspace_id, source_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_raw_events_scope_time
   ON raw_events(scope_type, scope_id, event_time);
 
@@ -228,6 +289,15 @@ CREATE INDEX IF NOT EXISTS idx_tenant_admin_policies_tenant_org
 
 CREATE INDEX IF NOT EXISTS idx_feishu_group_policies_tenant_org_status
   ON feishu_group_policies(tenant_id, organization_id, status, passive_memory_enabled);
+
+CREATE INDEX IF NOT EXISTS idx_feishu_workspace_registry_seen
+  ON feishu_workspace_source_registry(tenant_id, organization_id, workspace_id, discovery_filter_key, last_seen_run_id);
+
+CREATE INDEX IF NOT EXISTS idx_feishu_workspace_registry_status
+  ON feishu_workspace_source_registry(tenant_id, organization_id, workspace_id, status);
+
+CREATE INDEX IF NOT EXISTS idx_feishu_workspace_runs_scope
+  ON feishu_workspace_ingestion_runs(tenant_id, organization_id, workspace_id, started_at);
 """
 
 
@@ -288,8 +358,10 @@ def connect(db_path: str | Path | None = None) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+    table_sql, index_sql = _split_schema_for_migration(SCHEMA)
+    conn.executescript(table_sql)
     _migrate_existing_tables(conn)
+    conn.executescript(index_sql)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 
@@ -321,6 +393,20 @@ def _migrate_existing_tables(conn: sqlite3.Connection) -> None:
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     return {str(row["name"] if isinstance(row, sqlite3.Row) else row[1]) for row in rows}
+
+
+def _split_schema_for_migration(schema: str) -> tuple[str, str]:
+    table_statements: list[str] = []
+    index_statements: list[str] = []
+    for statement in schema.split(";"):
+        stripped = statement.strip()
+        if not stripped:
+            continue
+        if stripped.upper().startswith("CREATE INDEX"):
+            index_statements.append(stripped)
+        else:
+            table_statements.append(stripped)
+    return ";\n".join(table_statements) + ";\n", ";\n".join(index_statements) + ";\n"
 
 
 def _backfill_table_defaults(conn: sqlite3.Connection, table: str) -> None:

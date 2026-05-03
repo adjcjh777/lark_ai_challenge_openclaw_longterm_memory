@@ -108,11 +108,18 @@ This slice adds a controlled adapter:
   - discovers resources with `drive +search`;
   - routes document, sheet, and Bitable resources;
   - builds per-source permission context.
+- `memory_engine/feishu_workspace_registry.py`
+  - records workspace ingestion runs;
+  - stores discovered resource keys and fetched source keys;
+  - skips unchanged versioned resources on repeat runs;
+  - marks sources stale only inside the same discovery filter when explicitly requested;
+  - records fetch permission denied / not found as registry revocation.
 - `scripts/feishu_workspace_ingest.py`
   - dry-run discovery mode;
   - controlled candidate-only ingestion mode requiring an actor id.
+  - registry-backed repeat-run summary with fetched, skipped, failed, and stale counts.
 - `lark_sheet` source support in schema and ingestion metadata.
-- Tests in `tests/test_feishu_workspace_fetcher.py`.
+- Tests in `tests/test_feishu_workspace_fetcher.py` and `tests/test_feishu_workspace_registry.py`.
 
 Example dry run:
 
@@ -140,6 +147,21 @@ python3 scripts/feishu_workspace_ingest.py \
   --json
 ```
 
+Example repeat run with registry stale marking:
+
+```bash
+python3 scripts/feishu_workspace_ingest.py \
+  --query "" \
+  --edited-since 30d \
+  --limit 20 \
+  --profile feishu-ai-challenge \
+  --actor-open-id "$COPILOT_REVIEWER_OPEN_ID" \
+  --mark-missing-stale \
+  --json
+```
+
+Only use `--mark-missing-stale` when the query/folder/wiki-space filter is stable and represents the set you want to compare. It does not mean the whole Feishu workspace was scanned.
+
 ## Performance Plan
 
 Keep the current feature stable first, then optimize the hot path:
@@ -147,8 +169,8 @@ Keep the current feature stable first, then optimize the hot path:
 1. Batch discovery with `drive +search`; keep page size bounded and record `page_token`.
 2. Fetch by type and skip unsupported objects early.
 3. Avoid full document/table reads on the first pass; read outline or bounded sheet ranges first.
-4. Deduplicate by `source_type + source_id + source_revision` before candidate extraction.
-5. Cache lark-cli discovery results in a source registry before repeated fetches.
+4. Deduplicate by `source_key + source_revision` before candidate extraction when Drive returns a usable revision/update timestamp.
+5. Cache lark-cli discovery results in `feishu_workspace_source_registry` before repeated fetches.
 6. Move high-volume fetches from lark-cli subprocesses to native OpenAPI only after the pilot shows real bottlenecks.
 7. Keep embeddings limited to confirmed curated memory fields.
 
@@ -158,5 +180,8 @@ Keep the current feature stable first, then optimize the hot path:
 - Document, Sheet, and Bitable resources can become `FeishuIngestionSource` objects.
 - Every source fetch has a matching source-context permission key.
 - Candidate creation still goes through `ingest_feishu_source()` and `CopilotService`.
+- Repeat runs can skip unchanged versioned resources from the registry.
+- Missing sources are marked stale only when the operator explicitly asks for stale marking and uses the same discovery filter.
+- Fetch permission denied / not found writes registry revocation instead of silently retrying forever.
 - Default output says candidate-only and pilot, not production full workspace ingestion.
-- Tests cover discovery, type routing, sheet ingestion, Bitable routing, and candidate-only behavior.
+- Tests cover discovery, type routing, sheet ingestion, Bitable routing, candidate-only behavior, registry skip, stale marking, revocation status, and run summary.
