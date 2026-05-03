@@ -326,6 +326,67 @@ class CopilotGovernanceTest(unittest.TestCase):
         self.assertEqual("same stable memory key already has an active value", result["conflict"]["reason"])
         self.assertEqual("deploy_region", result["candidate"]["stable_key"]["slot_type"])
 
+    def test_ci_tool_correction_supersedes_old_value_without_default_search_leak(self) -> None:
+        seed = self.service.create_candidate(candidate_request("决定：发布 pipeline 使用 Jenkins。"))
+        confirmed_seed = self.service.confirm(
+            ConfirmRequest(
+                candidate_id=seed["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="人工确认",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+        self.assertTrue(confirmed_seed["ok"])
+
+        result = self.service.create_candidate(
+            candidate_request("刚才说 Jenkins 那个作废，最后还是 GitHub Actions。")
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("candidate_conflict", result["action"])
+        self.assertTrue(result["conflict"]["has_conflict"])
+        self.assertEqual("ci_tool", result["candidate"]["stable_key"]["slot_type"])
+        before = self.service.search(
+            SearchRequest.from_payload(
+                {
+                    "query": "发布 CI 工具最后用什么？",
+                    "scope": SCOPE,
+                    "top_k": 3,
+                    "current_context": current_context("memory.search"),
+                }
+            )
+        )
+        self.assertTrue(before["ok"])
+        self.assertIn("Jenkins", before["results"][0]["current_value"])
+
+        confirmed_update = self.service.confirm(
+            ConfirmRequest(
+                candidate_id=result["candidate_id"],
+                scope=SCOPE,
+                actor_id="ou_test",
+                reason="确认覆盖",
+                current_context=current_context("memory.confirm"),
+            )
+        )
+
+        self.assertTrue(confirmed_update["ok"])
+        self.assertIn("Jenkins", confirmed_update["superseded"]["value"])
+        after = self.service.search(
+            SearchRequest.from_payload(
+                {
+                    "query": "发布 CI 工具最后用什么？",
+                    "scope": SCOPE,
+                    "top_k": 3,
+                    "current_context": current_context("memory.search"),
+                }
+            )
+        )
+        self.assertTrue(after["ok"])
+        self.assertTrue(after["results"])
+        self.assertIn("GitHub Actions", after["results"][0]["current_value"])
+        self.assertNotIn("Jenkins", after["results"][0]["current_value"])
+
     def test_stable_key_does_not_merge_owner_with_weekly_report_recipient(self) -> None:
         owner = self.service.create_candidate(candidate_request("OpenClaw 产品化负责人是程俊豪。"))
         confirmed = self.service.confirm(

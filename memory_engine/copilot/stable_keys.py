@@ -31,6 +31,8 @@ _FEISHU_REVIEW_SUBJECT_MARKERS = ("飞书", "bot", "机器人", "copilot service
 _FEISHU_REVIEW_ACTION_MARKERS = ("候选", "确认", "权限")
 _BENCHMARK_REPORT_MARKERS = ("benchmark", "评测", "报告", "recall", "evidence coverage")
 _DEMO_FLOW_MARKERS = ("demo", "演示", "录屏", "展示")
+_CI_TOOL_MARKERS = ("ci", "pipeline", "jenkins", "github actions", "gitlab ci")
+_CI_TOOL_SUBJECT_MARKERS = ("ci 工具", "ci 流水线", "发布 pipeline", "发布流程", "上线发布流程")
 
 
 def resolve_stable_memory_key(
@@ -221,6 +223,16 @@ def _slot(text: str, lowered: str, subject: str | None) -> tuple[str, str, list[
             ["Demo 录屏流程", "演示顺序"],
             0.82,
             "Demo/录屏展示顺序归为同一个流程 slot。",
+        )
+    if _contains_any(lowered, _CI_TOOL_MARKERS) and (
+        _contains_any(lowered, _CI_TOOL_SUBJECT_MARKERS) or _contains_any(subject_norm, ("ci工具", "ci流水线"))
+    ):
+        return (
+            "ci_tool",
+            "release_ci_tool",
+            ["CI 工具", "发布 pipeline", "上线发布流程", "Jenkins", "GitHub Actions"],
+            0.86,
+            "发布 CI / pipeline 工具选型归为同一个 CI 工具 slot。",
         )
     if "ci" in lowered and "并行" in text:
         return ("ci_parallelism", "ci_parallelism", ["CI 并行度"], 0.82, "CI 并行度归为 execution slot。")

@@ -419,10 +419,10 @@
       "reminder_created": false,
       "review_action_count": 2,
       "has_user_explanation": true,
-      "old_value_leaked": true,
+      "old_value_leaked": false,
       "permission_decision": "allow"
     },
-    "failure_debug_hint": "保留失败样例：旧 Jenkins 仍可能泄漏，后续修 active-only 和版本过滤。"
+    "failure_debug_hint": "已用 CI 工具 stable key 和改口 current_value 归一化修复：旧 Jenkins 只保留在原始证据和版本链，不进入当前有效值。"
   },
   {
     "case_id": "real_expr_multi_turn_correction_005",

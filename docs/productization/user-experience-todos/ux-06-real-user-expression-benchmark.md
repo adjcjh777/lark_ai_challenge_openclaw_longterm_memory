@@ -2,7 +2,7 @@
 
 日期：2026-04-29
 负责人：程俊豪
-状态：进行中（样本集和 runner 已完成；pre-live 质量 gate 未通过）
+状态：已完成（样本集、runner 和 pre-live 质量 gate 已完成；仍保留残余失败样例）
 上游总览：[用户体验产品化 TODO 清单](../user-experience-todo.md)
 执行顺序：第 6 个
 
@@ -27,20 +27,20 @@
 - 已新增 `copilot_real_feishu` benchmark runner，指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
 - 已补 `tests/test_copilot_benchmark.py` 回归测试，覆盖样本格式、指标输出和失败输出。
 - 已对齐 `docs/benchmark-report.md` 和上游 `docs/productization/user-experience-todo.md`。
-- 已新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把本页“指标建议”转成可执行 pre-live 质量 gate。当前 gate 返回失败：`old_value_leakage_rate=0.1429`，阈值为 `0.0000`。
+- 已新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把本页“指标建议”转成可执行 pre-live 质量 gate。当前 gate 返回通过：旧值泄漏率已降到 `0.0000`，其他硬阈值也通过。
 
 本地重跑结果：
 
 | 指标 | 结果 | 当前判断 |
 |---|---:|---|
 | 样本数 | 25 | 口语、含糊、多轮改口、闲聊误判、权限场景各 5 条 |
-| Case pass rate | 0.7600 | 保留失败样例，不作为生产结论 |
+| Case pass rate | 0.8000 | 保留失败样例，不作为生产结论 |
 | Recall@3 | 0.8750 | 当前样本通过 |
 | 误记率 | 0.0400 | 当前样本通过，但保留 1 条误记失败样例 |
 | 误提醒率 | 0.0000 | 当前样本通过 |
 | 确认负担 | 2.4000 | 每 10 条输入约 2.4 条需要人工候选处理 |
 | 解释覆盖率 | 0.8500 | 当前样本通过，但保留解释缺口 |
-| 旧值泄漏率 | 0.1429 | 未达标，作为残余风险继续修 |
+| 旧值泄漏率 | 0.0000 | 当前样本通过 |
 
 ## 为什么现在做
 
@@ -62,7 +62,7 @@
 | 3 | 扩 benchmark runner 指标 | `tests/test_copilot_benchmark.py`、benchmark runner 相关代码 | 指标包含 Recall@3、误记率、误提醒率、确认负担、解释覆盖率、旧值泄漏率。 |
 | 4 | 对齐报告和阈值 | `docs/benchmark-report.md` | 报告区分 fixture benchmark 和真实表达样本；写清样本规模和不足。 |
 | 5 | 补回归测试 | `tests/test_copilot_benchmark.py`、相关 `tests/test_copilot_*` | 样本文件格式、指标计算和失败输出都有测试。 |
-| 6 | 补 pre-live 质量 gate | `scripts/check_real_feishu_expression_quality_gate.py`、`tests/test_real_feishu_expression_quality_gate.py` | Recall@3、误记率、误提醒率、解释覆盖率和旧值泄漏率按本页阈值 fail closed；当前旧值泄漏率仍阻塞完成。 |
+| 6 | 补 pre-live 质量 gate | `scripts/check_real_feishu_expression_quality_gate.py`、`tests/test_real_feishu_expression_quality_gate.py` | Recall@3、误记率、误提醒率、解释覆盖率和旧值泄漏率按本页阈值 fail closed；当前 gate 已通过。 |
 
 ## 样本类型建议
 
@@ -116,7 +116,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json
 python3 scripts/check_real_feishu_expression_quality_gate.py --json
 ```
 
-当前该 gate 预期失败，直到旧值泄漏率降到 `0.0000`。
+当前该 gate 已通过；边界仍是脱敏样本的 pre-live 本地质量门禁，不是真实 Feishu live evidence。
 
 ## 本轮验证记录
 
@@ -139,7 +139,7 @@ ollama ps
 验证边界：
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
-- 当前失败样例保留，用于暴露解释缺口、闲聊误记和旧值泄漏。
+- 当前失败样例保留，用于暴露解释缺口、含糊上下文和闲聊误记。
 - `scripts/check_real_feishu_expression_quality_gate.py --json` 是本地 pre-live 质量 gate，不是真实 Feishu live evidence，也不是 productized live 证明。
 - 真实飞书来源仍 candidate-only，不自动 active。
 - 不宣称 production live、真实 Feishu DM live E2E 或 productized live 长期运行完成。
@@ -161,4 +161,4 @@ ollama ps
 
 ## 顺序执行出口
 
-完成 UX-06 质量 gate 后再把本项重新标为完成。UX-07 已有评委体验脚本，但不能用 UX-07 代替 UX-06 的真实表达质量门禁。
+UX-06 质量 gate 已完成。UX-07 已有评委体验脚本，但不能用 UX-07 或 UX-06 的脱敏样本门禁代替真实 Feishu live evidence。

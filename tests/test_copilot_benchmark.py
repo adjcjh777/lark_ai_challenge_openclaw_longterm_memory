@@ -196,9 +196,10 @@ class CopilotBenchmarkTest(unittest.TestCase):
         self.assertIn("user_confirmation_burden", summary)
         self.assertIn("explanation_coverage", summary)
         self.assertIn("old_value_leakage_rate", summary)
+        self.assertEqual(0.0, summary["old_value_leakage_rate"])
         self.assertGreater(summary["failure_type_counts"].get("user_expression_explanation_missing", 0), 0)
         self.assertGreater(summary["failure_type_counts"].get("false_positive_candidate", 0), 0)
-        self.assertGreater(summary["failure_type_counts"].get("user_expression_old_value_leaked", 0), 0)
+        self.assertNotIn("user_expression_old_value_leaked", summary["failure_type_counts"])
         for item in result["results"]:
             self.assertIn("expected_output", item)
             self.assertIn("actual_output_summary", item)

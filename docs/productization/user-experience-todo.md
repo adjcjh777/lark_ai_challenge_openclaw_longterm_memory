@@ -29,7 +29,7 @@
 | UX-03 | 用户可理解的“为什么这样回答”解释层 | 已完成 | 是 | P1 | 主答案讲清当前结论、证据、版本覆盖和权限原因；工程字段进入审计详情；permission denied 不泄露未授权 current_value / summary / evidence |
 | UX-04 | 记忆收件箱 / 审核队列 | 已完成 | 是 | P1 | 有“待我审核、冲突需判断、高风险暂不建议确认”三类视图和候选状态流转 |
 | UX-05 | 主动提醒变成可控提醒体验 | 已完成 | 是 | P1 | reminder candidate 可确认、忽略、延后、关闭同类提醒；不直接真实群推送 |
-| UX-06 | 真实用户表达样本评测 | 进行中 | 否 | P1 | 样本集和 runner 已完成；新增 pre-live 质量 gate 后，当前旧值泄漏率 0.1429 未达 0.0000，不能标为质量完成 |
+| UX-06 | 真实用户表达样本评测 | 已完成 | 是 | P1 | 样本集、runner 和 pre-live 质量 gate 已完成；当前旧值泄漏率 0.0000，但仍保留解释缺口、含糊上下文和闲聊误记残余样例，不代表生产真实用户稳定可用 |
 | UX-07 | 10 分钟评委体验包 | 已完成 | 是 | P0 | 评委按一条脚本在 10 分钟内看懂问题、飞书体验、可选受控 DM allow-path、benchmark、安全边界和架构；入口为 `docs/judge-10-minute-experience.md` |
 
 ## 详细执行文档
@@ -43,7 +43,7 @@
 | 3 | UX-03 | [用户可理解的“为什么这样回答”解释层](user-experience-todos/ux-03-user-facing-explanation-layer.md) | 主答案能解释当前结论、证据、版本覆盖和权限原因，工程字段进入审计详情。 |
 | 4 | UX-04 | [记忆收件箱 / 审核队列](user-experience-todos/ux-04-memory-inbox-review-queue.md) | 待我审核、冲突需判断、高风险暂不建议确认三类视图可处理。 |
 | 5 | UX-05 | [主动提醒变成可控提醒体验](user-experience-todos/ux-05-controlled-reminder-experience.md) | reminder candidate 可确认、忽略、延后和关闭同类提醒，不直接真实群推送。 |
-| 6 | UX-06 | [真实用户表达样本评测](user-experience-todos/ux-06-real-user-expression-benchmark.md) | 已覆盖真实表达样本和 UX 指标；质量 gate 仍因旧值泄漏阻塞 pre-live 完成。 |
+| 6 | UX-06 | [真实用户表达样本评测](user-experience-todos/ux-06-real-user-expression-benchmark.md) | 已覆盖真实表达样本和 UX 指标；pre-live 质量 gate 已通过，残余样例继续进入优化 backlog。 |
 | 7 | UX-07 | [10 分钟评委体验包](user-experience-todos/ux-07-ten-minute-judge-experience-pack.md) | 评委按一条脚本在 10 分钟内看懂体验、benchmark、安全边界和架构。 |
 
 ## UX-07：10 分钟评委体验包
@@ -263,7 +263,7 @@
 - 样本覆盖口语、含糊上下文、多人改口、闲聊误判和权限场景各 5 条。
 - `memory_engine/benchmark.py` 已新增 `copilot_real_feishu` runner，输出 Recall@3、误记率、误提醒率、确认负担、解释覆盖率和旧值泄漏率。
 - 失败样例保留，不删除失败记录来制造好看的指标。
-- 2026-05-03 新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把 UX-06 阈值变成 pre-live 本地质量 gate。当前 gate 返回 `status=fail`，阻塞项为 `old_value_leakage_rate=0.1429`，阈值为 `0.0000`；因此 UX-06 只能说样本和 runner 已完成，不能说真实表达质量已达上线前门禁。
+- 2026-05-03 新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把 UX-06 阈值变成 pre-live 本地质量 gate。当前 gate 返回 `status=pass`：Recall@3 0.8750、误记率 0.0400、误提醒率 0.0000、解释覆盖率 0.8500、旧值泄漏率 0.0000。
 
 要做什么：
 
@@ -280,7 +280,7 @@
 - 已完成：新增真实表达样本集，保留失败样例，不只保留成功样例。
 - 已完成：指标包含 Recall@3、误记率、误提醒率、确认负担、回答可解释性、旧值泄漏率。
 - 已完成：样本来源脱敏，不提交真实 chat_id、open_id、token。
-- 未完成：pre-live 质量 gate 必须通过；当前旧值泄漏率未达 0.0000，需修复旧 Jenkins 泄漏等失败样例，而不是删除样本。
+- 已完成：pre-live 质量 gate 通过；旧 Jenkins 泄漏样例已通过 CI 工具 stable key 和改口 current_value 归一化修复，不删除样本。
 
 已验证：
 
@@ -293,14 +293,14 @@
 - `python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json`
 - `python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json`
 - `python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json`
-- `python3 scripts/check_real_feishu_expression_quality_gate.py --json`（当前预期失败，直到旧值泄漏率降到 0.0000）
+- `python3 scripts/check_real_feishu_expression_quality_gate.py --json`
 - `git diff --check`
 - `ollama ps`
 
 剩余边界：
 
 - `copilot_real_feishu_cases.json` 是脱敏 fixture + baseline 标注，不是生产真实用户稳定可用结论。
-- 当前失败样例包括解释缺口、闲聊误记和旧值泄漏，后续应修能力而不是删样例。
+- 当前失败样例包括解释缺口、含糊上下文和闲聊误记，后续应修能力而不是删样例。
 - 真实飞书来源先走 review policy；低重要性安全候选可自动 active，重要/敏感/冲突候选仍需人工确认。
 - 本阶段不宣称 production live、真实 Feishu DM 稳定长期路由或 productized live 长期运行完成；一次受控 DM allow-path 只覆盖 `fmc_memory_search`。
 

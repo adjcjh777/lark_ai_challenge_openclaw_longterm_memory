@@ -7,6 +7,9 @@ DEFAULT_SCOPE = "project:feishu_ai_challenge"
 
 OVERRIDE_WORDS = (
     "不对",
+    "作废",
+    "收回",
+    "最后还是",
     "改成",
     "以后",
     "统一",
@@ -30,7 +33,7 @@ OVERRIDE_WORDS = (
     "变更",
 )
 
-DECISION_WORDS = ("决定", "最终", "统一", "以后", "采用", "改成", "调成", "调整到", "升级到")
+DECISION_WORDS = ("决定", "最终", "最后还是", "统一", "以后", "采用", "改成", "调成", "调整到", "升级到")
 WORKFLOW_WORDS = (
     "必须",
     "不允许",
@@ -51,6 +54,7 @@ SUBJECT_RULES = (
     (("容器编排", "docker compose", "kubernetes", "k8s"), "容器编排"),
     (("发布策略", "release strategy", "blue-green deployment"), "发布策略"),
     (("ci 并行", "并行度"), "CI 并行度"),
+    (("ci 工具", "ci 流水线", "发布 ci", "发布 pipeline", "pipeline", "jenkins", "github actions"), "CI 工具"),
     (("api 接口", "endpoint", "https://api.internal"), "API 接口"),
     (("api 超时", "超时时间", "网关超时"), "API 超时"),
     (("缓存策略", "redis", "memcached"), "缓存策略"),

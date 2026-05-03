@@ -19,9 +19,21 @@ def clean_content(content: str) -> str:
     content = re.sub(r"^@?Memory\s*记住[:：]\s*", "", content, flags=re.IGNORECASE)
     content = re.sub(r"^/remember\s+", "", content, flags=re.IGNORECASE)
     content = content.strip()
+    content = _normalize_override_current_value(content)
     if "JSON" in content and "trace_id" in content and "日志" not in content:
         return f"JSON 格式含 trace_id。{content}"
     return content
+
+
+def _normalize_override_current_value(content: str) -> str:
+    if "最后还是" not in content:
+        return content
+    if not contains_any(content, ("作废", "收回", "不对")):
+        return content
+    current = re.split(r"最后还是", content, maxsplit=1)[1].strip(" ，,。.;；")
+    if not current:
+        return content
+    return f"最终：{current}。"
 
 
 def is_override_intent(content: str) -> bool:
@@ -79,6 +91,7 @@ def _has_memory_signal(content: str) -> bool:
         contains_any(content, DECISION_WORDS)
         or contains_any(content, WORKFLOW_WORDS)
         or contains_any(content, PREFERENCE_WORDS)
+        or contains_any(content, OVERRIDE_WORDS)
     )
 
 
