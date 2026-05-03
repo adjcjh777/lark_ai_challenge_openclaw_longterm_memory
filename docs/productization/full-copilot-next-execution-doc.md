@@ -17,9 +17,9 @@
 
 Workspace ingestion 的当前选择是 **lark-cli first**。原因很直接：lark-cli 已经把 Drive、Wiki、Docs、Sheets、Base/Bitable 等操作包装成适合 OpenClaw 调用的命令，能更快做出可审计 pilot。native Feishu OpenAPI / SDK 后续只在长期 daemon、高吞吐热路径、rate-limit 管理或更强错误分类需要时替换子进程边界。
 
-当前 workspace pilot 已有这些证据：Drive root / folder walk、Wiki space walk、显式 `--resource type:token[:title]`、doc/docx/wiki/sheet/bitable 类型路由、source registry / run registry、revision 去重、unchanged skip、同 filter stale 标记、failed fetch 记录、discovery cursor、registry gate、mixed-source 本地佐证 gate、warm-path latency gate。最近 latency gate 读回平均 5.51ms、最大 5.599ms，质量指标全绿。
+当前 workspace pilot 已有这些证据：Drive root / folder walk、Wiki space walk、显式 `--resource type:token[:title]`、doc/docx/wiki/sheet/bitable 类型路由、source registry / run registry、revision 去重、unchanged skip、同 filter stale 标记、failed fetch 记录、discovery cursor、registry gate、mixed-source 本地佐证 gate、warm-path latency gate 和真实 lark-cli fetch latency gate。最近本地 warm-path gate 读回平均 5.51ms、最大 5.599ms；真实 lark-cli fetch gate 用公开模板类 Sheet 在临时 DB 中跑完整 fetch / source render / candidate route / registry write，用时 12.747s，`source_count=3`、`candidate_count=2`、`failed_count=0`。
 
-还不能说完成的是：生产全量 workspace ingestion、项目/企业 workspace 内的常规 Sheet 样本、真实 chat + doc/table mixed-source live sample、真实 lark-cli fetch/network latency、生产 DB / 生产监控 / productized live 长期运行、完整多租户企业后台。常规 Sheet adapter 已用公开模板类 Sheet 在临时库里读出 `lark_sheet` source 和 candidate，但这只能证明技术路径，不代表企业 workspace 样本已覆盖。
+还不能说完成的是：生产全量 workspace ingestion、项目/企业 workspace 内的常规 Sheet 样本、真实 chat + doc/table mixed-source live sample、生产 DB / 生产监控 / productized live 长期运行、完整多租户企业后台。常规 Sheet adapter 和真实 fetch latency gate 都已用公开模板类 Sheet 证明技术路径，但这不代表企业 workspace 样本已覆盖，也不是生产 SLO。
 
 所有真实飞书来源仍必须先进入 `memory.create_candidate` 和 review policy。低重要性、无冲突、无敏感风险内容可以自动确认成 active；项目进展重要、重要角色发言、敏感/高风险或冲突内容必须停在 candidate；confirm / reject / undo 必须走 `CopilotService` / `handle_tool_request()`。
 
@@ -31,7 +31,7 @@ Workspace ingestion 的当前选择是 **lark-cli first**。原因很直接：la
 
 1. 用项目/企业 workspace 内已有常规 Sheet token / folder / wiki space 证明 normal Sheet ingestion，或在用户明确同意后创建受控测试 Sheet。
 2. 用真实飞书 chat + document / Sheet / Bitable 围绕同一个结论跑 mixed-source live sample，证明“佐证追加”和“冲突不覆盖 active”在真实来源上成立。
-3. 把 latency gate 从本地 warm path 扩到真实 lark-cli fetch/network path，继续保持 bounded discovery、registry skip 和 no raw-event embedding。
+3. 把真实 lark-cli fetch latency gate 继续扩到项目/企业 workspace 资源，保持 bounded discovery、registry skip 和 no raw-event embedding。
 
 如果要继续文档重写，按 `docs/productization/document-writing-style-guide-opus-4-6.md` 只改活跃入口文档。历史 handoff 和 archived plans 保留审计用途，除非被重新提升为当前执行入口。
 

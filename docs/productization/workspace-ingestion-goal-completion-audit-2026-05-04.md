@@ -34,11 +34,13 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `scripts/check_feishu_workspace_registry_gate.py`
 - `scripts/check_workspace_mixed_source_corroboration_gate.py`
 - `scripts/check_workspace_ingestion_latency_gate.py`
+- `scripts/check_workspace_real_fetch_latency_gate.py`
 - `tests/test_feishu_workspace_fetcher.py`
 - `tests/test_feishu_workspace_registry.py`
 - `tests/test_feishu_workspace_registry_gate.py`
 - `tests/test_workspace_mixed_source_corroboration_gate.py`
 - `tests/test_workspace_ingestion_latency_gate.py`
+- `tests/test_workspace_real_fetch_latency_gate.py`
 
 Recent implementation commits inspected:
 
@@ -67,7 +69,7 @@ dba049f Add direct Feishu folder and wiki discovery
 | Route should reuse group-chat architecture | `docs/productization/workspace-ingestion-architecture-adr.md`, `scripts/feishu_workspace_ingest.py`, `memory_engine/document_ingestion.py`, `memory_engine/copilot/tools.py` | Workspace fetches become `FeishuIngestionSource`, then `ingest_feishu_source()`, then `memory.create_candidate`, then `CopilotService` and review policy. | Complete for pilot. |
 | Shared database across chat/docs/tables | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/db.py`, `memory_engine/document_ingestion.py` | ADR chooses one governed ledger with raw events, memories, evidence, versions, audit events, and graph nodes; source evidence keeps source type/id/quote/tenant/org. | Complete for local/staging ledger. |
 | Corroboration and conflict handling | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/governance.py`, `scripts/check_workspace_mixed_source_corroboration_gate.py` | The gate confirms a chat source can create and confirm an active memory; a document source with the same value adds `document_feishu` evidence to the active version; a Bitable source with a different value becomes a conflict candidate and does not overwrite the active memory. | Complete for local/staging gate; still needs real mixed-source workspace samples for production confidence. |
-| Keep stability while improving response speed | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/feishu_workspace_registry.py`, `scripts/feishu_workspace_ingest.py`, `scripts/check_workspace_ingestion_latency_gate.py` | Bounded discovery, bounded fetch sizes, candidate limits, registry skip, cursor resume, no raw event embedding, same-filter stale marking, and a local warm-path latency gate reduce repeated work and detect regressions. Latest gate: `avg_ingestion_latency_ms=5.51`, `max_ingestion_latency_ms=5.599`, quality checks pass. | Complete for local warm-path baseline; production API latency and native hot-path migration remain future work. |
+| Keep stability while improving response speed | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/feishu_workspace_registry.py`, `scripts/feishu_workspace_ingest.py`, `scripts/check_workspace_ingestion_latency_gate.py`, `scripts/check_workspace_real_fetch_latency_gate.py` | Bounded discovery, bounded fetch sizes, candidate limits, registry skip, cursor resume, no raw event embedding, same-filter stale marking, and a local warm-path latency gate reduce repeated work and detect regressions. Latest warm-path gate: `avg_ingestion_latency_ms=5.51`, `max_ingestion_latency_ms=5.599`, quality checks pass. New real lark-cli fetch latency gate uses a temp SQLite DB and measures the full subprocess/network/fetch/source-render/candidate-route/registry path; current controlled public-template Sheet run passed at 12.747s with 3 sources, 2 candidates, and 0 failed fetches. | Complete for local warm-path baseline and controlled real lark-cli fetch-path evidence. Production SLO and project/enterprise workspace latency evidence remain future work. |
 | Opus 4.6-like docs, not 4.7 | `docs/productization/document-writing-style-guide-opus-4-6.md`, `workspace-ingestion-architecture-adr.md`, `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, `docs/productization/prd-completion-audit-and-gap-tasks.md` | Style guide exists and the new ADR uses shorter human engineering prose. It explicitly excludes Opus 4.7 voice. First-pass rewrites are complete for `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `full-copilot-next-execution-doc.md`, and `prd-completion-audit-and-gap-tasks.md`. | Complete for active entry-doc first pass. The guide still says historical handoffs and archived plans are not rewritten unless they are promoted back into active execution. |
 | Use subagents/skills/MCP as needed | Current run used lark skill guidance and repo-local checks; previous implementation used lark-cli evidence and board sync. | No direct artifact needed, but actions stayed inside project rules. | Sufficient. |
 
@@ -92,6 +94,8 @@ python3 scripts/check_workspace_mixed_source_corroboration_gate.py --json
 python3 -m unittest tests.test_workspace_mixed_source_corroboration_gate
 python3 scripts/check_workspace_ingestion_latency_gate.py --json
 python3 -m unittest tests.test_workspace_ingestion_latency_gate
+python3 scripts/check_workspace_real_fetch_latency_gate.py --json --resource 'sheet:<token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu
+python3 -m unittest tests.test_workspace_real_fetch_latency_gate
 ```
 
 ## Missing Or Weakly Verified Requirements
@@ -105,8 +109,8 @@ python3 -m unittest tests.test_workspace_ingestion_latency_gate
 3. **Mixed-source corroboration is locally proven but not yet live-proven.**
    `check_workspace_mixed_source_corroboration_gate.py` proves the ledger behavior in a temp SQLite DB. It still does not prove that real Feishu chat, document, Sheet, and Bitable objects from the same workspace have been sampled around the same conclusion.
 
-4. **Performance optimization has a local warm-path gate, but not production SLO evidence.**
-   `check_workspace_ingestion_latency_gate.py` measures local document/workspace candidate ingestion after warmup. Latest evidence is green at roughly 5-6ms per fixture, but this does not include lark-cli network calls, Feishu API rate limits, production storage, or OpenClaw live routing.
+4. **Performance optimization now has local warm-path and controlled real lark-cli fetch-path evidence, but not production SLO evidence.**
+   `check_workspace_ingestion_latency_gate.py` measures local document/workspace candidate ingestion after warmup. `check_workspace_real_fetch_latency_gate.py` measures a controlled real lark-cli fetch path through a temp DB; latest public-template Sheet evidence is green at 12.747s, 3 sources, 2 candidates, 0 failed fetches. This still does not include production storage, production rate-limit posture, OpenClaw live routing, or project/enterprise workspace resources.
 
 5. **The active-doc rewrite request is complete for this slice.**
    New active productization docs follow the style guide. `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, and `docs/productization/prd-completion-audit-and-gap-tasks.md` have a first-pass human-readable rewrite. The full repo contains many historical handoffs and archived plans that intentionally remain audit records; they should only be rewritten if promoted back into active execution.
@@ -117,7 +121,7 @@ The next product step should not be another architecture discussion. It should b
 
 1. **Prove project/enterprise normal Sheet ingestion** with an existing normal Sheet token/folder/wiki space, or with explicit user approval to create a controlled test Sheet.
 2. **Run the mixed-source gate on real sampled resources** once a matching document/table source is available.
-3. **Extend latency evidence to real lark-cli fetches** once controlled resources are available.
+3. **Extend real lark-cli fetch latency evidence to project/enterprise workspace resources** once controlled resources are available.
 4. **Keep active docs aligned** when the workspace evidence changes, using `document-writing-style-guide-opus-4-6.md` and keeping archived plans unchanged unless promoted back into active execution.
 
 Until at least the Sheet and real mixed-source evidence gaps are closed, do not call the overall objective complete.
