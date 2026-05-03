@@ -4,7 +4,7 @@ Date: 2026-05-04
 
 Purpose: make productization docs easier for humans to read while keeping audit facts precise.
 
-This guide is based on official Anthropic material about Claude Opus 4.6, not Opus 4.7. The useful writing cues are: gather context before acting, follow constraints across long work, stay warm and collaborative, and explain intent rather than piling up reminders. Official migration guidance also says Opus 4.7 is more direct and opinionated than Opus 4.6; do not use that 4.7 voice as the model for this repo.
+This guide is based on official Anthropic material about Claude Opus 4.6, not Opus 4.7. The useful writing cues are: gather context before acting, follow constraints across long work, stay warm and collaborative, and explain intent rather than piling up reminders. Anthropic's Opus 4.7 announcement describes stronger literal instruction following and a more opinionated style; do not use that 4.7 voice as the model for this repo.
 
 ## Voice
 

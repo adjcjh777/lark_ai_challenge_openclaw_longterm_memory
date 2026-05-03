@@ -15,7 +15,7 @@ Native Feishu OpenAPI remains the production direction for a daemon because it g
 Research basis:
 
 - Anthropic describes Opus 4.6 as better at gathering context, following long tasks, and judging when to work independently; this ADR keeps that style: read the system first, then make the smallest durable decision.
-- Official Claude guidance notes that Opus 4.6 had a warmer, more collaborative style than Opus 4.7; this document uses a clear but less brittle tone.
+- Anthropic's Opus 4.7 announcement describes a more opinionated model with stronger literal instruction following; this repo should not copy that 4.7 voice when the requested style target is Opus 4.6.
 - The local lark-cli skills and `lark-cli --help` confirm `drive +search`, `docs +fetch`, `sheets +read`, and `base +record-*` are first-class shortcut commands.
 
 ## Non-Goals
