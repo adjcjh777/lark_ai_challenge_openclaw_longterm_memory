@@ -25,6 +25,7 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `docs/productization/full-copilot-next-execution-doc.md`
 - `docs/productization/prd-completion-audit-and-gap-tasks.md`
 - `docs/productization/workspace-ingestion-architecture-adr.md`
+- `docs/productization/workspace-ingestion-evidence-request.md`
 - `docs/productization/document-writing-style-guide-opus-4-6.md`
 - `memory_engine/feishu_workspace_fetcher.py`
 - `memory_engine/feishu_workspace_registry.py`
@@ -146,5 +147,7 @@ The next product step should not be another architecture discussion. It should b
 2. **Run `check_workspace_real_same_conclusion_gate.py` on real chat + sampled document/table resources** once a matching chat statement is available.
 3. **Extend real lark-cli fetch latency evidence to project/enterprise workspace resources** once controlled resources are available.
 4. **Keep active docs aligned** when the workspace evidence changes, using `document-writing-style-guide-opus-4-6.md` and keeping archived plans unchanged unless promoted back into active execution.
+
+Use `workspace-ingestion-evidence-request.md` when asking the project owner or a teammate for the missing Sheet and same-fact samples. It is the shortest handoff note for the current blocker.
 
 Until at least the Sheet and real chat + doc/table same-conclusion corroboration evidence gaps are closed, do not call the overall objective complete.

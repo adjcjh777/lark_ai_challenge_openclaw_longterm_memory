@@ -6,6 +6,8 @@ Status: active runbook for closing the two remaining workspace-ingestion evidenc
 
 This runbook is deliberately narrow. It does not create Feishu resources, send messages, or claim production full-workspace ingestion. It tells the next operator exactly what evidence is still missing, how to collect it, and which gates must pass before the overall workspace objective can be called complete.
 
+If the next step is asking the project owner or a teammate for the missing samples, use `workspace-ingestion-evidence-request.md`. This runbook is the operator procedure after those samples exist.
+
 ## Current Blocking Evidence
 
 The combined readiness gate still returns `goal_complete=false`.
