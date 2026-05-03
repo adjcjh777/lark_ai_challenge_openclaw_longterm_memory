@@ -58,6 +58,8 @@ SOURCE_FIELDS = {
     "source_url",
     "source_chat_id",
     "source_doc_id",
+    "source_sheet_token",
+    "source_sheet_id",
     "source_task_id",
     "source_meeting_id",
     "source_bitable_app_token",
@@ -325,6 +327,8 @@ class Evidence:
     source_url: str | None = None
     source_chat_id: str | None = None
     source_doc_id: str | None = None
+    source_sheet_token: str | None = None
+    source_sheet_id: str | None = None
     source_task_id: str | None = None
     source_meeting_id: str | None = None
     source_bitable_app_token: str | None = None
@@ -341,7 +345,16 @@ class Evidence:
             source_id=source.get("source_id"),
             quote=source.get("quote"),
             created_at=source.get("created_at"),
+            source_url=source.get("source_url"),
             source_chat_id=source.get("source_chat_id"),
+            source_doc_id=source.get("source_doc_id"),
+            source_sheet_token=source.get("source_sheet_token"),
+            source_sheet_id=source.get("source_sheet_id"),
+            source_task_id=source.get("source_task_id"),
+            source_meeting_id=source.get("source_meeting_id"),
+            source_bitable_app_token=source.get("source_bitable_app_token"),
+            source_bitable_table_id=source.get("source_bitable_table_id"),
+            source_bitable_record_id=source.get("source_bitable_record_id"),
             document_token=source.get("document_token"),
             document_title=source.get("document_title"),
         )
@@ -357,6 +370,8 @@ class Evidence:
             "source_url": self.source_url,
             "source_chat_id": self.source_chat_id,
             "source_doc_id": self.source_doc_id,
+            "source_sheet_token": self.source_sheet_token,
+            "source_sheet_id": self.source_sheet_id,
             "source_task_id": self.source_task_id,
             "source_meeting_id": self.source_meeting_id,
             "source_bitable_app_token": self.source_bitable_app_token,
@@ -555,6 +570,8 @@ class CandidateSource:
     source_url: str | None = None
     source_chat_id: str | None = None
     source_doc_id: str | None = None
+    source_sheet_token: str | None = None
+    source_sheet_id: str | None = None
     source_task_id: str | None = None
     source_meeting_id: str | None = None
     source_bitable_app_token: str | None = None
@@ -574,6 +591,8 @@ class CandidateSource:
             source_url=_optional_string(data, "source_url"),
             source_chat_id=_optional_string(data, "source_chat_id"),
             source_doc_id=_optional_string(data, "source_doc_id"),
+            source_sheet_token=_optional_string(data, "source_sheet_token"),
+            source_sheet_id=_optional_string(data, "source_sheet_id"),
             source_task_id=_optional_string(data, "source_task_id"),
             source_meeting_id=_optional_string(data, "source_meeting_id"),
             source_bitable_app_token=_optional_string(data, "source_bitable_app_token"),
@@ -593,6 +612,10 @@ class CandidateSource:
             result["source_chat_id"] = self.source_chat_id
         if self.source_doc_id:
             result["source_doc_id"] = self.source_doc_id
+        if self.source_sheet_token:
+            result["source_sheet_token"] = self.source_sheet_token
+        if self.source_sheet_id:
+            result["source_sheet_id"] = self.source_sheet_id
         if self.source_url:
             result["source_url"] = self.source_url
         if self.source_task_id:

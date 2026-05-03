@@ -230,7 +230,14 @@
             "entrypoint": {"type": "string", "minLength": 1},
             "workspace_id": {"type": "string"},
             "chat_id": {"type": "string"},
-            "document_id": {"type": "string"}
+            "document_id": {"type": "string"},
+            "sheet_token": {"type": "string"},
+            "sheet_id": {"type": "string"},
+            "task_id": {"type": "string"},
+            "meeting_id": {"type": "string"},
+            "bitable_app_token": {"type": "string"},
+            "bitable_table_id": {"type": "string"},
+            "bitable_record_id": {"type": "string"}
           }
         },
         "requested_action": {

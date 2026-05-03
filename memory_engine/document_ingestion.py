@@ -603,6 +603,9 @@ def _candidate_source_payload(source: FeishuIngestionSource, quote: str, index: 
         payload["source_chat_id"] = str(metadata.get("chat_id") or source.source_id)
     if source.source_type in {"document_feishu", "lark_doc"}:
         payload["source_doc_id"] = source.source_id
+    if source.source_type == "lark_sheet":
+        payload["source_sheet_token"] = str(metadata.get("sheet_token") or source.source_id)
+        payload["source_sheet_id"] = str(metadata.get("sheet_id") or "")
     if source.source_type == "feishu_task":
         payload["source_task_id"] = source.source_id
     if source.source_type == "feishu_meeting":
@@ -642,6 +645,8 @@ def _limited_source_metadata(source: FeishuIngestionSource, current_context: dic
         "entrypoint": source_context.get("entrypoint"),
         "chat_id": source_context.get("chat_id"),
         "document_id": source_context.get("document_id"),
+        "sheet_token": source_context.get("sheet_token") or metadata.get("sheet_token"),
+        "sheet_id": source_context.get("sheet_id") or metadata.get("sheet_id"),
         "task_id": source_context.get("task_id"),
         "meeting_id": source_context.get("meeting_id"),
         "bitable_record_id": source_context.get("bitable_record_id") or metadata.get("record_id"),
@@ -710,6 +715,7 @@ def _source_context_key(source_type: str) -> str | None:
         "feishu_message": "chat_id",
         "document_feishu": "document_id",
         "lark_doc": "document_id",
+        "lark_sheet": "sheet_token",
         "feishu_task": "task_id",
         "feishu_meeting": "meeting_id",
         "lark_bitable": "bitable_record_id",
