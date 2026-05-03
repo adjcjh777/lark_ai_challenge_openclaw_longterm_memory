@@ -35,12 +35,14 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `scripts/check_workspace_mixed_source_corroboration_gate.py`
 - `scripts/check_workspace_ingestion_latency_gate.py`
 - `scripts/check_workspace_real_fetch_latency_gate.py`
+- `scripts/check_workspace_project_sheet_evidence_gate.py`
 - `tests/test_feishu_workspace_fetcher.py`
 - `tests/test_feishu_workspace_registry.py`
 - `tests/test_feishu_workspace_registry_gate.py`
 - `tests/test_workspace_mixed_source_corroboration_gate.py`
 - `tests/test_workspace_ingestion_latency_gate.py`
 - `tests/test_workspace_real_fetch_latency_gate.py`
+- `tests/test_workspace_project_sheet_evidence_gate.py`
 
 Recent implementation commits inspected:
 
@@ -63,7 +65,7 @@ dba049f Add direct Feishu folder and wiki discovery
 | Reference docs when deciding | `docs/productization/workspace-ingestion-architecture-adr.md`, `document-writing-style-guide-opus-4-6.md`, local lark skills, current `lark-cli --help` derived command choices | ADR names `drive +search`, `drive files list`, `wiki nodes list`, `docs +fetch`, `sheets +info/+read`, and `base +record-*`. | Complete enough for pilot; production API research remains a future implementation gate, not a missing pilot decision. |
 | Discover and route Feishu documents/cloud docs | `memory_engine/feishu_workspace_fetcher.py`, `scripts/feishu_workspace_ingest.py` | Drive root/folder walk and Wiki `my_library` walk discovered docx resources; temporary SQLite smokes produced `document_feishu` sources and candidates. | Pilot complete; not production full workspace crawler. |
 | Discover and route Bitable/Base | `memory_engine/feishu_bitable_fetcher.py`, `memory_engine/feishu_workspace_fetcher.py`, `scripts/feishu_workspace_ingest.py` | Explicit reviewed Bitable resource smoke produced 1 `lark_bitable` source and 1 candidate in a temporary SQLite DB; current lark-cli 1.0.22 output shapes are handled. | Pilot complete for Bitable. |
-| Discover and route normal Sheet | `memory_engine/feishu_workspace_fetcher.py`, `document_ingestion.py`, `tests/test_feishu_workspace_fetcher.py` | Code supports `lark_sheet`, `sheets +info`, `sheets +read`, source context, metadata, and tests. Current project/Wiki discovery found Drive root 0 normal Sheets and Wiki `my_library` 1 sheet-backed Bitable tab, which correctly returned `no_sources`. A docs search then found a public/template normal Sheet; explicit temp-DB ingestion read 3 `lark_sheet` sources, generated 2 candidates, and registry gate read back `ingested_count=3`, `cursor_count=1`. | Complete for normal Sheet adapter technical readback. Incomplete for project/enterprise workspace evidence; still needs a real project/enterprise normal Sheet token/folder/wiki space or explicit approval to create a controlled test Sheet. |
+| Discover and route normal Sheet | `memory_engine/feishu_workspace_fetcher.py`, `document_ingestion.py`, `scripts/check_workspace_project_sheet_evidence_gate.py`, `tests/test_feishu_workspace_fetcher.py`, `tests/test_workspace_project_sheet_evidence_gate.py` | Code supports `lark_sheet`, `sheets +info`, `sheets +read`, source context, metadata, and tests. Current parser now handles real `drive +search` result shape through `result_meta.doc_types/token/url` and Wiki `icon_info.token`. Current project Sheet gate is read-only and calls only `sheets +info`: it found 2 Sheet candidates, where the project keyword match is sheet-backed Bitable-only and the other normal Sheet is cross-tenant/non-project, so `eligible_project_normal_sheet_count=0`. A docs search then found a public/template normal Sheet; explicit temp-DB ingestion read 3 `lark_sheet` sources, generated 2 candidates, and registry gate read back `ingested_count=3`, `cursor_count=1`. | Complete for normal Sheet adapter technical readback and current-account project Sheet absence evidence. Incomplete for project/enterprise workspace evidence; still needs a real project/enterprise normal Sheet token/folder/wiki space or explicit approval to create a controlled test Sheet. |
 | Full workspace registry and cursoring | `memory_engine/feishu_workspace_registry.py`, `scripts/check_feishu_workspace_registry_gate.py` | Registry records runs, source keys, status, cursors, revision skip, same-filter stale, and failed fetch evidence. Real temporary DB gates read back skip/cursor, stale, and failed evidence. | Pilot complete; not production scheduler or all-enterprise coverage. |
 | What should be remembered | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/review_policy.py`, `memory_engine/document_ingestion.py` | ADR defines durable decisions, workflow rules, project facts, conflicts, risks, and preferences as memory candidates, and excludes chatter, raw tables, inaccessible content, and secrets. Review policy can auto-confirm low-risk content and hold important/sensitive/conflict content as candidates. | Complete for policy. |
 | Route should reuse group-chat architecture | `docs/productization/workspace-ingestion-architecture-adr.md`, `scripts/feishu_workspace_ingest.py`, `memory_engine/document_ingestion.py`, `memory_engine/copilot/tools.py` | Workspace fetches become `FeishuIngestionSource`, then `ingest_feishu_source()`, then `memory.create_candidate`, then `CopilotService` and review policy. | Complete for pilot. |
@@ -96,12 +98,14 @@ python3 scripts/check_workspace_ingestion_latency_gate.py --json
 python3 -m unittest tests.test_workspace_ingestion_latency_gate
 python3 scripts/check_workspace_real_fetch_latency_gate.py --json --resource 'sheet:<token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu
 python3 -m unittest tests.test_workspace_real_fetch_latency_gate
+python3 scripts/check_workspace_project_sheet_evidence_gate.py --json --opened-since 90d --limit 20 --max-pages 2
+python3 -m unittest tests.test_workspace_project_sheet_evidence_gate
 ```
 
 ## Missing Or Weakly Verified Requirements
 
 1. **Project/enterprise normal Sheet evidence is missing.**
-   The code path exists and tests pass. A public/template normal Sheet has now proven the adapter can fetch `lark_sheet` sources and create candidates in a temp DB. The current project/Wiki discovery still exposes only a sheet-backed Bitable tab, which correctly returns `no_sources`, so this is not yet enterprise workspace Sheet evidence.
+   The code path exists and tests pass. A public/template normal Sheet has now proven the adapter can fetch `lark_sheet` sources and create candidates in a temp DB. The new read-only project Sheet gate proves the current account can parse real `drive +search` results, but still finds no eligible project normal Sheet: the project match is sheet-backed Bitable-only, and the only normal Sheet candidate is cross-tenant and non-project. This is not yet enterprise workspace Sheet evidence.
 
 2. **"Full workspace ingestion" is not achieved.**
    The system has deterministic discovery, registry, cursoring, stale marking, and failed fetch evidence for a limited pilot. It does not yet have a production long-running daemon, full enterprise coverage guarantees, production rate-limit handling, monitoring, or operational SLOs.

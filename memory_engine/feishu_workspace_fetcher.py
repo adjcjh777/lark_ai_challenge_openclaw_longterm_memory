@@ -336,6 +336,41 @@ def fetch_workspace_resource_sources(
     return []
 
 
+def inspect_sheet_resource(
+    resource: WorkspaceResource,
+    *,
+    profile: str | None = None,
+    as_identity: str | None = None,
+) -> dict[str, Any]:
+    """Inspect a Sheet resource shape without reading cell contents."""
+
+    info = _sheet_info(resource.token, profile=profile, as_identity=as_identity)
+    sheets = _sheets_from_info(info.data or {})
+    normal_sheets: list[dict[str, Any]] = []
+    embedded_or_unsupported: list[dict[str, Any]] = []
+    for sheet in sheets:
+        resource_type = _sheet_resource_type(sheet)
+        if resource_type in {"", "sheet"}:
+            normal_sheets.append(sheet)
+        else:
+            embedded_or_unsupported.append(sheet)
+    embedded_resource_types = sorted({_sheet_resource_type(sheet) or "unknown" for sheet in embedded_or_unsupported})
+    return {
+        "title": resource.title,
+        "route_type": resource.route_type,
+        "resource_type": resource.resource_type,
+        "sheet_count": len(sheets),
+        "normal_sheet_count": len(normal_sheets),
+        "embedded_or_unsupported_sheet_count": len(embedded_or_unsupported),
+        "embedded_resource_types": embedded_resource_types,
+        "normal_sheet_titles": [_sheet_title(sheet) for sheet in normal_sheets],
+        "is_normal_sheet": bool(normal_sheets),
+        "is_sheet_backed_bitable_only": bool(sheets)
+        and not normal_sheets
+        and set(embedded_resource_types).issubset({"bitable"}),
+    }
+
+
 def workspace_current_context(
     *,
     scope: str,
@@ -554,13 +589,13 @@ def _fetch_sheet_resource(
     info = _sheet_info(resource.token, profile=profile, as_identity=as_identity)
     sources: list[FeishuIngestionSource] = []
     for sheet in _sheets_from_info(info.data or {}):
-        sheet_resource_type = str(sheet.get("resource_type") or "sheet").strip().lower()
+        sheet_resource_type = _sheet_resource_type(sheet)
         if sheet_resource_type not in {"", "sheet"}:
             continue
         sheet_id = str(sheet.get("sheet_id") or sheet.get("id") or "")
         if not sheet_id:
             continue
-        title = str(sheet.get("title") or sheet.get("name") or resource.title)
+        title = _sheet_title(sheet) or resource.title
         values = _sheet_values(resource.token, sheet_id, max_rows=max_rows, profile=profile, as_identity=as_identity)
         if not values:
             continue
@@ -663,14 +698,19 @@ def _sheet_values(
 
 
 def _resource_from_search_result(item: dict[str, Any]) -> WorkspaceResource | None:
-    nested = _first_dict(item, "doc", "document", "wiki", "resource", "entity") or item
+    nested = _first_dict(item, "doc", "document", "wiki", "resource", "entity", "result_meta") or item
     resource_type = _first_string(item, "type", "doc_type", "resource_type", "obj_type")
     resource_type = resource_type or _first_string(nested, "type", "doc_type", "resource_type", "obj_type")
+    resource_type = resource_type or _first_string(nested, "doc_types")
     token = _first_string(nested, "token", "file_token", "obj_token", "doc_token", "wiki_token", "app_token")
     token = token or _first_string(item, "token", "file_token", "obj_token", "doc_token", "wiki_token", "app_token")
+    icon_token = _icon_info_token(nested)
+    if icon_token and _first_string(item, "entity_type", "type") == "WIKI":
+        token = icon_token
     if not resource_type or not token:
         return None
-    title = _first_string(nested, "title", "name") or _first_string(item, "title", "name") or token
+    title = _first_string(nested, "title", "name")
+    title = title or _first_string(item, "title", "name", "title_highlighted") or token
     url = _first_string(nested, "url", "link") or _first_string(item, "url", "link")
     obj_type = _first_string(nested, "obj_type") or _first_string(item, "obj_type")
     return WorkspaceResource(
@@ -789,6 +829,14 @@ def _sheets_from_info(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
+def _sheet_resource_type(sheet: dict[str, Any]) -> str:
+    return str(sheet.get("resource_type") or "sheet").strip().lower()
+
+
+def _sheet_title(sheet: dict[str, Any]) -> str:
+    return str(sheet.get("title") or sheet.get("name") or "").strip()
+
+
 def _values_from_sheet_read(payload: dict[str, Any]) -> list[list[Any]]:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     if not isinstance(data, dict):
@@ -845,6 +893,20 @@ def _normalize_resource_type(value: str) -> str:
     if normalized == "base":
         return "bitable"
     return normalized
+
+
+def _icon_info_token(payload: dict[str, Any]) -> str | None:
+    raw_icon_info = payload.get("icon_info")
+    if not isinstance(raw_icon_info, str) or not raw_icon_info.strip():
+        return None
+    try:
+        icon_info = json.loads(raw_icon_info)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(icon_info, dict):
+        return None
+    token = icon_info.get("token")
+    return token if isinstance(token, str) and token else None
 
 
 def _safe_id(value: str) -> str:

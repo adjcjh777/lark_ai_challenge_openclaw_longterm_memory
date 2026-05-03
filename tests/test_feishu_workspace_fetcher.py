@@ -16,6 +16,7 @@ from memory_engine.feishu_workspace_fetcher import (
     discover_workspace_resource_batch,
     discover_workspace_resources,
     fetch_workspace_resource_sources,
+    inspect_sheet_resource,
     workspace_resource_from_spec,
     workspace_current_context,
 )
@@ -160,6 +161,45 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertIn("oc_chat", argv)
         self.assertIn("--sort", argv)
         self.assertIn("edit_time", argv)
+
+    def test_discovers_workspace_resources_from_current_drive_search_shape(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "data": {
+                        "results": [
+                            {
+                                "entity_type": "WIKI",
+                                "result_meta": {
+                                    "doc_types": "SHEET",
+                                    "icon_info": '{"token":"sht_underlying","obj_type":3}',
+                                    "token": "wiki_node_token",
+                                    "url": "https://example.feishu.cn/wiki/wiki_node_token",
+                                },
+                                "title_highlighted": "<h>飞书挑战赛</h>任务跟进看板",
+                            },
+                            {
+                                "entity_type": "DOC",
+                                "result_meta": {
+                                    "doc_types": "SHEET",
+                                    "token": "sht_doc_token",
+                                    "url": "https://example.feishu.cn/sheets/sht_doc_token",
+                                },
+                                "title_highlighted": "项目指标表",
+                            },
+                        ],
+                        "has_more": False,
+                    }
+                }
+            )
+
+            resources = discover_workspace_resources(doc_types=["sheet"], limit=10)
+
+        self.assertEqual(["sht_underlying", "sht_doc_token"], [item.token for item in resources])
+        self.assertEqual(["sheet", "sheet"], [item.resource_type for item in resources])
+        self.assertEqual(["sheet", "sheet"], [item.route_type for item in resources])
+        self.assertEqual("<h>飞书挑战赛</h>任务跟进看板", resources[0].title)
+        self.assertEqual("项目指标表", resources[1].title)
 
     def test_discovers_drive_folder_resources_and_recurses_folders(self) -> None:
         with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
@@ -357,6 +397,54 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
 
         self.assertEqual([], sources)
         self.assertEqual(1, run.call_count)
+
+    def test_inspects_sheet_resource_without_reading_cells(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "data": {
+                        "sheets": {
+                            "sheets": [
+                                {"sheet_id": "sh_1", "title": "规则", "resource_type": "sheet"},
+                                {"sheet_id": "sh_2", "title": "看板", "resource_type": "bitable"},
+                            ]
+                        }
+                    }
+                }
+            )
+            resource = WorkspaceResource(resource_type="sheet", token="sht_1", title="项目规则")
+
+            inspection = inspect_sheet_resource(resource, profile="feishu-ai-challenge")
+
+        self.assertTrue(inspection["is_normal_sheet"])
+        self.assertFalse(inspection["is_sheet_backed_bitable_only"])
+        self.assertEqual(2, inspection["sheet_count"])
+        self.assertEqual(1, inspection["normal_sheet_count"])
+        self.assertEqual(["规则"], inspection["normal_sheet_titles"])
+        self.assertEqual(["bitable"], inspection["embedded_resource_types"])
+        self.assertEqual(1, run.call_count)
+        self.assertNotIn("+read", run.call_args.args[0])
+
+    def test_inspects_sheet_backed_bitable_only_resource(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "data": {
+                        "sheets": {
+                            "sheets": [
+                                {"sheet_id": "sh_bitable", "title": "任务看板", "resource_type": "bitable"},
+                            ]
+                        }
+                    }
+                }
+            )
+            resource = WorkspaceResource(resource_type="sheet", token="sht_1", title="任务看板")
+
+            inspection = inspect_sheet_resource(resource)
+
+        self.assertFalse(inspection["is_normal_sheet"])
+        self.assertTrue(inspection["is_sheet_backed_bitable_only"])
+        self.assertEqual(0, inspection["normal_sheet_count"])
 
     def test_fetches_bitable_resource_by_tables_and_records(self) -> None:
         with patch("memory_engine.feishu_bitable_fetcher.run_lark_cli") as run:
