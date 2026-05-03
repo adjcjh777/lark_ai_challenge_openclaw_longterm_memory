@@ -139,6 +139,7 @@ def discover_workspace_resources(
 def discover_drive_folder_resources(
     *,
     folder_tokens: Iterable[str],
+    doc_types: Iterable[str] = WORKSPACE_DOC_TYPES,
     include_root: bool = False,
     limit: int = 100,
     max_depth: int = 2,
@@ -150,6 +151,7 @@ def discover_drive_folder_resources(
     """List Drive folders directly and return supported cloud-document resources."""
 
     resources: list[WorkspaceResource] = []
+    allowed_types = {_normalize_resource_type(item) for item in doc_types}
     queue: list[tuple[str, int]] = []
     if include_root:
         queue.append(("", 0))
@@ -175,7 +177,7 @@ def discover_drive_folder_resources(
             payload = result.data or {}
             for item in _drive_files(payload):
                 resource = _resource_from_drive_file(item)
-                if resource is not None:
+                if resource is not None and resource.resource_type in allowed_types:
                     resources.append(resource)
                     if len(resources) >= limit:
                         break
@@ -192,6 +194,7 @@ def discover_drive_folder_resources(
 def discover_wiki_space_resources(
     *,
     space_ids: Iterable[str],
+    doc_types: Iterable[str] = WORKSPACE_DOC_TYPES,
     limit: int = 100,
     max_depth: int = 2,
     max_pages_per_parent: int = 3,
@@ -202,6 +205,7 @@ def discover_wiki_space_resources(
     """List Wiki spaces directly and resolve nodes to their underlying cloud docs."""
 
     resources: list[WorkspaceResource] = []
+    allowed_types = {_normalize_resource_type(item) for item in doc_types}
     for space_id in [item for item in space_ids if item]:
         queue: list[tuple[str | None, int]] = [(None, 0)]
         seen_parents: set[str] = set()
@@ -227,7 +231,7 @@ def discover_wiki_space_resources(
                 payload = result.data or {}
                 for item in _wiki_nodes(payload):
                     resource = _resource_from_wiki_node(item)
-                    if resource is not None:
+                    if resource is not None and resource.resource_type in allowed_types:
                         resources.append(resource)
                         if len(resources) >= limit:
                             break

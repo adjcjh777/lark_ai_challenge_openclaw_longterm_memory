@@ -173,7 +173,9 @@ def main() -> int:
                 profile=args.profile,
                 as_identity=args.as_identity,
             )
-        resources.extend(_discover_direct_walk_resources(args, remaining=max(0, args.limit - len(resources))))
+        resources.extend(
+            _discover_direct_walk_resources(args, remaining=max(0, args.limit - len(resources)), doc_types=doc_types)
+        )
         resources.extend(explicit_resources)
         resources = _dedupe_resources(resources)
         return _emit(
@@ -248,6 +250,7 @@ def main() -> int:
     direct_walk_resources = _discover_direct_walk_resources(
         args,
         remaining=max(0, args.limit - len(discovery_batch.resources)),
+        doc_types=doc_types,
     )
     resources = _dedupe_resources([*discovery_batch.resources, *direct_walk_resources, *explicit_resources])
     source_results: list[dict[str, Any]] = []
@@ -475,7 +478,12 @@ def _resource_summary(resource) -> dict[str, Any]:
     }
 
 
-def _discover_direct_walk_resources(args: argparse.Namespace, *, remaining: int) -> list[WorkspaceResource]:
+def _discover_direct_walk_resources(
+    args: argparse.Namespace,
+    *,
+    remaining: int,
+    doc_types: list[str],
+) -> list[WorkspaceResource]:
     if remaining <= 0:
         return []
     resources: list[WorkspaceResource] = []
@@ -484,6 +492,7 @@ def _discover_direct_walk_resources(args: argparse.Namespace, *, remaining: int)
         resources.extend(
             discover_drive_folder_resources(
                 folder_tokens=folder_tokens,
+                doc_types=doc_types,
                 include_root=args.folder_walk_root,
                 limit=remaining,
                 max_depth=max(0, args.walk_max_depth),
@@ -498,6 +507,7 @@ def _discover_direct_walk_resources(args: argparse.Namespace, *, remaining: int)
         resources.extend(
             discover_wiki_space_resources(
                 space_ids=wiki_space_ids,
+                doc_types=doc_types,
                 limit=remaining_after_folders,
                 max_depth=max(0, args.walk_max_depth),
                 page_size=min(max(1, args.walk_page_size), 50),

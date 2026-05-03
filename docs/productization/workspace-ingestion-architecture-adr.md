@@ -127,6 +127,7 @@ This slice adds a controlled adapter:
   - `--resume-cursor` / `--reset-cursor` for long scans across multiple runs.
   - `--resource type:token[:title]` and `--skip-discovery` for explicit, reviewed resources when Drive search is not the right entry point.
   - `--folder-walk-root`, `--folder-walk-tokens`, `--wiki-space-walk-ids`, `--walk-max-depth`, and `--walk-page-size` for deterministic folder/wiki discovery.
+  - direct folder/wiki walk respects `--doc-types`, matching the search path's type filtering.
   - explicit `no_sources` result rows when a discovered resource returns no supported text source, instead of silently disappearing.
 - `scripts/check_feishu_workspace_registry_gate.py`
   - read-only gate for workspace runs, source registry rows, cursor rows, and required ingested / skipped / stale / failed evidence.
@@ -226,7 +227,7 @@ python3 scripts/feishu_workspace_ingest.py \
   --json
 ```
 
-2026-05-04 controlled evidence: Drive root dry-run returned 8 supported resources; Wiki `my_library` dry-run returned 8 supported resources; combined dry-run returned 16 docx/sheet/bitable resources. Temporary SQLite smoke results: Drive folder/root walk ingested 1 docx resource into 1 `document_feishu` source and 2 candidates; Wiki walk with limit 3 fetched 3 resources, produced 2 document sources and 2 candidates, and surfaced the sheet-backed Bitable tab as `stage=no_sources` instead of treating it as a successful source. Repeating the same folder walk in the same temporary SQLite database, then running `check_feishu_workspace_registry_gate.py --min-runs 2 --require-ingested --require-skipped --require-cursor --json`, returned `ok=true`, `run_count=2`, `totals.ingested=1`, `totals.skipped_unchanged=1`, and `cursor_count=1`. Unit tests cover the same gate's stale and failed evidence checks. This proves deterministic folder/wiki discovery and small candidate ingestion work in the current account context; it still does not prove production full-workspace crawling, long-running scheduling, or complete enterprise coverage.
+2026-05-04 controlled evidence: Drive root dry-run returned 8 supported resources; Wiki `my_library` dry-run returned 8 supported resources; combined dry-run returned 16 docx/sheet/bitable resources. Sheet-only direct discovery now respects `--doc-types`: Drive root returned 0 sheets, Wiki `my_library` returned 1 sheet-backed Bitable tab. Temporary SQLite smoke results: Drive folder/root walk ingested 1 docx resource into 1 `document_feishu` source and 2 candidates; Wiki walk with limit 3 fetched 3 resources, produced 2 document sources and 2 candidates, and surfaced the sheet-backed Bitable tab as `stage=no_sources` instead of treating it as a successful source. Repeating the same folder walk in the same temporary SQLite database, then running `check_feishu_workspace_registry_gate.py --min-runs 2 --require-ingested --require-skipped --require-cursor --json`, returned `ok=true`, `run_count=2`, `totals.ingested=1`, `totals.skipped_unchanged=1`, and `cursor_count=1`. Unit tests cover the same gate's stale and failed evidence checks. This proves deterministic folder/wiki discovery and small candidate ingestion work in the current account context; it still does not prove production full-workspace crawling, long-running scheduling, complete enterprise coverage, or real normal-sheet ingestion.
 
 ## Performance Plan
 
@@ -244,6 +245,7 @@ Keep the current feature stable first, then optimize the hot path:
 
 - Discovery can list doc/docx/wiki/sheet/bitable resources without writing the DB.
 - Operators can scope discovery with `--mine`, creator/sharer/chat IDs, folder/wiki filters, sort, and since/until time windows.
+- Folder/wiki direct discovery obeys `--doc-types`.
 - Operators can ingest reviewed explicit resources with `--resource type:token[:title] --skip-discovery` when Drive discovery is empty or intentionally bypassed.
 - Operators can bypass search and directly list Drive root/folders or Wiki spaces with bounded recursion.
 - Document, Sheet, and Bitable resources can become `FeishuIngestionSource` objects.

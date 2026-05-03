@@ -203,6 +203,26 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertTrue(any("fld_root" in item for item in first_argv))
         self.assertTrue(any("fld_child" in item for item in second_argv))
 
+    def test_drive_folder_discovery_respects_doc_type_filter(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "data": {
+                        "files": [
+                            {"type": "docx", "token": "doc_1", "name": "方案"},
+                            {"type": "sheet", "token": "sht_1", "name": "指标"},
+                            {"type": "bitable", "token": "app_1", "name": "任务表"},
+                        ],
+                        "has_more": False,
+                    },
+                }
+            )
+
+            resources = discover_drive_folder_resources(folder_tokens=["fld_root"], doc_types=["sheet"], limit=10)
+
+        self.assertEqual(["sht_1"], [item.token for item in resources])
+        self.assertEqual(["sheet"], [item.resource_type for item in resources])
+
     def test_discovers_wiki_space_resources_from_nodes(self) -> None:
         with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
             run.side_effect = [
@@ -245,6 +265,25 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertEqual(["document", "sheet"], [item.route_type for item in resources])
         self.assertTrue(any("space_1" in item for item in run.call_args_list[0].args[0]))
         self.assertTrue(any("wik_1" in item for item in run.call_args_list[1].args[0]))
+
+    def test_wiki_space_discovery_respects_doc_type_filter(self) -> None:
+        with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
+            run.return_value = _ok(
+                {
+                    "data": {
+                        "items": [
+                            {"obj_type": "docx", "obj_token": "doc_1", "title": "方案"},
+                            {"obj_type": "sheet", "obj_token": "sht_1", "title": "指标"},
+                        ],
+                        "has_more": False,
+                    },
+                }
+            )
+
+            resources = discover_wiki_space_resources(space_ids=["space_1"], doc_types=["sheet"], limit=10)
+
+        self.assertEqual(["sht_1"], [item.token for item in resources])
+        self.assertEqual(["sheet"], [item.resource_type for item in resources])
 
     @patch("memory_engine.document_ingestion.subprocess.run")
     def test_fetches_document_resource_as_feishu_source(self, subprocess_run: Mock) -> None:
