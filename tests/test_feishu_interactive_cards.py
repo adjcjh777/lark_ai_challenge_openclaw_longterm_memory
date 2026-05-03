@@ -1014,6 +1014,7 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertEqual("trace_denied_review_card", payload["trace_id"])
         self.assertEqual("deny", payload["permission_decision"]["decision"])
         self.assertEqual("review_role_required", payload["permission_decision"]["reason_code"])
+        self.assertIn("reviewer", payload["user_explanation"])
         self.assertEqual([], payload["buttons"])
         self.assertNotIn("ap-shanghai", rendered)
         self.assertNotIn("决定：生产部署 region", rendered)
@@ -1021,6 +1022,37 @@ class FeishuInteractiveCardsTest(unittest.TestCase):
         self.assertNotIn("trace_id", rendered)
         self.assertNotIn("req_denied_review_card", rendered)
         self.assertNotIn("trace_denied_review_card", rendered)
+
+    def test_search_denied_source_revoked_payload_explains_without_leaking_values(self) -> None:
+        denied = {
+            "ok": False,
+            "error": {
+                "code": "permission_denied",
+                "message": "source revoked",
+                "details": {
+                    "reason_code": "source_permission_revoked",
+                    "request_id": "req_source_revoked_card",
+                    "trace_id": "trace_source_revoked_card",
+                    "current_value": "敏感旧结论",
+                    "summary": "敏感摘要",
+                    "evidence": {"quote": "敏感证据"},
+                },
+            },
+        }
+
+        payload = search_result_payload(denied)
+        card = build_search_result_card(denied)
+        rendered = json.dumps(card, ensure_ascii=False)
+
+        self.assertEqual("permission_denied", payload["status"])
+        self.assertEqual("source_permission_revoked", payload["permission_reason"])
+        self.assertIn("原始飞书来源已经撤权", payload["user_explanation"])
+        self.assertIn("默认搜索会隐藏相关记忆", rendered)
+        self.assertNotIn("敏感旧结论", rendered)
+        self.assertNotIn("敏感摘要", rendered)
+        self.assertNotIn("敏感证据", rendered)
+        self.assertNotIn("req_source_revoked_card", rendered)
+        self.assertNotIn("trace_source_revoked_card", rendered)
 
     def test_card_action_review_surface_uses_copilot_bridge_and_fails_closed(self) -> None:
         service = CopilotService(repository=MemoryRepository(self.conn))

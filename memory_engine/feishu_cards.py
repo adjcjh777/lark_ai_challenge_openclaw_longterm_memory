@@ -1510,6 +1510,7 @@ def _denied_surface_payload(
         },
         "buttons": [],
         "state_mutation": "none",
+        "user_explanation": _permission_denied_user_explanation(str(reason_code)),
         "error": {
             "code": error.get("code") or "permission_denied",
             "message": "当前操作者没有权限执行这个审核动作。",
@@ -1523,6 +1524,7 @@ def _permission_denied_card(title: str, payload: dict[str, Any]) -> dict[str, An
     fields = [
         ("状态", "permission_denied"),
         ("拒绝原因", str(payload.get("permission_reason") or "permission_denied")),
+        ("用户说明", str(payload.get("user_explanation") or _permission_denied_user_explanation("permission_denied"))),
     ]
     return {
         "config": {"wide_screen_mode": True},
@@ -1547,6 +1549,23 @@ def _permission_denied_card(title: str, payload: dict[str, Any]) -> dict[str, An
             },
         ],
     }
+
+
+def _permission_denied_user_explanation(reason_code: str) -> str:
+    if reason_code in {"source_permission_revoked", "source_revoked", "source_visibility_revoked"}:
+        return (
+            "原始飞书来源已经撤权或不可见，因此默认搜索会隐藏相关记忆；"
+            "请让 owner/reviewer 重新授权来源，或提供新的公开证据后再确认。"
+        )
+    if reason_code == "review_role_required":
+        return "这个操作需要 reviewer、owner 或 admin 身份；当前操作者不能确认、拒绝或改动候选记忆。"
+    if reason_code in {"tenant_mismatch", "organization_mismatch"}:
+        return "当前操作者不属于目标 tenant/org，系统已拒绝访问并隐藏记忆内容和证据。"
+    if reason_code == "source_context_mismatch":
+        return "当前聊天、文档或 workspace 与来源上下文不一致，系统已拒绝访问并隐藏记忆内容和证据。"
+    if reason_code == "visibility_private_non_owner":
+        return "这是 private 记忆，只有 owner、reviewer 或 admin 可以查看或处理。"
+    return "当前权限不足，系统已安全拒绝；不会展示未授权的记忆内容、摘要或证据。"
 
 
 def _last_match(pattern: str, text: str) -> str | None:

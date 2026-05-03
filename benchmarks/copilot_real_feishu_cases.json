@@ -716,11 +716,11 @@
       "candidate_created": false,
       "reminder_created": false,
       "review_action_count": 0,
-      "has_user_explanation": false,
+      "has_user_explanation": true,
       "old_value_leaked": false,
       "permission_decision": "deny"
     },
-    "failure_debug_hint": "保留失败样例：权限拒绝成立但解释不足，后续补 source revoked 用户文案。"
+    "failure_debug_hint": "已补 source revoked 用户文案：解释来源撤权后默认搜索隐藏相关记忆，且不泄露明文。"
   },
   {
     "case_id": "real_expr_permission_005",
