@@ -172,7 +172,7 @@ Feishu reply:
 
 ### 2.7 Workspace 记忆 bot 单聊自动复测
 
-时间：2026-05-04 11:47（Asia/Shanghai）
+时间：2026-05-04 11:47、12:53、13:08（Asia/Shanghai）
 
 自动测试命令：
 
@@ -222,6 +222,28 @@ OpenClaw gateway:
 
 这次复测证明当前受控 workspace 记忆可以通过 bot 单聊回读，并且仍走 first-class `fmc_memory_search` 路由。它不证明真实 Feishu DM 长期稳定路由，也不证明全量 workspace ingestion 或 productized live。
 
+2026-05-04 13:08（Asia/Shanghai）再次自动复测：
+
+```text
+Feishu P2P:
+- user message: /recall Workspace ingestion readiness gate Sheet 样本
+- bot reply type: interactive card
+- first active result: Workspace ingestion readiness gate must include a reviewed normal Sheet sample
+- evidence: lark_sheet:sheet:<redacted>:fb7047
+- audit: permission allow / scope_access_granted
+
+OpenClaw gateway:
+- received p2p DM
+- feishu-memory-copilot route result ok=true
+- bridge tool=fmc_memory_search
+- request_id present
+- trace_id present
+- source_entrypoint=openclaw_gateway_live
+- card delivery ok=true, mode=reply_card
+```
+
+脱敏证据保存在 `logs/feishu-dm-workspace-tests/20260504T050822Z/`。`check_feishu_dm_routing.py --event-log /tmp/openclaw/openclaw-2026-05-04.log --required-tools fmc_memory_search --min-first-class-results 4 --json` 返回 `ok=true`，4 条 first-class `fmc_memory_search` 结果全部 successful / allow。`check_openclaw_feishu_websocket.py --json --timeout 45` 返回 `ok=true`，Feishu log 读回 `inbound_message_seen=2026-05-04T13:08:24.197+08:00` 和 `dispatch_complete=2026-05-04T13:08:34.928+08:00`，health running 字段不一致仍按 OpenClaw 2026.4.24 既有 warning 处理。
+
 ---
 
 ## 3. 边界
@@ -235,7 +257,7 @@ OpenClaw gateway:
 - ✅ 所有 7 个工具路径已验证
 - ✅ 缺失 `current_context.permission` 时 fail closed，不回退到宽松默认权限
 - ✅ 一次受控真实 Feishu DM 已进入 OpenClaw websocket，直接调用 `fmc_memory_search`，进入 `handle_tool_request()` / `CopilotService`，并在飞书 DM 中读回 allow-path 结果
-- ✅ 2026-05-04 11:47 bot 单聊自动复测再次通过 `fmc_memory_search` 回读 workspace Sheet 记忆，回复为 interactive card，权限审计为 allow / scope_access_granted
+- ✅ 2026-05-04 11:47、12:53、13:08 bot 单聊自动复测再次通过 `fmc_memory_search` 回读 workspace Sheet 记忆，回复为 interactive card，权限审计为 allow / scope_access_granted
 - ✅ MiMo / openai-completions 把 `current_context` 序列化成 JSON 字符串时，插件和 runner 可解析； malformed 字符串仍 fail closed
 
 ### 不能说
@@ -269,6 +291,6 @@ OpenClaw gateway:
 
 1. **固定评委/用户主路径脚本**：把 11:04 这类受控 DM 验收收敛成可复测脚本、用户提示和失败 fallback。
 2. **扩展真实 DM 工具动作**：继续验证 `fmc_memory_prefetch`、`fmc_memory_create_candidate` 等关键动作；真实飞书来源仍只能进入 candidate。
-3. **继续做自动回归**：把 11:47 这种单聊 `/recall` 复测纳入后续 live evidence run，保留 readback 和 gateway route evidence，但不要把单次结果写成稳定长期路由。
+3. **继续做自动回归**：把 13:08 这种单聊 `/recall` 复测纳入后续 live evidence run，保留 readback 和 gateway route evidence，但不要把单次结果写成稳定长期路由。
 4. **性能优化**：Python 子进程启动时间和 LLM fallback 会影响响应速度；11:04 复测中 `mimo-v2.5` 首次超时后 fallback 到 `mimo-v2.5-pro` 才完成。
 5. **监控和告警**：添加工具调用成功率、permission deny、LLM timeout/fallback 和 Feishu reply latency 监控。
