@@ -34,7 +34,19 @@
 2. 本轮覆盖 recall（历史决策召回）、candidate（待确认记忆识别）、conflict（冲突更新）、layer（分层召回）、prefetch（任务前上下文包）、heartbeat（主动提醒候选）六类能力。
 3. 今天不追求最终指标冲高，先保证每个 PRD 指标都有输入字段、输出字段、失败分类和可复现命令。
 4. Bitable Benchmark Results 已有 dry-run 字段承载这些指标；今天不真实写飞书生产表。
-5. 历史 MVP 样例曾全部通过；当前 2026-04-29 扩样后的 recall / conflict runner 可运行但指标未全部达标，不能为了保持 100% 删除难例。
+5. 历史更新记录保留为过程证据；当前对外以“复赛三类证明”和最新重跑结果为准。难例不能为了保持好看指标被删除，必须继续作为失败分类和回归样本保留。
+
+## 复赛三类证明
+
+评委现场不需要看七类 runner 的内部细节。复赛材料把 benchmark 收敛成三类赛题证明：
+
+| 赛题证明 | 使用哪些 runner | 对外指标 | 当前结果 | 说明 |
+|---|---|---|---|---|
+| 抗干扰测试 | `copilot_recall_cases.json`、`copilot_layer_cases.json`、`copilot_real_feishu_cases.json` | Recall@3、Evidence Coverage、Stale Leakage Rate、Real Expression Recall@3 | recall 40/40、Recall@3 1.0000、Evidence Coverage 1.0000、Stale Leakage 0.0000；真实表达样本 25/25 通过 | 证明插入无关讨论、口语化表达或跨主题干扰后，默认搜索仍返回当前 active 结论和证据 |
+| 矛盾更新测试 | `copilot_conflict_cases.json`、`memory.explain_versions` 对应样例 | Conflict Update Accuracy、Superseded Leakage、Evidence Coverage | conflict 35/35、Conflict Accuracy 1.0000、Superseded Leakage 0.0000、Evidence Coverage 1.0000 | 证明新结论确认后旧值进入 superseded，默认 search / prefetch 不把旧值当当前答案 |
+| 效能验证 | `copilot_prefetch_cases.json`、`copilot_candidate_cases.json`、`copilot_heartbeat_cases.json` | Agent Task Context Use Rate、Candidate Precision、False Reminder Rate、Duplicate Reminder Rate、Sensitive Reminder Leakage Rate | prefetch 20/20、candidate 57/57、heartbeat 20/20；误提醒、重复提醒和敏感泄漏均为 0.0000 | 证明 Agent 做任务前能拿到 compact context pack，低价值内容不乱记，提醒受控且可审计 |
+
+当前不要把 `Steps Saved` 或 `Time-to-Answer` 写成自动化硬指标。它们适合作为 10 分钟评委体验包里的人工计时观察：评委不需要翻群聊、不需要复制内部 ID，就能完成搜索、确认、版本解释和 prefetch。除非后续补计时 runner 或手动测试记录，否则对外硬指标只使用上表已由 runner 覆盖的指标。
 
 ## 可复现实验命令
 
@@ -81,9 +93,9 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | benchmark | 样例数 | 通过率 | 核心指标 | 失败分类 |
 |---|---:|---:|---|---|
 | copilot_recall | 40 | 1.0000 | Recall@3 = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
-| copilot_candidate | 34 | 1.0000 | Candidate Precision = 1.0000；candidate_not_detected = 0；false_positive_candidate = 0 | 无失败 |
+| copilot_candidate | 57 | 1.0000 | Candidate Precision = 1.0000；candidate_not_detected = 0；false_positive_candidate = 0 | 无失败 |
 | copilot_conflict | 35 | 1.0000 | Conflict Accuracy = 1.0000；Superseded Leakage = 0.0000；Evidence Coverage = 1.0000 | 无失败 |
-| copilot_layer | 15 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 1.602 ms | 无失败 |
+| copilot_layer | 40 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 1.602 ms | 无失败 |
 | copilot_prefetch | 20 | 1.0000 | Context-required cases = 18；Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
 | copilot_heartbeat | 20 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000；False Reminder Rate = 0.0000；Duplicate Reminder Rate = 0.0000；User Confirmation Burden = 4.0000 | 无失败 |
 | copilot_real_feishu | 25 | 1.0000 | Recall@3 = 1.0000；误记率 = 0.0000；误提醒率 = 0.0000；确认负担 = 2.0000；解释覆盖率 = 1.0000；旧值泄漏率 = 0.0000 | 无失败 |
@@ -138,7 +150,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 |---|---:|---|
 | 口语 | 5 | “上次说的”“那个”“来着”等自然表达能否召回 Top 3 并解释 |
 | 含糊 | 5 | 代词和上下文不足时是否要求补充，而不是乱记 |
-| 多轮改口 | 5 | “不对”“收回”“作废”只进 candidate/conflict，不自动 active |
+| 多轮改口 | 5 | “不对”“收回”“作废”先进入 review policy；冲突更新不直接覆盖 active，必须经人工确认后才替换当前结论 |
 | 闲聊误判 | 5 | 玩笑、临时状态和显式“别记”不应误记或误提醒 |
 | 权限场景 | 5 | 私聊、跨租户、非 reviewer、source revoked 必须 fail closed |
 
@@ -147,7 +159,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 - 这是 fixture benchmark 与真实表达样本的连接层，不是生产真实用户稳定可用结论。
 - `observed_baseline` 是当前本地能力的标注，用于让 runner 计算 UX 指标和暴露失败类别。
 - 难例必须保留，例如含糊上下文和改口样例，不为了好看的 pass rate 删除或简化。
-- 真实飞书来源仍只能 candidate-only；多轮改口不会自动覆盖 active memory。
+- 真实飞书来源先进入 review policy；低风险安全内容可自动确认，多轮改口、重要、敏感或冲突内容不会自动覆盖 active memory。
 - 本报告不宣称真实 Feishu DM 到本项目 `fmc_*` / `memory.*` live E2E 或 productized live 已完成。
 
 ## UX-07 评委讲法
@@ -157,9 +169,9 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | 现场问题 | 评委版回答 |
 |---|---|
 | 你们怎么证明不是临场 demo？ | 每条演示能力都能映射到 `benchmarks/copilot_*_cases.json` 和本文档的指标表；`reports/` 只是本地运行证据，不提交。 |
-| 指标是不是全部达标？ | 不是。heartbeat、candidate、prefetch 和 UX-06 当前样本通过；但 UX-06 仍是脱敏 pre-live gate，真实 Feishu live evidence、长跑和权限负例仍未全部覆盖。 |
+| 指标是不是全部达标？ | 本地 runner 当前通过：recall、candidate、conflict、layer、prefetch、heartbeat 和 UX-06 脱敏样本都已达当前门槛；但这不能外推为生产真实用户稳定可用、长期 live 或全量 workspace ingestion 已完成。 |
 | 真实用户表达覆盖了吗？ | UX-06 有 25 条脱敏样本，覆盖口语、含糊、多轮改口、闲聊误判和权限场景；这是 baseline，不是生产稳定结论。 |
-| 安全边界是什么？ | 权限拒绝不能泄露未授权内容；真实飞书来源 candidate-only；reminder 只生成 candidate；不宣称 production live 或真实 DM 到 `fmc_*` / `memory.*` live E2E 已完成。 |
+| 安全边界是什么？ | 权限拒绝不能泄露未授权内容；真实飞书来源先过 review policy，重要/敏感/冲突内容停在 candidate；reminder 只生成 candidate；不宣称 production live 或真实 DM 到 `fmc_*` / `memory.*` live E2E 已完成。 |
 
 评委现场若没有时间跑 benchmark，只展示本报告和以下命令即可：
 
@@ -235,7 +247,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json -
 
 ## 当前局限
 
-- 样例规模仍是 MVP / 产品化打磨级：recall 40 条、candidate 34 条、conflict 35 条、layer 15 条、prefetch 20 条、heartbeat 20 条。适合证明链路，不代表最终复赛级压力测试。
+- 样例规模仍是 MVP / 产品化打磨级：recall 40 条、candidate 57 条、conflict 35 条、layer 40 条、prefetch 20 条、heartbeat 20 条、real_feishu 25 条。适合证明链路，不代表最终复赛级压力测试。
 - `reports/` 的 JSON / CSV 是本地运行证据，没有提交；评委材料优先读本报告和可复现命令。
 - Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。真实 Cognee / Ollama embedding 已由 Phase D live gate 单独验证，不把本 benchmark 报告写成长期 embedding 服务证明。
 - heartbeat 仍是 reminder candidate / dry-run，不真实发群，不绕过治理层自动写 active memory；UX-05 只补确认有用、忽略、延后、关闭同类提醒的可控动作、冷却状态和审计口径。

@@ -36,6 +36,7 @@
 | [productization/stable-memory-key-alias-design.md](productization/stable-memory-key-alias-design.md) | 稳定 memory key / alias 层设计，用于降低 subject normalization 和旧值泄漏风险 |
 | [productization/real-feishu-controlled-expansion-checklist.md](productization/real-feishu-controlled-expansion-checklist.md) | 真实飞书受控扩样 gate，列出 smoke matrix、读回证据和凭据/资源 ID 阻塞 |
 | [productization/product-demo-completion-checklist.md](productization/product-demo-completion-checklist.md) | 产品展示完成清单：四件事、8 步 demo 路线、真实证据采集和评委材料入口 |
+| [productization/finals-closeout-todo.md](productization/finals-closeout-todo.md) | 复赛 / 比赛收尾清单：把 deep research 报告收束为叙事、Demo、Benchmark 和模板落位 |
 | [productization/cross-platform-quick-deploy.md](productization/cross-platform-quick-deploy.md) | macOS / Linux / Windows 新机器快速部署到 demo / pre-production 验收状态 |
 | [productization/handoffs/openclaw-feishu-completion-gate-handoff.md](productization/handoffs/openclaw-feishu-completion-gate-handoff.md) | 九项 demo/pre-production completion gate 的通过命令、证据路径和 no-overclaim 边界 |
 | [productization/audit-read-only-live-gate.md](productization/audit-read-only-live-gate.md) | productized live 小步实施 gate：审计 read-only view，不宣称生产长期运行 |

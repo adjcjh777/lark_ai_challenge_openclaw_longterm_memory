@@ -9,7 +9,8 @@
 1. 这条路线优先使用固定演示数据、脱敏截图清单和本地可复现证据；如果现场已有单监听 OpenClaw websocket 和受控私聊权限，可以追加一次真实 DM allow-path 读回。
 2. 评委不需要理解 `candidate_id`、`trace_id` 或 `memory_id`，这些字段只放在审计详情或工程 fallback。
 3. 当前可说 demo / sandbox / pre-production / 本机 staging，以及一次受控真实 Feishu DM -> `fmc_memory_search` -> `CopilotService` allow-path live E2E 已完成；不能说 production live、全量 Feishu workspace 接入或真实 Feishu DM 已稳定长期路由到本项目 `fmc_*` / `memory.*`。
-4. 真实飞书来源仍是 candidate-only，不能自动 active；确认、拒绝、版本解释和 prefetch 都必须进入 `handle_tool_request()` / `CopilotService`。
+4. 真实飞书来源必须先进入 review policy；低重要性、无冲突、无敏感风险的内容可以由 policy 自动确认成 active，项目进展重要、重要角色发言、敏感/高风险或冲突内容必须停在 candidate，并由 reviewer / owner 人工确认。确认、拒绝、版本解释和 prefetch 都必须进入 `handle_tool_request()` / `CopilotService`。
+5. 复赛叙事固定为“企业记忆治理层”，方向 B 为主、方向 D 为辅。不要把作品讲成普通聊天 Bot、RAG、向量库 Demo、Shell 补全或个人偏好助手。
 
 ## 固定演示数据
 
@@ -125,13 +126,17 @@ trace_id=trace_feishu_dm_live_20260429_1104。
 
 ## Benchmark 和安全边界讲法
 
-评委版只讲三类指标：
+评委版只讲三类证明：
 
-| 指标组 | 讲什么 | 当前口径 |
+| 证明组 | 讲什么 | 当前口径 |
 |---|---|---|
-| 召回与证据 | Recall@3、Evidence Coverage、Stale Leakage Rate | recall runner 可复现；2026-04-29 扩样后 Recall@3 = 0.9250，但 stale leakage 仍是残余风险 |
-| UX-06 真实表达样本 | Real Expression Recall@3、误记率、误提醒率、确认负担、解释覆盖率、旧值泄漏率 | 脱敏样本 25 条，当前 baseline pass rate = 0.7600；不是生产真实用户稳定可用结论 |
-| 安全与提醒 | Unauthorized Value Leakage Rate、Sensitive Reminder Leakage Rate、False / Duplicate Reminder Rate | 权限拒绝和提醒脱敏已有测试 / benchmark 入口；reminder 仍只生成 candidate，不真实群推送 |
+| 抗干扰测试 | 插入无关讨论、换自然表达后，是否还能 Top 3 找到当前 active 结论 | `copilot_recall` 当前 40/40，通过；Recall@3 1.0000，Evidence Coverage 1.0000，Stale Leakage 0.0000 |
+| 矛盾更新测试 | 新结论确认后，旧值是否进入 superseded 且默认不泄漏 | `copilot_conflict` 当前 35/35，通过；Conflict Accuracy 1.0000，Superseded Leakage 0.0000 |
+| 效能与安全验证 | Agent 是否拿到任务前上下文、低价值内容是否不乱记、提醒是否克制 | `copilot_prefetch` 20/20、`copilot_candidate` 57/57、`copilot_heartbeat` 20/20；敏感泄漏、误提醒和重复提醒均为 0.0000 |
+
+真实表达样本可以作为补充说明：`copilot_real_feishu_cases.json` 当前 25 条脱敏样本全部通过，Recall@3 1.0000、误记率 0.0000、误提醒率 0.0000、解释覆盖率 1.0000、旧值泄漏率 0.0000。它是 pre-live 本地质量 gate，不是生产真实用户稳定可用结论。
+
+`Steps Saved` / `Time-to-Answer` 当前只作为现场体验观察，不作为自动化 benchmark 硬指标。可讲的事实是：评委按脚本不需要翻群聊、不需要复制内部 ID，就能在 10 分钟内看完搜索、候选、确认、版本解释、prefetch、提醒和边界。
 
 不要说：
 
@@ -139,9 +144,21 @@ trace_id=trace_feishu_dm_live_20260429_1104。
 - “真实 Feishu DM 已稳定自动调用本项目 `fmc_*` / `memory.*` 工具。”
 - “已全量接入企业飞书 workspace。”
 - “长期 embedding 服务已完成。”
-- “benchmark 全部达标。”
+- “本地 benchmark 当前通过，所以生产真实用户、长期 live 和全量 workspace 都已经达标。”
 - “真实飞书来源会自动变成 active memory。”
 - “一次受控 `fmc_memory_search` 成功等于所有工具动作和长期路由都稳定。”
+
+## 复赛模板落位
+
+如果需要把材料填进复赛模板，按下面映射，不重新发明交付物：
+
+| 模板部分 | 使用内容 | 对应文件 |
+|---|---|---|
+| 项目摘要 / 场景价值 | OpenClaw-native 企业记忆治理层；解决当前结论不明、旧值污染、重复翻群聊、Agent 缺上下文 | `README.md`、`docs/human-product-guide.md`、`docs/memory-definition-and-architecture-whitepaper.md` |
+| 系统架构 / 数据流 | Feishu / workspace source -> candidate memory -> review policy -> active / superseded；OpenClaw Agent -> `fmc_*` -> `CopilotService` -> permissions / governance / retrieval / audit | `docs/diagrams/system-architecture.mmd`、`docs/diagrams/product-interaction-flow.mmd` |
+| 可运行 Demo | 五分钟三幕式脚本和本文 10 分钟主路径；真实不稳时用 replay fallback | `docs/demo-runbook.md`、`reports/demo_replay.json` |
+| Benchmark Report | 抗干扰、矛盾更新、效能验证三类证明 | `docs/benchmark-report.md` |
+| 边界 / 风险 / 后续计划 | no-overclaim 清单、controlled readiness、productized workspace ingestion 24h+ blocker、production live 后续 gate | `README.md`、`docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/full-copilot-next-execution-doc.md` |
 
 ## 架构图入口
 

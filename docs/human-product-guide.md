@@ -7,7 +7,7 @@
 
 当前项目已经有 demo / pre-production 闭环。OpenClaw 工具、CopilotService、权限门控、候选记忆、证据、版本链、审计、受控飞书测试群和本地/staging 证据都能串起来。
 
-现在正在补的是 workspace ingestion：飞书文档、云文档、Bitable、Sheet 这类企业知识来源如何进入同一条记忆治理链路。当前完成的是 **limited workspace pilot**，不是生产全量 workspace ingestion。它已经能做受控资源发现、按类型读取、candidate-only 路由、registry skip / stale / failed / cursor 证据、mixed-source 本地佐证 gate 和本地热路径 latency gate。普通 Sheet 的真实样本、真实 mixed-source live sample、真实 lark-cli fetch latency 还没有补齐。
+现在正在补的是 workspace ingestion：飞书文档、云文档、Bitable、Sheet 这类企业知识来源如何进入同一条记忆治理链路。当前完成的是 **limited workspace pilot / controlled readiness**，不是生产全量 workspace ingestion。它已经能做受控资源发现、按类型读取、review-policy 路由、registry skip / stale / failed / cursor 证据、mixed-source 本地佐证 gate、本地热路径 latency gate、受控 normal Sheet、真实群消息 same-fact 和 bot 单聊回读。后续产品化仍要扩大 organic 企业样本和 24h+ long-run 证据。
 
 ## 这个项目为什么立项
 

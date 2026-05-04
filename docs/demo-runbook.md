@@ -1,6 +1,6 @@
 # 2026-05-04 OpenClaw-native Demo Runbook
 
-目标：用 5 分钟证明 Feishu Memory Copilot 不是普通聊天搜索，而是能在 OpenClaw Agent 任务前主动调取“有证据、有版本、有状态”的企业协作记忆。
+目标：用 5 分钟证明 Feishu Memory Copilot 不是普通聊天搜索，而是一层 OpenClaw-native 企业记忆治理层；它能在 OpenClaw Agent 任务前主动调取“有证据、有版本、有状态”的企业协作记忆。
 
 > **状态更新（2026-04-28）**：本 runbook 对应的 2026-05-04 Demo 固定任务已经完成，保留为可复现演示证据。后续不要从 2026-05-04 日期计划继续补任务；新的执行入口是 `docs/productization/full-copilot-next-execution-doc.md`。
 
@@ -15,6 +15,7 @@
 3. 现场优先走 `agent_adapters/openclaw/examples/*.json` 和 `scripts/demo_seed.py` 的 dry-run；OpenClaw gateway 或飞书权限不稳时，不真实写飞书生产空间。
 4. Demo 只展示可复现能力：历史决策召回、冲突更新、任务前 prefetch、heartbeat reminder candidate、benchmark 证明。
 5. 若现场卡住，把失败命令、卡住步骤和替代路径写回当前产品化 handoff；`docs/plans/2026-05-04-handoff.md` 只作为历史交接证据。
+6. 复赛叙事固定为方向 B 为主、方向 D 为辅：项目决策和上下文记忆是主线；团队共享记忆、冲突覆盖、旧值失效和遗忘提醒是第二主线。
 
 ## 演示前准备，60 秒
 
@@ -58,6 +59,18 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 | 2026-04-29 | 按 10 分钟评委体验包做本地文档计时走查 | 9 分 40 秒内可走完问题定义、搜索、候选确认、版本解释、prefetch、benchmark、架构和边界 | Mermaid 渲染或飞书 sandbox 不稳定会拖慢现场节奏 | 直接展示 `.mmd` 源码、`reports/demo_replay.json` 和 benchmark report；明确这些是 replay / sandbox / 本机 staging 证据，不是 production live |
 | 2026-04-29 | 受控真实 DM allow-path 读回 | 真实 DM 进入 OpenClaw 后直接调用 `fmc_memory_search`，飞书机器人读回命中 5 条、request_id、trace_id、permission_decision=allow | 只覆盖单次 search 工具；主模型 timeout 后由 fallback model 完成 | 现场不稳时回到 replay / handoff；不启动第二个 listener |
 
+## 复赛三幕式脚本
+
+如果现场只给 5 分钟，优先按三幕讲，不展开所有工程细节。
+
+| 幕 | 时间 | 演示动作 | 评委应该看到 | 对应赛题证明 |
+|---|---:|---|---|---|
+| 第一幕：注入可信记忆 | 0:00-1:30 | 用受控飞书消息、Sheet 或 replay 注入“生产部署 region / 发布规则”这类项目决策；展示 candidate、evidence 和权限摘要 | 系统不是保存整段聊天，而是抽出一条带证据、带权限、待确认的工作事实 | 方向 B：项目决策与上下文记忆 |
+| 第二幕：冲突更新和版本链 | 1:30-3:30 | 输入“不对，统一改成 ap-shanghai，并加 --canary”；展示 review / confirm、active 新值、superseded 旧值和 `memory.explain_versions` | 旧值不删除但默认不召回；版本链解释“为什么现在信这个” | 方向 B + D：矛盾更新、团队共享记忆覆盖 |
+| 第三幕：抗干扰召回和遗忘提醒 | 3:30-5:00 | 穿插无关对话后跑 `memory.search` / `memory.prefetch`，再展示 heartbeat review_due candidate | Top 3 返回当前 active 结论，旧值泄漏为 0；reminder 只是 candidate，不真实群推送、不自动 active | 方向 D：抗干扰、旧值失效、遗忘管理 |
+
+三幕脚本的底层 fallback 仍是 `scripts/demo_seed.py --json-output reports/demo_replay.json`、`docs/benchmark-report.md` 和 `docs/judge-10-minute-experience.md`。如果真实 Feishu / OpenClaw 现场不稳，回退 replay，但明确说这是 replay / sandbox / pre-production 证据，不是 production live。
+
 ## 5 分钟流程
 
 ## 飞书主路径普通话脚本
@@ -67,7 +80,7 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 | 路径 | 普通话输入 | 预期输出 | 失败 fallback | no-overclaim 边界 |
 |---|---|---|---|---|
 | 搜索当前结论 | `上次定的生产部署 region 是哪个？` | 主答案先给当前 active 结论、1 条 evidence quote 和下一步动作；`request_id`、`trace_id`、`permission_decision` 只在审计详情。 | 如果没有 active 记忆，提示“没有找到当前有效结论”，引导用户补充主题或先创建候选。 | 默认搜索不返回 superseded 旧值，也不返回 raw events。 |
-| 创建并确认候选 | `记住：生产部署必须加 --canary，region 用 ap-shanghai。` -> `确认这条` | 第一条回复说明“已生成待确认记忆，不会自动 active”；第二条回复确认最近 candidate，不要求用户复制内部 ID。 | 如果无法解析最近 candidate，保留 `/confirm <candidate_id>` fallback，并说明没有绕过 `CopilotService`。 | 真实飞书来源只能 candidate-only，确认必须由 reviewer / owner / admin 触发。 |
+| 创建并确认候选 | `记住：生产部署必须加 --canary，region 用 ap-shanghai。` -> `确认这条` | 第一条回复说明“已进入 review policy，不会绕过治理直接污染当前结论”；第二条回复确认最近 candidate，不要求用户复制内部 ID。 | 如果无法解析最近 candidate，保留 `/confirm <candidate_id>` fallback，并说明没有绕过 `CopilotService`。 | 低重要性安全内容可由 policy 自动确认；项目进展重要、敏感或冲突内容必须停在 candidate，并由 reviewer / owner / admin 确认。 |
 | 版本解释 | `为什么之前的 cn-shanghai 不用了？` | 调用 `memory.explain_versions`，解释当前版本、旧版本、覆盖原因和证据。 | 如果无法解析最近 memory，保留 `/versions <memory_id>` fallback，并提示先搜索具体主题。 | 默认 search 不把旧值当当前答案；旧值只在版本解释里出现。 |
 | 任务前 prefetch | `帮我准备今天上线前 checklist。` | 调用 `memory.prefetch`，返回 compact context pack、相关 active 记忆、缺失信息和风险。 | 如果上下文不足，返回空 pack 或缺失信息，不编造规则。 | prefetch 不返回全部 raw events，不代表长期 embedding 服务或生产工作流已完成。 |
 
@@ -78,7 +91,7 @@ python3 scripts/demo_seed.py --json-output reports/demo_replay.json
 | 卡片 | 输入 | 预期输出 | 可见按钮 | fallback | no-overclaim 边界 |
 |---|---|---|---|---|---|
 | 搜索结果卡 | `memory.search` 输出 | 当前 active 结论、evidence quote、版本状态、旧值已过滤、用户可读排序理由；审计详情放底部。 | `解释版本`，进入现有 versions / `memory.explain_versions` 路径。 | 没找到时显示空状态，引导补主题或创建候选。 | 不展示 superseded 旧值或 raw events；受控真实 DM 证据只覆盖一次 `fmc_memory_search` allow-path，不代表稳定长期路由。 |
-| 候选审核卡 | `memory.create_candidate` 输出 | 待确认新记忆、来源、证据、风险等级、冲突摘要、建议动作。 | reviewer / owner / admin 可见 `确认保存`、`拒绝候选`；非 reviewer 隐藏。 | 权限不足或 permission 畸形时 fail closed，只显示安全拒绝摘要。 | 真实飞书来源仍 candidate-only；按钮不绕过 `CopilotService`。 |
+| 候选审核卡 | `memory.create_candidate` 输出 | 待确认新记忆、来源、证据、风险等级、冲突摘要、建议动作。 | reviewer / owner / admin 可见 `确认保存`、`拒绝候选`；非 reviewer 隐藏。 | 权限不足或 permission 畸形时 fail closed，只显示安全拒绝摘要。 | 真实飞书来源先过 review policy；低风险 auto-confirm 和人工确认都不能绕过 `CopilotService`。 |
 | 版本解释卡 | `memory.explain_versions` 输出 | 当前版本、被覆盖旧版本、覆盖原因、时间线摘要。 | 无新增半成品按钮。 | 无法定位 memory 时先搜索主题，或用 `/versions <memory_id>`。 | 旧值只用于解释，不作为默认 search 当前答案。 |
 | 任务前上下文卡 | `memory.prefetch` 输出 | 本次任务、要带入的 active 规则、关键风险、deadline/owner、缺失信息。 | 无新增半成品按钮。 | 上下文不足时展示缺失信息，不编造规则。 | 不塞全部 raw events，不代表 production live 或长期 embedding 服务。 |
 

@@ -35,7 +35,7 @@
 - `agent_adapters/openclaw/`
 - `agent_adapters/openclaw/memory_tools.schema.json`
 - `memory_engine/copilot/tools.py`
-- `docs/productization/openclaw-runtime-evidence.md`
+- `docs/productization/handoffs/openclaw-runtime-evidence.md`
 - `docs/productization/full-copilot-next-execution-doc.md`
 
 完成标准：
@@ -73,7 +73,7 @@ ollama ps
 主要位置：
 
 - `docs/productization/feishu-staging-runbook.md`
-- `docs/productization/openclaw-runtime-evidence.md`
+- `docs/productization/handoffs/openclaw-runtime-evidence.md`
 - `scripts/check_feishu_listener_singleton.py`
 - `memory_engine/feishu_listener_guard.py`
 
@@ -166,7 +166,7 @@ ollama ps
 - 已完成：明确生产 DB 选择和本地 SQLite 的边界；当前默认 SQLite 只用于 demo / pre-production / 本机 staging，上线试点建议托管 PostgreSQL，但本阶段未部署生产 DB。
 - 已完成：migration 支持 dry-run、回滚说明、重复执行安全；入口是 `scripts/migrate_copilot_storage.py --dry-run --json` 和 `--apply --json`。
 - 已完成：全文索引、结构化索引、向量索引职责清楚；本阶段只补结构化 / 来源 / 审计索引，全文搜索仍由现有 retrieval 层承担，向量路径仍走 curated memory embedding / Cognee adapter。
-- 已完成：audit retention、备份恢复、数据删除策略写入 [storage handoff](storage-migration-productization-handoff.md)。
+- 已完成：audit retention、备份恢复、数据删除策略写入 [storage handoff](handoffs/storage-migration-productization-handoff.md)。
 - 已完成：healthcheck 能报告 schema version、index status、audit status。
 
 已完成证据：
@@ -175,7 +175,7 @@ ollama ps
 - 新增 `scripts/migrate_copilot_storage.py`，支持 `--dry-run`、`--apply` 和 `--json`。
 - `memory_engine/copilot/healthcheck.py` 的 `storage_schema` 新增 `index_status` 和 `audit_status`。
 - 新增 `tests/test_copilot_storage_migration.py`，覆盖 dry-run 不改库、apply 可重复执行、产品化索引存在。
-- 新增 [生产存储、索引和迁移方案 handoff](storage-migration-productization-handoff.md)。
+- 新增 [生产存储、索引和迁移方案 handoff](handoffs/storage-migration-productization-handoff.md)。
 
 建议验证：
 
@@ -480,7 +480,7 @@ ollama ps
 ## 当前不要做
 
 - 不要把测试群 sandbox 写成 production live。
-- 不要在真实飞书来源上自动 active。
+- 不要让重要、敏感、高风险或冲突的真实飞书来源自动 active；低重要性、无冲突、无敏感风险内容的自动确认必须经过 review-policy gate。
 - 不要绕过 `CopilotService` 直接改 repository 状态。
 - 不要升级 OpenClaw 版本。
 - 不要把 Cognee 不可用时的 fallback 说成真实 Cognee 主路径。
