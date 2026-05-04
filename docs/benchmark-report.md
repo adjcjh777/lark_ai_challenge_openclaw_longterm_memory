@@ -26,6 +26,8 @@
 
 > **UX-06 quality gate 更新（2026-05-03）**：新增 `scripts/check_real_feishu_expression_quality_gate.py --json`，把真实表达样本的 Recall@3、误记率、误提醒率、解释覆盖率和旧值泄漏率变成 pre-live 本地硬门禁。当前 gate 已通过：旧值泄漏率 0.0000，其他硬阈值也通过；这仍只是脱敏样本的 pre-live 本地门禁，不是真实 Feishu live evidence 或 productized live 证明。
 
+> **真实挑战集更新（2026-05-04）**：新增 `benchmarks/copilot_realistic_recall_challenge.json` 和 `scripts/check_realistic_recall_challenge_gate.py --json`。这组 benchmark 不再按 case 各自创建小数据库，而是把 60 条共享语料事件和 80 条查询放进同一个 temp DB，让当前结论、旧值、相似项目、不同来源、拒答问题和权限负例共同竞争。当前 gate 通过的是“挑战集有效性和最低质量线”：case pass rate = 0.5750、Recall@3 = 0.7500、MRR = 0.7417、Evidence Coverage = 0.7500、Evidence Source Accuracy = 0.9500、Abstention Accuracy = 0.3333、Permission Negative Accuracy = 1.0000、Distractor Leakage Rate = 0.2000、Stale Leakage Rate = 0.5000。这个结果刻意暴露 `vector_miss`、`distractor_leakage`、`no_answer_failed` 三类短板；不能和旧 fixture 的 100% 混写成生产真实用户稳定性。
+
 > **UX-07 更新（2026-04-29）**：10 分钟评委体验包入口为 `docs/judge-10-minute-experience.md`。评委版只引用本报告已有 runner 和 UX-06 指标，不重复跑重 benchmark；讲法必须同时展示通过项和残余风险，尤其是 UX-06 真实表达样本当前 25 条全部通过但仍只是脱敏 pre-live gate，以及真实 Feishu live evidence 仍未覆盖全链路。
 
 ## 先看这个
@@ -42,7 +44,7 @@
 
 | 赛题证明 | 使用哪些 runner | 对外指标 | 当前结果 | 说明 |
 |---|---|---|---|---|
-| 抗干扰测试 | `copilot_recall_cases.json`、`copilot_layer_cases.json`、`copilot_real_feishu_cases.json` | Recall@3、Evidence Coverage、Stale Leakage Rate、Real Expression Recall@3 | recall 40/40、Recall@3 1.0000、Evidence Coverage 1.0000、Stale Leakage 0.0000；真实表达样本 25/25 通过 | 证明插入无关讨论、口语化表达或跨主题干扰后，默认搜索仍返回当前 active 结论和证据 |
+| 抗干扰测试 | `copilot_recall_cases.json`、`copilot_layer_cases.json`、`copilot_real_feishu_cases.json`、`copilot_realistic_recall_challenge.json` | Recall@3、Evidence Coverage、Stale Leakage Rate、Real Expression Recall@3、Abstention Accuracy、Distractor Leakage Rate | 旧 fixture recall 40/40、Recall@3 1.0000；真实表达样本 25/25 通过；真实挑战集 80 queries：case pass rate 0.5750、Recall@3 0.7500、Abstention Accuracy 0.3333、Distractor Leakage 0.2000 | 旧 fixture 证明功能回归；真实挑战集证明共享语料竞争下仍有可复现短板，尤其是拒答、相似干扰和语义改写 |
 | 矛盾更新测试 | `copilot_conflict_cases.json`、`memory.explain_versions` 对应样例 | Conflict Update Accuracy、Superseded Leakage、Evidence Coverage | conflict 35/35、Conflict Accuracy 1.0000、Superseded Leakage 0.0000、Evidence Coverage 1.0000 | 证明新结论确认后旧值进入 superseded，默认 search / prefetch 不把旧值当当前答案 |
 | 效能验证 | `copilot_prefetch_cases.json`、`copilot_candidate_cases.json`、`copilot_heartbeat_cases.json` | Agent Task Context Use Rate、Candidate Precision、False Reminder Rate、Duplicate Reminder Rate、Sensitive Reminder Leakage Rate | prefetch 20/20、candidate 57/57、heartbeat 20/20；误提醒、重复提醒和敏感泄漏均为 0.0000 | 证明 Agent 做任务前能拿到 compact context pack，低价值内容不乱记，提醒受控且可审计 |
 
@@ -59,6 +61,8 @@ python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json --
 python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json --json-output reports/copilot_heartbeat.json --csv-output reports/copilot_heartbeat.csv
 python3 -m memory_engine benchmark run benchmarks/copilot_real_feishu_cases.json --json-output reports/copilot_real_feishu.json --csv-output reports/copilot_real_feishu.csv
 python3 scripts/check_real_feishu_expression_quality_gate.py --json
+python3 -m memory_engine benchmark run benchmarks/copilot_realistic_recall_challenge.json --json-output reports/copilot_realistic_recall_challenge.json --csv-output reports/copilot_realistic_recall_challenge.csv
+python3 scripts/check_realistic_recall_challenge_gate.py --json
 python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 ```
 
@@ -87,6 +91,10 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | Real Expression Confirmation Burden | `copilot_real_feishu_cases.json` | 2.0000（2026-05-03 重跑） | 先记录，不设硬阈值 | UX-06 样本入口 |
 | Real Expression Explanation Coverage | `copilot_real_feishu_cases.json` | 1.0000（2026-05-03 重跑） | >= 0.8000 | 当前样本通过 |
 | Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-05-03 gate 重跑） | 0.0000 | 当前样本通过 |
+| Realistic Challenge Recall@3 | `copilot_realistic_recall_challenge.json` | 0.7500（2026-05-04 gate 重跑） | >= 0.6000 | 通过最低线；不是生产质量证明 |
+| Realistic Challenge Abstention Accuracy | `copilot_realistic_recall_challenge.json` | 0.3333（2026-05-04 gate 重跑） | >= 0.3000 | 通过最低线但明显偏低，是后续 hardening 优先项 |
+| Realistic Challenge Distractor Leakage Rate | `copilot_realistic_recall_challenge.json` | 0.2000（2026-05-04 gate 重跑） | <= 0.2500 | 通过最低线但仍有 12 条 distractor leakage |
+| Realistic Challenge Permission Negative Accuracy | `copilot_realistic_recall_challenge.json` | 1.0000（2026-05-04 gate 重跑） | 1.0000 | 通过 |
 
 ## 分项结果
 
@@ -99,6 +107,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | copilot_prefetch | 20 | 1.0000 | Context-required cases = 18；Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
 | copilot_heartbeat | 20 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000；False Reminder Rate = 0.0000；Duplicate Reminder Rate = 0.0000；User Confirmation Burden = 4.0000 | 无失败 |
 | copilot_real_feishu | 25 | 1.0000 | Recall@3 = 1.0000；误记率 = 0.0000；误提醒率 = 0.0000；确认负担 = 2.0000；解释覆盖率 = 1.0000；旧值泄漏率 = 0.0000 | 无失败 |
+| copilot_realistic_recall_challenge | 80 | 0.5750 | Recall@3 = 0.7500；MRR = 0.7417；Evidence Coverage = 0.7500；Evidence Source Accuracy = 0.9500；Abstention Accuracy = 0.3333；Permission Negative Accuracy = 1.0000；Distractor Leakage = 0.2000；Stale Leakage = 0.5000 | `vector_miss` 14；`distractor_leakage` 12；`no_answer_failed` 8 |
 | day1 fallback | 10 | 1.0000 | 旧本地 memory demo 仍可复现 | 无失败 |
 
 ## 样例证据

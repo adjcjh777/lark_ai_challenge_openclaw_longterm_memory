@@ -39,6 +39,9 @@ FAILURE_RECOMMENDED_FIXES = {
     "user_expression_context_miss": "检查真实表达样本中的 thread_topic、上一轮消息和口语意图是否进入判别上下文。",
     "user_expression_explanation_missing": "检查真实表达输出是否给出用户可读解释，而不是只返回工程 trace。",
     "user_expression_old_value_leaked": "检查真实表达样本的 active-only 过滤，旧值只能出现在版本解释中。",
+    "distractor_leakage": "检查共享语料中的相似项目、环境、文档来源是否把错误候选带进 Top 3。",
+    "no_answer_failed": "检查低置信度拒答阈值和澄清问题策略，避免没有证据时硬答。",
+    "evidence_source_mismatch": "检查 evidence source_type/source_id 是否来自期望来源，而不是相似干扰来源。",
 }
 
 _FORBIDDEN_REJECTION_BEFORE = (
@@ -76,6 +79,8 @@ def run_benchmark(cases_path: str | Path, *, scope: str = DEFAULT_SCOPE) -> dict
     cases = json.loads(Path(cases_path).read_text(encoding="utf-8"))
     if isinstance(cases, dict) and cases.get("benchmark_type") == "anti_interference":
         return run_anti_interference_benchmark(cases, source_path=cases_path, scope=scope)
+    if isinstance(cases, dict) and cases.get("benchmark_type") == "copilot_realistic_recall_challenge":
+        return run_copilot_realistic_recall_challenge_benchmark(cases, source_path=cases_path, scope=scope)
     case_types = {_case_type(case) for case in cases} if isinstance(cases, list) else set()
     if "copilot_recall" in case_types:
         return run_copilot_recall_benchmark(cases, source_path=cases_path, scope=scope)
@@ -990,6 +995,199 @@ def run_copilot_real_feishu_benchmark(
     }
 
 
+def run_copilot_realistic_recall_challenge_benchmark(
+    spec: dict[str, Any],
+    *,
+    source_path: str | Path,
+    scope: str = DEFAULT_SCOPE,
+) -> dict[str, Any]:
+    corpus = spec.get("corpus") or {}
+    events = list(corpus.get("events") or [])
+    noise_events = list(corpus.get("noise_events") or [])
+    queries = list(spec.get("queries") or [])
+    results: list[dict[str, Any]] = []
+
+    with tempfile.NamedTemporaryFile(prefix="copilot_realistic_recall_", suffix=".sqlite") as tmp:
+        conn = connect(tmp.name)
+        init_db(conn)
+        repo = MemoryRepository(conn)
+
+        ingested_event_count = 0
+        for event in events:
+            if isinstance(event, str):
+                repo.remember(scope, event, source_type="benchmark_realistic_recall")
+                ingested_event_count += 1
+                continue
+            if not isinstance(event, dict):
+                continue
+            content = str(event.get("content") or "").strip()
+            if not content:
+                continue
+            if event.get("status") == "noise":
+                repo.add_noise_event(scope, content, source_type=str(event.get("source_type") or "benchmark_noise"))
+            else:
+                repo.remember(
+                    scope,
+                    content,
+                    source_type=str(event.get("source_type") or "benchmark_realistic_recall"),
+                    source_id=str(event.get("id") or event.get("source_id") or ""),
+                    sender_id=event.get("sender_id"),
+                    created_by=str(event.get("actor_id") or "benchmark"),
+                )
+            ingested_event_count += 1
+
+        for item in noise_events:
+            content = item.get("content") if isinstance(item, dict) else item
+            if content:
+                repo.add_noise_event(scope, str(content), source_type="benchmark_realistic_noise")
+
+        service = CopilotService(repository=repo)
+        for query in queries:
+            started = time.perf_counter()
+            context = _realistic_recall_context(query, scope)
+            try:
+                response = service.search(
+                    SearchRequest.from_payload(
+                        {
+                            "query": query["query"],
+                            "scope": scope,
+                            "top_k": int(query.get("top_k", 3)),
+                            "filters": dict(query.get("filters") or {}),
+                            "current_context": context,
+                        }
+                    )
+                )
+            except Exception as exc:
+                response = {
+                    "ok": False,
+                    "error": {"code": "internal_error", "message": str(exc), "details": {}},
+                    "results": [],
+                }
+            latency_ms = round((time.perf_counter() - started) * 1000, 3)
+            top_results = response.get("results", []) if response.get("ok") else []
+            if not isinstance(top_results, list):
+                top_results = []
+
+            expected_values = _as_string_list(query.get("expected_active_value") or query.get("expected_values"))
+            forbidden_values = _as_string_list(query.get("forbidden_values") or query.get("forbidden_value"))
+            evidence_keywords = _as_string_list(query.get("evidence_keywords") or query.get("evidence_keyword"))
+            expected_source_types = set(_as_string_list(query.get("expected_source_types")))
+            expected_permission_decision = str(query.get("expected_permission_decision") or "allow")
+            expected_permission_denied = expected_permission_decision == "deny"
+            permission_decision = _response_permission_decision(response)
+            permission_ok = permission_decision == expected_permission_decision
+            expected_no_answer = bool(query.get("expected_no_answer"))
+            expected_rank = _copilot_expected_rank_any(top_results, expected_values)
+            recall_at_1 = expected_rank == 1
+            recall_at_3 = expected_rank is not None and expected_rank <= 3
+            mrr = round(1 / expected_rank, 4) if expected_rank else 0.0
+            distractor_leak = bool(
+                forbidden_values
+                and any(_result_has_any_forbidden_leak(item, forbidden_values) for item in top_results)
+            )
+            stale_values = _as_string_list(query.get("stale_values"))
+            stale_leak = bool(
+                stale_values and any(_result_has_any_forbidden_leak(item, stale_values) for item in top_results)
+            )
+            evidence_present = _copilot_evidence_keywords_present(top_results, evidence_keywords)
+            evidence_source_ok = _copilot_evidence_source_ok(top_results, expected_source_types)
+            min_confident_score = float(query.get("min_confident_score", spec.get("min_confident_score", 120.0)))
+            abstained = _response_abstained(top_results, min_confident_score=min_confident_score)
+            no_answer_ok = (not expected_no_answer) or abstained
+            passed = bool(
+                permission_ok
+                and (
+                    expected_permission_denied
+                    or (
+                        no_answer_ok
+                        and (expected_no_answer or recall_at_3)
+                        and (expected_no_answer or evidence_present)
+                        and evidence_source_ok
+                        and not distractor_leak
+                        and not stale_leak
+                    )
+                )
+            )
+            failure_type = _realistic_recall_failure_type(
+                query=query,
+                permission_ok=permission_ok,
+                expected_no_answer=expected_no_answer,
+                no_answer_ok=no_answer_ok,
+                recall_at_3=recall_at_3,
+                evidence_present=evidence_present,
+                evidence_source_ok=evidence_source_ok,
+                distractor_leak=distractor_leak,
+                stale_leak=stale_leak,
+            )
+
+            results.append(
+                {
+                    "case_id": query["id"],
+                    "case_type": "copilot_realistic_recall_challenge",
+                    "category": query.get("category"),
+                    "query": query["query"],
+                    "expected_output": {
+                        "expected_active_value": expected_values,
+                        "expected_no_answer": expected_no_answer,
+                        "expected_permission_decision": expected_permission_decision,
+                        "expected_source_types": sorted(expected_source_types),
+                        "forbidden_values": forbidden_values,
+                        "stale_values": stale_values,
+                        "evidence_keywords": evidence_keywords,
+                    },
+                    "actual_output_summary": {
+                        "expected_rank": expected_rank,
+                        "recall_at_1": recall_at_1,
+                        "recall_at_3": recall_at_3,
+                        "mrr": mrr,
+                        "permission_decision": permission_decision,
+                        "abstained": abstained,
+                        "top_score": _top_score(top_results),
+                        "evidence_present": evidence_present,
+                        "evidence_source_ok": evidence_source_ok,
+                        "distractor_leak": distractor_leak,
+                        "stale_leak": stale_leak,
+                        "score_breakdown_summary": _score_breakdown_summary(top_results),
+                    },
+                    "expected_rank": expected_rank,
+                    "recall_at_1": recall_at_1,
+                    "recall_at_3": recall_at_3,
+                    "mrr": mrr,
+                    "expected_no_answer": expected_no_answer,
+                    "abstained": abstained,
+                    "permission_ok": permission_ok,
+                    "permission_decision": permission_decision,
+                    "expected_permission_denied": expected_permission_denied,
+                    "evidence_present": evidence_present,
+                    "evidence_source_ok": evidence_source_ok,
+                    "distractor_leak": distractor_leak,
+                    "stale_leak": stale_leak,
+                    "passed": passed,
+                    "latency_ms": latency_ms,
+                    "top_candidates": top_results,
+                    "trace": response.get("trace"),
+                    "failure_type": failure_type,
+                    "recommended_fix": _recommended_fix(query, failure_type),
+                    "failure_debug_hint": query.get("failure_debug_hint"),
+                }
+            )
+        conn.close()
+
+    return {
+        "benchmark_type": "copilot_realistic_recall_challenge",
+        "name": spec.get("name") or Path(source_path).stem,
+        "source": str(source_path),
+        "layers": {
+            "corpus_event_count": ingested_event_count,
+            "noise_event_count": len(noise_events),
+            "query_count": len(queries),
+        },
+        "summary": _copilot_realistic_recall_metrics(results),
+        "by_category": _realistic_group_metrics(results, "category"),
+        "results": results,
+    }
+
+
 def _benchmark_prefetch_context(case: dict[str, Any], scope: str) -> dict[str, Any]:
     context = dict(case.get("current_context") or {"intent": case["task"]})
     context.update(
@@ -1222,6 +1420,16 @@ def _copilot_expected_rank(top_results: list[dict[str, Any]], expected: str) -> 
     return None
 
 
+def _copilot_expected_rank_any(top_results: list[dict[str, Any]], expected_values: list[str]) -> int | None:
+    if not expected_values:
+        return 1 if top_results else None
+    for index, item in enumerate(top_results, start=1):
+        current_value = str(item.get("current_value") or "")
+        if any(expected in current_value for expected in expected_values if expected):
+            return index
+    return None
+
+
 def _copilot_evidence_present(top_results: list[dict[str, Any]], evidence_keyword: str) -> bool:
     if not evidence_keyword:
         return bool(top_results)
@@ -1230,6 +1438,107 @@ def _copilot_evidence_present(top_results: list[dict[str, Any]], evidence_keywor
             if evidence_keyword in str(evidence.get("quote") or ""):
                 return True
     return False
+
+
+def _copilot_evidence_keywords_present(top_results: list[dict[str, Any]], evidence_keywords: list[str]) -> bool:
+    if not evidence_keywords:
+        return bool(top_results)
+    for keyword in evidence_keywords:
+        if not _copilot_evidence_present(top_results, keyword):
+            return False
+    return True
+
+
+def _copilot_evidence_source_ok(top_results: list[dict[str, Any]], expected_source_types: set[str]) -> bool:
+    if not expected_source_types:
+        return True
+    for item in top_results:
+        for evidence in item.get("evidence", []):
+            if str(evidence.get("source_type") or "") in expected_source_types:
+                return True
+    return False
+
+
+def _result_has_any_forbidden_leak(result: dict[str, Any], forbidden_values: list[str]) -> bool:
+    current_value = str(result.get("current_value") or "")
+    return any(_text_has_forbidden_leak(current_value, forbidden) for forbidden in forbidden_values)
+
+
+def _as_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    return [str(value)]
+
+
+def _top_score(top_results: list[dict[str, Any]]) -> float:
+    if not top_results:
+        return 0.0
+    try:
+        return float(top_results[0].get("score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _response_abstained(top_results: list[dict[str, Any]], *, min_confident_score: float) -> bool:
+    return not top_results or _top_score(top_results) < min_confident_score
+
+
+def _response_permission_decision(response: dict[str, Any]) -> str:
+    if response.get("ok"):
+        return "allow"
+    error = response.get("error") if isinstance(response.get("error"), dict) else {}
+    if error.get("code") == "permission_denied":
+        return "deny"
+    return str(error.get("code") or "error")
+
+
+def _realistic_recall_context(query: dict[str, Any], scope: str) -> dict[str, Any]:
+    if query.get("current_context"):
+        return dict(query["current_context"])
+    if query.get("expected_permission_decision") == "deny":
+        context = demo_permission_context("memory.search", scope, actor_id=str(query.get("actor_id", "benchmark")))
+        permission = dict(context["permission"])
+        actor = dict(permission["actor"])
+        actor["tenant_id"] = "tenant:other"
+        permission["actor"] = actor
+        context["permission"] = permission
+        return context
+    return demo_permission_context("memory.search", scope, actor_id=str(query.get("actor_id", "benchmark")))
+
+
+def _realistic_recall_failure_type(
+    *,
+    query: dict[str, Any],
+    permission_ok: bool,
+    expected_no_answer: bool,
+    no_answer_ok: bool,
+    recall_at_3: bool,
+    evidence_present: bool,
+    evidence_source_ok: bool,
+    distractor_leak: bool,
+    stale_leak: bool,
+) -> str | None:
+    if not permission_ok:
+        return "permission_scope_error"
+    if query.get("expected_permission_decision") == "deny":
+        return None
+    if expected_no_answer and not no_answer_ok:
+        return "no_answer_failed"
+    if distractor_leak:
+        return "distractor_leakage"
+    if stale_leak:
+        return "stale_value_leaked"
+    if not recall_at_3 and not expected_no_answer:
+        return str(query.get("failure_category") or "vector_miss")
+    if not evidence_present and not expected_no_answer:
+        return "evidence_missing"
+    if not evidence_source_ok:
+        return "evidence_source_mismatch"
+    return None
 
 
 def _score_breakdown_summary(top_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1865,6 +2174,51 @@ def _copilot_real_feishu_metrics(results: list[dict[str, Any]]) -> dict[str, Any
         "old_value_leakage_rate": _ratio(old_value_leaks, len(old_value_cases)),
         "failure_type_counts": _failure_type_counts(results),
     }
+
+
+def _copilot_realistic_recall_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(results)
+    passed = sum(1 for result in results if result["passed"])
+    answerable = [result for result in results if not result.get("expected_no_answer") and not result.get("expected_permission_denied")]
+    denied = [result for result in results if result.get("expected_permission_denied")]
+    no_answer = [result for result in results if result.get("expected_no_answer")]
+    evidence_cases = [result for result in answerable if result.get("expected_output", {}).get("evidence_keywords")]
+    source_cases = [result for result in answerable if result.get("expected_output", {}).get("expected_source_types")]
+    forbidden_cases = [result for result in results if result.get("expected_output", {}).get("forbidden_values")]
+    stale_cases = [result for result in results if result.get("expected_output", {}).get("stale_values")]
+    latencies = sorted(result["latency_ms"] for result in results)
+    return {
+        "case_count": total,
+        "case_pass_rate": _ratio(passed, total),
+        "query_count": total,
+        "answerable_query_count": len(answerable),
+        "no_answer_query_count": len(no_answer),
+        "permission_negative_count": len(denied),
+        "recall_at_1": _ratio(sum(1 for result in answerable if result["recall_at_1"]), len(answerable)),
+        "recall_at_3": _ratio(sum(1 for result in answerable if result["recall_at_3"]), len(answerable)),
+        "mrr": round(sum(result["mrr"] for result in answerable) / len(answerable), 4) if answerable else 0.0,
+        "answer_exactness": _ratio(sum(1 for result in answerable if result["recall_at_1"]), len(answerable)),
+        "abstention_accuracy": _ratio(sum(1 for result in no_answer if result["abstained"]), len(no_answer)),
+        "permission_negative_accuracy": _ratio(sum(1 for result in denied if result["permission_ok"]), len(denied)),
+        "evidence_coverage": _ratio(sum(1 for result in evidence_cases if result["evidence_present"]), len(evidence_cases)),
+        "evidence_source_accuracy": _ratio(
+            sum(1 for result in source_cases if result["evidence_source_ok"]), len(source_cases)
+        ),
+        "distractor_leakage_rate": _ratio(
+            sum(1 for result in forbidden_cases if result["distractor_leak"]), len(forbidden_cases)
+        ),
+        "stale_leakage_rate": _ratio(sum(1 for result in stale_cases if result["stale_leak"]), len(stale_cases)),
+        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "p95_latency_ms": _percentile(latencies, 0.95),
+        "failure_type_counts": _failure_type_counts(results),
+    }
+
+
+def _realistic_group_metrics(results: list[dict[str, Any]], key: str) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for result in results:
+        grouped.setdefault(str(result.get(key) or "unknown"), []).append(result)
+    return {group: _copilot_realistic_recall_metrics(items) for group, items in sorted(grouped.items())}
 
 
 def _anti_interference_metrics(

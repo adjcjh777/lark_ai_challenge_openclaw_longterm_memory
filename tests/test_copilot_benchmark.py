@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
 
 from memory_engine.benchmark import _text_has_forbidden_leak, run_benchmark
+from scripts.check_realistic_recall_challenge_gate import build_challenge_gate_report
 
 LAYER_CASES = Path("benchmarks/copilot_layer_cases.json")
 RECALL_CASES = Path("benchmarks/copilot_recall_cases.json")
 CANDIDATE_CASES = Path("benchmarks/copilot_candidate_cases.json")
 CONFLICT_CASES = Path("benchmarks/copilot_conflict_cases.json")
 REAL_FEISHU_CASES = Path("benchmarks/copilot_real_feishu_cases.json")
+REALISTIC_RECALL_CHALLENGE = Path("benchmarks/copilot_realistic_recall_challenge.json")
 
 
 class CopilotBenchmarkTest(unittest.TestCase):
@@ -208,6 +211,103 @@ class CopilotBenchmarkTest(unittest.TestCase):
             self.assertIn("expected_output", item)
             self.assertIn("actual_output_summary", item)
             self.assertIn("failure_debug_hint", item)
+
+    def test_realistic_recall_fixture_is_large_and_challenge_shaped(self) -> None:
+        spec = json.loads(REALISTIC_RECALL_CHALLENGE.read_text(encoding="utf-8"))
+        queries = spec["queries"]
+        categories = Counter(query["category"] for query in queries)
+
+        self.assertEqual("copilot_realistic_recall_challenge", spec["benchmark_type"])
+        self.assertGreaterEqual(len(spec["corpus"]["events"]), 60)
+        self.assertGreaterEqual(len(queries), 80)
+        self.assertGreaterEqual(len(categories), 8)
+        self.assertGreaterEqual(sum(1 for item in queries if item.get("expected_no_answer")), 8)
+        self.assertGreaterEqual(sum(1 for item in queries if item.get("expected_permission_decision") == "deny"), 8)
+        self.assertGreaterEqual(sum(1 for item in queries if item.get("forbidden_values")), 30)
+        self.assertEqual(len({item["id"] for item in queries}), len(queries))
+        for item in queries:
+            self.assertTrue(item["query"].strip(), msg=item["id"])
+            self.assertTrue(item["failure_debug_hint"].strip(), msg=item["id"])
+
+    def test_realistic_recall_runner_uses_shared_corpus_and_reports_strict_metrics(self) -> None:
+        spec = {
+            "benchmark_type": "copilot_realistic_recall_challenge",
+            "name": "unit_shared_corpus_challenge",
+            "corpus": {
+                "events": [
+                    {
+                        "id": "evt_prod_region_final",
+                        "content": "生产部署 region 最终改成 ap-shanghai，灰度 5% 观察 10 分钟。",
+                        "source_type": "feishu_message",
+                    },
+                    {
+                        "id": "evt_test_region_distractor",
+                        "content": "测试环境部署 region 仍然使用 cn-shanghai，不能套用到生产。",
+                        "source_type": "lark_doc",
+                    },
+                ]
+            },
+            "queries": [
+                {
+                    "id": "q_prod_region",
+                    "category": "confusable_distractor",
+                    "query": "生产发版现在用哪个 region",
+                    "expected_active_value": "ap-shanghai",
+                    "forbidden_values": ["cn-shanghai"],
+                    "evidence_keywords": ["最终改成 ap-shanghai"],
+                    "expected_source_types": ["feishu_message"],
+                    "failure_debug_hint": "生产 region 不能被测试环境 region 干扰。",
+                },
+                {
+                    "id": "q_unanswerable",
+                    "category": "no_answer",
+                    "query": "财务报销入口在哪里",
+                    "expected_no_answer": True,
+                    "failure_debug_hint": "共享语料没有财务报销信息时应该拒答或低置信度。",
+                },
+            ],
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8") as tmp:
+            json.dump(spec, tmp, ensure_ascii=False)
+            tmp.flush()
+            result = run_benchmark(Path(tmp.name))
+        summary = result["summary"]
+
+        self.assertEqual("copilot_realistic_recall_challenge", result["benchmark_type"])
+        self.assertEqual(2, result["layers"]["query_count"])
+        self.assertEqual(2, result["layers"]["corpus_event_count"])
+        self.assertIn("recall_at_1", summary)
+        self.assertIn("recall_at_3", summary)
+        self.assertIn("mrr", summary)
+        self.assertIn("distractor_leakage_rate", summary)
+        self.assertIn("stale_leakage_rate", summary)
+        self.assertIn("evidence_source_accuracy", summary)
+        self.assertIn("abstention_accuracy", summary)
+        for item in result["results"]:
+            self.assertIn("top_candidates", item)
+            self.assertIn("actual_output_summary", item)
+            self.assertIn("failure_type", item)
+
+    def test_realistic_recall_gate_is_a_validity_gate_not_production_claim(self) -> None:
+        benchmark = {
+            "source": "benchmarks/copilot_realistic_recall_challenge.json",
+            "layers": {"corpus_event_count": 60, "query_count": 80},
+            "summary": {
+                "case_pass_rate": 0.58,
+                "recall_at_3": 0.75,
+                "evidence_coverage": 0.75,
+                "abstention_accuracy": 0.34,
+                "permission_negative_accuracy": 1.0,
+                "distractor_leakage_rate": 0.2,
+                "stale_leakage_rate": 0.5,
+            },
+            "results": [{"case_id": "q1", "passed": False, "failure_type": "vector_miss"}],
+        }
+        report = build_challenge_gate_report(benchmark)
+
+        self.assertTrue(report["ok"])
+        self.assertIn("not production", report["boundary"])
+        self.assertIn("failed_cases", report)
 
 
 if __name__ == "__main__":
