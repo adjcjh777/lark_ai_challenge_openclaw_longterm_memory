@@ -24,6 +24,10 @@ BOUNDARY = (
     "workspace_evidence_request_packet_only; no Feishu API calls, no resource creation, "
     "no cell reads, no memory DB writes, no full workspace ingestion claim"
 )
+SAMPLE_DURABLE_FACT = (
+    "决定：Workspace ingestion readiness gate must include a reviewed normal Sheet sample "
+    "before the goal can be marked complete."
+)
 
 
 def main() -> int:
@@ -103,6 +107,7 @@ def prepare_workspace_evidence_request(
         "output_dir": str(packet_dir),
         "paths": paths,
         "required_inputs": _required_inputs(),
+        "sample_durable_fact": SAMPLE_DURABLE_FACT,
         "commands": _commands(
             profile=profile,
             scope=scope,
@@ -132,6 +137,7 @@ def prepare_workspace_evidence_request(
         "warnings": [
             "Do not paste raw tokens, chat ids, message ids, user ids, screenshots, or cell contents into Git.",
             "Do not create a controlled test Sheet unless the user explicitly approves it.",
+            "If using the controlled sample, send the sample durable fact exactly; weaker process-only wording may be filtered as low memory signal.",
             "A sheet-backed Bitable tab is not a normal Sheet sample.",
             "This packet is a request/preflight artifact, not proof that workspace ingestion is complete.",
         ],
@@ -178,6 +184,18 @@ def format_markdown(packet: dict[str, Any]) -> str:
     for item in packet["required_inputs"]:
         lines.append(f"- `{item['id']}`: {item['description']}")
     lines.extend(["", "## Commands", ""])
+    lines.extend(
+        [
+            "## Controlled Same-Fact Sample",
+            "",
+            "If the owner approves a controlled test sample, put this exact durable fact in both the normal Sheet row and one real Feishu group message:",
+            "",
+            "```text",
+            packet["sample_durable_fact"],
+            "```",
+            "",
+        ]
+    )
     for name, command in packet["commands"].items():
         lines.extend([f"### {name}", "", "```bash", command, "```", ""])
     lines.extend(["## Completion Criteria", ""])

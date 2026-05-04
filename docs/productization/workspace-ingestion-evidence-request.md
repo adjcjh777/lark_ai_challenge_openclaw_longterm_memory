@@ -50,8 +50,10 @@ Good sample facts:
 
 - "The review owner for workspace memory is <role or person>."
 - "The pilot uses lark-cli first; native OpenAPI is reserved for production hot paths."
-- "Normal Sheet evidence must pass before workspace ingestion can be called complete."
+- "决定：Workspace ingestion readiness gate must include a reviewed normal Sheet sample before the goal can be marked complete."
 - "Important or conflicting workspace facts stay candidate until reviewer confirmation."
+
+For a controlled test sample, use the `决定：...` sentence exactly in both the normal Sheet row and the real Feishu group message. The memory candidate extractor treats weaker process-only wording as low-signal and may correctly filter it out.
 
 Avoid:
 

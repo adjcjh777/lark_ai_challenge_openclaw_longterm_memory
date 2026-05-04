@@ -24,6 +24,8 @@ class PrepareWorkspaceEvidenceRequestTest(unittest.TestCase):
         self.assertIn("--folder-walk-tokens '<folder_token>'", packet["commands"]["project_normal_sheet_folder_or_wiki"])
         self.assertIn("check_workspace_real_same_conclusion_sample_finder.py", packet["commands"]["same_fact_sample_finder"])
         self.assertIn("check_workspace_ingestion_goal_readiness.py", packet["commands"]["final_readiness"])
+        self.assertIn("Workspace ingestion readiness gate", packet["sample_durable_fact"])
+        self.assertIn("决定：", packet["sample_durable_fact"])
         for command in packet["commands"].values():
             self.assertNotIn("\n+  ", command)
         self.assertNotIn("appSecret", json.dumps(packet))
@@ -44,8 +46,10 @@ class PrepareWorkspaceEvidenceRequestTest(unittest.TestCase):
             self.assertTrue(packet_json.exists())
             self.assertTrue(markdown.exists())
             loaded = json.loads(packet_json.read_text(encoding="utf-8"))
+            markdown_text = markdown.read_text(encoding="utf-8")
             self.assertEqual(packet["run_id"], loaded["run_id"])
-            self.assertIn("<sheet_token_for_owner>", markdown.read_text(encoding="utf-8"))
+            self.assertIn("<sheet_token_for_owner>", markdown_text)
+            self.assertIn(packet["sample_durable_fact"], markdown_text)
 
 
 if __name__ == "__main__":
