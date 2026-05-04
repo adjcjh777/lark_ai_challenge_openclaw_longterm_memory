@@ -6,13 +6,21 @@
       "document_feishu": {
         "organic_sample_count": 0
       },
-      "lark_doc": {
-        "organic_sample_count": 0
-      },
       "lark_sheet": {
         "organic_sample_count": 0
       },
       "lark_bitable": {
+        "organic_sample_count": 0
+      }
+    },
+    "workspace_surfaces": {
+      "document": {
+        "organic_sample_count": 0
+      },
+      "sheet": {
+        "organic_sample_count": 0
+      },
+      "bitable": {
         "organic_sample_count": 0
       },
       "wiki": {

@@ -497,10 +497,24 @@ def _resource_summary(resource) -> dict[str, Any]:
     return {
         "resource_type": resource.resource_type,
         "route_type": resource.route_type,
+        "workspace_surface": _workspace_surface(resource),
         "token": resource.token,
         "title": resource.title,
         "url": resource.url,
     }
+
+
+def _workspace_surface(resource) -> str:
+    raw = resource.raw or {}
+    if str(raw.get("workspace_source") or "").lower() == "wiki_node":
+        return "wiki"
+    if str(raw.get("entity_type") or "").upper() == "WIKI":
+        return "wiki"
+    if resource.resource_type in {"doc", "docx", "document_feishu"}:
+        return "document"
+    if resource.resource_type in {"sheet", "bitable", "wiki"}:
+        return resource.resource_type
+    return resource.route_type or resource.resource_type
 
 
 def _discover_direct_walk_resources(

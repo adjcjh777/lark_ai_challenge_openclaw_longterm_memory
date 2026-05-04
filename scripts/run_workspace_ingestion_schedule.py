@@ -329,10 +329,12 @@ def _sanitize_job_result(container: dict[str, Any]) -> None:
     resources = result.get("resources")
     if isinstance(resources, list):
         result["resource_type_counts"] = _resource_type_counts(resources)
+        result["workspace_surface_counts"] = _workspace_surface_counts(resources)
         result["resources"] = [_sanitize_resource(resource) for resource in resources if isinstance(resource, dict)]
     results = result.get("results")
     if isinstance(results, list):
         result["resource_type_counts"] = _result_resource_type_counts(results)
+        result["workspace_surface_counts"] = _result_workspace_surface_counts(results)
         result["source_type_counts"] = _source_type_counts(results)
         result["results"] = [
             _sanitize_ingestion_result(item, sensitive_values) for item in results if isinstance(item, dict)
@@ -374,6 +376,7 @@ def _sanitize_resource(resource: dict[str, Any]) -> dict[str, Any]:
     return {
         "resource_type": resource.get("resource_type"),
         "route_type": resource.get("route_type"),
+        "workspace_surface": _workspace_surface(resource),
         "title": resource.get("title"),
         "token": "<redacted>",
         "url": "<redacted>" if resource.get("url") else "",
@@ -390,6 +393,16 @@ def _resource_type_counts(resources: list[Any]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _workspace_surface_counts(resources: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        surface = _workspace_surface(resource)
+        counts[surface] = counts.get(surface, 0) + 1
+    return dict(sorted(counts.items()))
+
+
 def _source_type_counts(results: list[Any]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in results:
@@ -402,6 +415,27 @@ def _source_type_counts(results: list[Any]) -> dict[str, int]:
             continue
         source_type = str(source.get("source_type") or "unknown")
         counts[source_type] = counts.get(source_type, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _result_workspace_surface_counts(results: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    seen_resources: set[tuple[str, str, str]] = set()
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        resource = item.get("resource")
+        if not isinstance(resource, dict):
+            continue
+        resource_type = str(resource.get("resource_type") or "unknown")
+        route_type = str(resource.get("route_type") or "")
+        token = str(resource.get("token") or "")
+        key = (resource_type, route_type, token)
+        if key in seen_resources:
+            continue
+        seen_resources.add(key)
+        surface = _workspace_surface(resource)
+        counts[surface] = counts.get(surface, 0) + 1
     return dict(sorted(counts.items()))
 
 
@@ -423,6 +457,21 @@ def _result_resource_type_counts(results: list[Any]) -> dict[str, int]:
         seen_resources.add(key)
         counts[resource_type] = counts.get(resource_type, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def _workspace_surface(resource: dict[str, Any]) -> str:
+    surface = str(resource.get("workspace_surface") or "").strip().lower()
+    if surface:
+        return surface
+    resource_type = str(resource.get("resource_type") or "").strip().lower()
+    route_type = str(resource.get("route_type") or "").strip().lower()
+    if resource_type in {"doc", "docx", "document_feishu"}:
+        return "document"
+    if resource_type in {"sheet", "bitable", "wiki"}:
+        return resource_type
+    if route_type in {"document", "sheet", "bitable", "wiki"}:
+        return route_type
+    return resource_type or route_type or "unknown"
 
 
 def _sensitive_values(value: Any) -> set[str]:

@@ -39,9 +39,13 @@ def _complete_manifest() -> dict[str, object]:
         "source_coverage": {
             "source_types": {
                 "document_feishu": {"organic_sample_count": 1},
-                "lark_doc": {"organic_sample_count": 1},
                 "lark_sheet": {"organic_sample_count": 1},
                 "lark_bitable": {"organic_sample_count": 1},
+            },
+            "workspace_surfaces": {
+                "document": {"organic_sample_count": 1},
+                "sheet": {"organic_sample_count": 1},
+                "bitable": {"organic_sample_count": 1},
                 "wiki": {"organic_sample_count": 1},
             },
             "same_conclusion_across_chat_and_workspace": True,

@@ -30,7 +30,8 @@ REQUIRED_SECTIONS = (
     "operations",
     "live_long_run",
 )
-REQUIRED_SOURCE_TYPES = ("document_feishu", "lark_doc", "lark_sheet", "lark_bitable", "wiki")
+REQUIRED_SOURCE_TYPES = ("document_feishu", "lark_sheet", "lark_bitable")
+REQUIRED_WORKSPACE_SURFACES = ("document", "sheet", "bitable", "wiki")
 SECRET_VALUE_MARKERS = (
     "app_secret=",
     "access_token=",
@@ -146,10 +147,17 @@ def _check_secret_redaction(manifest: dict[str, Any]) -> dict[str, Any]:
 def _check_source_coverage(section: Any, *, is_example: bool) -> dict[str, Any]:
     data = section if isinstance(section, dict) else {}
     sources = data.get("source_types") if isinstance(data.get("source_types"), dict) else {}
+    surfaces = data.get("workspace_surfaces") if isinstance(data.get("workspace_surfaces"), dict) else {}
     checks = {
         f"{source_type}_organic_sample_count": _count(sources.get(source_type, {}).get("organic_sample_count")) >= 1
         for source_type in REQUIRED_SOURCE_TYPES
     }
+    checks.update(
+        {
+            f"{surface}_workspace_surface_count": _count(surfaces.get(surface, {}).get("organic_sample_count")) >= 1
+            for surface in REQUIRED_WORKSPACE_SURFACES
+        }
+    )
     checks.update(
         {
             "same_conclusion_across_chat_and_workspace": data.get("same_conclusion_across_chat_and_workspace") is True,

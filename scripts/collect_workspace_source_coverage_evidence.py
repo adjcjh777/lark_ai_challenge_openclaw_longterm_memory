@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.check_workspace_productized_ingestion_readiness import (
     PLACEHOLDER_MARKERS,
+    REQUIRED_WORKSPACE_SURFACES,
     REQUIRED_SOURCE_TYPES,
     SECRET_VALUE_MARKERS,
 )
@@ -25,7 +26,8 @@ BOUNDARY = (
     "workspace_source_coverage_evidence_collector_only; normalizes existing redacted evidence reports "
     "into a source_coverage manifest patch, but does not run ingestion or prove full workspace readiness"
 )
-WORKSPACE_SOURCE_TYPES = {"document_feishu", "lark_doc", "lark_sheet", "lark_bitable", "wiki"}
+WORKSPACE_SOURCE_TYPES = set(REQUIRED_SOURCE_TYPES)
+WORKSPACE_SURFACES = set(REQUIRED_WORKSPACE_SURFACES)
 
 
 def main() -> int:
@@ -63,6 +65,7 @@ def collect_workspace_source_coverage_evidence(
 ) -> dict[str, Any]:
     refs = list(evidence_refs or [])
     source_counts: dict[str, int] = {}
+    surface_counts: dict[str, int] = {}
     report_summaries: list[dict[str, Any]] = []
     same_conclusion = False
     conflict_negative = False
@@ -76,6 +79,7 @@ def collect_workspace_source_coverage_evidence(
                 "usable": normalized["usable"],
                 "mode": normalized["mode"],
                 "source_type_counts": normalized["source_type_counts"],
+                "workspace_surface_counts": normalized["workspace_surface_counts"],
                 "same_conclusion": normalized["same_conclusion"],
                 "conflict_negative": normalized["conflict_negative"],
             }
@@ -84,6 +88,7 @@ def collect_workspace_source_coverage_evidence(
             continue
         usable_report_count += 1
         source_counts = _merge_counts([source_counts, normalized["source_type_counts"]])
+        surface_counts = _merge_counts([surface_counts, normalized["workspace_surface_counts"]])
         same_conclusion = same_conclusion or normalized["same_conclusion"]
         conflict_negative = conflict_negative or normalized["conflict_negative"]
 
@@ -96,6 +101,17 @@ def collect_workspace_source_coverage_evidence(
         )
         for source_type in REQUIRED_SOURCE_TYPES
     }
+    checks.update(
+        {
+            f"{surface}_workspace_surface_count": _check(
+                surface_counts.get(surface, 0) >= min_organic_samples,
+                "Required workspace surface has enough usable organic samples.",
+                actual=surface_counts.get(surface, 0),
+                threshold=min_organic_samples,
+            )
+            for surface in REQUIRED_WORKSPACE_SURFACES
+        }
+    )
     checks.update(
         {
             "same_conclusion_across_chat_and_workspace": _check(
@@ -120,6 +136,10 @@ def collect_workspace_source_coverage_evidence(
                 source_type: {"organic_sample_count": int(source_counts.get(source_type, 0))}
                 for source_type in REQUIRED_SOURCE_TYPES
             },
+            "workspace_surfaces": {
+                surface: {"organic_sample_count": int(surface_counts.get(surface, 0))}
+                for surface in REQUIRED_WORKSPACE_SURFACES
+            },
             "same_conclusion_across_chat_and_workspace": same_conclusion,
             "conflict_negative_proven": conflict_negative,
             "evidence_refs": refs,
@@ -133,6 +153,7 @@ def collect_workspace_source_coverage_evidence(
         "evidence_report_count": len(reports),
         "usable_report_count": usable_report_count,
         "source_type_counts": dict(sorted(source_counts.items())),
+        "workspace_surface_counts": dict(sorted(surface_counts.items())),
         "checks": checks,
         "failed_checks": failed,
         "reports": report_summaries,
@@ -151,6 +172,8 @@ def format_report(result: dict[str, Any]) -> str:
         f"evidence_report_count: {result['evidence_report_count']}",
         f"usable_report_count: {result['usable_report_count']}",
         f"source_type_counts: {json.dumps(result['source_type_counts'], ensure_ascii=False, sort_keys=True)}",
+        "workspace_surface_counts: "
+        f"{json.dumps(result['workspace_surface_counts'], ensure_ascii=False, sort_keys=True)}",
     ]
     if result["failed_checks"]:
         lines.append(f"failed_checks: {', '.join(result['failed_checks'])}")
@@ -165,6 +188,7 @@ def _normalize_report(report: dict[str, Any]) -> dict[str, Any]:
         "usable": usable,
         "mode": str(report.get("mode") or report.get("boundary") or ""),
         "source_type_counts": source_counts,
+        "workspace_surface_counts": _surface_counts_from_report(report),
         "same_conclusion": usable and _proves_same_conclusion(report),
         "conflict_negative": usable and _proves_conflict_negative(report),
     }
@@ -198,6 +222,25 @@ def _source_counts_from_report(report: dict[str, Any]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
+def _surface_counts_from_report(report: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    explicit_counts = _known_surface_counts(report.get("workspace_surface_counts"))
+    if explicit_counts:
+        counts = _merge_counts([counts, explicit_counts])
+    else:
+        counts = _merge_counts([counts, _surface_counts_from_resources(report.get("resources"))])
+        counts = _merge_counts([counts, _surface_counts_from_results(report.get("results"))])
+    counts = _merge_counts([counts, _surface_counts_from_manifest_patch(report)])
+
+    jobs = report.get("jobs") if isinstance(report.get("jobs"), list) else []
+    for job in jobs:
+        if not isinstance(job, dict) or job.get("status") != "pass":
+            continue
+        result = job.get("result") if isinstance(job.get("result"), dict) else {}
+        counts = _merge_counts([counts, _surface_counts_from_report(result)])
+    return dict(sorted(counts.items()))
+
+
 def _source_counts_from_results(results: Any) -> dict[str, int]:
     counts: dict[str, int] = {}
     if not isinstance(results, list):
@@ -209,9 +252,44 @@ def _source_counts_from_results(results: Any) -> dict[str, int]:
         source_type = source.get("source_type")
         if source_type in WORKSPACE_SOURCE_TYPES:
             counts[str(source_type)] = counts.get(str(source_type), 0) + 1
+    return counts
+
+
+def _surface_counts_from_results(results: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    if not isinstance(results, list):
+        return counts
+    seen_resources: set[tuple[str, str, str]] = set()
+    for item in results:
+        if not isinstance(item, dict) or item.get("ok") is False:
+            continue
         resource = item.get("resource") if isinstance(item.get("resource"), dict) else {}
-        if item.get("source") and resource.get("resource_type") == "wiki":
-            counts["wiki"] = counts.get("wiki", 0) + 1
+        if not resource:
+            continue
+        key = (
+            str(resource.get("resource_type") or ""),
+            str(resource.get("route_type") or ""),
+            str(resource.get("token") or resource.get("title") or ""),
+        )
+        if key in seen_resources:
+            continue
+        seen_resources.add(key)
+        surface = _surface_from_resource(resource)
+        if surface in WORKSPACE_SURFACES:
+            counts[surface] = counts.get(surface, 0) + 1
+    return counts
+
+
+def _surface_counts_from_resources(resources: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    if not isinstance(resources, list):
+        return counts
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        surface = _surface_from_resource(resource)
+        if surface in WORKSPACE_SURFACES:
+            counts[surface] = counts.get(surface, 0) + 1
     return counts
 
 
@@ -249,6 +327,26 @@ def _source_counts_from_manifest_patch(report: dict[str, Any]) -> dict[str, int]
     return counts
 
 
+def _surface_counts_from_manifest_patch(report: dict[str, Any]) -> dict[str, int]:
+    patch = report.get("production_manifest_patch")
+    if not isinstance(patch, dict):
+        return {}
+    source_coverage = patch.get("source_coverage")
+    if not isinstance(source_coverage, dict):
+        return {}
+    surfaces = source_coverage.get("workspace_surfaces")
+    if not isinstance(surfaces, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for surface, payload in surfaces.items():
+        if surface not in WORKSPACE_SURFACES or not isinstance(payload, dict):
+            continue
+        count = payload.get("organic_sample_count")
+        if isinstance(count, int) and count > 0:
+            counts[str(surface)] = count
+    return counts
+
+
 def _known_source_counts(value: Any) -> dict[str, int]:
     if not isinstance(value, dict):
         return {}
@@ -257,6 +355,33 @@ def _known_source_counts(value: Any) -> dict[str, int]:
         if key in WORKSPACE_SOURCE_TYPES and isinstance(count, int) and count > 0:
             counts[str(key)] = count
     return counts
+
+
+def _known_surface_counts(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for key, count in value.items():
+        if key in WORKSPACE_SURFACES and isinstance(count, int) and count > 0:
+            counts[str(key)] = count
+    return counts
+
+
+def _surface_from_resource(resource: dict[str, Any]) -> str:
+    surface = str(resource.get("workspace_surface") or "").strip().lower()
+    if surface:
+        return surface
+    resource_type = str(resource.get("resource_type") or "").strip().lower()
+    route_type = str(resource.get("route_type") or "").strip().lower()
+    if resource_type in {"doc", "docx", "document_feishu"}:
+        return "document"
+    if resource_type in WORKSPACE_SURFACES:
+        return resource_type
+    if route_type in WORKSPACE_SURFACES:
+        return route_type
+    if route_type == "document":
+        return "document"
+    return resource_type or route_type or "unknown"
 
 
 def _proves_same_conclusion(report: dict[str, Any]) -> bool:

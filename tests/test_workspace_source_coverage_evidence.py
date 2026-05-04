@@ -19,7 +19,6 @@ class WorkspaceSourceCoverageEvidenceTest(unittest.TestCase):
                 _ingest_report(
                     [
                         ("docx", "document_feishu"),
-                        ("doc", "lark_doc"),
                         ("sheet", "lark_sheet"),
                         ("bitable", "lark_bitable"),
                         ("wiki", "document_feishu"),
@@ -34,10 +33,12 @@ class WorkspaceSourceCoverageEvidenceTest(unittest.TestCase):
         self.assertTrue(result["ok"], result["failed_checks"])
         patch = result["production_manifest_patch"]["source_coverage"]
         self.assertEqual(2, patch["source_types"]["document_feishu"]["organic_sample_count"])
-        self.assertEqual(1, patch["source_types"]["lark_doc"]["organic_sample_count"])
         self.assertEqual(1, patch["source_types"]["lark_sheet"]["organic_sample_count"])
         self.assertEqual(1, patch["source_types"]["lark_bitable"]["organic_sample_count"])
-        self.assertEqual(1, patch["source_types"]["wiki"]["organic_sample_count"])
+        self.assertEqual(1, patch["workspace_surfaces"]["document"]["organic_sample_count"])
+        self.assertEqual(1, patch["workspace_surfaces"]["sheet"]["organic_sample_count"])
+        self.assertEqual(1, patch["workspace_surfaces"]["bitable"]["organic_sample_count"])
+        self.assertEqual(1, patch["workspace_surfaces"]["wiki"]["organic_sample_count"])
         self.assertTrue(patch["same_conclusion_across_chat_and_workspace"])
         self.assertTrue(patch["conflict_negative_proven"])
         self.assertFalse(result["production_ready_claim"])
@@ -84,9 +85,13 @@ class WorkspaceSourceCoverageEvidenceTest(unittest.TestCase):
                         "status": "pass",
                         "source_type_counts": {
                             "document_feishu": 1,
-                            "lark_doc": 1,
                             "lark_sheet": 1,
                             "lark_bitable": 1,
+                        },
+                        "workspace_surface_counts": {
+                            "document": 1,
+                            "sheet": 1,
+                            "bitable": 1,
                             "wiki": 1,
                         },
                         "summary": {
@@ -132,9 +137,13 @@ class WorkspaceSourceCoverageEvidenceTest(unittest.TestCase):
                     "status": "pass",
                     "source_type_counts": {
                         "document_feishu": 1,
-                        "lark_doc": 1,
                         "lark_sheet": 1,
                         "lark_bitable": 1,
+                    },
+                    "workspace_surface_counts": {
+                        "document": 1,
+                        "sheet": 1,
+                        "bitable": 1,
                         "wiki": 1,
                     },
                     "summary": {"same_fact_match_count": 1},
