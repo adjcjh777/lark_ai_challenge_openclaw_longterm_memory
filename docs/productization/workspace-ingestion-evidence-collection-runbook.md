@@ -8,6 +8,16 @@ This runbook is deliberately narrow. It does not create Feishu resources, send m
 
 If the next step is asking the project owner or a teammate for the missing samples, use `workspace-ingestion-evidence-request.md`. This runbook is the operator procedure after those samples exist.
 
+To generate a redacted packet with the exact request, checklist, and command templates, run:
+
+```bash
+python3 scripts/prepare_workspace_evidence_request.py \
+  --create-dirs \
+  --json
+```
+
+The packet writes under `logs/workspace-evidence-requests/<run_id>/` when `--create-dirs` is used. It does not call Feishu, create resources, read Sheet cells, or write the memory DB.
+
 ## Current Blocking Evidence
 
 The combined readiness gate still returns `goal_complete=false`.

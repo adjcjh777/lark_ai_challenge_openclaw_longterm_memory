@@ -44,6 +44,7 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `scripts/check_workspace_real_same_conclusion_gate.py`
 - `scripts/check_workspace_real_same_conclusion_sample_finder.py`
 - `scripts/check_workspace_ingestion_goal_readiness.py`
+- `scripts/prepare_workspace_evidence_request.py`
 - `tests/test_feishu_workspace_fetcher.py`
 - `tests/test_feishu_workspace_registry.py`
 - `tests/test_feishu_workspace_registry_gate.py`
@@ -55,6 +56,7 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `tests/test_workspace_real_same_conclusion_gate.py`
 - `tests/test_workspace_real_same_conclusion_sample_finder.py`
 - `tests/test_workspace_ingestion_goal_readiness.py`
+- `tests/test_prepare_workspace_evidence_request.py`
 
 Recent implementation commits inspected:
 
@@ -118,6 +120,8 @@ python3 -m unittest tests.test_workspace_real_fetch_latency_gate
 python3 scripts/check_workspace_project_sheet_evidence_gate.py --json --opened-since 90d --limit 20 --max-pages 2
 python3 scripts/check_workspace_project_sheet_evidence_gate.py --json --folder-walk-tokens <folder_token> --wiki-space-walk-ids <space_id_or_my_library> --walk-max-depth 2 --limit 50
 python3 -m unittest tests.test_workspace_project_sheet_evidence_gate
+python3 scripts/prepare_workspace_evidence_request.py --create-dirs --json
+python3 -m unittest tests.test_prepare_workspace_evidence_request
 python3 scripts/check_workspace_real_fetch_latency_gate.py --json --resource 'docx:<project_docx_token>:<title>' --resource 'bitable:<project_base_token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu --max-bitable-records 3 --candidate-limit 8 --min-source-count 2 --min-candidate-count 2
 python3 scripts/check_workspace_real_chat_resource_gate.py --json --event-log <captured_non_at_group_message.ndjson> --resource 'docx:<project_docx_token>:<title>' --resource 'bitable:<project_base_token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu --max-bitable-records 3 --candidate-limit 8 --min-chat-candidates 1 --min-resource-sources 2 --min-resource-candidates 2
 python3 -m unittest tests.test_workspace_real_chat_resource_gate
@@ -157,5 +161,6 @@ The next product step should not be another architecture discussion. It should b
 4. **Keep active docs aligned** when the workspace evidence changes, using `document-writing-style-guide-opus-4-6.md` and keeping archived plans unchanged unless promoted back into active execution.
 
 Use `workspace-ingestion-evidence-request.md` when asking the project owner or a teammate for the missing Sheet and same-fact samples. It is the shortest handoff note for the current blocker.
+Use `scripts/prepare_workspace_evidence_request.py --create-dirs --json` when the request should be packaged as a redacted operator packet with command templates.
 
 Until at least the Sheet and real chat + doc/table same-conclusion corroboration evidence gaps are closed, do not call the overall objective complete.

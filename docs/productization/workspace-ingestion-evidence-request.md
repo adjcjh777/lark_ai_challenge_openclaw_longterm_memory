@@ -62,6 +62,14 @@ Avoid:
 
 ## Commands To Run After Samples Arrive
 
+To create a redacted operator packet with these commands and placeholders:
+
+```bash
+python3 scripts/prepare_workspace_evidence_request.py \
+  --create-dirs \
+  --json
+```
+
 If the Sheet sample is explicit:
 
 ```bash

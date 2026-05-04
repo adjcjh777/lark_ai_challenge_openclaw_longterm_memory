@@ -147,6 +147,8 @@ This slice adds a controlled adapter:
   - redacted sample finder for existing evidence pools. It scans captured real chat logs and reviewed workspace sources for exact durable-fact matches, can expand the reviewed source pool through read-only Drive search, Drive folder/root walk, and Wiki space walk, and only runs the strict same-conclusion gate when a match exists.
 - `scripts/check_workspace_ingestion_goal_readiness.py`
   - combined readiness gate for the user objective. It runs project normal Sheet evidence and real same-conclusion sample checks, then combines them with static checks for lark-cli-first architecture, memory policy, CopilotService routing, shared ledger, latency gates, and Opus 4.6 documentation boundaries.
+- `scripts/prepare_workspace_evidence_request.py`
+  - redacted request-packet generator for the two remaining evidence blockers. It writes operator-ready JSON/Markdown command templates without calling Feishu, creating resources, reading Sheet cells, or writing the memory DB.
 - `drive +search` query guard
   - Feishu search rejects queries longer than 30 characters. The fetcher now fails locally with a structured message before calling lark-cli, so broad OR searches must be split into shorter queries.
 - Response-speed and diagnosis hardening
