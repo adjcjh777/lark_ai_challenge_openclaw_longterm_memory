@@ -23,6 +23,7 @@ class FeishuApiResult:
     raw_stdout: str = ""
     raw_stderr: str = ""
     returncode: int = 0
+    elapsed_ms: float = 0.0
 
     @property
     def is_permission_denied(self) -> bool:
@@ -60,6 +61,7 @@ def run_lark_cli(
     last_error: FeishuApiResult | None = None
 
     for attempt in range(retries + 1):
+        attempt_started = time.perf_counter()
         try:
             result = _execute_lark_cli(argv, timeout_seconds)
             if result.ok:
@@ -84,6 +86,7 @@ def run_lark_cli(
                 error_code="api_error",
                 error_message=f"lark-cli 命令超时（{timeout_seconds} 秒）",
                 returncode=-1,
+                elapsed_ms=_elapsed_ms(attempt_started),
             )
             if attempt < retries:
                 time.sleep(min(2**attempt, 4))
@@ -95,6 +98,7 @@ def run_lark_cli(
                 error_code="api_error",
                 error_message="lark-cli 未安装或不在 PATH 中",
                 returncode=-1,
+                elapsed_ms=_elapsed_ms(attempt_started),
             )
 
         except Exception as e:
@@ -103,6 +107,7 @@ def run_lark_cli(
                 error_code="api_error",
                 error_message=f"执行 lark-cli 时发生异常: {e}",
                 returncode=-1,
+                elapsed_ms=_elapsed_ms(attempt_started),
             )
             if attempt < retries:
                 time.sleep(min(2**attempt, 4))
@@ -120,6 +125,7 @@ def run_lark_cli(
 def _execute_lark_cli(argv: list[str], timeout_seconds: int) -> FeishuApiResult:
     """执行单次 lark-cli 命令。"""
     command = ["lark-cli"] + argv
+    started = time.perf_counter()
 
     try:
         completed = subprocess.run(
@@ -134,6 +140,7 @@ def _execute_lark_cli(argv: list[str], timeout_seconds: int) -> FeishuApiResult:
     stdout = completed.stdout.strip()
     stderr = completed.stderr.strip()
     returncode = completed.returncode
+    elapsed_ms = _elapsed_ms(started)
 
     # 命令执行失败
     if returncode != 0:
@@ -145,6 +152,7 @@ def _execute_lark_cli(argv: list[str], timeout_seconds: int) -> FeishuApiResult:
             raw_stdout=stdout,
             raw_stderr=stderr,
             returncode=returncode,
+            elapsed_ms=elapsed_ms,
         )
 
     # 尝试解析 JSON
@@ -156,6 +164,7 @@ def _execute_lark_cli(argv: list[str], timeout_seconds: int) -> FeishuApiResult:
             raw_stdout=stdout,
             raw_stderr=stderr,
             returncode=returncode,
+            elapsed_ms=elapsed_ms,
         )
     except json.JSONDecodeError:
         # JSON 解析失败，尝试作为纯文本处理
@@ -166,6 +175,7 @@ def _execute_lark_cli(argv: list[str], timeout_seconds: int) -> FeishuApiResult:
                 raw_stdout=stdout,
                 raw_stderr=stderr,
                 returncode=returncode,
+                elapsed_ms=elapsed_ms,
             )
         return FeishuApiResult(
             ok=False,
@@ -174,7 +184,12 @@ def _execute_lark_cli(argv: list[str], timeout_seconds: int) -> FeishuApiResult:
             raw_stdout=stdout,
             raw_stderr=stderr,
             returncode=returncode,
+            elapsed_ms=elapsed_ms,
         )
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000.0, 3)
 
 
 def _classify_error(returncode: int, stdout: str, stderr: str) -> tuple[str, str]:
