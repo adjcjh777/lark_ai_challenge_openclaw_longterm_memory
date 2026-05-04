@@ -1,0 +1,38 @@
+{
+  "schema_version": "workspace_ingestion_schedule/v1",
+  "defaults": {
+    "profile": "feishu-ai-challenge",
+    "as_identity": "user",
+    "tenant_id": "tenant:demo",
+    "organization_id": "org:demo",
+    "roles": "member,reviewer",
+    "scope": "project:feishu_ai_challenge",
+    "doc_types": [
+      "doc",
+      "docx",
+      "wiki",
+      "sheet",
+      "bitable"
+    ],
+    "limit": 50,
+    "max_pages": 3,
+    "max_sheet_rows": 80,
+    "max_bitable_records": 50,
+    "candidate_limit": 12,
+    "walk_max_depth": 2,
+    "walk_page_size": 50,
+    "timeout_seconds": 300,
+    "dry_run": true,
+    "resume_cursor": true
+  },
+  "jobs": [
+    {
+      "name": "workspace_recent_opened",
+      "enabled": true,
+      "query": "",
+      "opened_since": "30d",
+      "folder_walk_root": true,
+      "wiki_space_walk_ids": "my_library"
+    }
+  ]
+}
