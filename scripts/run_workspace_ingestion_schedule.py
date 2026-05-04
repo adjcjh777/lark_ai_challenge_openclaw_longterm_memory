@@ -9,6 +9,7 @@ default it only returns the plan; pass --execute to run jobs sequentially.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import subprocess
 import sys
@@ -30,10 +31,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Plan or run bounded Feishu workspace ingestion schedule jobs.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
     parser.add_argument("--execute", action="store_true", help="Run enabled jobs. Default is plan-only.")
+    parser.add_argument("--output", default="", help="Optional sanitized evidence report path.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     report = run_schedule(Path(args.config).expanduser(), execute=args.execute)
+    if args.output:
+        output = Path(args.output).expanduser()
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(sanitize_report(report), ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
@@ -289,6 +298,53 @@ def _attempt_from_completed(*, attempt: int, completed: subprocess.CompletedProc
         "result": result,
         "stderr_preview": completed.stderr[:1000] if completed.stderr else "",
     }
+
+
+def sanitize_report(report: dict[str, Any]) -> dict[str, Any]:
+    """Return a token-safe evidence report suitable for committing or archiving."""
+
+    sanitized = copy.deepcopy(report)
+    for job in sanitized.get("jobs", []):
+        if isinstance(job, dict):
+            job.pop("command", None)
+            if "command_preview" in job:
+                job["command"] = job.pop("command_preview")
+            _sanitize_job_result(job)
+            for attempt in job.get("attempts", []) or []:
+                if isinstance(attempt, dict):
+                    _sanitize_job_result(attempt)
+    sanitized["sanitized"] = True
+    return sanitized
+
+
+def _sanitize_job_result(container: dict[str, Any]) -> None:
+    result = container.get("result")
+    if not isinstance(result, dict):
+        return
+    resources = result.get("resources")
+    if isinstance(resources, list):
+        result["resource_type_counts"] = _resource_type_counts(resources)
+        result["resources"] = [_sanitize_resource(resource) for resource in resources if isinstance(resource, dict)]
+
+
+def _sanitize_resource(resource: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "resource_type": resource.get("resource_type"),
+        "route_type": resource.get("route_type"),
+        "title": resource.get("title"),
+        "token": "<redacted>",
+        "url": "<redacted>" if resource.get("url") else "",
+    }
+
+
+def _resource_type_counts(resources: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        resource_type = str(resource.get("resource_type") or "unknown")
+        counts[resource_type] = counts.get(resource_type, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _job_failure(*, index: int, name: str, reason: str) -> dict[str, Any]:

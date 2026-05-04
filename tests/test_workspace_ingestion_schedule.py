@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from scripts.run_workspace_ingestion_schedule import DEFAULT_CONFIG_PATH, run_schedule
+from scripts.run_workspace_ingestion_schedule import DEFAULT_CONFIG_PATH, run_schedule, sanitize_report
 
 
 class WorkspaceIngestionScheduleTest(unittest.TestCase):
@@ -85,6 +85,61 @@ class WorkspaceIngestionScheduleTest(unittest.TestCase):
 
         self.assertFalse(report["ok"])
         self.assertEqual("secret_like_value_present", report["failed_jobs"][0]["reason"])
+
+    def test_sanitized_report_redacts_resource_tokens_and_urls(self) -> None:
+        report = {
+            "ok": True,
+            "jobs": [
+                {
+                    "name": "job",
+                    "command": ["python3", "scripts/feishu_workspace_ingest.py", "--resource", "sheet:sht_1"],
+                    "command_preview": ["python3", "scripts/feishu_workspace_ingest.py", "--resource", "<redacted>"],
+                    "result": {
+                        "resources": [
+                            {
+                                "resource_type": "sheet",
+                                "route_type": "sheet",
+                                "title": "Project Sheet",
+                                "token": "sht_1",
+                                "url": "https://example.feishu.cn/sheets/sht_1",
+                            },
+                            {
+                                "resource_type": "docx",
+                                "route_type": "document",
+                                "title": "Project Doc",
+                                "token": "doc_1",
+                                "url": "https://example.feishu.cn/docx/doc_1",
+                            },
+                        ]
+                    },
+                    "attempts": [
+                        {
+                            "result": {
+                                "resources": [
+                                    {
+                                        "resource_type": "sheet",
+                                        "route_type": "sheet",
+                                        "title": "Project Sheet",
+                                        "token": "sht_1",
+                                        "url": "https://example.feishu.cn/sheets/sht_1",
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                }
+            ],
+        }
+
+        sanitized = sanitize_report(report)
+
+        job = sanitized["jobs"][0]
+        self.assertEqual(["python3", "scripts/feishu_workspace_ingest.py", "--resource", "<redacted>"], job["command"])
+        self.assertNotIn("command_preview", job)
+        self.assertEqual({"docx": 1, "sheet": 1}, job["result"]["resource_type_counts"])
+        self.assertEqual("<redacted>", job["result"]["resources"][0]["token"])
+        self.assertEqual("<redacted>", job["result"]["resources"][0]["url"])
+        self.assertEqual("<redacted>", job["attempts"][0]["result"]["resources"][0]["token"])
 
     def test_disabled_job_is_skipped(self) -> None:
         data = _schedule_config()
