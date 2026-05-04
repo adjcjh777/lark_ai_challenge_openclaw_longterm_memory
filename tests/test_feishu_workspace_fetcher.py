@@ -26,7 +26,7 @@ SCOPE = "project:feishu_ai_challenge"
 
 
 def _ok(data: dict) -> FeishuApiResult:
-    return FeishuApiResult(ok=True, data=data, returncode=0)
+    return FeishuApiResult(ok=True, data=data, returncode=0, elapsed_ms=1.25)
 
 
 class FeishuWorkspaceFetcherTest(unittest.TestCase):
@@ -350,6 +350,7 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertEqual("document_feishu", sources[0].source_type)
         self.assertEqual("doc_1", sources[0].source_id)
         self.assertIn("上线窗口固定", sources[0].text)
+        self.assertIsInstance(sources[0].metadata["lark_cli_fetch_elapsed_ms"], float)
 
     def test_fetches_sheet_resource_from_info_and_read(self) -> None:
         with patch("memory_engine.feishu_workspace_fetcher.run_lark_cli") as run:
@@ -365,6 +366,8 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertEqual("lark_sheet", sources[0].source_type)
         self.assertEqual("sht_1", sources[0].metadata["sheet_token"])
         self.assertEqual("sh_1", sources[0].metadata["sheet_id"])
+        self.assertEqual(1.25, sources[0].metadata["lark_cli_info_elapsed_ms"])
+        self.assertEqual(1.25, sources[0].metadata["lark_cli_read_elapsed_ms"])
         self.assertIn("生产部署必须加审计", sources[0].text)
 
     def test_fetches_sheet_resource_from_current_lark_cli_info_shape(self) -> None:
@@ -468,6 +471,7 @@ class FeishuWorkspaceFetcherTest(unittest.TestCase):
         self.assertEqual("lark_bitable", sources[0].source_type)
         self.assertEqual("rec_1", sources[0].source_id)
         self.assertEqual("app_1", sources[0].metadata["app_token"])
+        self.assertEqual(1.25, sources[0].metadata["lark_cli_record_get_elapsed_ms"])
 
     def test_workspace_current_context_allows_sheet_ingestion_candidate_only(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

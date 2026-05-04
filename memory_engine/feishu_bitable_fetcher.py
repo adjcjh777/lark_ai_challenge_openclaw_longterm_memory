@@ -85,6 +85,7 @@ def fetch_bitable_record_text(
             "table_id": table_id,
             "record_id": record_id,
             "field_names": field_names,
+            "lark_cli_record_get_elapsed_ms": result.elapsed_ms,
         },
     )
 

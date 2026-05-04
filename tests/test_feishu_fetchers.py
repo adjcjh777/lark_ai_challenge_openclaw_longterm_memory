@@ -33,7 +33,7 @@ SCOPE = "project:feishu_ai_challenge"
 
 
 def _ok_result(data: dict) -> FeishuApiResult:
-    return FeishuApiResult(ok=True, data=data, returncode=0)
+    return FeishuApiResult(ok=True, data=data, returncode=0, elapsed_ms=2.5)
 
 
 def _error_result(error_code: str, message: str) -> FeishuApiResult:
@@ -503,6 +503,7 @@ class BitableFetcherTest(unittest.TestCase):
         self.assertEqual(source.metadata["app_token"], "app_token")
         self.assertEqual(source.metadata["table_id"], "tbl_1")
         self.assertEqual(source.metadata["record_id"], "rec_001")
+        self.assertEqual(source.metadata["lark_cli_record_get_elapsed_ms"], 2.5)
 
     @patch("memory_engine.feishu_bitable_fetcher.run_lark_cli")
     def test_fetch_bitable_record_text_accepts_current_lark_cli_shape(self, mock_run: Mock) -> None:

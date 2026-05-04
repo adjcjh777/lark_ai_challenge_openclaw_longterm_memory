@@ -10,6 +10,7 @@ single source of truth.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -573,7 +574,9 @@ def _fetch_document_resource(
     from .document_ingestion import fetch_feishu_document_text
 
     doc_ref = resource.url or resource.token
+    started = time.perf_counter()
     text = fetch_feishu_document_text(doc_ref, profile=profile, as_identity=as_identity or "user")
+    fetch_elapsed_ms = _elapsed_ms(started)
     return FeishuIngestionSource(
         source_type="document_feishu",
         source_id=resource.token,
@@ -585,6 +588,7 @@ def _fetch_document_resource(
             "document_id": resource.token,
             "resource_type": resource.resource_type,
             "obj_type": resource.obj_type,
+            "lark_cli_fetch_elapsed_ms": fetch_elapsed_ms,
         },
     )
 
@@ -606,7 +610,9 @@ def _fetch_sheet_resource(
         if not sheet_id:
             continue
         title = _sheet_title(sheet) or resource.title
-        values = _sheet_values(resource.token, sheet_id, max_rows=max_rows, profile=profile, as_identity=as_identity)
+        values, read_elapsed_ms = _sheet_values(
+            resource.token, sheet_id, max_rows=max_rows, profile=profile, as_identity=as_identity
+        )
         if not values:
             continue
         text = _render_sheet_text(resource.title, title, values)
@@ -623,6 +629,8 @@ def _fetch_sheet_resource(
                     "sheet_id": sheet_id,
                     "sheet_title": title,
                     "resource_type": resource.resource_type,
+                    "lark_cli_info_elapsed_ms": info.elapsed_ms,
+                    "lark_cli_read_elapsed_ms": read_elapsed_ms,
                 },
             )
         )
@@ -684,7 +692,7 @@ def _sheet_values(
     max_rows: int,
     profile: str | None,
     as_identity: str | None,
-) -> list[list[Any]]:
+) -> tuple[list[list[Any]], float]:
     argv = _build_argv(
         [
             "sheets",
@@ -704,7 +712,11 @@ def _sheet_values(
     result = run_lark_cli(argv)
     if not result.ok:
         raise ValueError(f"sheet read failed: {result.error_message} (error_code={result.error_code})")
-    return _values_from_sheet_read(result.data or {})
+    return _values_from_sheet_read(result.data or {}), result.elapsed_ms
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000.0, 3)
 
 
 def _resource_from_search_result(item: dict[str, Any]) -> WorkspaceResource | None:
