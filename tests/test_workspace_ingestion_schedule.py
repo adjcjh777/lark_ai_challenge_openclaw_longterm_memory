@@ -91,9 +91,23 @@ class WorkspaceIngestionScheduleTest(unittest.TestCase):
             "ok": True,
             "jobs": [
                 {
-                    "name": "job",
-                    "command": ["python3", "scripts/feishu_workspace_ingest.py", "--resource", "sheet:sht_1"],
-                    "command_preview": ["python3", "scripts/feishu_workspace_ingest.py", "--resource", "<redacted>"],
+                    "name": "dry_run_job",
+                    "command": [
+                        "python3",
+                        "scripts/feishu_workspace_ingest.py",
+                        "--resource",
+                        "sheet:sht_1",
+                        "--actor-open-id",
+                        "ou_reviewer",
+                    ],
+                    "command_preview": [
+                        "python3",
+                        "scripts/feishu_workspace_ingest.py",
+                        "--resource",
+                        "<redacted>",
+                        "--actor-open-id",
+                        "<redacted>",
+                    ],
                     "result": {
                         "resources": [
                             {
@@ -134,12 +148,102 @@ class WorkspaceIngestionScheduleTest(unittest.TestCase):
         sanitized = sanitize_report(report)
 
         job = sanitized["jobs"][0]
-        self.assertEqual(["python3", "scripts/feishu_workspace_ingest.py", "--resource", "<redacted>"], job["command"])
+        self.assertEqual(
+            [
+                "python3",
+                "scripts/feishu_workspace_ingest.py",
+                "--resource",
+                "<redacted>",
+                "--actor-open-id",
+                "<redacted>",
+            ],
+            job["command"],
+        )
         self.assertNotIn("command_preview", job)
         self.assertEqual({"docx": 1, "sheet": 1}, job["result"]["resource_type_counts"])
         self.assertEqual("<redacted>", job["result"]["resources"][0]["token"])
         self.assertEqual("<redacted>", job["result"]["resources"][0]["url"])
         self.assertEqual("<redacted>", job["attempts"][0]["result"]["resources"][0]["token"])
+
+    def test_sanitized_report_redacts_non_dry_run_results_and_cursor_tokens(self) -> None:
+        report = {
+            "ok": True,
+            "jobs": [
+                {
+                    "name": "ingest_job",
+                    "command": [
+                        "python3",
+                        "scripts/feishu_workspace_ingest.py",
+                        "--actor-open-id",
+                        "ou_reviewer",
+                        "--chat-ids",
+                        "oc_private",
+                    ],
+                    "command_preview": [
+                        "python3",
+                        "scripts/feishu_workspace_ingest.py",
+                        "--actor-open-id",
+                        "<redacted>",
+                        "--chat-ids",
+                        "<redacted>",
+                    ],
+                    "result": {
+                        "ok": True,
+                        "discovery": {
+                            "start_page_token": "page_start_secret",
+                            "next_page_token": "page_next_secret",
+                            "cursor_before": {"page_token": "page_before_secret"},
+                            "cursor_after": {"page_token": "page_after_secret"},
+                        },
+                        "results": [
+                            {
+                                "resource": {
+                                    "resource_type": "sheet",
+                                    "route_type": "sheet",
+                                    "title": "Project Sheet",
+                                    "token": "sht_1",
+                                    "url": "https://example.feishu.cn/sheets/sht_1",
+                                },
+                                "source": {
+                                    "source_type": "lark_sheet",
+                                    "source_id": "sht_1#Sheet1",
+                                    "title": "Project Sheet",
+                                },
+                                "ok": True,
+                                "candidate_count": 2,
+                            },
+                            {
+                                "resource": {
+                                    "resource_type": "docx",
+                                    "route_type": "document",
+                                    "title": "Project Doc",
+                                    "token": "doc_1",
+                                    "url": "https://example.feishu.cn/docx/doc_1",
+                                },
+                                "ok": False,
+                                "stage": "fetch",
+                                "error": "document doc_1 at https://example.feishu.cn/docx/doc_1 failed",
+                            },
+                        ],
+                    },
+                }
+            ],
+        }
+
+        sanitized = sanitize_report(report)
+
+        payload = json.dumps(sanitized, ensure_ascii=False)
+        self.assertNotIn("sht_1", payload)
+        self.assertNotIn("doc_1", payload)
+        self.assertNotIn("page_start_secret", payload)
+        self.assertNotIn("page_next_secret", payload)
+        self.assertNotIn("ou_reviewer", payload)
+        self.assertEqual({"lark_sheet": 1}, sanitized["jobs"][0]["result"]["source_type_counts"])
+        self.assertEqual({"docx": 1, "sheet": 1}, sanitized["jobs"][0]["result"]["resource_type_counts"])
+        self.assertEqual("<redacted>", sanitized["jobs"][0]["result"]["discovery"]["next_page_token"])
+        self.assertEqual("<redacted>", sanitized["jobs"][0]["result"]["results"][0]["resource"]["token"])
+        self.assertEqual("<redacted>", sanitized["jobs"][0]["result"]["results"][0]["source"]["source_id"])
+        self.assertIn("<redacted>", sanitized["jobs"][0]["result"]["results"][1]["error"])
 
     def test_disabled_job_is_skipped(self) -> None:
         data = _schedule_config()

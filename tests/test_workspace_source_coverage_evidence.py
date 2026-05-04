@@ -54,6 +54,24 @@ class WorkspaceSourceCoverageEvidenceTest(unittest.TestCase):
         self.assertIn("evidence_refs_present", result["failed_checks"])
         self.assertIn("lark_sheet_organic_sample_count", result["failed_checks"])
 
+    def test_prefers_explicit_source_type_counts_over_result_recount(self) -> None:
+        result = collect_workspace_source_coverage_evidence(
+            reports=[
+                {
+                    "ok": True,
+                    "status": "pass",
+                    "source_type_counts": {"document_feishu": 2},
+                    "results": [
+                        {"ok": True, "source": {"source_type": "document_feishu"}},
+                        {"ok": True, "source": {"source_type": "document_feishu"}},
+                    ],
+                }
+            ],
+            evidence_refs=["logs/workspace-productized/source-coverage-redacted"],
+        )
+
+        self.assertEqual(2, result["source_type_counts"]["document_feishu"])
+
     def test_cli_writes_output(self) -> None:
         with tempfile.TemporaryDirectory(prefix="workspace_source_coverage_") as temp_dir:
             root = Path(temp_dir)

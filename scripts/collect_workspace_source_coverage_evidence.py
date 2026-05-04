@@ -181,8 +181,11 @@ def _report_passed(report: dict[str, Any]) -> bool:
 
 def _source_counts_from_report(report: dict[str, Any]) -> dict[str, int]:
     counts: dict[str, int] = {}
-    counts = _merge_counts([counts, _known_source_counts(report.get("source_type_counts"))])
-    counts = _merge_counts([counts, _source_counts_from_results(report.get("results"))])
+    explicit_counts = _known_source_counts(report.get("source_type_counts"))
+    if explicit_counts:
+        counts = _merge_counts([counts, explicit_counts])
+    else:
+        counts = _merge_counts([counts, _source_counts_from_results(report.get("results"))])
     counts = _merge_counts([counts, _source_counts_from_resource_results(report.get("resource_results"))])
     counts = _merge_counts([counts, _source_counts_from_manifest_patch(report)])
 

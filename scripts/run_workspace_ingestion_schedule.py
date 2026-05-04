@@ -323,10 +323,50 @@ def _sanitize_job_result(container: dict[str, Any]) -> None:
     result = container.get("result")
     if not isinstance(result, dict):
         return
+    sensitive_values = _sensitive_values(result)
+    _sanitize_discovery_cursor(result)
     resources = result.get("resources")
     if isinstance(resources, list):
         result["resource_type_counts"] = _resource_type_counts(resources)
         result["resources"] = [_sanitize_resource(resource) for resource in resources if isinstance(resource, dict)]
+    results = result.get("results")
+    if isinstance(results, list):
+        result["resource_type_counts"] = _result_resource_type_counts(results)
+        result["source_type_counts"] = _source_type_counts(results)
+        result["results"] = [
+            _sanitize_ingestion_result(item, sensitive_values) for item in results if isinstance(item, dict)
+        ]
+
+
+def _sanitize_discovery_cursor(result: dict[str, Any]) -> None:
+    discovery = result.get("discovery")
+    if not isinstance(discovery, dict):
+        return
+    for key in ("start_page_token", "next_page_token"):
+        if discovery.get(key):
+            discovery[key] = "<redacted>"
+    for key in ("cursor_before", "cursor_after"):
+        cursor = discovery.get(key)
+        if isinstance(cursor, dict) and cursor.get("page_token"):
+            cursor["page_token"] = "<redacted>"
+
+
+def _sanitize_ingestion_result(item: dict[str, Any], sensitive_values: set[str]) -> dict[str, Any]:
+    sanitized = copy.deepcopy(item)
+    resource = sanitized.get("resource")
+    if isinstance(resource, dict):
+        sanitized["resource"] = _sanitize_resource(resource)
+    source = sanitized.get("source")
+    if isinstance(source, dict):
+        sanitized["source"] = {
+            "source_type": source.get("source_type"),
+            "source_id": "<redacted>" if source.get("source_id") else "",
+            "title": source.get("title"),
+        }
+    for key in ("error", "reason", "error_code", "stderr_preview"):
+        if isinstance(sanitized.get(key), str):
+            sanitized[key] = _redact_known_values(sanitized[key], sensitive_values)
+    return sanitized
 
 
 def _sanitize_resource(resource: dict[str, Any]) -> dict[str, Any]:
@@ -347,6 +387,69 @@ def _resource_type_counts(resources: list[Any]) -> dict[str, int]:
         resource_type = str(resource.get("resource_type") or "unknown")
         counts[resource_type] = counts.get(resource_type, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def _source_type_counts(results: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        if item.get("ok") is False:
+            continue
+        source = item.get("source")
+        if not isinstance(source, dict):
+            continue
+        source_type = str(source.get("source_type") or "unknown")
+        counts[source_type] = counts.get(source_type, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _result_resource_type_counts(results: list[Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    seen_resources: set[tuple[str, str, str]] = set()
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        resource = item.get("resource")
+        if not isinstance(resource, dict):
+            continue
+        resource_type = str(resource.get("resource_type") or "unknown")
+        route_type = str(resource.get("route_type") or "")
+        token = str(resource.get("token") or "")
+        key = (resource_type, route_type, token)
+        if key in seen_resources:
+            continue
+        seen_resources.add(key)
+        counts[resource_type] = counts.get(resource_type, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _sensitive_values(value: Any) -> set[str]:
+    values: set[str] = set()
+    sensitive_keys = {"token", "url", "source_id", "page_token", "start_page_token", "next_page_token"}
+
+    def visit(item: Any, key: str = "") -> None:
+        if isinstance(item, dict):
+            for child_key, child_value in item.items():
+                visit(child_value, str(child_key))
+            return
+        if isinstance(item, list):
+            for child in item:
+                visit(child, key)
+            return
+        if key in sensitive_keys and isinstance(item, str) and item.strip():
+            values.add(item)
+
+    visit(value)
+    return values
+
+
+def _redact_known_values(text: str, sensitive_values: set[str]) -> str:
+    redacted = text
+    for value in sorted(sensitive_values, key=len, reverse=True):
+        if value:
+            redacted = redacted.replace(value, "<redacted>")
+    return redacted
 
 
 def _job_failure(*, index: int, name: str, reason: str) -> dict[str, Any]:
@@ -389,7 +492,18 @@ def _append_csv(command: list[str], flag: str, value: Any) -> None:
 
 def _redact_command(command: list[str]) -> list[str]:
     redacted = []
-    redact_next_flags = {"--resource", "--folder-tokens", "--space-ids", "--folder-walk-tokens", "--wiki-space-walk-ids"}
+    redact_next_flags = {
+        "--resource",
+        "--folder-tokens",
+        "--space-ids",
+        "--folder-walk-tokens",
+        "--wiki-space-walk-ids",
+        "--actor-user-id",
+        "--actor-open-id",
+        "--creator-ids",
+        "--sharer-ids",
+        "--chat-ids",
+    }
     redact_next = False
     for part in command:
         if redact_next:

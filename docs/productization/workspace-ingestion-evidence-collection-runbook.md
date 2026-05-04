@@ -2,7 +2,7 @@
 
 Date: 2026-05-04
 
-Status: active runbook for closing the two remaining workspace-ingestion evidence gaps.
+Status: active runbook for moving from controlled workspace readiness to productized workspace-ingestion evidence.
 
 This runbook is deliberately narrow. It does not create Feishu resources, send messages, or claim production full-workspace ingestion. It tells the next operator exactly what evidence is still missing, how to collect it, and which gates must pass before the overall workspace objective can be called complete.
 
@@ -20,12 +20,16 @@ The packet writes under `logs/workspace-evidence-requests/<run_id>/` when `--cre
 
 ## Current Blocking Evidence
 
-The combined readiness gate still returns `goal_complete=false`.
+The controlled workspace readiness gate has passed. The stricter productized workspace gate still returns `goal_complete=false`.
 
-Two blockers remain:
+The current productized blockers are:
 
-1. A project or enterprise normal Sheet sample.
-2. A real chat message and a real document, Sheet, or Base source that repeat the same durable fact.
+1. Organic source coverage for `lark_doc`, `lark_sheet`, and `wiki`.
+2. Same-conclusion evidence across chat and workspace sources beyond the controlled sample.
+3. Conflict-negative evidence in the productized evidence packet.
+4. Real multi-run scheduler/cursor evidence that includes revision skip, stale marking, bounded discovery, failed-fetch or revocation audit, and non-secret evidence refs.
+5. Rate-limit/backoff, governance, and operations evidence refs.
+6. A 24h+ long-run window with at least 3 successful schedule executions and no unresolved failed runs.
 
 Already proven:
 
@@ -38,12 +42,15 @@ Already proven:
 - real chat log + docx/Base candidate co-ingestion.
 - public/template normal Sheet technical fetch path.
 - broad same-conclusion sample search over current evidence pool.
+- controlled normal Sheet + real OpenClaw Feishu group message same-conclusion readiness.
+- bot DM readback of the controlled workspace Sheet memory through `fmc_memory_search`.
+- non-dry-run bounded schedule sampling in an isolated SQLite DB: 2 successful runs, real candidate pipeline entry, `document_feishu=8`, `lark_bitable=43`.
 
 Not yet proven:
 
-- project or enterprise workspace normal Sheet ingestion evidence.
-- real chat + doc/table same-conclusion corroboration.
+- complete organic coverage for Docs, Sheets, Base/Bitable, Wiki, same-conclusion, and conflict-negative evidence.
 - production full-workspace crawling or productized live long-run operation.
+- productized evidence manifest that passes `check_workspace_productized_ingestion_readiness.py --require-productized-ready`.
 
 ## Rules Before Collecting Evidence
 
