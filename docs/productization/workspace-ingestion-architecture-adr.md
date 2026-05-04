@@ -149,6 +149,10 @@ This slice adds a controlled adapter:
   - combined readiness gate for the user objective. It runs project normal Sheet evidence and real same-conclusion sample checks, then combines them with static checks for lark-cli-first architecture, memory policy, CopilotService routing, shared ledger, latency gates, and Opus 4.6 documentation boundaries.
 - `drive +search` query guard
   - Feishu search rejects queries longer than 30 characters. The fetcher now fails locally with a structured message before calling lark-cli, so broad OR searches must be split into shorter queries.
+- Response-speed and diagnosis hardening
+  - `memory_engine/copilot/retrieval.py` now reuses the active memory index and curated vector scores across layer fallback inside one `memory.search`, and retrieval traces record stage-level `elapsed_ms` for structured, keyword, vector, Cognee, and rerank work.
+  - `memory_engine/feishu_api_client.py` now records `FeishuApiResult.elapsed_ms` for successful lark-cli calls, parse errors, nonzero returns, missing CLI, timeouts, and unexpected exceptions.
+  - `memory_engine/feishu_workspace_fetcher.py` and `memory_engine/feishu_bitable_fetcher.py` now surface per-source lark-cli timing metadata for document fetch, Sheet info/read, and Bitable record-get calls.
 - `lark_sheet` source support in schema and ingestion metadata.
 - Bitable fetch compatibility for the current lark-cli 1.0.22 output shapes: `base +table-list` can return `tables[].id`, `base +record-list` can return tabular rows plus `record_id_list`, and `base +record-get` can return fields directly under `record`.
 - Tests in `tests/test_feishu_fetchers.py`, `tests/test_feishu_workspace_fetcher.py`, and `tests/test_feishu_workspace_registry.py`.
@@ -249,6 +253,8 @@ python3 scripts/feishu_workspace_ingest.py \
 
 2026-05-04 latency evidence: `check_workspace_ingestion_latency_gate.py --json` passed after one warmup run. It reported `case_pass_rate=1.0`, `avg_quote_coverage=1.0`, `document_evidence_coverage=1.0`, `avg_ingestion_latency_ms=5.51`, and `max_ingestion_latency_ms=5.599`. This is a local hot-path regression gate, not a production SLO and not evidence for lark-cli network fetch speed.
 
+2026-05-04 response-speed instrumentation update: retrieval now reports stage-level timing in the trace, lark-cli wrapper results include elapsed time for every outcome class, and workspace source metadata carries document/Sheet/Bitable fetch timings. This makes local regressions and slow external calls easier to separate. It is still diagnostic evidence for the limited pilot, not a production SLO.
+
 ## Performance Plan
 
 Keep the current feature stable first, then optimize the hot path:
@@ -258,9 +264,11 @@ Keep the current feature stable first, then optimize the hot path:
 3. Avoid full document/table reads on the first pass; read outline or bounded sheet ranges first.
 4. Deduplicate by `source_key + source_revision` before candidate extraction when Drive returns a usable revision/update timestamp.
 5. Cache lark-cli discovery results in `feishu_workspace_source_registry` before repeated fetches.
-6. Move high-volume fetches from lark-cli subprocesses to native OpenAPI only after the pilot shows real bottlenecks.
-7. Keep embeddings limited to confirmed curated memory fields.
-8. Keep `check_workspace_ingestion_latency_gate.py --json` green before expanding workspace ingestion features; treat cold-start and network latency separately from local hot-path candidate ingestion.
+6. Reuse the active memory index and curated vector scores across layered retrieval fallback inside one request.
+7. Record retrieval-stage and lark-cli call elapsed time so local hot-path regressions, subprocess overhead, and Feishu network latency can be diagnosed separately.
+8. Move high-volume fetches from lark-cli subprocesses to native OpenAPI only after the pilot shows real bottlenecks.
+9. Keep embeddings limited to confirmed curated memory fields.
+10. Keep `check_workspace_ingestion_latency_gate.py --json` green before expanding workspace ingestion features; treat cold-start and network latency separately from local hot-path candidate ingestion.
 
 ## Acceptance Criteria
 
@@ -279,5 +287,6 @@ Keep the current feature stable first, then optimize the hot path:
 - A read-only registry gate can prove run, source, cursor, skip, stale, and failed evidence from SQLite.
 - A mixed-source gate can prove chat, document, and Bitable evidence share one governed ledger and handle corroboration/conflict without silent overwrite.
 - A local latency gate can prove warm-path document/workspace candidate ingestion stays within conservative local thresholds while quality checks remain green.
+- Retrieval traces, lark-cli results, and workspace source metadata include enough timing fields to diagnose slow local stages and slow Feishu fetches without calling the pilot production-ready.
 - Default output says candidate-only and pilot, not production full workspace ingestion.
 - Tests cover discovery, type routing, sheet ingestion, Bitable routing, candidate-only behavior, registry skip, stale marking, revocation status, and run summary.
