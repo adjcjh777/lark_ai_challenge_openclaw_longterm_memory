@@ -365,7 +365,7 @@ def _payload_from_log_line(line: dict[str, Any]) -> dict[str, Any]:
         parsed = _parse_json(raw_line)
         if isinstance(parsed, dict):
             return parsed
-    for key in ("payload", "data", "raw", "message", "1"):
+    for key in ("payload", "data", "raw", "message", "log_message", "1"):
         value = line.get(key)
         if isinstance(value, dict):
             return value
@@ -393,7 +393,7 @@ def _result_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
         return result
     if "tool" in payload or "tool_result" in payload or "bridge" in payload:
         return payload
-    for key in ("payload", "data", "message", "raw", "1"):
+    for key in ("payload", "data", "message", "raw", "log_message", "1"):
         value = payload.get(key)
         if isinstance(value, dict):
             nested = _result_payload(value)

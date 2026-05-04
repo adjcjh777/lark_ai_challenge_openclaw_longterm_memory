@@ -170,6 +170,33 @@ class FeishuDMRoutingTest(unittest.TestCase):
         self.assertEqual("first_class_live_routing_evidence_seen", report["reason"])
         self.assertEqual({"fmc_memory_search": 1}, report["first_class_tools"])
 
+    def test_live_routing_event_gate_reads_raw_openclaw_text_route_result(self) -> None:
+        embedded = json.dumps(
+            {
+                "ok": True,
+                "tool": "memory.search",
+                "message_id": "om_search_live",
+                "tool_result": {
+                    "ok": True,
+                    "bridge": {
+                        "entrypoint": "openclaw_tool",
+                        "tool": "fmc_memory_search",
+                        "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+                        "request_id": "req_search_live",
+                        "trace_id": "trace_search_live",
+                    },
+                },
+                "publish": {"mode": "interactive"},
+            },
+            ensure_ascii=False,
+        )
+        text = f"2026-05-04T11:10:10.846+08:00 [plugins] feishu-memory-copilot route result {embedded}"
+
+        report = check_live_routing_events(text, required_tools=("fmc_memory_search",))
+
+        self.assertTrue(report["ok"], report)
+        self.assertEqual({"fmc_memory_search": 1}, report["first_class_tools"])
+
     def test_plugin_tools_registered_with_fmc_names(self) -> None:
         """Verify plugin tools use fmc_xxx naming convention."""
         registrations = native_tool_registrations()

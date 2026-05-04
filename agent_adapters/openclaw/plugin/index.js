@@ -193,7 +193,7 @@ function registerFeishuBeforeDispatchHook(api) {
     description: "Caches Feishu message ids so before_dispatch can react to the original message.",
   });
   api.on("before_dispatch", async (event, context) => {
-    if (!shouldRouteFeishuGroupEvent(event, context)) {
+    if (!shouldRouteFeishuEvent(event, context)) {
       return undefined;
     }
     try {
@@ -372,17 +372,17 @@ function redactId(value) {
   return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
 }
 
-function shouldRouteFeishuGroupEvent(event, context) {
+function shouldRouteFeishuEvent(event, context) {
   const channel = String(event.channel || context.channelId || "").toLowerCase();
   if (channel !== "feishu") {
-    return false;
-  }
-  if (event.isGroup !== true) {
     return false;
   }
   const text = String(event.content || event.body || "").trim();
   if (!text) {
     return false;
+  }
+  if (event.isGroup !== true) {
+    return true;
   }
   const commandName = slashCommandName(text);
   if (commandName && FEISHU_GROUP_ROUTER_COMMANDS.has(commandName)) {
@@ -396,6 +396,8 @@ function shouldRouteFeishuGroupEvent(event, context) {
   }
   return true;
 }
+
+const shouldRouteFeishuGroupEvent = shouldRouteFeishuEvent;
 
 function slashCommandName(text) {
   const stripped = text.trim();
