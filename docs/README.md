@@ -41,7 +41,7 @@
 | [productization/audit-read-only-live-gate.md](productization/audit-read-only-live-gate.md) | productized live 小步实施 gate：审计 read-only view，不宣称生产长期运行 |
 | [productization/productized-live-long-run-plan.md](productization/productized-live-long-run-plan.md) | Productized live 长期运行方案；只定义 gate 和运行边界，不代表已上线 |
 | [productization/workspace-ingestion-architecture-adr.md](productization/workspace-ingestion-architecture-adr.md) | Workspace ingestion ADR：lark-cli/API 选型、资源路由、记忆判断、共库与佐证模型 |
-| [productization/workspace-ingestion-goal-completion-audit-2026-05-04.md](productization/workspace-ingestion-goal-completion-audit-2026-05-04.md) | Workspace ingestion 目标完成审计：逐条映射用户要求、当前证据和仍未完成的 Sheet / mixed-source / 文档改写缺口 |
+| [productization/workspace-ingestion-goal-completion-audit-2026-05-04.md](productization/workspace-ingestion-goal-completion-audit-2026-05-04.md) | Workspace ingestion 目标完成审计：逐条映射用户要求、controlled readiness 证据、bot 单聊回读和仍未完成的生产全量边界 |
 | [productization/document-writing-style-guide-opus-4-6.md](productization/document-writing-style-guide-opus-4-6.md) | 文档重写风格准则：按 Opus 4.6 的温和协作语气重写活跃文档，避免 4.7 风格 |
 
 ### 工作流和人类入口

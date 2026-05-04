@@ -151,10 +151,13 @@ python3 scripts/check_feishu_dm_routing.py --json --event-log ~/.openclaw/logs/g
 3. **Bot DM readback is controlled allow-path evidence, not stable productized live routing.**
    The 2026-05-04 `/recall` test proves a workspace memory can be recalled through OpenClaw p2p DM, `fmc_memory_search`, `CopilotService`, permission audit, and Feishu card delivery. It does not prove long-running production routing, all tool actions, all DM variants, or all real Feishu conversations.
 
-4. **Performance optimization has bounded retrieval reuse, local warm-path evidence, and controlled real lark-cli fetch-path evidence, but not production SLO evidence.**
+4. **A stricter productized workspace ingestion gate now exists, and it is blocked by design until production evidence exists.**
+   `scripts/check_workspace_productized_ingestion_readiness.py` validates a redacted evidence manifest for organic source coverage, scheduler/cursor, rate-limit/backoff, governance, operations, and 24h+ long-run evidence. The committed example manifest returns `goal_complete=false`; that is the expected result until a real non-example evidence manifest exists.
+
+5. **Performance optimization has bounded retrieval reuse, local warm-path evidence, and controlled real lark-cli fetch-path evidence, but not production SLO evidence.**
    `check_workspace_ingestion_latency_gate.py` measures local document/workspace candidate ingestion after warmup. Retrieval fallback now reuses the active-memory index and curated vector scores inside one request, and trace steps expose per-stage timing for structured, keyword, vector, Cognee, and rerank work. `FeishuApiResult.elapsed_ms` and workspace source metadata now expose lark-cli subprocess/fetch timing for documents, Sheets, and Bitable records. `check_workspace_real_fetch_latency_gate.py` measures a controlled real lark-cli fetch path through a temp DB; latest public-template Sheet evidence is green at 12.747s, 3 sources, 2 candidates, 0 failed fetches. This still does not include production storage, production rate-limit posture, OpenClaw live routing, or project/enterprise workspace resources.
 
-5. **The active-doc rewrite request is complete for this slice.**
+6. **The active-doc rewrite request is complete for this slice.**
    New active productization docs follow the style guide. `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, and `docs/productization/prd-completion-audit-and-gap-tasks.md` have a first-pass human-readable rewrite. The full repo contains many historical handoffs and archived plans that intentionally remain audit records; they should only be rewritten if promoted back into active execution.
 
 ## Next Required Action
@@ -163,8 +166,9 @@ The next product step should not be another architecture discussion. It should b
 
 1. **Add more organic enterprise workspace samples** beyond the controlled Sheet: project Sheets, Docs, Bases, and Wiki spaces.
 2. **Extend real lark-cli fetch latency evidence to project/enterprise workspace resources** once controlled resources are available.
-3. **Plan productized live ingestion** only after rate limits, scheduling, monitoring, data retention, and rollback are specified.
-4. **Keep active docs aligned** when the workspace evidence changes, using `document-writing-style-guide-opus-4-6.md` and keeping archived plans unchanged unless promoted back into active execution.
+3. **Collect productized ingestion evidence** into a non-example manifest, then run `python3 scripts/check_workspace_productized_ingestion_readiness.py --manifest <manifest> --require-productized-ready --json`.
+4. **Plan productized live ingestion** only after rate limits, scheduling, monitoring, data retention, and rollback are specified.
+5. **Keep active docs aligned** when the workspace evidence changes, using `document-writing-style-guide-opus-4-6.md` and keeping archived plans unchanged unless promoted back into active execution.
 
 Use `workspace-ingestion-evidence-request.md` when asking the project owner or a teammate for the missing Sheet and same-fact samples. It is the shortest handoff note for the current blocker.
 Use `scripts/prepare_workspace_evidence_request.py --create-dirs --json` when the request should be packaged as a redacted operator packet with command templates.

@@ -1,0 +1,80 @@
+{
+  "schema_version": "workspace_productized_ingestion_evidence/v1",
+  "example": true,
+  "source_coverage": {
+    "source_types": {
+      "document_feishu": {
+        "organic_sample_count": 0
+      },
+      "lark_doc": {
+        "organic_sample_count": 0
+      },
+      "lark_sheet": {
+        "organic_sample_count": 0
+      },
+      "lark_bitable": {
+        "organic_sample_count": 0
+      },
+      "wiki": {
+        "organic_sample_count": 0
+      }
+    },
+    "same_conclusion_across_chat_and_workspace": false,
+    "conflict_negative_proven": false,
+    "evidence_refs": [
+      "__FILL_WITH_REDACTED_EVIDENCE_REF__"
+    ]
+  },
+  "discovery_and_cursoring": {
+    "scheduler_enabled": false,
+    "cursor_resume_proven": false,
+    "revision_skip_proven": false,
+    "stale_marking_proven": false,
+    "revocation_proven": false,
+    "max_resources_per_run": 0,
+    "max_pages_per_run": 0,
+    "evidence_refs": [
+      "__FILL_WITH_REDACTED_EVIDENCE_REF__"
+    ]
+  },
+  "rate_limit_and_backoff": {
+    "timeout_seconds": 0,
+    "backoff_policy": "__FILL_BACKOFF_POLICY__",
+    "rate_limit_budget": "__FILL_RATE_LIMIT_BUDGET__",
+    "throttling_or_retry_tested_at": "__FILL_ISO_DATETIME__",
+    "failed_fetch_audit_proven": false,
+    "evidence_refs": [
+      "__FILL_WITH_REDACTED_EVIDENCE_REF__"
+    ]
+  },
+  "governance": {
+    "review_policy_enforced": false,
+    "permission_fail_closed_negative_at": "__FILL_ISO_DATETIME__",
+    "no_raw_event_embedding": false,
+    "curated_only_embedding": false,
+    "audit_readback_proven": false,
+    "evidence_refs": [
+      "__FILL_WITH_REDACTED_EVIDENCE_REF__"
+    ]
+  },
+  "operations": {
+    "single_listener_preflight_at": "__FILL_ISO_DATETIME__",
+    "monitoring_alert_tested_at": "__FILL_ISO_DATETIME__",
+    "rollback_stop_write_tested_at": "__FILL_ISO_DATETIME__",
+    "retention_policy_approved_at": "__FILL_ISO_DATETIME__",
+    "dashboard_or_report_readback": false,
+    "evidence_refs": [
+      "__FILL_WITH_REDACTED_EVIDENCE_REF__"
+    ]
+  },
+  "live_long_run": {
+    "started_at": "__FILL_ISO_DATETIME__",
+    "ended_at": "__FILL_ISO_DATETIME__",
+    "duration_hours": 0,
+    "successful_runs": 0,
+    "unresolved_failed_runs": 0,
+    "evidence_refs": [
+      "__FILL_WITH_REDACTED_EVIDENCE_REF__"
+    ]
+  }
+}
