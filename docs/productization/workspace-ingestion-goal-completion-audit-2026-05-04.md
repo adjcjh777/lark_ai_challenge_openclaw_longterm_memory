@@ -44,6 +44,7 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `scripts/check_workspace_real_same_conclusion_gate.py`
 - `scripts/check_workspace_real_same_conclusion_sample_finder.py`
 - `scripts/check_workspace_ingestion_goal_readiness.py`
+- `scripts/check_feishu_dm_routing.py`
 - `scripts/prepare_workspace_evidence_request.py`
 - `tests/test_feishu_workspace_fetcher.py`
 - `tests/test_feishu_workspace_registry.py`
@@ -56,6 +57,7 @@ The user asked for a Feishu workspace ingestion product path that covers:
 - `tests/test_workspace_real_same_conclusion_gate.py`
 - `tests/test_workspace_real_same_conclusion_sample_finder.py`
 - `tests/test_workspace_ingestion_goal_readiness.py`
+- `tests/test_feishu_dm_routing.py`
 - `tests/test_prepare_workspace_evidence_request.py`
 
 Recent implementation commits inspected:
@@ -74,6 +76,7 @@ dba049f Add direct Feishu folder and wiki discovery
 002ee0d Persist Feishu workspace discovery cursors
 4e3e054 Add Feishu workspace discovery filters
 66bced9 Add corroboration discovery to readiness gate
+8623342 Route Feishu DM through copilot router
 ```
 
 ## Prompt-To-Artifact Checklist
@@ -90,6 +93,7 @@ dba049f Add direct Feishu folder and wiki discovery
 | Route should reuse group-chat architecture | `docs/productization/workspace-ingestion-architecture-adr.md`, `scripts/feishu_workspace_ingest.py`, `memory_engine/document_ingestion.py`, `memory_engine/copilot/tools.py` | Workspace fetches become `FeishuIngestionSource`, then `ingest_feishu_source()`, then `memory.create_candidate`, then `CopilotService` and review policy. | Complete for pilot. |
 | Shared database across chat/docs/tables | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/db.py`, `memory_engine/document_ingestion.py` | ADR chooses one governed ledger with raw events, memories, evidence, versions, audit events, and graph nodes; source evidence keeps source type/id/quote/tenant/org. | Complete for local/staging ledger. |
 | Corroboration and conflict handling | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/governance.py`, `scripts/check_workspace_mixed_source_corroboration_gate.py`, `scripts/check_workspace_real_fetch_latency_gate.py`, `scripts/check_workspace_real_chat_resource_gate.py`, `scripts/check_workspace_real_same_conclusion_gate.py`, `scripts/check_workspace_real_same_conclusion_sample_finder.py`, `scripts/check_workspace_ingestion_goal_readiness.py` | The local gate confirms a chat source can create and confirm an active memory; a document source with the same value adds `document_feishu` evidence to the active version; a Bitable source with a different value becomes a conflict candidate and does not overwrite the active memory. Controlled real gates prove project docx/Base resources can enter the same candidate pipeline. After the controlled normal Sheet was created, a real OpenClaw Feishu group message repeated the same durable fact. `check_workspace_real_same_conclusion_sample_finder.py --event-log ~/.openclaw/logs/gateway.log --resource sheet:<redacted>:<title>` returned `ok=true`, `same_fact_match_count=1`, `resource_fetch_failure_count=0`, and strict gate `status=pass`; strict gate evidence source types were `feishu_message` and `lark_sheet`. | Complete for real chat + reviewed Sheet same-conclusion corroboration under the controlled pilot boundary. Still not proof of production long-running ingestion. |
+| Bot DM can recall workspace memory | `agent_adapters/openclaw/plugin/index.js`, `scripts/check_feishu_dm_routing.py`, `tests/test_feishu_dm_routing.py` | The first 2026-05-04 p2p DM reached OpenClaw but fell through to the generic agent because the plugin before-dispatch gate only routed group events. Commit `8623342` routes p2p text events through the same first-class memory router and teaches the live log checker to parse raw OpenClaw gateway text lines. After restart, bot single chat `/recall Workspace ingestion readiness gate Sheet 样本` produced a `memory.search` route result whose bridge tool was `fmc_memory_search`; the bot card's first active result was the controlled Sheet fact, with `lark_sheet` evidence, `request_id`, `trace_id`, and `permission: allow / scope_access_granted`. | Complete for controlled bot DM readback of workspace memory. Still not proof of stable long-running DM routing or every Feishu conversation entering the tool chain. |
 | Keep stability while improving response speed | `docs/productization/workspace-ingestion-architecture-adr.md`, `memory_engine/copilot/retrieval.py`, `memory_engine/feishu_api_client.py`, `memory_engine/feishu_workspace_fetcher.py`, `memory_engine/feishu_bitable_fetcher.py`, `memory_engine/feishu_workspace_registry.py`, `scripts/feishu_workspace_ingest.py`, `scripts/check_workspace_ingestion_latency_gate.py`, `scripts/check_workspace_real_fetch_latency_gate.py` | Bounded discovery, bounded fetch sizes, candidate limits, registry skip, cursor resume, no raw event embedding, same-filter stale marking, and a local warm-path latency gate reduce repeated work and detect regressions. Retrieval now reuses active-memory index and curated vector scores across layer fallback inside one request, and trace steps expose stage-level `elapsed_ms` for structured, keyword, vector, Cognee, and rerank. `FeishuApiResult.elapsed_ms` now covers lark-cli success, parse error, nonzero return, timeout, missing CLI, and unexpected error paths. Workspace source metadata now records document fetch, Sheet info/read, and Bitable record-get elapsed time. Latest warm-path gate: `avg_ingestion_latency_ms=5.51`, `max_ingestion_latency_ms=5.599`, quality checks pass. New real lark-cli fetch latency gate uses a temp SQLite DB and measures the full subprocess/network/fetch/source-render/candidate-route/registry path; current controlled public-template Sheet run passed at 12.747s with 3 sources, 2 candidates, and 0 failed fetches. | Complete for local warm-path baseline, bounded retrieval optimization, and controlled real lark-cli fetch-path evidence. Production SLO and project/enterprise workspace latency evidence remain future work. |
 | Opus 4.6-like docs, not 4.7 | `docs/productization/document-writing-style-guide-opus-4-6.md`, `workspace-ingestion-architecture-adr.md`, `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, `docs/productization/prd-completion-audit-and-gap-tasks.md` | Style guide exists and the new ADR uses shorter human engineering prose. It explicitly excludes Opus 4.7 voice. First-pass rewrites are complete for `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `full-copilot-next-execution-doc.md`, and `prd-completion-audit-and-gap-tasks.md`. | Complete for active entry-doc first pass. The guide still says historical handoffs and archived plans are not rewritten unless they are promoted back into active execution. |
 | Use subagents/skills/MCP as needed | Current run used lark skill guidance and repo-local checks; previous implementation used lark-cli evidence and board sync. | No direct artifact needed, but actions stayed inside project rules. | Sufficient. |
@@ -132,6 +136,8 @@ python3 -m unittest tests.test_workspace_real_same_conclusion_sample_finder
 python3 scripts/check_workspace_ingestion_goal_readiness.py --json --event-log <captured_non_at_group_message.ndjson> --event-log <captured_first_class_routing.ndjson> --resource 'docx:<project_docx_token>:<title>' --resource 'bitable:<project_base_token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu --max-bitable-records 3
 python3 -m unittest tests.test_workspace_ingestion_goal_readiness
 python3 scripts/check_workspace_ingestion_goal_readiness.py --json --event-log <captured_non_at_group_message.ndjson> --event-log <captured_first_class_routing.ndjson> --resource 'docx:<project_docx_token>:<title>' --resource 'bitable:<project_base_token>:<title>' --sheet-folder-walk-root --sheet-wiki-space-walk-ids my_library --corroboration-folder-walk-root --corroboration-wiki-space-walk-ids my_library --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu --max-bitable-records 3
+python3 -m unittest tests.test_feishu_dm_routing tests.test_openclaw_tool_registry
+python3 scripts/check_feishu_dm_routing.py --json --event-log ~/.openclaw/logs/gateway.log --required-tools fmc_memory_search --min-first-class-results 1
 ```
 
 ## Remaining Productization Boundaries
@@ -142,10 +148,13 @@ python3 scripts/check_workspace_ingestion_goal_readiness.py --json --event-log <
 2. **More organic enterprise samples should still be added before external launch.**
    The normal Sheet and same-fact evidence used a controlled Sheet plus a real OpenClaw Feishu group message. This is sufficient for the readiness gate, but productized rollout should add organic project/enterprise Sheets, Docs, Bases, Wiki spaces, and longer-running samples.
 
-3. **Performance optimization has bounded retrieval reuse, local warm-path evidence, and controlled real lark-cli fetch-path evidence, but not production SLO evidence.**
+3. **Bot DM readback is controlled allow-path evidence, not stable productized live routing.**
+   The 2026-05-04 `/recall` test proves a workspace memory can be recalled through OpenClaw p2p DM, `fmc_memory_search`, `CopilotService`, permission audit, and Feishu card delivery. It does not prove long-running production routing, all tool actions, all DM variants, or all real Feishu conversations.
+
+4. **Performance optimization has bounded retrieval reuse, local warm-path evidence, and controlled real lark-cli fetch-path evidence, but not production SLO evidence.**
    `check_workspace_ingestion_latency_gate.py` measures local document/workspace candidate ingestion after warmup. Retrieval fallback now reuses the active-memory index and curated vector scores inside one request, and trace steps expose per-stage timing for structured, keyword, vector, Cognee, and rerank work. `FeishuApiResult.elapsed_ms` and workspace source metadata now expose lark-cli subprocess/fetch timing for documents, Sheets, and Bitable records. `check_workspace_real_fetch_latency_gate.py` measures a controlled real lark-cli fetch path through a temp DB; latest public-template Sheet evidence is green at 12.747s, 3 sources, 2 candidates, 0 failed fetches. This still does not include production storage, production rate-limit posture, OpenClaw live routing, or project/enterprise workspace resources.
 
-4. **The active-doc rewrite request is complete for this slice.**
+5. **The active-doc rewrite request is complete for this slice.**
    New active productization docs follow the style guide. `README.md`, `docs/README.md`, `docs/human-product-guide.md`, `docs/productization/full-copilot-next-execution-doc.md`, and `docs/productization/prd-completion-audit-and-gap-tasks.md` have a first-pass human-readable rewrite. The full repo contains many historical handoffs and archived plans that intentionally remain audit records; they should only be rewritten if promoted back into active execution.
 
 ## Next Required Action
