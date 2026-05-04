@@ -27,7 +27,7 @@ The current productized blockers are:
 1. Organic source coverage for `lark_doc`, `lark_sheet`, and `wiki`.
 2. Same-conclusion evidence across chat and workspace sources beyond the controlled sample.
 3. Conflict-negative evidence in the productized evidence packet.
-4. Real multi-run scheduler/cursor evidence that includes revision skip, stale marking, bounded discovery, failed-fetch or revocation audit, and non-secret evidence refs.
+4. Real multi-run scheduler/cursor evidence is now proven in a partial manifest; keep rerunning it in the 24h+ window.
 5. Rate-limit/backoff, governance, and operations evidence refs.
 6. A 24h+ long-run window with at least 3 successful schedule executions and no unresolved failed runs.
 
@@ -44,7 +44,8 @@ Already proven:
 - broad same-conclusion sample search over current evidence pool.
 - controlled normal Sheet + real OpenClaw Feishu group message same-conclusion readiness.
 - bot DM readback of the controlled workspace Sheet memory through `fmc_memory_search`.
-- non-dry-run bounded schedule sampling in an isolated SQLite DB: 2 successful runs, real candidate pipeline entry, `document_feishu=8`, `lark_bitable=43`.
+- non-dry-run bounded schedule sampling in an isolated SQLite DB: 4 successful runs, real candidate pipeline entry, `document_feishu=8`, `lark_bitable=43`.
+- discovery/cursoring partial evidence: cursor resume, revision skip, stale marking, revocation/failed-fetch signal, bounded pages/resources, and non-secret evidence refs all pass. The registry now reads Drive/Wiki `result_meta.icon_info.version`, so repeated resources can skip unchanged fetches.
 
 Not yet proven:
 

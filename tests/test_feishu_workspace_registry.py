@@ -17,6 +17,7 @@ from memory_engine.feishu_workspace_registry import (
     record_fetch_error,
     record_source_ingested,
     reset_workspace_discovery_cursor,
+    resource_revision,
     start_workspace_ingestion_run,
 )
 
@@ -115,6 +116,32 @@ class FeishuWorkspaceRegistryTest(unittest.TestCase):
         self.assertTrue(first_decision.should_fetch)
         self.assertFalse(second_decision.should_fetch)
         self.assertEqual("unchanged_revision", second_decision.reason)
+
+    def test_registry_uses_drive_result_meta_icon_info_version_as_revision(self) -> None:
+        resource = WorkspaceResource(
+            resource_type="docx",
+            token="doc_1",
+            title="部署决策",
+            raw={
+                "entity_type": "WIKI",
+                "result_meta": {
+                    "doc_types": "DOCX",
+                    "icon_info": '{"type":0,"obj_type":22,"token":"doc_1","version":13}',
+                },
+            },
+        )
+
+        self.assertEqual("13", resource_revision(resource))
+
+    def test_registry_uses_dict_icon_info_version_as_revision(self) -> None:
+        resource = WorkspaceResource(
+            resource_type="sheet",
+            token="sht_1",
+            title="项目规则",
+            raw={"result_meta": {"icon_info": {"obj_type": 3, "token": "sht_1", "version": 538}}},
+        )
+
+        self.assertEqual("538", resource_revision(resource))
 
     def test_registry_fetches_unversioned_resources_every_time(self) -> None:
         filter_key = discovery_filter_key(query="", doc_types=["docx"])

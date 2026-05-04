@@ -588,13 +588,43 @@ def resource_revision(resource: WorkspaceResource) -> str | None:
         value = raw.get(key)
         if value not in (None, ""):
             return str(value)
-    nested = raw.get("doc") or raw.get("document") or raw.get("resource") or {}
-    if isinstance(nested, dict):
-        for key in ("revision", "version", "update_time", "updated_time", "modified_time", "edit_time"):
+    for nested_key in ("doc", "document", "resource", "result_meta"):
+        nested = raw.get(nested_key) or {}
+        if not isinstance(nested, dict):
+            continue
+        for key in (
+            "revision",
+            "version",
+            "update_time",
+            "updated_time",
+            "modified_time",
+            "latest_modify_time",
+            "edit_time",
+            "last_edited_time",
+        ):
             value = nested.get(key)
             if value not in (None, ""):
                 return str(value)
+        icon_version = _icon_info_version(nested.get("icon_info"))
+        if icon_version:
+            return icon_version
     return None
+
+
+def _icon_info_version(value: Any) -> str | None:
+    if isinstance(value, dict):
+        version = value.get("version")
+        return str(version) if version not in (None, "") else None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    version = payload.get("version")
+    return str(version) if version not in (None, "") else None
 
 
 def content_fingerprint(text: str) -> str:
