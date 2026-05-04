@@ -170,6 +170,58 @@ Feishu reply:
 
 注意：真实 `chat_id`、`open_id`、Feishu message id 只保存在本机日志和 CLI 输出中，不写入仓库。
 
+### 2.7 Workspace 记忆 bot 单聊自动复测
+
+时间：2026-05-04 11:47（Asia/Shanghai）
+
+自动测试命令：
+
+```bash
+lark-cli im +messages-send \
+  --profile feishu-ai-challenge \
+  --as user \
+  --user-id <redacted-bot-open-id> \
+  --text '/recall Workspace ingestion readiness gate Sheet 样本' \
+  --idempotency-key <unique-codex-test-key>
+```
+
+读回方式：
+
+```bash
+lark-cli im +chat-messages-list \
+  --profile feishu-ai-challenge \
+  --as user \
+  --user-id <redacted-bot-open-id> \
+  --page-size 6 \
+  --sort desc \
+  --format json
+
+tail -n 80 /tmp/openclaw/openclaw-2026-05-04.log | \
+  rg 'fmc_memory_search|route result|card delivery|Workspace ingestion'
+```
+
+读回结果：
+
+```text
+Feishu P2P:
+- user message: /recall Workspace ingestion readiness gate Sheet 样本
+- bot reply type: interactive card
+- first active result: Workspace ingestion readiness gate must include a reviewed normal Sheet sample
+- evidence: lark_sheet:sheet:<redacted>:fb7047
+- audit: permission allow / scope_access_granted
+
+OpenClaw gateway:
+- received p2p DM
+- feishu-memory-copilot route result ok=true
+- bridge tool=fmc_memory_search
+- request_id present
+- trace_id present
+- source_entrypoint=openclaw_gateway_live
+- card delivery ok=true, mode=reply_card
+```
+
+这次复测证明当前受控 workspace 记忆可以通过 bot 单聊回读，并且仍走 first-class `fmc_memory_search` 路由。它不证明真实 Feishu DM 长期稳定路由，也不证明全量 workspace ingestion 或 productized live。
+
 ---
 
 ## 3. 边界
@@ -183,6 +235,7 @@ Feishu reply:
 - ✅ 所有 7 个工具路径已验证
 - ✅ 缺失 `current_context.permission` 时 fail closed，不回退到宽松默认权限
 - ✅ 一次受控真实 Feishu DM 已进入 OpenClaw websocket，直接调用 `fmc_memory_search`，进入 `handle_tool_request()` / `CopilotService`，并在飞书 DM 中读回 allow-path 结果
+- ✅ 2026-05-04 11:47 bot 单聊自动复测再次通过 `fmc_memory_search` 回读 workspace Sheet 记忆，回复为 interactive card，权限审计为 allow / scope_access_granted
 - ✅ MiMo / openai-completions 把 `current_context` 序列化成 JSON 字符串时，插件和 runner 可解析； malformed 字符串仍 fail closed
 
 ### 不能说
@@ -216,5 +269,6 @@ Feishu reply:
 
 1. **固定评委/用户主路径脚本**：把 11:04 这类受控 DM 验收收敛成可复测脚本、用户提示和失败 fallback。
 2. **扩展真实 DM 工具动作**：继续验证 `fmc_memory_prefetch`、`fmc_memory_create_candidate` 等关键动作；真实飞书来源仍只能进入 candidate。
-3. **性能优化**：Python 子进程启动时间和 LLM fallback 会影响响应速度；11:04 复测中 `mimo-v2.5` 首次超时后 fallback 到 `mimo-v2.5-pro` 才完成。
-4. **监控和告警**：添加工具调用成功率、permission deny、LLM timeout/fallback 和 Feishu reply latency 监控。
+3. **继续做自动回归**：把 11:47 这种单聊 `/recall` 复测纳入后续 live evidence run，保留 readback 和 gateway route evidence，但不要把单次结果写成稳定长期路由。
+4. **性能优化**：Python 子进程启动时间和 LLM fallback 会影响响应速度；11:04 复测中 `mimo-v2.5` 首次超时后 fallback 到 `mimo-v2.5-pro` 才完成。
+5. **监控和告警**：添加工具调用成功率、permission deny、LLM timeout/fallback 和 Feishu reply latency 监控。

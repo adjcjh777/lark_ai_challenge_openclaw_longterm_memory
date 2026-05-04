@@ -14,6 +14,7 @@ import json
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,7 @@ def run_schedule(config_path: Path = DEFAULT_CONFIG_PATH, *, execute: bool = Fal
         "mode": "execute" if execute else "plan",
         "status": "pass" if ok else "blocked",
         "boundary": BOUNDARY,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "schema_version": config.get("schema_version"),
         "config_path": str(config_path),
         "job_count": len(planned_jobs),
