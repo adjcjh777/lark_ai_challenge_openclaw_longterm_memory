@@ -155,6 +155,8 @@ class LayerAwareRetriever:
             self.embedding_provider = embedding_provider
         else:
             self.embedding_provider = _load_ollama_embedding_provider()
+        self._active_entry_cache: dict[tuple[str, str, str, str], list[RecallIndexEntry]] = {}
+        self._vector_score_cache: dict[tuple[str, tuple[str, ...]], dict[str, float]] = {}
 
     def search_layer(self, request: SearchRequest, layer: MemoryLayer) -> LayerSearchResult:
         trace_steps: list[RetrievalTraceStep] = []
@@ -282,6 +284,12 @@ class LayerAwareRetriever:
         context = request.current_context.to_dict()
         tenant_id = _target_context_value(context, "tenant_id")
         organization_id = _target_context_value(context, "organization_id")
+        expected_type = request.filters.get("type")
+        cache_key = (request.scope, tenant_id, organization_id, str(expected_type or ""))
+        cached_entries = self._active_entry_cache.get(cache_key)
+        if cached_entries is not None:
+            return [replace(entry, layer=layer.value) for entry in cached_entries], "active_memory_index_cache_hit"
+
         rows = self.repository.conn.execute(
             """
             SELECT
@@ -315,13 +323,13 @@ class LayerAwareRetriever:
             (parsed_scope.scope_type, parsed_scope.scope_id, tenant_id, organization_id),
         ).fetchall()
 
-        expected_type = request.filters.get("type")
         entries = []
         for row in rows:
             if expected_type and row["type"] != expected_type:
                 continue
-            entries.append(self._row_to_index_entry(row, layer=layer))
-        return entries, None
+            entries.append(self._row_to_index_entry(row, layer=MemoryLayer.WARM))
+        self._active_entry_cache[cache_key] = entries
+        return [replace(entry, layer=layer.value) for entry in entries], None
 
     def _row_to_index_entry(self, row: Any, *, layer: MemoryLayer) -> RecallIndexEntry:
         source = _raw_event_source(row["raw_json"])
@@ -381,6 +389,11 @@ class LayerAwareRetriever:
         return scores
 
     def _vector_scores(self, entries: list[RecallIndexEntry], query: str) -> dict[str, float]:
+        cache_key = (query, _entry_signature(entries))
+        cached_scores = self._vector_score_cache.get(cache_key)
+        if cached_scores is not None:
+            return dict(cached_scores)
+
         query_vector = self.embedding_provider.embed_text(query)
         scores: dict[str, float] = {}
         for entry in entries:
@@ -388,6 +401,7 @@ class LayerAwareRetriever:
             similarity = cosine_similarity(query_vector, entry_vector)
             if similarity > self.scoring_config.vector_min_similarity:
                 scores[entry.memory_id] = round(similarity * self.scoring_config.vector_weight, 3)
+        self._vector_score_cache[cache_key] = dict(scores)
         return scores
 
     def _cognee_results(
@@ -648,6 +662,13 @@ class LayerAwareRetriever:
 def rerank_results(results: list[MemoryResult]) -> list[MemoryResult]:
     ordered = sorted(results, key=lambda item: (-item.score, item.layer, item.rank, item.memory_id))
     return [replace(result, rank=index) for index, result in enumerate(ordered, start=1)]
+
+
+def _entry_signature(entries: list[RecallIndexEntry]) -> tuple[str, ...]:
+    return tuple(
+        f"{entry.memory_id}:{entry.version or ''}:{entry.evidence_id or ''}:{entry.updated_at}"
+        for entry in entries
+    )
 
 
 def _tokens(text: str) -> list[str]:

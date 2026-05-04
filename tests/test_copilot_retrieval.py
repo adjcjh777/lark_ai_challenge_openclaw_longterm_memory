@@ -116,6 +116,43 @@ class CopilotRetrievalTest(unittest.TestCase):
         self.assertEqual("l3_raw_events_blocked_for_default_search", l3_structured["note"])
         self.assertEqual("adapter_simulated", _trace_step(response, layer="L2", stage="keyword")["layer_source"])
 
+    def test_search_reuses_vector_scores_across_layer_fallback(self) -> None:
+        class CountingEmbeddingProvider(DeterministicEmbeddingProvider):
+            def __init__(self) -> None:
+                super().__init__()
+                self.curated_calls = 0
+
+            def embed_curated_memory(self, text):  # type: ignore[no-untyped-def]
+                self.curated_calls += 1
+                return super().embed_curated_memory(text)
+
+        embedding_provider = CountingEmbeddingProvider()
+        with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_cache_", suffix=".sqlite") as tmp:
+            conn = connect(tmp.name)
+            init_db(conn)
+            repo = MemoryRepository(conn)
+            repo.remember(
+                "project:feishu_ai_challenge",
+                "评测报告周日 20:00 前完成，负责人是程俊豪。",
+                source_type="unit_test",
+            )
+
+            response = CopilotService(repository=repo, embedding_provider=embedding_provider).search(
+                SearchRequest.from_payload(
+                    {
+                        "query": "谁负责评测报告",
+                        "scope": "project:feishu_ai_challenge",
+                        "current_context": current_context(),
+                    }
+                )
+            )
+            conn.close()
+
+        self.assertTrue(response["ok"])
+        self.assertEqual("fallback_to_L2", response["trace"]["final_reason"])
+        self.assertEqual("active_memory_index_cache_hit", _trace_step(response, layer="L2", stage="structured")["note"])
+        self.assertEqual(1, embedding_provider.curated_calls)
+
     def test_search_layer_filter_can_select_hot_path(self) -> None:
         with tempfile.NamedTemporaryFile(prefix="copilot_retrieval_", suffix=".sqlite") as tmp:
             conn = connect(tmp.name)
