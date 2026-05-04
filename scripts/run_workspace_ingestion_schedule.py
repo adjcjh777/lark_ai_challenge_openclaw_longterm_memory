@@ -152,6 +152,8 @@ def _build_job_plan(*, index: int, job: dict[str, Any], defaults: dict[str, Any]
         "status": "planned",
         "dry_run": merged.get("dry_run", True) is True,
         "timeout_seconds": int(merged.get("timeout_seconds") or 300),
+        "retry_attempts": int(merged.get("retry_attempts") or 0),
+        "retry_backoff_seconds": int(merged.get("retry_backoff_seconds") or 0),
         "command": command,
         "command_preview": _redact_command(command),
     }
@@ -164,6 +166,10 @@ def _validate_job(job: dict[str, Any]) -> str | None:
         return "max_pages_must_be_positive"
     if _int_value(job.get("timeout_seconds")) <= 0:
         return "timeout_seconds_must_be_positive"
+    if _int_value(job.get("retry_attempts")) < 0:
+        return "retry_attempts_must_be_non_negative"
+    if _int_value(job.get("retry_backoff_seconds")) < 0:
+        return "retry_backoff_seconds_must_be_non_negative"
     if not job.get("dry_run", True) and not (job.get("actor_user_id") or job.get("actor_open_id")):
         return "actor_required_for_non_dry_run_job"
     return None
@@ -222,28 +228,67 @@ def _build_ingest_command(job: dict[str, Any]) -> list[str]:
 
 
 def _execute_job(job: dict[str, Any]) -> None:
-    started = time.monotonic()
-    completed = subprocess.run(
-        job["command"],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=job["timeout_seconds"],
-    )
-    elapsed_ms = round((time.monotonic() - started) * 1000, 3)
-    job["elapsed_ms"] = elapsed_ms
-    job["returncode"] = completed.returncode
+    max_attempts = max(1, int(job.get("retry_attempts") or 0) + 1)
+    attempts = []
+    for attempt in range(1, max_attempts + 1):
+        started = time.monotonic()
+        try:
+            completed = subprocess.run(
+                job["command"],
+                cwd=ROOT,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=job["timeout_seconds"],
+            )
+            elapsed_ms = round((time.monotonic() - started) * 1000, 3)
+            attempt_result = _attempt_from_completed(attempt=attempt, completed=completed, elapsed_ms=elapsed_ms)
+        except subprocess.TimeoutExpired as exc:
+            elapsed_ms = round((time.monotonic() - started) * 1000, 3)
+            attempt_result = {
+                "attempt": attempt,
+                "returncode": None,
+                "elapsed_ms": elapsed_ms,
+                "ok": False,
+                "reason": "ingestion_command_timeout",
+                "stderr_preview": str(exc)[:1000],
+            }
+        attempts.append(attempt_result)
+        if attempt_result["ok"]:
+            job["status"] = "pass"
+            job["returncode"] = attempt_result["returncode"]
+            job["elapsed_ms"] = attempt_result["elapsed_ms"]
+            job["result"] = attempt_result.get("result", {})
+            job["attempt_count"] = attempt
+            job["attempts"] = attempts
+            return
+        if attempt < max_attempts and int(job.get("retry_backoff_seconds") or 0) > 0:
+            time.sleep(int(job["retry_backoff_seconds"]))
+    last = attempts[-1]
+    job["status"] = "failed"
+    job["reason"] = last.get("reason", "ingestion_command_failed")
+    job["returncode"] = last.get("returncode")
+    job["elapsed_ms"] = last.get("elapsed_ms")
+    job["attempt_count"] = len(attempts)
+    job["attempts"] = attempts
+    if last.get("stderr_preview"):
+        job["stderr_preview"] = last["stderr_preview"]
+
+
+def _attempt_from_completed(*, attempt: int, completed: subprocess.CompletedProcess[str], elapsed_ms: float) -> dict[str, Any]:
     try:
-        job["result"] = json.loads(completed.stdout) if completed.stdout.strip() else {}
+        result = json.loads(completed.stdout) if completed.stdout.strip() else {}
     except json.JSONDecodeError:
-        job["result"] = {"stdout_preview": completed.stdout[:1000]}
-    if completed.returncode == 0:
-        job["status"] = "pass"
-    else:
-        job["status"] = "failed"
-        job["reason"] = "ingestion_command_failed"
-        job["stderr_preview"] = completed.stderr[:1000]
+        result = {"stdout_preview": completed.stdout[:1000]}
+    return {
+        "attempt": attempt,
+        "returncode": completed.returncode,
+        "elapsed_ms": elapsed_ms,
+        "ok": completed.returncode == 0,
+        "reason": "" if completed.returncode == 0 else "ingestion_command_failed",
+        "result": result,
+        "stderr_preview": completed.stderr[:1000] if completed.stderr else "",
+    }
 
 
 def _job_failure(*, index: int, name: str, reason: str) -> dict[str, Any]:

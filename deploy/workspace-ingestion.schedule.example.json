@@ -22,6 +22,8 @@
     "walk_max_depth": 2,
     "walk_page_size": 50,
     "timeout_seconds": 300,
+    "retry_attempts": 1,
+    "retry_backoff_seconds": 5,
     "dry_run": true,
     "resume_cursor": true
   },

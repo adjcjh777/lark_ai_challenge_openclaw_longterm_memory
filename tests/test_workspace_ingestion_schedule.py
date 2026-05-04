@@ -40,6 +40,30 @@ class WorkspaceIngestionScheduleTest(unittest.TestCase):
         self.assertIn("--actor-open-id", command)
         self.assertIn("--mark-missing-stale", command)
 
+    def test_execute_retries_failed_job_with_backoff(self) -> None:
+        data = _schedule_config()
+        data["defaults"]["retry_attempts"] = 1
+        data["defaults"]["retry_backoff_seconds"] = 2
+        with tempfile.TemporaryDirectory(prefix="workspace_schedule_") as temp_dir:
+            config = Path(temp_dir) / "schedule.json"
+            config.write_text(json.dumps(data), encoding="utf-8")
+            failed = Mock(returncode=1, stdout=json.dumps({"ok": False}), stderr="temporary")
+            passed = Mock(returncode=0, stdout=json.dumps({"ok": True, "run_id": "run_2"}), stderr="")
+            with (
+                patch("scripts.run_workspace_ingestion_schedule.subprocess.run", side_effect=[failed, passed]) as run,
+                patch("scripts.run_workspace_ingestion_schedule.time.sleep") as sleep,
+            ):
+                report = run_schedule(config, execute=True)
+
+        self.assertTrue(report["ok"], report["failed_jobs"])
+        job = report["jobs"][0]
+        self.assertEqual("pass", job["status"])
+        self.assertEqual(2, job["attempt_count"])
+        self.assertEqual([False, True], [attempt["ok"] for attempt in job["attempts"]])
+        self.assertEqual({"ok": True, "run_id": "run_2"}, job["result"])
+        self.assertEqual(2, run.call_count)
+        sleep.assert_called_once_with(2)
+
     def test_non_dry_run_requires_actor(self) -> None:
         data = _schedule_config()
         data["jobs"][0].pop("actor_open_id")
@@ -88,6 +112,8 @@ def _schedule_config() -> dict[str, object]:
             "limit": 10,
             "max_pages": 2,
             "timeout_seconds": 60,
+            "retry_attempts": 0,
+            "retry_backoff_seconds": 0,
             "dry_run": False,
         },
         "jobs": [
