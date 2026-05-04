@@ -24,20 +24,16 @@ from memory_engine.db import connect, init_db  # noqa: E402
 from memory_engine.feishu_workspace_fetcher import (  # noqa: E402
     WorkspaceActor,
     WorkspaceResource,
-    discover_drive_folder_resources,
-    discover_wiki_space_resources,
-    discover_workspace_resources,
     fetch_workspace_resource_sources,
     inspect_sheet_resource,
-    workspace_resource_from_spec,
 )
 from scripts.check_workspace_project_sheet_evidence_gate import (  # noqa: E402
     DEFAULT_PROJECT_KEYWORDS,
     DEFAULT_PROJECT_QUERIES,
     _candidate_report,
-    _dedupe_resources,
     _redacted_resource,
     build_project_sheet_evidence_report,
+    collect_project_sheet_resources,
 )
 from scripts.check_workspace_real_same_conclusion_sample_finder import (  # noqa: E402
     chat_inputs_from_event_logs,
@@ -180,6 +176,9 @@ def run_project_sheet_check(
         queries=queries,
         explicit_resources=explicit_resources,
         opened_since=opened_since,
+        edited_since=None,
+        created_since=None,
+        mine=False,
         limit=limit,
         max_pages=max_pages,
         folder_walk_root=folder_walk_root,
@@ -215,64 +214,6 @@ def run_project_sheet_check(
         project_keywords=project_keywords,
         allow_cross_tenant=allow_cross_tenant,
     )
-
-
-def collect_project_sheet_resources(
-    *,
-    queries: list[str],
-    explicit_resources: list[str],
-    opened_since: str,
-    limit: int,
-    max_pages: int,
-    folder_walk_root: bool,
-    folder_walk_tokens: str | None,
-    wiki_space_walk_ids: str | None,
-    walk_max_depth: int,
-    walk_page_size: int,
-    profile: str | None,
-    as_identity: str | None,
-) -> list[WorkspaceResource]:
-    resources = []
-    for query in queries:
-        resources.extend(
-            discover_workspace_resources(
-                query=query,
-                doc_types=["sheet"],
-                limit=limit,
-                max_pages=max_pages,
-                opened_since=opened_since,
-                sort="edit_time",
-                profile=profile,
-                as_identity=as_identity,
-            )
-        )
-    resources.extend(workspace_resource_from_spec(spec) for spec in explicit_resources)
-    if folder_walk_root or folder_walk_tokens:
-        resources.extend(
-            discover_drive_folder_resources(
-                folder_tokens=_split_csv(folder_walk_tokens),
-                include_root=folder_walk_root,
-                doc_types=["sheet"],
-                limit=limit,
-                max_depth=walk_max_depth,
-                page_size=walk_page_size,
-                profile=profile,
-                as_identity=as_identity,
-            )
-        )
-    if wiki_space_walk_ids:
-        resources.extend(
-            discover_wiki_space_resources(
-                space_ids=_split_csv(wiki_space_walk_ids),
-                doc_types=["sheet"],
-                limit=limit,
-                max_depth=walk_max_depth,
-                page_size=walk_page_size,
-                profile=profile,
-                as_identity=as_identity,
-            )
-        )
-    return _dedupe_resources(resources)
 
 
 def sheet_resources_from_specs(resources: list[str], sheet_resources: list[str]) -> list[str]:

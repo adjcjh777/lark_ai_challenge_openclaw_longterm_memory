@@ -138,7 +138,7 @@ This slice adds a controlled adapter:
 - `scripts/check_workspace_ingestion_latency_gate.py`
   - local warm-path latency gate for document/workspace candidate ingestion. It reuses the existing document ingestion benchmark and checks quality plus conservative latency thresholds without calling Feishu APIs.
 - `scripts/check_workspace_project_sheet_evidence_gate.py`
-  - read-only project normal Sheet evidence gate. It uses `drive +search` plus `sheets +info` only, emits redacted token hashes, and fails unless at least one project-scoped normal Sheet is present.
+  - read-only project normal Sheet evidence gate. It uses `drive +search`, explicit reviewed Sheet specs, Drive folder/root walk, Wiki space walk, and `sheets +info` only; it emits redacted token hashes and fails unless at least one project-scoped normal Sheet is present.
 - `scripts/check_workspace_real_chat_resource_gate.py`
   - temp-DB gate for captured real Feishu/OpenClaw chat events plus reviewed workspace resources. It extracts a real `feishu_message` from event logs, fetches doc/sheet/Bitable resources through lark-cli, and verifies they share one candidate pipeline without writing production storage.
 - `scripts/check_workspace_real_same_conclusion_gate.py`

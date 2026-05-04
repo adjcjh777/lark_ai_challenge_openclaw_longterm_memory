@@ -73,15 +73,12 @@ python3 scripts/check_workspace_project_sheet_evidence_gate.py \
 If the Sheet sample is in a folder or Wiki:
 
 ```bash
-python3 scripts/check_workspace_ingestion_goal_readiness.py \
+python3 scripts/check_workspace_project_sheet_evidence_gate.py \
   --json \
-  --event-log '<real_event_log.ndjson>' \
-  --resource '<reviewed_doc_or_bitable_or_sheet>' \
-  --sheet-folder-walk-tokens '<folder_token>' \
-  --sheet-wiki-space-walk-ids '<space_id_or_my_library>' \
-  --actor-open-id '<reviewer_open_id>' \
-  --roles reviewer \
-  --scope workspace:feishu
+  --folder-walk-tokens '<folder_token>' \
+  --wiki-space-walk-ids '<space_id_or_my_library>' \
+  --walk-max-depth 2 \
+  --limit 50
 ```
 
 If the same-fact sample is available:

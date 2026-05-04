@@ -21,6 +21,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from memory_engine.feishu_workspace_fetcher import (  # noqa: E402
     WorkspaceResource,
+    discover_drive_folder_resources,
+    discover_wiki_space_resources,
     discover_workspace_resources,
     inspect_sheet_resource,
     workspace_resource_from_spec,
@@ -60,6 +62,11 @@ def main() -> int:
     parser.add_argument("--created-since")
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--max-pages", type=int, default=2)
+    parser.add_argument("--folder-walk-root", action="store_true")
+    parser.add_argument("--folder-walk-tokens")
+    parser.add_argument("--wiki-space-walk-ids")
+    parser.add_argument("--walk-max-depth", type=int, default=2)
+    parser.add_argument("--walk-page-size", type=int, default=50)
     parser.add_argument("--profile")
     parser.add_argument("--as-identity", default="user")
     parser.add_argument("--allow-cross-tenant", action="store_true")
@@ -69,25 +76,23 @@ def main() -> int:
 
     queries = args.query if args.query else list(DEFAULT_PROJECT_QUERIES)
     keywords = args.project_keyword if args.project_keyword else list(DEFAULT_PROJECT_KEYWORDS)
-    resources: list[WorkspaceResource] = []
-    for query in queries:
-        resources.extend(
-            discover_workspace_resources(
-                query=query,
-                doc_types=["sheet"],
-                limit=args.limit,
-                max_pages=args.max_pages,
-                opened_since=args.opened_since,
-                edited_since=args.edited_since,
-                created_since=args.created_since,
-                mine=args.mine,
-                sort="edit_time",
-                profile=args.profile,
-                as_identity=args.as_identity,
-            )
-        )
-    resources.extend(workspace_resource_from_spec(spec) for spec in args.resource)
-    resources = _dedupe_resources(resources)
+    resources = collect_project_sheet_resources(
+        queries=queries,
+        explicit_resources=args.resource,
+        opened_since=args.opened_since,
+        edited_since=args.edited_since,
+        created_since=args.created_since,
+        mine=args.mine,
+        limit=args.limit,
+        max_pages=args.max_pages,
+        folder_walk_root=args.folder_walk_root,
+        folder_walk_tokens=args.folder_walk_tokens,
+        wiki_space_walk_ids=args.wiki_space_walk_ids,
+        walk_max_depth=args.walk_max_depth,
+        walk_page_size=args.walk_page_size,
+        profile=args.profile,
+        as_identity=args.as_identity,
+    )
 
     candidate_reports: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
@@ -203,6 +208,70 @@ def format_report(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def collect_project_sheet_resources(
+    *,
+    queries: list[str],
+    explicit_resources: list[str],
+    opened_since: str | None,
+    edited_since: str | None = None,
+    created_since: str | None = None,
+    mine: bool = False,
+    limit: int = 20,
+    max_pages: int = 2,
+    folder_walk_root: bool = False,
+    folder_walk_tokens: str | None = None,
+    wiki_space_walk_ids: str | None = None,
+    walk_max_depth: int = 2,
+    walk_page_size: int = 50,
+    profile: str | None = None,
+    as_identity: str | None = "user",
+) -> list[WorkspaceResource]:
+    resources: list[WorkspaceResource] = []
+    for query in queries:
+        resources.extend(
+            discover_workspace_resources(
+                query=query,
+                doc_types=["sheet"],
+                limit=limit,
+                max_pages=max_pages,
+                opened_since=opened_since,
+                edited_since=edited_since,
+                created_since=created_since,
+                mine=mine,
+                sort="edit_time",
+                profile=profile,
+                as_identity=as_identity,
+            )
+        )
+    resources.extend(workspace_resource_from_spec(spec) for spec in explicit_resources)
+    if folder_walk_root or folder_walk_tokens:
+        resources.extend(
+            discover_drive_folder_resources(
+                folder_tokens=_split_csv(folder_walk_tokens),
+                include_root=folder_walk_root,
+                doc_types=["sheet"],
+                limit=limit,
+                max_depth=walk_max_depth,
+                page_size=walk_page_size,
+                profile=profile,
+                as_identity=as_identity,
+            )
+        )
+    if wiki_space_walk_ids:
+        resources.extend(
+            discover_wiki_space_resources(
+                space_ids=_split_csv(wiki_space_walk_ids),
+                doc_types=["sheet"],
+                limit=limit,
+                max_depth=walk_max_depth,
+                page_size=walk_page_size,
+                profile=profile,
+                as_identity=as_identity,
+            )
+        )
+    return _dedupe_resources(resources)
+
+
 def _candidate_report(
     resource: WorkspaceResource,
     inspection: dict[str, Any],
@@ -253,6 +322,12 @@ def _dedupe_resources(resources: list[WorkspaceResource]) -> list[WorkspaceResou
         seen.add(key)
         result.append(resource)
     return result
+
+
+def _split_csv(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _is_cross_tenant(resource: WorkspaceResource) -> bool:

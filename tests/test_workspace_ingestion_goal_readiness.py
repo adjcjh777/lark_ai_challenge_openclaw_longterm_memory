@@ -71,15 +71,15 @@ class WorkspaceIngestionGoalReadinessTest(unittest.TestCase):
     def test_project_sheet_resources_include_folder_and_wiki_walks(self) -> None:
         with (
             patch(
-                "scripts.check_workspace_ingestion_goal_readiness.discover_workspace_resources",
+                "scripts.check_workspace_project_sheet_evidence_gate.discover_workspace_resources",
                 return_value=[WorkspaceResource(resource_type="sheet", token="sht_search", title="Search Sheet")],
             ) as search,
             patch(
-                "scripts.check_workspace_ingestion_goal_readiness.discover_drive_folder_resources",
+                "scripts.check_workspace_project_sheet_evidence_gate.discover_drive_folder_resources",
                 return_value=[WorkspaceResource(resource_type="sheet", token="sht_folder", title="Folder Sheet")],
             ) as folder,
             patch(
-                "scripts.check_workspace_ingestion_goal_readiness.discover_wiki_space_resources",
+                "scripts.check_workspace_project_sheet_evidence_gate.discover_wiki_space_resources",
                 return_value=[WorkspaceResource(resource_type="sheet", token="sht_wiki", title="Wiki Sheet")],
             ) as wiki,
         ):

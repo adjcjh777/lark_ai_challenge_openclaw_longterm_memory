@@ -68,25 +68,21 @@ python3 scripts/check_workspace_project_sheet_evidence_gate.py \
   --resource 'sheet:<sheet_token>:<reviewed_title>'
 ```
 
-If the operator has only a folder or Wiki space, use the workspace discovery path first and then pass the discovered normal Sheet token explicitly:
+If the operator has only a folder or Wiki space, pass it directly to the read-only Sheet evidence gate:
 
 ```bash
-python3 scripts/feishu_workspace_ingest.py \
+python3 scripts/check_workspace_project_sheet_evidence_gate.py \
   --json \
-  --dry-run \
-  --skip-discovery \
   --folder-walk-tokens '<folder_token>' \
-  --doc-types sheet \
+  --walk-max-depth 2 \
   --limit 50
 ```
 
 ```bash
-python3 scripts/feishu_workspace_ingest.py \
+python3 scripts/check_workspace_project_sheet_evidence_gate.py \
   --json \
-  --dry-run \
-  --skip-discovery \
   --wiki-space-walk-ids '<space_id_or_my_library>' \
-  --doc-types sheet \
+  --walk-max-depth 2 \
   --limit 50
 ```
 

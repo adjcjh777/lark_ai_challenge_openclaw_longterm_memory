@@ -116,6 +116,7 @@ python3 -m unittest tests.test_workspace_ingestion_latency_gate
 python3 scripts/check_workspace_real_fetch_latency_gate.py --json --resource 'sheet:<token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu
 python3 -m unittest tests.test_workspace_real_fetch_latency_gate
 python3 scripts/check_workspace_project_sheet_evidence_gate.py --json --opened-since 90d --limit 20 --max-pages 2
+python3 scripts/check_workspace_project_sheet_evidence_gate.py --json --folder-walk-tokens <folder_token> --wiki-space-walk-ids <space_id_or_my_library> --walk-max-depth 2 --limit 50
 python3 -m unittest tests.test_workspace_project_sheet_evidence_gate
 python3 scripts/check_workspace_real_fetch_latency_gate.py --json --resource 'docx:<project_docx_token>:<title>' --resource 'bitable:<project_base_token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu --max-bitable-records 3 --candidate-limit 8 --min-source-count 2 --min-candidate-count 2
 python3 scripts/check_workspace_real_chat_resource_gate.py --json --event-log <captured_non_at_group_message.ndjson> --resource 'docx:<project_docx_token>:<title>' --resource 'bitable:<project_base_token>:<title>' --actor-open-id <reviewer_open_id> --roles reviewer --scope workspace:feishu --max-bitable-records 3 --candidate-limit 8 --min-chat-candidates 1 --min-resource-sources 2 --min-resource-candidates 2
@@ -132,7 +133,7 @@ python3 scripts/check_workspace_ingestion_goal_readiness.py --json --event-log <
 ## Missing Or Weakly Verified Requirements
 
 1. **Project/enterprise normal Sheet evidence is missing.**
-   The code path exists and tests pass. A public/template normal Sheet has now proven the adapter can fetch `lark_sheet` sources and create candidates in a temp DB. The read-only project Sheet gate proves the current account can parse real `drive +search` results, but 365 天窗口、空查询、Drive root sheet walk 和 Wiki `my_library` sheet walk still find no eligible project normal Sheet: the project match is sheet-backed Bitable-only, and the only normal Sheet candidate is cross-tenant and non-project. This is not yet enterprise workspace Sheet evidence.
+   The code path exists and tests pass. A public/template normal Sheet has now proven the adapter can fetch `lark_sheet` sources and create candidates in a temp DB. The read-only project Sheet gate can now inspect explicit Sheet specs, Drive folder/root walks, and Wiki space walks directly with `sheets +info` only. Current evidence still finds no eligible project normal Sheet: the project match is sheet-backed Bitable-only, and the only normal Sheet candidate is cross-tenant and non-project. This is not yet enterprise workspace Sheet evidence.
 
 2. **"Full workspace ingestion" is not achieved.**
    The system has deterministic discovery, registry, cursoring, stale marking, and failed fetch evidence for a limited pilot. It does not yet have a production long-running daemon, full enterprise coverage guarantees, production rate-limit handling, monitoring, or operational SLOs.
