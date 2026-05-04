@@ -239,6 +239,16 @@ python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-w
 - 真实 Task / Meeting / Bitable source smoke 至少各 1 条，仍经过 review-policy gate。
 - websocket down、embedding unavailable、ingestion_failed、permission_denied 都能在运维报告里定位。
 
+Workspace ingestion 方向如果要从 limited pilot 升级为 productized full-workspace claim，还必须先跑：
+
+```bash
+python3 scripts/check_workspace_productized_ingestion_readiness.py --manifest <manifest> --require-productized-ready --json
+python3 scripts/check_workspace_ingestion_objective_completion.py --manifest <manifest> --json
+python3 scripts/finalize_workspace_ingestion_productized_evidence.py --manifest <manifest> --long-run-evidence <long-run.json> --output <finalization.json> --json
+```
+
+`finalize_workspace_ingestion_productized_evidence.py` 是只读收口检查。它不会启动 ingestion、不会发送飞书消息、不会启动 listener，也不会自动把目标标记完成；它只把 strict readiness、objective audit、long-run summary 和可选 launchd 状态写成一个 finalization status。
+
 ## 当前剩余风险
 
 - 生产 PostgreSQL 未部署。

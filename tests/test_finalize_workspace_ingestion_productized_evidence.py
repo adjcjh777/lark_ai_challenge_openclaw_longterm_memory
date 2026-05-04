@@ -1,0 +1,151 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from scripts.check_workspace_productized_ingestion_readiness import SCHEMA_VERSION
+from scripts.finalize_workspace_ingestion_productized_evidence import (
+    finalize_workspace_ingestion_productized_evidence,
+)
+
+
+class FinalizeWorkspaceIngestionProductizedEvidenceTest(unittest.TestCase):
+    def test_blocked_manifest_reports_long_run_blocker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="workspace_finalizer_") as temp_dir:
+            root = Path(temp_dir)
+            manifest = root / "manifest.json"
+            long_run = root / "long-run.json"
+            objective_output = root / "objective.json"
+            output = root / "finalizer.json"
+            manifest.write_text(json.dumps(_manifest(duration_hours=1)), encoding="utf-8")
+            long_run.write_text(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "failed_checks": ["long_run_window"],
+                        "window_hours": 1.0,
+                        "successful_run_count": 4,
+                        "unresolved_failed_run_count": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = finalize_workspace_ingestion_productized_evidence(
+                manifest_path=manifest,
+                long_run_evidence_path=long_run,
+                objective_output_path=objective_output,
+                output_path=output,
+            )
+
+            self.assertFalse(result["goal_complete"])
+            self.assertEqual("blocked", result["status"])
+            self.assertTrue(output.exists())
+            self.assertTrue(objective_output.exists())
+            self.assertEqual(["long_run_window"], result["long_run_summary"]["failed_checks"])
+            self.assertTrue(any(blocker.get("check") == "live_long_run" for blocker in result["blockers"]))
+
+    def test_complete_manifest_allows_closeout_status(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="workspace_finalizer_") as temp_dir:
+            root = Path(temp_dir)
+            manifest = root / "manifest.json"
+            long_run = root / "long-run.json"
+            objective_output = root / "objective.json"
+            output = root / "finalizer.json"
+            manifest.write_text(json.dumps(_manifest(duration_hours=25)), encoding="utf-8")
+            long_run.write_text(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "failed_checks": [],
+                        "window_hours": 25.0,
+                        "successful_run_count": 4,
+                        "unresolved_failed_run_count": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = finalize_workspace_ingestion_productized_evidence(
+                manifest_path=manifest,
+                long_run_evidence_path=long_run,
+                objective_output_path=objective_output,
+                output_path=output,
+            )
+
+            self.assertTrue(result["goal_complete"], result["blockers"])
+            self.assertEqual("complete", result["status"])
+            self.assertTrue(result["production_ready_claim_allowed"])
+            self.assertEqual([], result["blockers"])
+
+
+def _manifest(*, duration_hours: int) -> dict[str, object]:
+    evidence_refs = ["logs/workspace-ingestion-productized-probe/redacted"]
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "example": False,
+        "source_coverage": {
+            "source_types": {
+                "document_feishu": {"organic_sample_count": 1},
+                "lark_sheet": {"organic_sample_count": 1},
+                "lark_bitable": {"organic_sample_count": 1},
+            },
+            "workspace_surfaces": {
+                "document": {"organic_sample_count": 1},
+                "sheet": {"organic_sample_count": 1},
+                "bitable": {"organic_sample_count": 1},
+                "wiki": {"organic_sample_count": 1},
+            },
+            "same_conclusion_across_chat_and_workspace": True,
+            "conflict_negative_proven": True,
+            "evidence_refs": evidence_refs,
+        },
+        "discovery_and_cursoring": {
+            "scheduler_enabled": True,
+            "cursor_resume_proven": True,
+            "revision_skip_proven": True,
+            "stale_marking_proven": True,
+            "revocation_proven": True,
+            "max_resources_per_run": 200,
+            "max_pages_per_run": 10,
+            "evidence_refs": evidence_refs,
+        },
+        "rate_limit_and_backoff": {
+            "timeout_seconds": 30,
+            "backoff_policy": "bounded_retry_backoff_with_jitter",
+            "rate_limit_budget": "200 resources per run; 1 run per 4 hours",
+            "throttling_or_retry_tested_at": "2026-05-04T10:00:00+08:00",
+            "failed_fetch_audit_proven": True,
+            "evidence_refs": evidence_refs,
+        },
+        "governance": {
+            "review_policy_enforced": True,
+            "permission_fail_closed_negative_at": "2026-05-04T10:10:00+08:00",
+            "no_raw_event_embedding": True,
+            "curated_only_embedding": True,
+            "audit_readback_proven": True,
+            "evidence_refs": evidence_refs,
+        },
+        "operations": {
+            "single_listener_preflight_at": "2026-05-04T10:20:00+08:00",
+            "monitoring_alert_tested_at": "2026-05-04T10:30:00+08:00",
+            "rollback_stop_write_tested_at": "2026-05-04T10:40:00+08:00",
+            "retention_policy_approved_at": "2026-05-04T10:50:00+08:00",
+            "dashboard_or_report_readback": True,
+            "evidence_refs": evidence_refs,
+        },
+        "live_long_run": {
+            "started_at": "2026-05-03T10:00:00+08:00",
+            "ended_at": "2026-05-04T11:00:00+08:00",
+            "duration_hours": duration_hours,
+            "successful_runs": 4,
+            "unresolved_failed_runs": 0,
+            "evidence_refs": evidence_refs,
+        },
+    }
+
+
+if __name__ == "__main__":
+    unittest.main()

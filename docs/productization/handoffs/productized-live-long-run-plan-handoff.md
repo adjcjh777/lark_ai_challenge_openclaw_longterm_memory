@@ -84,3 +84,13 @@ ollama ps
 2. PostgreSQL pilot：做一套托管 PostgreSQL dry-run / restore 演练，不切全量生产。
 3. 权限后台最小化：把 allowlist / reviewer / source scope 配到 Bitable，并读回确认。
 4. 审计 read-only view：把 `query_audit_events.py` 的输出同步到只读 Bitable 视图。
+
+## Workspace Ingestion Finalizer
+
+2026-05-04 已补 workspace productized evidence finalizer：
+
+```bash
+python3 scripts/finalize_workspace_ingestion_productized_evidence.py --launchd-label com.feishu-ai-challenge.workspace-ingestion-longrun --json
+```
+
+它只读现有 manifest、objective audit 和 long-run evidence，不启动 ingestion、Feishu listener 或 bot 消息发送。当前复跑结果是 `goal_complete=false`：source coverage、scheduler/cursor、rate-limit、governance 和 operations 已通过，唯一 blocker 仍是 `live_long_run.duration_hours_at_least_24`；本机 launchd 读回 `last exit code=0`、`run interval=14400 seconds`。24 小时窗口满足后，先 rerun 这个 finalizer，再同步 README、handoff、飞书看板、commit/push 和目标状态。
