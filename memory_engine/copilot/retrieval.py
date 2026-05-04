@@ -162,7 +162,9 @@ class LayerAwareRetriever:
         trace_steps: list[RetrievalTraceStep] = []
         explicit_layer_filter = request.filters.get("layer") == layer.value
 
+        structured_started = time.perf_counter()
         entries, structured_note = self._structured_filter(request, layer)
+        structured_elapsed_ms = _elapsed_ms(structured_started)
         trace_steps.append(
             self._trace_step(
                 request,
@@ -173,12 +175,15 @@ class LayerAwareRetriever:
                 hit_memory_ids=[entry.memory_id for entry in entries],
                 note=structured_note,
                 selection_reason="scope_status_layer_type_filter",
+                elapsed_ms=structured_elapsed_ms,
             )
         )
         if not entries:
             return LayerSearchResult(layer=layer, backend=self.backend, results=[], trace_steps=trace_steps)
 
+        keyword_started = time.perf_counter()
         keyword_scores = self._keyword_scores(entries, request.query)
+        keyword_elapsed_ms = _elapsed_ms(keyword_started)
         keyword_hits = [memory_id for memory_id, score in keyword_scores.items() if score > 0]
         trace_steps.append(
             self._trace_step(
@@ -190,15 +195,18 @@ class LayerAwareRetriever:
                 hit_memory_ids=keyword_hits,
                 note=None if keyword_hits else "keyword_index_no_match",
                 selection_reason="subject_current_value_summary_evidence_quote",
+                elapsed_ms=keyword_elapsed_ms,
             )
         )
 
         vector_note = None
+        vector_started = time.perf_counter()
         try:
             vector_scores = self._vector_scores(entries, request.query)
         except Exception as exc:
             vector_scores = {}
             vector_note = f"vector_embedding_unavailable:{exc.__class__.__name__}"
+        vector_elapsed_ms = _elapsed_ms(vector_started)
         vector_hits = [memory_id for memory_id, score in vector_scores.items() if score > 0]
         trace_steps.append(
             self._trace_step(
@@ -210,10 +218,13 @@ class LayerAwareRetriever:
                 hit_memory_ids=vector_hits,
                 note=vector_note or (None if vector_hits else "vector_similarity_no_match"),
                 selection_reason="curated_memory_embedding_only",
+                elapsed_ms=vector_elapsed_ms,
             )
         )
 
+        cognee_started = time.perf_counter()
         cognee_results, cognee_note = self._cognee_results(request, entries)
+        cognee_elapsed_ms = _elapsed_ms(cognee_started)
         trace_steps.append(
             self._trace_step(
                 request,
@@ -224,9 +235,11 @@ class LayerAwareRetriever:
                 hit_memory_ids=[result.memory_id for result in cognee_results],
                 note=cognee_note,
                 selection_reason="optional_recall_channel",
+                elapsed_ms=cognee_elapsed_ms,
             )
         )
 
+        rerank_started = time.perf_counter()
         ranked, dropped_missing_evidence, dropped_shadowed = self._merge_and_rerank(
             entries,
             query=request.query,
@@ -245,6 +258,7 @@ class LayerAwareRetriever:
                 note = "stale_shadow_filtered"
         elif dropped_shadowed:
             note = f"stale_shadow_filtered:{dropped_shadowed}"
+        rerank_elapsed_ms = _elapsed_ms(rerank_started)
         trace_steps.append(
             self._trace_step(
                 request,
@@ -256,6 +270,7 @@ class LayerAwareRetriever:
                 note=note,
                 selection_reason="importance_recency_confidence_version_layer_evidence_stale_shadow_filter",
                 dropped_count=dropped_missing_evidence + dropped_shadowed,
+                elapsed_ms=rerank_elapsed_ms,
             )
         )
         return LayerSearchResult(
@@ -642,6 +657,7 @@ class LayerAwareRetriever:
         note: str | None,
         selection_reason: str,
         dropped_count: int = 0,
+        elapsed_ms: float = 0.0,
     ) -> RetrievalTraceStep:
         return RetrievalTraceStep(
             layer=layer.value,
@@ -649,7 +665,7 @@ class LayerAwareRetriever:
             query=request.query,
             requested_top_k=request.top_k,
             returned_count=returned_count,
-            elapsed_ms=0.0,
+            elapsed_ms=elapsed_ms,
             hit_memory_ids=hit_memory_ids,
             note=note,
             layer_source="adapter_simulated",
@@ -669,6 +685,10 @@ def _entry_signature(entries: list[RecallIndexEntry]) -> tuple[str, ...]:
         f"{entry.memory_id}:{entry.version or ''}:{entry.evidence_id or ''}:{entry.updated_at}"
         for entry in entries
     )
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000.0, 3)
 
 
 def _tokens(text: str) -> list[str]:

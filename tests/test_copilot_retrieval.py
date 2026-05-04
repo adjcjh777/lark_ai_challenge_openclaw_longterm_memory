@@ -115,6 +115,13 @@ class CopilotRetrievalTest(unittest.TestCase):
         l3_structured = _trace_step(response, layer="L3", stage="structured")
         self.assertEqual("l3_raw_events_blocked_for_default_search", l3_structured["note"])
         self.assertEqual("adapter_simulated", _trace_step(response, layer="L2", stage="keyword")["layer_source"])
+        hybrid_steps = [
+            step
+            for step in response["trace"]["steps"]
+            if step.get("backend") in {"structured_filter", "keyword_index", "curated_vector", "cognee", "hybrid_rerank"}
+        ]
+        self.assertTrue(all(isinstance(step["elapsed_ms"], float) for step in hybrid_steps))
+        self.assertTrue(any(step["elapsed_ms"] > 0 for step in hybrid_steps))
 
     def test_search_reuses_vector_scores_across_layer_fallback(self) -> None:
         class CountingEmbeddingProvider(DeterministicEmbeddingProvider):
