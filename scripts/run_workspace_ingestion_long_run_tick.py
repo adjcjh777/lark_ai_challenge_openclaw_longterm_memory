@@ -26,6 +26,9 @@ from scripts.merge_workspace_productized_ingestion_evidence import (  # noqa: E4
     merge_workspace_productized_ingestion_evidence_patches,
 )
 from scripts.run_workspace_ingestion_schedule import DEFAULT_CONFIG_PATH, run_schedule, sanitize_report  # noqa: E402
+from scripts.check_workspace_ingestion_objective_completion import (  # noqa: E402
+    run_workspace_ingestion_objective_completion_audit,
+)
 
 DEFAULT_OUTPUT_DIR = ROOT / "logs" / "workspace-ingestion-productized-probe" / "long-run-active"
 BOUNDARY = (
@@ -42,6 +45,7 @@ def main() -> int:
     parser.add_argument("--merge-patch", action="append", default=[])
     parser.add_argument("--long-run-output", default="")
     parser.add_argument("--merged-output", default="")
+    parser.add_argument("--objective-output", default="")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -52,6 +56,7 @@ def main() -> int:
         merge_patch_paths=[Path(path).expanduser() for path in args.merge_patch],
         long_run_output=Path(args.long_run_output).expanduser() if args.long_run_output else None,
         merged_output=Path(args.merged_output).expanduser() if args.merged_output else None,
+        objective_output=Path(args.objective_output).expanduser() if args.objective_output else None,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
@@ -68,6 +73,7 @@ def run_workspace_ingestion_long_run_tick(
     merge_patch_paths: list[Path] | None = None,
     long_run_output: Path | None = None,
     merged_output: Path | None = None,
+    objective_output: Path | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     report = sanitize_report(run_schedule(config_path, execute=True))
@@ -94,13 +100,23 @@ def run_workspace_ingestion_long_run_tick(
     long_run_path.write_text(json.dumps(collector, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
     merge_result: dict[str, Any] | None = None
+    objective_result: dict[str, Any] | None = None
+    objective_path = objective_output or output_dir / "workspace-objective-completion.active.json"
     patches = list(merge_patch_paths or [])
     if patches:
         patches.append(long_run_path)
+        merged_path = merged_output or output_dir / "productized-evidence.long-run.partial.json"
         merge_result = merge_workspace_productized_ingestion_evidence_patches(
             patch_paths=patches,
-            output_path=merged_output or output_dir / "productized-evidence.long-run.partial.json",
+            output_path=merged_path,
         )
+        if merge_result.get("ok"):
+            objective_result = run_workspace_ingestion_objective_completion_audit(merged_path)
+            objective_path.parent.mkdir(parents=True, exist_ok=True)
+            objective_path.write_text(
+                json.dumps(objective_result, ensure_ascii=False, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
 
     ok = bool(report.get("ok"))
     result = {
@@ -118,7 +134,9 @@ def run_workspace_ingestion_long_run_tick(
         "collector_window_hours": collector.get("window_hours"),
         "collector_successful_runs": collector.get("successful_run_count"),
         "merge_result": merge_result,
-        "next_step": _next_step(report, collector, merge_result),
+        "objective_output": str(objective_path.resolve()) if objective_result is not None else "",
+        "objective_result": objective_result,
+        "next_step": _next_step(report, collector, merge_result, objective_result),
     }
     status_path = output_dir / "long-run-tick-status.json"
     result["status_path"] = str(status_path.resolve())
@@ -139,6 +157,9 @@ def format_report(result: dict[str, Any]) -> str:
     if merge:
         validation = merge.get("validation") if isinstance(merge.get("validation"), dict) else {}
         lines.append(f"merged_goal_complete: {str(validation.get('goal_complete')).lower()}")
+    objective = result.get("objective_result") if isinstance(result.get("objective_result"), dict) else {}
+    if objective:
+        lines.append(f"objective_goal_complete: {str(objective.get('goal_complete')).lower()}")
     if result.get("next_step"):
         lines.append(f"next_step: {result['next_step']}")
     return "\n".join(lines)
@@ -163,15 +184,22 @@ def _unique_report_path(output_dir: Path) -> Path:
     return candidate
 
 
-def _next_step(report: dict[str, Any], collector: dict[str, Any], merge_result: dict[str, Any] | None) -> str:
+def _next_step(
+    report: dict[str, Any],
+    collector: dict[str, Any],
+    merge_result: dict[str, Any] | None,
+    objective_result: dict[str, Any] | None = None,
+) -> str:
     if not report.get("ok"):
         return "Inspect the failed sanitized schedule report before continuing the long-run window."
     if not collector.get("ok"):
         return "Keep launchd/cron ticks running until the sanitized reports cover a 24h+ window."
     if merge_result:
+        if objective_result and objective_result.get("goal_complete"):
+            return "Workspace objective completion audit is complete; update docs, board, and goal status."
         validation = merge_result.get("validation") if isinstance(merge_result.get("validation"), dict) else {}
         if validation.get("goal_complete"):
-            return "Productized workspace evidence gate is complete; update docs and board with this manifest."
+            return "Productized workspace evidence gate is complete; inspect objective_result before closing the goal."
         return "Long-run patch is ready, but merged productized gate still has blockers; inspect merge_result.validation."
     return "Long-run patch is ready; merge it with source, governance, operations, and rate-limit evidence."
 

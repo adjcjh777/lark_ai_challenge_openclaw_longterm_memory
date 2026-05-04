@@ -54,6 +54,10 @@ class WorkspaceIngestionLongRunTickTest(unittest.TestCase):
                     "scripts.run_workspace_ingestion_long_run_tick.merge_workspace_productized_ingestion_evidence_patches",
                     return_value={"ok": True, "validation": {"goal_complete": True}},
                 ) as merge,
+                patch(
+                    "scripts.run_workspace_ingestion_long_run_tick.run_workspace_ingestion_objective_completion_audit",
+                    return_value={"goal_complete": True, "status": "complete"},
+                ) as objective,
             ):
                 result = run_workspace_ingestion_long_run_tick(
                     config_path=Path("schedule.json"),
@@ -65,8 +69,10 @@ class WorkspaceIngestionLongRunTickTest(unittest.TestCase):
 
             self.assertTrue(result["ok"], result)
             self.assertTrue(result["collector_ok"], result)
-            self.assertIn("Productized workspace evidence gate is complete", result["next_step"])
+            self.assertIn("Workspace objective completion audit is complete", result["next_step"])
+            self.assertTrue(Path(result["objective_output"]).exists())
             merge.assert_called_once()
+            objective.assert_called_once_with(output_dir / "merged.json")
 
 
 def _schedule_report(generated_at: str) -> dict[str, object]:
