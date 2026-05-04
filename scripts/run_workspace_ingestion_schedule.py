@@ -37,17 +37,18 @@ def main() -> int:
     args = parser.parse_args()
 
     report = run_schedule(Path(args.config).expanduser(), execute=args.execute)
+    display_report = sanitize_report(report) if args.output else report
     if args.output:
         output = Path(args.output).expanduser()
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(
-            json.dumps(sanitize_report(report), ensure_ascii=False, indent=2, sort_keys=True),
+            json.dumps(display_report, ensure_ascii=False, indent=2, sort_keys=True),
             encoding="utf-8",
         )
     if args.json:
-        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+        print(json.dumps(display_report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
-        print(format_report(report))
+        print(format_report(display_report))
     return 0 if report["ok"] else 1
 
 

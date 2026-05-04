@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from scripts.run_workspace_ingestion_schedule import DEFAULT_CONFIG_PATH, run_schedule, sanitize_report
+from scripts.run_workspace_ingestion_schedule import DEFAULT_CONFIG_PATH, main, run_schedule, sanitize_report
 
 
 class WorkspaceIngestionScheduleTest(unittest.TestCase):
@@ -244,6 +247,64 @@ class WorkspaceIngestionScheduleTest(unittest.TestCase):
         self.assertEqual("<redacted>", sanitized["jobs"][0]["result"]["results"][0]["resource"]["token"])
         self.assertEqual("<redacted>", sanitized["jobs"][0]["result"]["results"][0]["source"]["source_id"])
         self.assertIn("<redacted>", sanitized["jobs"][0]["result"]["results"][1]["error"])
+
+    def test_cli_output_json_is_sanitized_when_output_path_is_set(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="workspace_schedule_") as temp_dir:
+            root = Path(temp_dir)
+            config = root / "schedule.json"
+            output = root / "schedule-report.json"
+            config.write_text(json.dumps(_schedule_config()), encoding="utf-8")
+            completed = Mock(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "ok": True,
+                        "results": [
+                            {
+                                "ok": True,
+                                "resource": {
+                                    "resource_type": "docx",
+                                    "route_type": "document",
+                                    "title": "Project Doc",
+                                    "token": "doc_secret_123",
+                                    "url": "https://example.feishu.cn/docx/doc_secret_123",
+                                },
+                                "source": {
+                                    "source_type": "document_feishu",
+                                    "source_id": "doc_secret_123",
+                                    "title": "Project Doc",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                stderr="",
+            )
+            with (
+                patch("scripts.run_workspace_ingestion_schedule.subprocess.run", return_value=completed),
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "run_workspace_ingestion_schedule.py",
+                        "--config",
+                        str(config),
+                        "--execute",
+                        "--output",
+                        str(output),
+                        "--json",
+                    ],
+                ),
+                redirect_stdout(StringIO()) as stdout,
+            ):
+                exit_code = main()
+
+            self.assertEqual(0, exit_code)
+            printed = stdout.getvalue()
+            written = output.read_text(encoding="utf-8")
+            self.assertNotIn("doc_secret_123", printed)
+            self.assertNotIn("doc_secret_123", written)
+            self.assertEqual("<redacted>", json.loads(printed)["jobs"][0]["result"]["results"][0]["source"]["source_id"])
 
     def test_disabled_job_is_skipped(self) -> None:
         data = _schedule_config()
