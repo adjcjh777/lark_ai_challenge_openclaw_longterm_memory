@@ -718,36 +718,13 @@ python3 scripts/collect_cognee_embedding_long_run_evidence.py --help
 Benchmark：
 
 ```bash
-python3 -m memory_engine benchmark run benchmarks/copilot_recall_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_candidate_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_conflict_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_layer_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_prefetch_cases.json
-python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json
+for f in benchmarks/copilot_*.json; do python3 -m memory_engine benchmark run "$f"; done
 ```
 
 ---
 
 ## 11. 项目边界
 
-本项目当前是比赛项目和产品化原型，不是完整生产系统。
+本项目当前是比赛项目和产品化原型，不是完整生产系统。已经证明的是本地可复现、Demo 可演示、Benchmark 可运行、OpenClaw tool contract 可检查、飞书测试群 sandbox 可联调，以及权限、证据、版本、审计的本地闭环。
 
-当前已经证明：
-
-- 本地可复现。
-- Demo 可演示。
-- Benchmark 可运行。
-- OpenClaw tool contract 可检查。
-- 飞书测试群 sandbox 可联调。
-- 权限、证据、版本、审计有本地闭环。
-- 存储迁移和索引检查有本地 dry-run / apply 入口。
-
-当前尚未完成：
-
-- 生产部署。
-- 全量飞书 workspace ingestion。
-- 多租户企业后台。
-- 真实权限后台。
-- 生产级长期在线 embedding 服务（当前已有本地/staging 24h+ Cognee/embedding 长跑证据，非生产级）。
-- 生产级 Prometheus/Grafana 长期监控、告警投递和自动回滚；当前只有 `/metrics`、staging alert rules artifact 和本地 verifier。
-- 真实 Feishu DM 长期稳定路由到本项目 first-class `fmc_*` / `memory.*` 工具链路；当前已有受控 live packet 覆盖 search/create_candidate/prefetch、权限负例和 review DM/card，但不是长期线上运行证明。
+尚未完成的是生产部署、全量飞书 workspace ingestion、完整多租户企业后台、真实企业权限后台、生产级长期 embedding 服务、生产级监控告警自动回滚，以及真实 Feishu DM 长期稳定路由。详细边界以上方“不能 overclaim”和 `docs/productization/agent-execution-contract.md` 为准。
