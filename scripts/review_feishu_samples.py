@@ -89,10 +89,10 @@ def main():
                 if action == "q":
                     print("退出复核")
                     break
-                elif action == "s":
+                if action == "s":
                     print("跳过此样本")
                     continue
-                elif action == "c":
+                if action == "c":
                     reason = input("请输入确认理由（可选）: ").strip()
                     sample["review_status"] = "confirmed"
                     sample["review_reason"] = reason or "confirmed by human"

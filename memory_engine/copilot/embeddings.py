@@ -312,8 +312,7 @@ def create_embedding_provider(
             if ollama_provider.is_available():
                 logger.info("Using OllamaEmbeddingProvider")
                 return ollama_provider
-            else:
-                logger.warning("OllamaEmbeddingProvider not available, trying fallback")
+            logger.warning("OllamaEmbeddingProvider not available, trying fallback")
         except Exception as exc:
             logger.warning("Failed to create OllamaEmbeddingProvider: %s", exc)
 
