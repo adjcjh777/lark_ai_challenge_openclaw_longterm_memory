@@ -161,15 +161,15 @@ class CopilotBenchmarkTest(unittest.TestCase):
         case_ids = [case["case_id"] for case in cases]
         categories = Counter(case["expression_category"] for case in cases)
 
-        self.assertEqual(25, len(cases))
+        self.assertEqual(40, len(cases))
         self.assertEqual(len(case_ids), len(set(case_ids)))
         self.assertEqual(
             {
-                "ambiguous": 5,
-                "chitchat_false_positive": 5,
-                "colloquial": 5,
-                "multi_turn_correction": 5,
-                "permission": 5,
+                "ambiguous": 8,
+                "chitchat_false_positive": 8,
+                "colloquial": 8,
+                "multi_turn_correction": 8,
+                "permission": 8,
             },
             dict(sorted(categories.items())),
         )
@@ -191,7 +191,7 @@ class CopilotBenchmarkTest(unittest.TestCase):
         summary = result["summary"]
 
         self.assertEqual("copilot_real_feishu", result["benchmark_type"])
-        self.assertEqual(25, summary["case_count"])
+        self.assertEqual(40, summary["case_count"])
         self.assertEqual(5, summary["category_count"])
         self.assertIn("recall_at_3", summary)
         self.assertIn("false_memory_rate", summary)
@@ -218,12 +218,12 @@ class CopilotBenchmarkTest(unittest.TestCase):
         categories = Counter(query["category"] for query in queries)
 
         self.assertEqual("copilot_realistic_recall_challenge", spec["benchmark_type"])
-        self.assertGreaterEqual(len(spec["corpus"]["events"]), 60)
-        self.assertGreaterEqual(len(queries), 80)
+        self.assertGreaterEqual(len(spec["corpus"]["events"]), 80)
+        self.assertGreaterEqual(len(queries), 125)
         self.assertGreaterEqual(len(categories), 8)
-        self.assertGreaterEqual(sum(1 for item in queries if item.get("expected_no_answer")), 8)
-        self.assertGreaterEqual(sum(1 for item in queries if item.get("expected_permission_decision") == "deny"), 8)
-        self.assertGreaterEqual(sum(1 for item in queries if item.get("forbidden_values")), 30)
+        self.assertGreaterEqual(sum(1 for item in queries if item.get("expected_no_answer")), 14)
+        self.assertGreaterEqual(sum(1 for item in queries if item.get("expected_permission_decision") == "deny"), 14)
+        self.assertGreaterEqual(sum(1 for item in queries if item.get("forbidden_values")), 80)
         self.assertEqual(len({item["id"] for item in queries}), len(queries))
         for item in queries:
             self.assertTrue(item["query"].strip(), msg=item["id"])
@@ -291,7 +291,7 @@ class CopilotBenchmarkTest(unittest.TestCase):
     def test_realistic_recall_gate_is_a_validity_gate_not_production_claim(self) -> None:
         benchmark = {
             "source": "benchmarks/copilot_realistic_recall_challenge.json",
-            "layers": {"corpus_event_count": 60, "query_count": 80},
+            "layers": {"corpus_event_count": 80, "query_count": 125},
             "summary": {
                 "case_pass_rate": 0.58,
                 "recall_at_3": 0.75,

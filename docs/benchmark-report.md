@@ -28,7 +28,9 @@
 
 > **真实挑战集更新（2026-05-04）**：新增 `benchmarks/copilot_realistic_recall_challenge.json` 和 `scripts/check_realistic_recall_challenge_gate.py --json`。这组 benchmark 不再按 case 各自创建小数据库，而是把 60 条共享语料事件和 80 条查询放进同一个 temp DB，让当前结论、旧值、相似项目、不同来源、拒答问题和权限负例共同竞争。当前 gate 通过的是“挑战集有效性和最低质量线”：case pass rate = 0.5750、Recall@3 = 0.7500、MRR = 0.7417、Evidence Coverage = 0.7500、Evidence Source Accuracy = 0.9500、Abstention Accuracy = 0.3333、Permission Negative Accuracy = 1.0000、Distractor Leakage Rate = 0.2000、Stale Leakage Rate = 0.5000。这个结果刻意暴露 `vector_miss`、`distractor_leakage`、`no_answer_failed` 三类短板；不能和旧 fixture 的 100% 混写成生产真实用户稳定性。
 
-> **UX-07 更新（2026-04-29）**：10 分钟评委体验包入口为 `docs/judge-10-minute-experience.md`。评委版只引用本报告已有 runner 和 UX-06 指标，不重复跑重 benchmark；讲法必须同时展示通过项和残余风险，尤其是 UX-06 真实表达样本当前 25 条全部通过但仍只是脱敏 pre-live gate，以及真实 Feishu live evidence 仍未覆盖全链路。
+> **Benchmark 扩样更新（2026-05-05）**：本轮按“更真实、样例更多”的要求扩充两条主评测入口。`copilot_real_feishu_cases.json` 从 25 条扩到 40 条，口语、含糊、多轮改口、闲聊误判、权限场景各 8 条；`scripts/check_real_feishu_expression_quality_gate.py --json` 仍通过：case pass rate = 1.0000、Recall@3 = 1.0000、误记率 0.0000、误提醒率 0.0000、解释覆盖率 1.0000、旧值泄漏率 0.0000。`copilot_realistic_recall_challenge.json` 从 60 条共享语料 / 80 query 扩到 80 条共享语料 / 125 query，新增跨来源佐证、撤权、错别字、跨语言、completion standard、更多拒答和权限负例；`scripts/check_realistic_recall_challenge_gate.py --json` 通过新的规模阈值：case pass rate = 0.6000、Recall@3 = 0.7065、MRR = 0.6649、Evidence Coverage = 0.7065、Evidence Source Accuracy = 0.9239、Abstention Accuracy = 0.6667、Permission Negative Accuracy = 1.0000、Distractor Leakage Rate = 0.1957、Stale Leakage Rate = 0.3333。失败类型仍保留为 hardening backlog：`vector_miss` 26、`distractor_leakage` 18、`no_answer_failed` 6；这说明 benchmark 更真实了，但仍不是生产真实用户稳定性证明。
+
+> **UX-07 更新（2026-04-29，2026-05-05 校准）**：10 分钟评委体验包入口为 `docs/judge-10-minute-experience.md`。评委版只引用本报告已有 runner 和 UX-06 指标，不重复跑重 benchmark；讲法必须同时展示通过项和残余风险，尤其是 UX-06 真实表达样本当前 40 条全部通过但仍只是脱敏 pre-live gate，以及真实 Feishu live evidence 仍未覆盖全链路。
 
 ## 先看这个
 
@@ -44,7 +46,7 @@
 
 | 赛题证明 | 使用哪些 runner | 对外指标 | 当前结果 | 说明 |
 |---|---|---|---|---|
-| 抗干扰测试 | `copilot_recall_cases.json`、`copilot_layer_cases.json`、`copilot_real_feishu_cases.json`、`copilot_realistic_recall_challenge.json` | Recall@3、Evidence Coverage、Stale Leakage Rate、Real Expression Recall@3、Abstention Accuracy、Distractor Leakage Rate | 旧 fixture recall 40/40、Recall@3 1.0000；真实表达样本 25/25 通过；真实挑战集 80 queries：case pass rate 0.5750、Recall@3 0.7500、Abstention Accuracy 0.3333、Distractor Leakage 0.2000 | 旧 fixture 证明功能回归；真实挑战集证明共享语料竞争下仍有可复现短板，尤其是拒答、相似干扰和语义改写 |
+| 抗干扰测试 | `copilot_recall_cases.json`、`copilot_layer_cases.json`、`copilot_real_feishu_cases.json`、`copilot_realistic_recall_challenge.json` | Recall@3、Evidence Coverage、Stale Leakage Rate、Real Expression Recall@3、Abstention Accuracy、Distractor Leakage Rate | 旧 fixture recall 40/40、Recall@3 1.0000；真实表达样本 40/40 通过；真实挑战集 125 queries：case pass rate 0.6000、Recall@3 0.7065、Abstention Accuracy 0.6667、Distractor Leakage 0.1957 | 旧 fixture 证明功能回归；真实挑战集证明共享语料竞争下仍有可复现短板，尤其是语义改写、相似干扰和拒答 |
 | 矛盾更新测试 | `copilot_conflict_cases.json`、`memory.explain_versions` 对应样例 | Conflict Update Accuracy、Superseded Leakage、Evidence Coverage | conflict 35/35、Conflict Accuracy 1.0000、Superseded Leakage 0.0000、Evidence Coverage 1.0000 | 证明新结论确认后旧值进入 superseded，默认 search / prefetch 不把旧值当当前答案 |
 | 效能验证 | `copilot_prefetch_cases.json`、`copilot_candidate_cases.json`、`copilot_heartbeat_cases.json` | Agent Task Context Use Rate、Candidate Precision、False Reminder Rate、Duplicate Reminder Rate、Sensitive Reminder Leakage Rate | prefetch 20/20、candidate 57/57、heartbeat 20/20；误提醒、重复提醒和敏感泄漏均为 0.0000 | 证明 Agent 做任务前能拿到 compact context pack，低价值内容不乱记，提醒受控且可审计 |
 
@@ -85,16 +87,16 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | Stale Leakage Rate | recall / conflict / layer / prefetch | recall 0.0000；conflict 0.0000；prefetch 0.0000（2026-05-01 重跑） | <= 0.1500 | 当前重跑入口通过 |
 | User Explanation Coverage | search / explain_versions / permission denied card payload | 已有单测入口，runner 暂未汇总 | 先记录，不设硬阈值 | 已有口径 |
 | Unauthorized Value Leakage Rate | permission denied card payload | 0.0000（单测覆盖） | 0.0000 | 已有口径 |
-| Real Expression Recall@3 | `copilot_real_feishu_cases.json` | 1.0000（2026-05-03 重跑） | >= 0.8000 | 当前样本通过 |
-| Real Expression False Memory Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-05-03 重跑） | <= 0.0500 | 当前样本通过 |
-| Real Expression False Reminder Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-04-29 重跑） | <= 0.0500 | 当前样本通过 |
-| Real Expression Confirmation Burden | `copilot_real_feishu_cases.json` | 2.0000（2026-05-03 重跑） | 先记录，不设硬阈值 | UX-06 样本入口 |
-| Real Expression Explanation Coverage | `copilot_real_feishu_cases.json` | 1.0000（2026-05-03 重跑） | >= 0.8000 | 当前样本通过 |
-| Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.0000（2026-05-03 gate 重跑） | 0.0000 | 当前样本通过 |
-| Realistic Challenge Recall@3 | `copilot_realistic_recall_challenge.json` | 0.7500（2026-05-04 gate 重跑） | >= 0.6000 | 通过最低线；不是生产质量证明 |
-| Realistic Challenge Abstention Accuracy | `copilot_realistic_recall_challenge.json` | 0.3333（2026-05-04 gate 重跑） | >= 0.3000 | 通过最低线但明显偏低，是后续 hardening 优先项 |
-| Realistic Challenge Distractor Leakage Rate | `copilot_realistic_recall_challenge.json` | 0.2000（2026-05-04 gate 重跑） | <= 0.2500 | 通过最低线但仍有 12 条 distractor leakage |
-| Realistic Challenge Permission Negative Accuracy | `copilot_realistic_recall_challenge.json` | 1.0000（2026-05-04 gate 重跑） | 1.0000 | 通过 |
+| Real Expression Recall@3 | `copilot_real_feishu_cases.json` | 1.0000（40 cases；2026-05-05 gate 重跑） | >= 0.8000 | 当前样本通过 |
+| Real Expression False Memory Rate | `copilot_real_feishu_cases.json` | 0.0000（40 cases；2026-05-05 gate 重跑） | <= 0.0500 | 当前样本通过 |
+| Real Expression False Reminder Rate | `copilot_real_feishu_cases.json` | 0.0000（40 cases；2026-05-05 gate 重跑） | <= 0.0500 | 当前样本通过 |
+| Real Expression Confirmation Burden | `copilot_real_feishu_cases.json` | 2.0000（40 cases；2026-05-05 gate 重跑） | 先记录，不设硬阈值 | UX-06 样本入口 |
+| Real Expression Explanation Coverage | `copilot_real_feishu_cases.json` | 1.0000（40 cases；2026-05-05 gate 重跑） | >= 0.8000 | 当前样本通过 |
+| Real Expression Old Value Leakage Rate | `copilot_real_feishu_cases.json` | 0.0000（40 cases；2026-05-05 gate 重跑） | 0.0000 | 当前样本通过 |
+| Realistic Challenge Recall@3 | `copilot_realistic_recall_challenge.json` | 0.7065（125 queries；2026-05-05 gate 重跑） | >= 0.6000 | 通过最低线；不是生产质量证明 |
+| Realistic Challenge Abstention Accuracy | `copilot_realistic_recall_challenge.json` | 0.6667（2026-05-05 gate 重跑） | >= 0.3000 | 通过最低线，仍保留 no-answer 失败样例 |
+| Realistic Challenge Distractor Leakage Rate | `copilot_realistic_recall_challenge.json` | 0.1957（2026-05-05 gate 重跑） | <= 0.2500 | 通过最低线但仍有 18 条 distractor leakage |
+| Realistic Challenge Permission Negative Accuracy | `copilot_realistic_recall_challenge.json` | 1.0000（15 permission-negative queries；2026-05-05 gate 重跑） | 1.0000 | 通过 |
 
 ## 分项结果
 
@@ -106,8 +108,8 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 | copilot_layer | 40 | 1.0000 | Layer Accuracy = 1.0000；L1 Hot Recall p95 = 1.602 ms | 无失败 |
 | copilot_prefetch | 20 | 1.0000 | Context-required cases = 18；Agent Task Context Use Rate = 1.0000；Evidence Coverage = 1.0000；Stale Leakage = 0.0000 | 无失败 |
 | copilot_heartbeat | 20 | 1.0000 | Reminder Candidate Rate = 1.0000；Sensitive Reminder Leakage Rate = 0.0000；False Reminder Rate = 0.0000；Duplicate Reminder Rate = 0.0000；User Confirmation Burden = 4.0000 | 无失败 |
-| copilot_real_feishu | 25 | 1.0000 | Recall@3 = 1.0000；误记率 = 0.0000；误提醒率 = 0.0000；确认负担 = 2.0000；解释覆盖率 = 1.0000；旧值泄漏率 = 0.0000 | 无失败 |
-| copilot_realistic_recall_challenge | 80 | 0.5750 | Recall@3 = 0.7500；MRR = 0.7417；Evidence Coverage = 0.7500；Evidence Source Accuracy = 0.9500；Abstention Accuracy = 0.3333；Permission Negative Accuracy = 1.0000；Distractor Leakage = 0.2000；Stale Leakage = 0.5000 | `vector_miss` 14；`distractor_leakage` 12；`no_answer_failed` 8 |
+| copilot_real_feishu | 40 | 1.0000 | Recall@3 = 1.0000；误记率 = 0.0000；误提醒率 = 0.0000；确认负担 = 2.0000；解释覆盖率 = 1.0000；旧值泄漏率 = 0.0000 | 无失败 |
+| copilot_realistic_recall_challenge | 125 | 0.6000 | Recall@3 = 0.7065；MRR = 0.6649；Evidence Coverage = 0.7065；Evidence Source Accuracy = 0.9239；Abstention Accuracy = 0.6667；Permission Negative Accuracy = 1.0000；Distractor Leakage = 0.1957；Stale Leakage = 0.3333 | `vector_miss` 26；`distractor_leakage` 18；`no_answer_failed` 6 |
 | day1 fallback | 10 | 1.0000 | 旧本地 memory demo 仍可复现 | 无失败 |
 
 ## 样例证据
@@ -157,11 +159,11 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 
 | 类型 | 数量 | 关注点 |
 |---|---:|---|
-| 口语 | 5 | “上次说的”“那个”“来着”等自然表达能否召回 Top 3 并解释 |
-| 含糊 | 5 | 代词和上下文不足时是否要求补充，而不是乱记 |
-| 多轮改口 | 5 | “不对”“收回”“作废”先进入 review policy；冲突更新不直接覆盖 active，必须经人工确认后才替换当前结论 |
-| 闲聊误判 | 5 | 玩笑、临时状态和显式“别记”不应误记或误提醒 |
-| 权限场景 | 5 | 私聊、跨租户、非 reviewer、source revoked 必须 fail closed |
+| 口语 | 8 | “上次说的”“那个”“来着”“长跑窗口”等自然表达能否召回 Top 3 并解释 |
+| 含糊 | 8 | 代词、缺 thread_topic、多入口并存或人称指代不足时是否要求补充，而不是乱记 |
+| 多轮改口 | 8 | “不对”“收回”“不是旧群”等先进入 review policy；冲突更新不直接覆盖 active，必须经人工确认后才替换当前结论 |
+| 闲聊误判 | 8 | 玩笑、临时状态、显式“别记”和未定 UI 想法不应误记或误提醒 |
+| 权限场景 | 8 | 私聊、跨租户、跨 org、非 reviewer、source revoked、missing permission 必须 fail closed |
 
 当前边界：
 
@@ -179,7 +181,7 @@ python3 -m memory_engine benchmark run benchmarks/day1_cases.json
 |---|---|
 | 你们怎么证明不是临场 demo？ | 每条演示能力都能映射到 `benchmarks/copilot_*_cases.json` 和本文档的指标表；`reports/` 只是本地运行证据，不提交。 |
 | 指标是不是全部达标？ | 本地 runner 当前通过：recall、candidate、conflict、layer、prefetch、heartbeat 和 UX-06 脱敏样本都已达当前门槛；但这不能外推为生产真实用户稳定可用、长期 live 或全量 workspace ingestion 已完成。 |
-| 真实用户表达覆盖了吗？ | UX-06 有 25 条脱敏样本，覆盖口语、含糊、多轮改口、闲聊误判和权限场景；这是 baseline，不是生产稳定结论。 |
+| 真实用户表达覆盖了吗？ | UX-06 有 40 条脱敏样本，覆盖口语、含糊、多轮改口、闲聊误判和权限场景各 8 条；这是 baseline，不是生产稳定结论。 |
 | 安全边界是什么？ | 权限拒绝不能泄露未授权内容；真实飞书来源先过 review policy，重要/敏感/冲突内容停在 candidate；reminder 只生成 candidate；不宣称 production live 或真实 DM 到 `fmc_*` / `memory.*` live E2E 已完成。 |
 
 评委现场若没有时间跑 benchmark，只展示本报告和以下命令即可：
@@ -256,7 +258,7 @@ python3 -m memory_engine benchmark run benchmarks/copilot_heartbeat_cases.json -
 
 ## 当前局限
 
-- 样例规模仍是 MVP / 产品化打磨级：recall 40 条、candidate 57 条、conflict 35 条、layer 40 条、prefetch 20 条、heartbeat 20 条、real_feishu 25 条。适合证明链路，不代表最终复赛级压力测试。
+- 样例规模仍是 MVP / 产品化打磨级：recall 40 条、candidate 57 条、conflict 35 条、layer 40 条、prefetch 20 条、heartbeat 20 条、real_feishu 40 条、realistic shared-corpus 80 条语料 / 125 个 query。适合证明链路和暴露短板，不代表最终复赛级压力测试或生产稳定性。
 - `reports/` 的 JSON / CSV 是本地运行证据，没有提交；评委材料优先读本报告和可复现命令。
 - Cognee optional recall channel 在这些本地 benchmark 中显示为 unavailable；本报告验证的是 Copilot runner、状态机、hybrid retrieval、prefetch 和 heartbeat dry-run。真实 Cognee / Ollama embedding 已由 Phase D live gate 单独验证，不把本 benchmark 报告写成长期 embedding 服务证明。
 - heartbeat 仍是 reminder candidate / dry-run，不真实发群，不绕过治理层自动写 active memory；UX-05 只补确认有用、忽略、延后、关闭同类提醒的可控动作、冷却状态和审计口径。

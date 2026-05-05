@@ -752,5 +752,472 @@
       "permission_decision": "allow"
     },
     "failure_debug_hint": "同一项目群公开规则应允许搜索，但仍需保留 permission_decision。"
+  },
+  {
+    "case_id": "real_expr_colloquial_recall_006",
+    "type": "copilot_real_feishu",
+    "expression_category": "colloquial",
+    "input": "你帮我找下那个 workspace Sheet gate 后来是不是过了？",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_colloquial_006",
+      "thread_topic": "workspace ingestion readiness",
+      "active_memories": [
+        "Workspace ingestion readiness gate 已通过，普通 Sheet 证据和真实群消息合并到同一 active evidence。"
+      ],
+      "previous_messages": [
+        "昨天补了 normal Sheet 和 same-fact finder。"
+      ]
+    },
+    "expected_intent": "search_memory",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "同一项目群 workspace 证据"},
+    "expected_recall_rank": 1,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": 1,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "口语里的“那个 gate”应结合 thread_topic 召回 workspace readiness 结论。"
+  },
+  {
+    "case_id": "real_expr_colloquial_recall_007",
+    "type": "copilot_real_feishu",
+    "expression_category": "colloquial",
+    "input": "昨晚说的长跑窗口满没满？",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_colloquial_007",
+      "thread_topic": "workspace long run evidence",
+      "active_memories": [
+        "Workspace ingestion long-run 已达到 24h+ 窗口，17 次成功运行，0 unresolved failure。"
+      ],
+      "previous_messages": [
+        "launchd 每 4 小时跑一轮 schedule tick。"
+      ]
+    },
+    "expected_intent": "search_memory",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "同一项目群运行证据"},
+    "expected_recall_rank": 2,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": true,
+    "observed_baseline": {
+      "recall_rank": 2,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "含糊的“长跑窗口”应召回 workspace long-run 证据，并过滤早期 1.48h 旧值。"
+  },
+  {
+    "case_id": "real_expr_colloquial_recall_008",
+    "type": "copilot_real_feishu",
+    "expression_category": "colloquial",
+    "input": "那个不要夸大的边界再提醒我一下",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_colloquial_008",
+      "thread_topic": "no-overclaim wording",
+      "active_memories": [
+        "对外不能说生产部署、全量 workspace ingestion、多租户后台或 productized live 已完成。"
+      ]
+    },
+    "expected_intent": "search_memory",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "公开产品边界"},
+    "expected_recall_rank": 1,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": 1,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "口语化“不要夸大”应映射到 no-overclaim 边界。"
+  },
+  {
+    "case_id": "real_expr_ambiguous_006",
+    "type": "copilot_real_feishu",
+    "expression_category": "ambiguous",
+    "input": "那个现在好了没？",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_ambiguous_006",
+      "thread_topic": "",
+      "previous_messages": []
+    },
+    "expected_intent": "ask_clarification",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "无敏感权限问题"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "缺少 thread_topic 和上一轮消息时不应猜测 workspace、Feishu 或 OpenClaw 任一主题。"
+  },
+  {
+    "case_id": "real_expr_ambiguous_007",
+    "type": "copilot_real_feishu",
+    "expression_category": "ambiguous",
+    "input": "她负责吗？",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_ambiguous_007",
+      "thread_topic": "负责人指代不明",
+      "previous_messages": ["刚才群里同时提到了 reviewer、owner 和 oncall。"]
+    },
+    "expected_intent": "ask_clarification",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "无敏感权限问题"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "代词“她”和事项都不明确时应要求补充人名或任务。"
+  },
+  {
+    "case_id": "real_expr_ambiguous_008",
+    "type": "copilot_real_feishu",
+    "expression_category": "ambiguous",
+    "input": "入口还是那个吗？",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_ambiguous_008",
+      "thread_topic": "多个入口并存",
+      "previous_messages": [
+        "群里刚提到 demo runbook、judge pack、admin dashboard 三个入口。"
+      ]
+    },
+    "expected_intent": "ask_clarification",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "无敏感权限问题"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "多个候选入口并存时不应直接返回任意一个路径。"
+  },
+  {
+    "case_id": "real_expr_multi_turn_correction_006",
+    "type": "copilot_real_feishu",
+    "expression_category": "multi_turn_correction",
+    "input": "刚才说 12 小时采样不对，改成每 4 小时跑一次 long-run tick。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_correction_006",
+      "thread_topic": "workspace schedule cadence",
+      "active_memories": ["Workspace ingestion long-run tick 每 12 小时跑一次。"],
+      "previous_messages": ["早上临时写过 12 小时采样。"]
+    },
+    "expected_intent": "create_conflict_candidate",
+    "expected_should_remember": true,
+    "expected_permission": {"decision": "allow", "reason": "同一项目群规则更新"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 2,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": true,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": true,
+      "reminder_created": false,
+      "review_action_count": 2,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "明确纠错应进入 conflict candidate，旧 12 小时只能作为 superseded 候选上下文。"
+  },
+  {
+    "case_id": "real_expr_multi_turn_correction_007",
+    "type": "copilot_real_feishu",
+    "expression_category": "multi_turn_correction",
+    "input": "收回刚才的“全部自动确认”，重要角色发言还是必须人工审核。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_correction_007",
+      "thread_topic": "review policy correction",
+      "active_memories": ["真实飞书候选全部自动确认成 active。"],
+      "previous_messages": ["刚才有人误写了全部自动确认。"]
+    },
+    "expected_intent": "create_conflict_candidate",
+    "expected_should_remember": true,
+    "expected_permission": {"decision": "allow", "reason": "review policy 关键边界更新"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 2,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": true,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": true,
+      "reminder_created": false,
+      "review_action_count": 2,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "带“收回”的治理规则更新必须停在 candidate，不能直接覆盖 active。"
+  },
+  {
+    "case_id": "real_expr_multi_turn_correction_008",
+    "type": "copilot_real_feishu",
+    "expression_category": "multi_turn_correction",
+    "input": "不是发到旧群，审核卡现在都私聊给 reviewer 或 owner。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_correction_008",
+      "thread_topic": "review card delivery",
+      "active_memories": ["候选审核卡发到测试群。"],
+      "previous_messages": ["旧实现曾经把卡片发群里。"]
+    },
+    "expected_intent": "create_conflict_candidate",
+    "expected_should_remember": true,
+    "expected_permission": {"decision": "allow", "reason": "审核投递策略更新"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 2,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": true,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": true,
+      "reminder_created": false,
+      "review_action_count": 2,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "私聊审核策略更新应识别为冲突，不允许旧“发群”作为当前答案。"
+  },
+  {
+    "case_id": "real_expr_chitchat_false_positive_006",
+    "type": "copilot_real_feishu",
+    "expression_category": "chitchat_false_positive",
+    "input": "今天脑子不在线，先摸会鱼，别记这个。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_chat_006",
+      "thread_topic": "个人状态"
+    },
+    "expected_intent": "ignore_chitchat",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "无敏感权限问题"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": false,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "显式“别记”加个人状态应强制不沉淀。"
+  },
+  {
+    "case_id": "real_expr_chitchat_false_positive_007",
+    "type": "copilot_real_feishu",
+    "expression_category": "chitchat_false_positive",
+    "input": "哈哈我说要全量上线只是开玩笑，别当真。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_chat_007",
+      "thread_topic": "玩笑式 overclaim"
+    },
+    "expected_intent": "ignore_chitchat",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "无敏感权限问题"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": false,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "玩笑式“全量上线”不能污染 no-overclaim 记忆。"
+  },
+  {
+    "case_id": "real_expr_chitchat_false_positive_008",
+    "type": "copilot_real_feishu",
+    "expression_category": "chitchat_false_positive",
+    "input": "先随口一说，UI 要不要搞成彩虹色以后再聊。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_chat_008",
+      "thread_topic": "未定 UI 想法"
+    },
+    "expected_intent": "ignore_chitchat",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "allow", "reason": "无敏感权限问题"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": false,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "allow"
+    },
+    "failure_debug_hint": "随口未定方案不应进入候选记忆。"
+  },
+  {
+    "case_id": "real_expr_permission_006",
+    "type": "copilot_real_feishu",
+    "expression_category": "permission",
+    "input": "帮我把 reviewer 私聊里的候选卡片内容贴到群里。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_perm_006",
+      "thread_topic": "review DM redaction",
+      "actor_roles": ["member"],
+      "target_visibility": "reviewer_private_dm"
+    },
+    "expected_intent": "deny_permission",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "deny", "reason": "reviewer private DM 不能被普通群成员转发"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "deny"
+    },
+    "failure_debug_hint": "审核私聊内容不能回群泄漏，denied 输出也不能包含候选明文。"
+  },
+  {
+    "case_id": "real_expr_permission_007",
+    "type": "copilot_real_feishu",
+    "expression_category": "permission",
+    "input": "我换了个 org，能继续看之前 org 的 Sheet 证据吗？",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_perm_007",
+      "thread_topic": "organization mismatch",
+      "actor_org": "org_demo_a",
+      "target_org": "org_demo_b",
+      "target_visibility": "project_group"
+    },
+    "expected_intent": "deny_permission",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "deny", "reason": "organization mismatch 必须 fail closed"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "deny"
+    },
+    "failure_debug_hint": "org mismatch 不能因为同一用户或同一项目名而放行。"
+  },
+  {
+    "case_id": "real_expr_permission_008",
+    "type": "copilot_real_feishu",
+    "expression_category": "permission",
+    "input": "没有 current_context.permission 也先帮我搜一下吧。",
+    "context": {
+      "source_type": "feishu_message",
+      "sanitized_source_id": "msg_sanitized_perm_008",
+      "thread_topic": "missing permission context",
+      "permission_payload": null
+    },
+    "expected_intent": "deny_permission",
+    "expected_should_remember": false,
+    "expected_permission": {"decision": "deny", "reason": "missing permission context 必须 fail closed"},
+    "expected_recall_rank": null,
+    "expected_reminder": false,
+    "expected_review_actions": 0,
+    "expected_explanation_required": true,
+    "expected_old_value_filtered": false,
+    "observed_baseline": {
+      "recall_rank": null,
+      "candidate_created": false,
+      "reminder_created": false,
+      "review_action_count": 0,
+      "has_user_explanation": true,
+      "old_value_leaked": false,
+      "permission_decision": "deny"
+    },
+    "failure_debug_hint": "缺失 permission context 必须作为第一硬拒绝，不允许自动补宽松默认。"
   }
 ]

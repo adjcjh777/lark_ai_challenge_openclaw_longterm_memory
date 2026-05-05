@@ -10,7 +10,7 @@ class RealFeishuExpressionQualityGateTest(unittest.TestCase):
         report = build_quality_gate_report(
             {
                 "summary": {
-                    "case_count": 25,
+                    "case_count": 40,
                     "case_pass_rate": 1.0,
                     "recall_at_3": 0.9,
                     "false_memory_rate": 0.0,
@@ -33,7 +33,7 @@ class RealFeishuExpressionQualityGateTest(unittest.TestCase):
         report = build_quality_gate_report(
             {
                 "summary": {
-                    "case_count": 25,
+                    "case_count": 40,
                     "case_pass_rate": 0.76,
                     "recall_at_3": 0.875,
                     "false_memory_rate": 0.04,

@@ -15,8 +15,8 @@ from memory_engine.benchmark import run_benchmark  # noqa: E402
 
 DEFAULT_CASES = ROOT / "benchmarks/copilot_realistic_recall_challenge.json"
 DEFAULT_THRESHOLDS = {
-    "corpus_event_count_min": 60,
-    "query_count_min": 80,
+    "corpus_event_count_min": 80,
+    "query_count_min": 125,
     "case_pass_rate_min": 0.50,
     "recall_at_3_min": 0.60,
     "evidence_coverage_min": 0.70,
