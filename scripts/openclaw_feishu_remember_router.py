@@ -1835,8 +1835,9 @@ def _format_group_policy_result(result: dict[str, Any]) -> str:
         return "\n".join(
             [
                 "群级记忆设置未修改。",
-                "原因：需要 reviewer/admin 权限。",
+                "理由：需要 reviewer/admin 权限；普通成员不能开启非 @ 静默企业记忆提取。",
                 f"状态：{result.get('status')}",
+                "来源：OpenClaw gateway group policy gate。",
                 f"运行边界：{result.get('production_boundary')}",
             ]
         )
