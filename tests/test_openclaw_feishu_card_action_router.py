@@ -51,6 +51,28 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertEqual(tool_result, json.loads(stdout.getvalue()))
         self.assertIn("Pipeline file_load_from_filesystem", stderr.getvalue())
 
+    def test_main_accepts_memory_id_for_version_card_actions(self) -> None:
+        envelope = {
+            "action": "versions",
+            "memory_id": "mem_main_versions",
+            "chat_id": CHAT_ID,
+            "operator_open_id": OWNER_OPEN_ID,
+            "token": "card_action_main_versions",
+        }
+        tool_result = {"ok": True, "tool_result": {"ok": True}, "card": {"elements": []}}
+
+        stdout = io.StringIO()
+        with patch("sys.stdin", io.StringIO(json.dumps(envelope))), patch(
+            "scripts.openclaw_feishu_card_action_router.route_card_action",
+            return_value=tool_result,
+        ) as routed, contextlib.redirect_stdout(stdout):
+            exit_code = main()
+
+        self.assertEqual(0, exit_code)
+        self.assertEqual(tool_result, json.loads(stdout.getvalue()))
+        self.assertEqual("versions", routed.call_args.kwargs["action"])
+        self.assertEqual("mem_main_versions", routed.call_args.kwargs["candidate_id"])
+
     def test_owner_confirm_returns_final_status_card_without_buttons(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
@@ -337,6 +359,71 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertEqual("confirmed", duplicate["tool_result"]["review_status"])
         actions = [element for element in duplicate["card"]["elements"] if element.get("tag") == "action"]
         self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
+
+    def test_versions_card_action_returns_version_chain_card(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            first = route_remember_message(
+                text="/remember 决定：版本链按钮回归旧值 A。",
+                message_id="om_versions_action_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            route_card_action(
+                action="confirm",
+                candidate_id=first["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_versions_initial",
+                db_path=str(db_path),
+            )
+            conflict = route_remember_message(
+                text="/remember 决定：版本链按钮回归新值 B。",
+                message_id="om_versions_action_002",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            confirmed = route_card_action(
+                action="merge",
+                candidate_id=conflict["tool_result"]["candidate_id"],
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_versions_merge",
+                db_path=str(db_path),
+            )
+            memory_id = confirmed["tool_result"]["memory_id"]
+
+            version_chain = route_card_action(
+                action="versions",
+                candidate_id=memory_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_versions_click",
+                db_path=str(db_path),
+            )
+            replayed = route_card_action(
+                action="versions",
+                candidate_id=memory_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_versions_click",
+                db_path=str(db_path),
+            )
+
+        rendered = json.dumps(version_chain["card"], ensure_ascii=False)
+        self.assertTrue(version_chain["ok"])
+        self.assertEqual("fmc_memory_explain_versions", version_chain["tool_result"]["bridge"]["tool"])
+        self.assertIn("记忆版本链", rendered)
+        self.assertIn("版本链按钮回归新值 B", rendered)
+        self.assertIn("版本链按钮回归旧值 A", rendered)
+        self.assertTrue(replayed["ok"])
+        self.assertIn("记忆版本链", json.dumps(replayed["card"], ensure_ascii=False))
 
     def test_owner_undo_after_confirm_returns_candidate_card(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

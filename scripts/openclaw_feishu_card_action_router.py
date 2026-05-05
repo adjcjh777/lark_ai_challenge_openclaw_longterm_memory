@@ -17,7 +17,11 @@ from memory_engine.copilot.local_env import load_local_env_files  # noqa: E402
 from memory_engine.copilot.service import CopilotService  # noqa: E402
 from memory_engine.copilot.tools import handle_tool_request  # noqa: E402
 from memory_engine.db import connect, init_db  # noqa: E402
-from memory_engine.feishu_cards import build_candidate_review_card  # noqa: E402
+from memory_engine.feishu_cards import (  # noqa: E402
+    build_candidate_review_card,
+    build_card_from_text,
+    build_version_chain_card,
+)
 from memory_engine.repository import MemoryRepository  # noqa: E402
 
 SCOPE = "project:feishu_ai_challenge"
@@ -45,7 +49,32 @@ def route_card_action(
     db_path: str | None = None,
 ) -> dict[str, Any]:
     load_local_env_files(root=ROOT, override=True)
-    tool_name = ACTION_TO_TOOL[action]
+    if action in {"versions", "versions_full"}:
+        return _route_version_action(
+            action=action,
+            memory_id=candidate_id,
+            chat_id=chat_id,
+            operator_open_id=operator_open_id,
+            token=token,
+            db_path=db_path,
+        )
+    tool_name = ACTION_TO_TOOL.get(action)
+    if not tool_name:
+        reply = "\n".join(
+            [
+                "卡片动作未处理。",
+                f"原因：unsupported_card_action:{action or 'missing'}",
+                f"target_id：{candidate_id or '-'}",
+            ]
+        )
+        return {
+            "ok": True,
+            "tool_result": {
+                "ok": False,
+                "error": {"code": "unsupported_card_action", "action": action, "target_id": candidate_id},
+            },
+            "card": build_card_from_text(reply),
+        }
     conn = connect(db_path)
     init_db(conn)
     repo = MemoryRepository(conn)
@@ -130,6 +159,82 @@ def route_card_action(
         "ok": True,
         "tool_result": tool_result,
         "card": build_candidate_review_card(tool_result),
+    }
+
+
+def _route_version_action(
+    *,
+    action: str,
+    memory_id: str,
+    chat_id: str,
+    operator_open_id: str,
+    token: str,
+    db_path: str | None,
+) -> dict[str, Any]:
+    if not memory_id:
+        reply = "版本链未展示。\n原因：memory_id 缺失。"
+        return {
+            "ok": True,
+            "tool_result": {"ok": False, "error": {"code": "memory_id_required"}},
+            "card": build_card_from_text(reply),
+        }
+
+    context = {
+        "session_id": f"feishu:{chat_id}",
+        "chat_id": chat_id,
+        "scope": SCOPE,
+        "user_id": operator_open_id,
+        "tenant_id": TENANT_ID,
+        "organization_id": ORGANIZATION_ID,
+        "visibility_policy": VISIBILITY,
+        "intent": "explain_versions",
+        "thread_topic": memory_id[:80],
+        "allowed_scopes": [SCOPE],
+        "metadata": {
+            "entrypoint": "feishu_chat_card_action",
+            "card_token": token,
+        },
+        "permission": {
+            "request_id": token,
+            "trace_id": f"card-action-{token[-12:]}",
+            "actor": {
+                "open_id": operator_open_id,
+                "tenant_id": TENANT_ID,
+                "organization_id": ORGANIZATION_ID,
+                "roles": ["member"],
+            },
+            "source_context": {
+                "entrypoint": "feishu_chat",
+                "workspace_id": SCOPE,
+                "chat_id": chat_id,
+            },
+            "requested_action": "memory.explain_versions",
+            "requested_visibility": VISIBILITY,
+            "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        },
+    }
+    payload = {
+        "memory_id": memory_id,
+        "scope": SCOPE,
+        "include_archived": True,
+        "current_context": context,
+    }
+    service = CopilotService(db_path=db_path)
+    tool_result = handle_tool_request("memory.explain_versions", payload, service=service)
+    if not tool_result.get("ok"):
+        error = tool_result.get("error") if isinstance(tool_result.get("error"), dict) else {}
+        reply = "\n".join(
+            [
+                "版本链未展示。",
+                f"原因：{error.get('code') or 'unknown'}",
+                f"memory_id：{memory_id}",
+            ]
+        )
+        return {"ok": True, "tool_result": tool_result, "card": build_card_from_text(reply)}
+    return {
+        "ok": True,
+        "tool_result": tool_result,
+        "card": build_version_chain_card(tool_result, expanded=action == "versions_full"),
     }
 
 
@@ -288,7 +393,7 @@ def main() -> int:
     with contextlib.redirect_stdout(noisy_stdout):
         result = route_card_action(
             action=str(envelope.get("action") or ""),
-            candidate_id=str(envelope.get("candidate_id") or ""),
+            candidate_id=str(envelope.get("candidate_id") or envelope.get("memory_id") or ""),
             chat_id=str(envelope.get("chat_id") or ""),
             operator_open_id=str(envelope.get("operator_open_id") or ""),
             token=str(envelope.get("token") or ""),
