@@ -102,6 +102,111 @@ OpenClaw is pinned to:
 
 Do not upgrade OpenClaw while validating this project.
 
+## Full Local Deployment
+
+This is the complete demo / pre-production path for a new machine. It is not a
+production deployment path.
+
+### 1. Install prerequisites
+
+Use Python 3.11+ if possible. For OpenClaw staging, also install Node.js/npm and
+the locked OpenClaw version:
+
+```bash
+npm i -g openclaw@2026.4.24 --no-fund --no-audit
+```
+
+### 2. Clone and install
+
+```bash
+git clone https://github.com/adjcjh777/lark_ai_challenge_openclaw_longterm_memory.git
+cd lark_ai_challenge_openclaw_longterm_memory
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+pip install -e .
+cp .env.example .env
+python -m memory_engine init-db
+```
+
+Windows users can follow the same steps with PowerShell activation:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. Verify local demo readiness
+
+```bash
+python scripts/check_cross_platform_quick_deploy.py --profile local-demo --json
+python scripts/check_openclaw_version.py
+python scripts/check_demo_readiness.py --json
+python scripts/demo_seed.py --json-output reports/demo_replay.json
+```
+
+At this point the local replay demo is runnable.
+
+### 4. Enable the OpenClaw plugin path
+
+```bash
+openclaw plugins install --link --dangerously-force-unsafe-install ./agent_adapters/openclaw/plugin
+openclaw plugins enable feishu-memory-copilot
+openclaw plugins inspect feishu-memory-copilot --json
+python scripts/check_cross_platform_quick_deploy.py --profile openclaw-staging --json
+python scripts/check_feishu_dm_routing.py --json
+```
+
+The plugin inspect output should include the `fmc_*` memory tools.
+
+### 5. Start the local admin dashboard (optional)
+
+```bash
+python scripts/check_copilot_admin_readiness.py --db-path data/memory.sqlite
+python scripts/start_copilot_admin.py --db-path data/memory.sqlite --host 127.0.0.1 --port 8765
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765
+```
+
+### 6. Connect a controlled Feishu sandbox (optional)
+
+Only do this after `lark-cli` is configured and exactly one Feishu listener is
+planned. Do not run the legacy listener and OpenClaw websocket against the same
+bot at the same time.
+
+```bash
+python scripts/check_feishu_listener_singleton.py --planned-listener copilot-lark-cli
+export LARK_CLI_PROFILE=feishu-ai-challenge
+export COPILOT_FEISHU_ALLOWED_CHAT_IDS="<controlled_test_chat_id>"
+export COPILOT_FEISHU_REVIEWER_OPEN_IDS="<reviewer_open_id>"
+bash scripts/start_copilot_feishu_live.sh
+```
+
+If OpenClaw websocket owns Feishu events instead, keep this repo listener
+stopped and use:
+
+```bash
+python scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
+openclaw channels status --probe --json
+```
+
+### 7. Optional embedding / Cognee staging
+
+The core demo works without a live embedding provider. To test the optional
+local embedding path:
+
+```bash
+ollama pull qwen3-embedding:0.6b-fp16
+python scripts/check_embedding_provider.py --model ollama/qwen3-embedding:0.6b-fp16 --dimensions 1024
+python scripts/check_cross_platform_quick_deploy.py --profile embedding --json
+```
+
+For OS-specific setup details, see
+`docs/productization/cross-platform-quick-deploy.md`.
+
 ## Demo
 
 Replay the fixed demo flow:
