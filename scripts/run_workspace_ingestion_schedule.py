@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.evidence_patch_merge import contains_any, flatten_strings  # noqa: E402
+
 DEFAULT_CONFIG_PATH = ROOT / "deploy" / "workspace-ingestion.schedule.example.json"
 SCHEMA_VERSION = "workspace_ingestion_schedule/v1"
 BOUNDARY = (
@@ -121,7 +126,7 @@ def _load_config(config_path: Path) -> dict[str, Any]:
         }
     if not isinstance(config, dict):
         config = {}
-    leaked = [value for value in _flatten_strings(config) if _contains_any(value, SECRET_VALUE_MARKERS)]
+    leaked = [value for value in flatten_strings(config) if contains_any(value, SECRET_VALUE_MARKERS)]
     if leaked:
         return {
             "ok": False,
@@ -570,26 +575,6 @@ def _int_value(value: Any) -> int:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     return 0
-
-
-def _flatten_strings(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        result: list[str] = []
-        for item in value.values():
-            result.extend(_flatten_strings(item))
-        return result
-    if isinstance(value, list):
-        result = []
-        for item in value:
-            result.extend(_flatten_strings(item))
-        return result
-    return []
-
-
-def _contains_any(value: str, markers: tuple[str, ...]) -> bool:
-    return any(marker in value for marker in markers)
 
 
 if __name__ == "__main__":
