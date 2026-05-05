@@ -209,14 +209,10 @@ def section_dict(value: Any) -> dict[str, Any]:
 def flatten_strings(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
-    if isinstance(value, dict):
+    if isinstance(value, (dict, list)):
+        items = value.values() if isinstance(value, dict) else value
         strings: list[str] = []
-        for item in value.values():
-            strings.extend(flatten_strings(item))
-        return strings
-    if isinstance(value, list):
-        strings = []
-        for item in value:
+        for item in items:
             strings.extend(flatten_strings(item))
         return strings
     return []

@@ -1,13 +1,12 @@
 # Feishu Memory Copilot 人类阅读指南
 
-日期：2026-05-04
-面向读者：第一次接手项目的人、评委、产品/技术同学、后续维护者
+日期：2026-05-04；读者：第一次接手项目的人、评委、产品/技术同学、后续维护者
 
 ## 先看这个
 
-当前项目已经有 demo / pre-production 闭环。OpenClaw 工具、CopilotService、权限门控、候选记忆、证据、版本链、审计、受控飞书测试群和本地/staging 证据都能串起来。
+当前项目已经有 demo / pre-production 闭环。OpenClaw 工具、`CopilotService`、权限门控、候选记忆、证据、版本链、审计和受控飞书测试群能串起来。
 
-现在正在补的是 workspace ingestion：飞书文档、云文档、Bitable、Sheet 这类企业知识来源如何进入同一条记忆治理链路。当前完成的是 **limited workspace pilot / controlled readiness**，不是生产全量 workspace ingestion。它已经能做受控资源发现、按类型读取、review-policy 路由、registry skip / stale / failed / cursor 证据、mixed-source 本地佐证 gate、本地热路径 latency gate、受控 normal Sheet、真实群消息 same-fact 和 bot 单聊回读。后续产品化仍要扩大 organic 企业样本和 24h+ long-run 证据。
+现在补的是 workspace ingestion：飞书文档、云文档、Bitable、Sheet 这类企业知识来源如何进入同一条记忆治理链路。当前完成的是 **limited workspace pilot / controlled readiness**，不是生产全量 workspace ingestion。它已经能做受控资源发现、按类型读取、review-policy 路由、registry 记录、mixed-source 佐证、受控 normal Sheet、真实群消息 same-fact 和 bot 单聊回读。后续仍要扩大 organic 企业样本和 24h+ long-run 证据。
 
 ## 这个项目为什么立项
 
@@ -18,7 +17,7 @@
 - 新同学或 Agent 执行任务前，不知道历史上下文。
 - 关键 deadline、负责人、部署参数、风险结论没有被整理成可复用记忆。
 
-Feishu Memory Copilot 的目标是把这些分散信息整理成“企业记忆”：有当前结论、有来源证据、有版本、有权限、有人工确认、有审计记录。
+Feishu Memory Copilot 的目标是把这些分散信息整理成“企业记忆”：能看到当前结论、来源证据、版本、权限、确认人和审计记录。
 
 ## 一句话产品定义
 
