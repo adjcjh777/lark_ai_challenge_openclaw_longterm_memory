@@ -6,12 +6,11 @@
 
 ## 先看这个
 
-1. 当前项目已完成 MVP / Demo / Pre-production 本地闭环；2026-05-03 复核九项 productization completion gate 已通过。
-2. 2026-05-04 新增的是 **limited workspace pilot**：它能发现飞书文档、云文档、Bitable 等资源，把内容按类型送进 candidate pipeline，并用 registry 记录 skip / stale / failed / cursor 证据。它还不是生产全量 workspace ingestion。
-3. Workspace 路线已经决定为 lark-cli first：当前先用 `drive +search`、Drive folder/root walk、Wiki space walk、`docs +fetch`、`sheets +read` 和 `base +record-*` 建 pilot；以后只有在长期 daemon 或高吞吐热路径上，再把子进程边界替换成 native Feishu OpenAPI / SDK。
-4. 已完成的日期计划和 handoff 文档已归档到 `archive/` 和 `productization/handoffs/`，不再作为执行入口。
-5. 当前代码、`README.md`、`productization/full-copilot-next-execution-doc.md` 和 workspace 目标审计是事实源。
-6. 读文档时要带着当前代码边界：受控测试群是 allowlist 模式；新群默认只进入 `pending_onboarding` 群策略，不记录消息内容。只有 reviewer/admin 显式 `/enable_memory` 后，该群的非 `@Bot` 消息才会做静默 candidate 探测。命中后默认不回群，审核卡片优先 DM/private 给 owner/reviewer；`@Bot` / 私聊仍是主动交互路径。
+当前项目已完成 MVP / Demo / Pre-production 闭环；limited workspace pilot 也已有 controlled readiness 证据。它能发现飞书文档、云文档、Sheet、Bitable 等资源，把内容按类型送进 candidate pipeline，并用 registry 留下 skip / stale / failed / cursor 记录。它还不是生产全量 workspace ingestion。
+
+Workspace 路线是 lark-cli first：先用 `drive +search`、Drive folder/root walk、Wiki space walk、`docs +fetch`、`sheets +read` 和 `base +record-*` 建 pilot。只有长期 daemon、高吞吐热路径或更细的 rate-limit 管理需要时，再替换成 native Feishu OpenAPI / SDK。
+
+已完成的日期计划和 handoff 都是历史证据，不再作为执行入口。当前事实源是代码、根目录 `README.md`、`productization/full-copilot-next-execution-doc.md` 和 workspace 目标审计。读文档时也要记住当前飞书边界：allowlist 或 reviewer/admin 显式 `/enable_memory` 后才会做非 `@Bot` 静默 candidate 探测；新群默认只进入 `pending_onboarding`，不记录消息正文。
 
 ## 活跃文档入口（当前应读的）
 

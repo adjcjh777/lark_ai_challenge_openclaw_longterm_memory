@@ -11,11 +11,24 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+import sys
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.evidence_patch_merge import (  # noqa: E402
+    contains_any,
+    count_number,
+    flatten_strings,
+    has_evidence_refs,
+    is_iso_datetime,
+    real_value,
+)
+
 DEFAULT_MANIFEST_PATH = ROOT / "deploy" / "workspace-ingestion.production-evidence.example.json"
 SCHEMA_VERSION = "workspace_productized_ingestion_evidence/v1"
 BOUNDARY = (
@@ -41,6 +54,10 @@ SECRET_VALUE_MARKERS = (
     "rightcode_",
 )
 PLACEHOLDER_MARKERS = ("__FILL", "__CHANGE_ME", "example.com", "localhost", "127.0.0.1")
+_has_evidence_refs = partial(has_evidence_refs, placeholder_markers=PLACEHOLDER_MARKERS)
+_real_value = partial(real_value, placeholder_markers=PLACEHOLDER_MARKERS)
+_is_iso_datetime = is_iso_datetime
+_count = count_number
 
 
 def main() -> int:
@@ -136,7 +153,7 @@ def _check_manifest_shape(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def _check_secret_redaction(manifest: dict[str, Any]) -> dict[str, Any]:
-    leaked = sorted({value for value in _flatten_strings(manifest) if _contains_any(value, SECRET_VALUE_MARKERS)})
+    leaked = sorted({value for value in flatten_strings(manifest) if contains_any(value, SECRET_VALUE_MARKERS)})
     return {
         "status": "pass" if not leaked else "fail",
         "description": "Manifest does not contain token or secret-like values.",
@@ -330,51 +347,6 @@ def format_report(report: dict[str, Any]) -> str:
         lines.append("")
         lines.append(f"next_step: {report['next_step']}")
     return "\n".join(lines)
-
-
-def _has_evidence_refs(data: dict[str, Any]) -> bool:
-    refs = data.get("evidence_refs")
-    return isinstance(refs, list) and bool(refs) and all(_real_value(item) for item in refs)
-
-
-def _real_value(value: Any) -> bool:
-    return isinstance(value, str) and bool(value.strip()) and not _contains_any(value, PLACEHOLDER_MARKERS)
-
-
-def _count(value: Any) -> float:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    return 0.0
-
-
-def _is_iso_datetime(value: Any) -> bool:
-    if not isinstance(value, str) or not value.strip():
-        return False
-    try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    return True
-
-
-def _flatten_strings(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        result: list[str] = []
-        for item in value.values():
-            result.extend(_flatten_strings(item))
-        return result
-    if isinstance(value, list):
-        result = []
-        for item in value:
-            result.extend(_flatten_strings(item))
-        return result
-    return []
-
-
-def _contains_any(value: str, markers: tuple[str, ...]) -> bool:
-    return any(marker in value for marker in markers)
 
 
 if __name__ == "__main__":

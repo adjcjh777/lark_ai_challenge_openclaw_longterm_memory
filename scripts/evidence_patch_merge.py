@@ -226,6 +226,49 @@ def contains_unsafe_value(config: EvidenceMergeConfig, value: str) -> bool:
     return any(marker in value for marker in (*config.placeholder_markers, *config.secret_value_markers))
 
 
+def contains_any(value: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in value for marker in markers)
+
+
+def real_value(value: Any, placeholder_markers: tuple[str, ...]) -> bool:
+    return isinstance(value, str) and bool(value.strip()) and not contains_any(value, placeholder_markers)
+
+
+def has_evidence_refs(data: dict[str, Any], placeholder_markers: tuple[str, ...]) -> bool:
+    refs = data.get("evidence_refs")
+    return isinstance(refs, list) and bool(refs) and all(real_value(item, placeholder_markers) for item in refs)
+
+
+def count_number(value: Any) -> float:
+    if isinstance(value, bool):
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    return 0.0
+
+
+def parse_iso_datetime(value: Any, placeholder_markers: tuple[str, ...] = ()) -> datetime | None:
+    if not isinstance(value, str) or not value.strip() or contains_any(value, placeholder_markers):
+        return None
+    try:
+        return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def is_iso_datetime(value: Any, placeholder_markers: tuple[str, ...] = ()) -> bool:
+    return parse_iso_datetime(value, placeholder_markers) is not None
+
+
+def is_future_datetime(value: Any, placeholder_markers: tuple[str, ...] = ()) -> bool:
+    parsed = parse_iso_datetime(value, placeholder_markers)
+    if parsed is None:
+        return False
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed > datetime.now(timezone.utc)
+
+
 def failed_result(
     *,
     config: EvidenceMergeConfig,
