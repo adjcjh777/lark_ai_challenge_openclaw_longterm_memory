@@ -134,109 +134,33 @@ docs/productization/feishu-single-listener-handoff.md
 
 ## Phase A：Storage Migration + Audit Table
 
-状态：已完成本地闭环，详见 [Phase A handoff](phase-a-storage-audit-handoff.md)。Phase B 已补受控 runtime 证据，Phase D 已补 live embedding gate，下一轮优先从 Phase E 开始。
-
-目标：让 Copilot Core 具备产品级事实源，不再只有 legacy scope。
-
-主要文件：
-
-```text
-memory_engine/db.py
-memory_engine/repository.py
-memory_engine/copilot/service.py
-memory_engine/copilot/governance.py
-memory_engine/copilot/permissions.py
-memory_engine/copilot/healthcheck.py
-tests/test_copilot_permissions.py
-tests/test_copilot_healthcheck.py
-docs/productization/contracts/storage-contract.md
-docs/productization/contracts/audit-observability-contract.md
-```
-
-必须完成：
-
-1. 已完成：新增或迁移字段：`tenant_id`、`organization_id`、`visibility_policy`。
-2. 已完成：新增 audit table，至少记录：
-   - `audit_id`
-   - `event_type`
-   - `tool_name`
-   - `memory_id`
-   - `candidate_id`
-   - `actor_id`
-   - `tenant_id`
-   - `organization_id`
-   - `scope`
-   - `permission_decision`
-   - `request_id`
-   - `trace_id`
-   - `created_at`
-3. 已完成：`memory.confirm`、`memory.reject`、permission denied、limited ingestion、heartbeat candidate 都写 audit record。
-4. 已完成：`scripts/check_copilot_health.py --json` 不再把 storage schema 报为 warning。
-5. 已完成：旧数据能兼容读取；不要破坏现有 benchmark。
+状态：已完成本地闭环，详见 [Phase A handoff](phase-a-storage-audit-handoff.md)。本阶段把 Copilot Core 从 legacy scope 推到带 tenant / org / visibility / audit 的事实源；相关代码集中在 `memory_engine/db.py`、`memory_engine/repository.py`、`memory_engine/copilot/` 和 `docs/productization/contracts/`。
 
 验收命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
 git diff --check
 python3 -m compileall memory_engine scripts
 python3 -m unittest tests.test_copilot_permissions tests.test_copilot_healthcheck
 python3 -m unittest tests.test_copilot_schemas tests.test_copilot_tools
 python3 scripts/check_copilot_health.py --json
-ollama ps
 ```
-
-完成标准：
-
-- 已完成：healthcheck 中 `storage_schema.status=pass`。
-- 已完成：audit smoke test 能证明 confirm/reject/deny、limited ingestion candidate、heartbeat candidate 都有记录。
-- 已完成：所有旧 Copilot tests 仍通过。
 
 ## Phase B：真实 OpenClaw Agent Runtime 验收
 
-状态：已完成受控闭环，详见 [Phase B runtime evidence](openclaw-runtime-evidence.md) 和 [Phase B handoff](phase-b-openclaw-runtime-handoff.md)。边界：这证明 OpenClaw Agent runtime 可以通过 `exec` 调用仓库证据脚本进入 `handle_tool_request()` / `CopilotService`；后续 first-class registry 和 Feishu websocket staging running 证据已分别补齐。
-
-目标：把 OpenClaw 产品形态从 schema/local bridge/replay 推到真实 runtime 证据。
-
-主要文件：
-
-```text
-agent_adapters/openclaw/memory_tools.schema.json
-agent_adapters/openclaw/feishu_memory_copilot.skill.md
-agent_adapters/openclaw/examples/*.json
-memory_engine/copilot/tools.py
-docs/demo-runbook.md
-docs/productization/openclaw-runtime-evidence.md
-docs/productization/feishu-staging-runbook.md
-```
-
-必须完成：
-
-1. 已完成：新增 `docs/productization/openclaw-runtime-evidence.md`。
-2. 已完成：真实 runtime 验收前先运行 `python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket`，确认没有 legacy `memory_engine feishu listen`、repo 内 `copilot-feishu listen` 或直接 `lark-cli event +subscribe` 同时消费同一个 bot；如果只看到泛化 `openclaw-gateway`，必须继续用 `channels.status` / gateway log 判断 Feishu channel 是否真的 active。
-3. 已完成：在真实 OpenClaw Agent runtime 中至少跑通 3 条：
-   - 历史决策召回：Agent 调用 `memory.search`。
-   - 候选确认：Agent 调用 `memory.create_candidate` 后再确认或拒绝。
-   - 任务前上下文：Agent 调用 `memory.prefetch` 后生成 checklist / plan / report。
-4. 已完成：每条记录输入、输出、tool、request_id、trace_id、permission_decision、失败回退。
-5. 已完成：边界写清，不冒称 production live；first-class tool registry 和 Feishu websocket staging running 证据已在后续 handoff 中补齐。
+状态：已完成受控闭环，详见 [Phase B runtime evidence](openclaw-runtime-evidence.md) 和 [Phase B handoff](phase-b-openclaw-runtime-handoff.md)。本阶段只证明 OpenClaw Agent runtime 可以进入 `handle_tool_request()` / `CopilotService`，不证明 production live；后续 first-class registry 和 Feishu websocket staging 证据已单独补齐。
 
 验收命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
 python3 scripts/check_demo_readiness.py --json
 python3 -m unittest tests.test_copilot_tools tests.test_demo_seed tests.test_demo_readiness
 git diff --check
-ollama ps
 ```
-
-完成标准：
-
-- 已完成：runtime evidence 文档可给评委或队友复现。
-- 已完成：至少 3 条 runtime flow 有证据。
-- 已完成：README 不再只依赖 local bridge 表述。
-- 已完成：验收记录能证明同一时间没有 repo 内 lark-cli listener 冲突；如果后续 OpenClaw websocket owns the bot，仍不得同时运行 lark-cli event listener；如果泛化 `openclaw-gateway` 正在运行，repo 内 lark-cli planned listener 默认 fail closed。
 
 ## Phase C：Feishu Staging Runbook
 
@@ -292,88 +216,32 @@ ollama ps
 
 ## Phase D：Live Cognee / Ollama Embedding Gate
 
-状态：已完成可复现 live gate，详见 [Phase D handoff](phase-d-live-embedding-handoff.md)。Phase E no-overclaim 审查也已完成，见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。
-
-目标：把 embedding 从 configuration-only warning 推进到可选 live check，并保持可清理。
-
-主要文件：
-
-```text
-scripts/check_embedding_provider.py
-scripts/check_live_embedding_gate.py
-scripts/spike_cognee_local.py
-memory_engine/copilot/cognee_adapter.py
-memory_engine/copilot/embedding-provider.lock
-docs/reference/local-windows-cognee-embedding-setup.md
-tests/test_live_embedding_gate.py
-```
-
-必须完成：
-
-1. 已完成：明确 live embedding check 与 fallback check 的区别。
-2. 已完成：真实运行 provider 检查时执行 `ollama ps`。
-3. 已完成：如果拉起 `qwen3-embedding:0.6b-fp16` 或其他本项目模型，验证结束后自动停止，除非文档写明保留原因。
-4. 已完成：healthcheck 继续允许 configuration-only，但 productized readiness 有 live embedding gate 的结果。
+状态：已完成可复现 live gate，详见 [Phase D handoff](phase-d-live-embedding-handoff.md)。本阶段把 embedding 从 configuration-only warning 推到可选 live check，并要求验证结束后清理本项目模型；这仍不是长期 embedding 服务。
 
 验收命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
 python3 scripts/check_live_embedding_gate.py --json
 python3 scripts/check_embedding_provider.py
 python3 scripts/spike_cognee_local.py --dry-run
-ollama ps
 git diff --check
 ```
 
-完成标准：
-
-- 已完成：成功时记录 live provider 维度、模型名、endpoint。
-- 已完成：失败时记录 fallback 和原因。
-- 已完成：最终 `ollama ps` 无本项目模型驻留，或文档写明为什么保留。
-
 ## Phase E：Product QA + No-overclaim 审查
 
-状态：已完成，详见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。后续已完成 `memory.*` first-class OpenClaw 原生工具注册本机证据、OpenClaw Feishu websocket running 本机 staging 证据、一次受控真实 Feishu DM allow-path live E2E 证据、评委/用户主路径脚本、真实 Feishu API review-policy 拉取入口、审计/告警/运维 healthcheck 面和 productized live 长期运行方案；下一步只有在明确继续产品化时，才推进真实 Feishu 样本实测扩样，或从长期运行方案里选择一个 L1/L2 gate 做受控实施。
-
-目标：让所有交付物讲同一个产品故事。
-
-主要文件：
-
-```text
-README.md
-docs/demo-runbook.md
-docs/benchmark-report.md
-docs/memory-definition-and-architecture-whitepaper.md
-docs/productization/prd-completion-audit-and-gap-tasks.md
-docs/productization/full-copilot-next-execution-doc.md
-docs/plans/*handoff.md
-```
-
-必须检查：
-
-- 已完成：不把 replay 写成 live。
-- 已完成：不把 live sandbox 写成生产部署。
-- 已完成：不把 limited ingestion 写成全量 workspace ingestion。
-- 已完成：不把 configuration-only embedding 写成 live embedding 已通过；当前可说 Phase D live embedding gate 已单独通过。
-- 已完成：不把 local bridge 写成真实 OpenClaw runtime；当前可说 Phase B 已有 OpenClaw Agent runtime 受控证据，且后续已补 first-class tool registry 本机插件证据。
-- 已完成：不把重要/敏感/冲突候选写成自动 active；只有低重要性安全候选允许 policy 自动确认。
+状态：已完成，详见 [Phase E handoff](phase-e-no-overclaim-handoff.md)。本阶段统一 README、Demo runbook、Benchmark Report、白皮书、产品化主控和 handoff 口径：demo / sandbox / staging 可以写，production live / 全量 workspace ingestion / 长期 embedding / 完整多租户后台不能写。
 
 验收命令：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
 python3 scripts/check_demo_readiness.py --json
 python3 scripts/check_copilot_health.py --json
 git diff --check
-ollama ps
 ```
-
-完成标准：
-
-- 已完成：README、runbook、benchmark report、whitepaper、handoff 口径一致。
-- 已完成：每个未完成项都有下一步任务入口。
-- 已完成：飞书共享看板与 README 顶部任务一致。
 
 ## 每轮执行前固定动作
 
