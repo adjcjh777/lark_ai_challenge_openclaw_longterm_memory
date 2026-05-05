@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from memory_engine.copilot.knowledge_pages import compile_project_memory_cards
 from memory_engine.db import db_path_from_env, init_db
@@ -42,6 +43,8 @@ ADMIN_PRODUCTION_EVIDENCE_MANIFEST_ENV_NAMES = (
     "FEISHU_MEMORY_COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST",
     "COPILOT_ADMIN_PRODUCTION_EVIDENCE_MANIFEST",
 )
+ADMIN_TIMEZONE_ENV_NAMES = ("FEISHU_MEMORY_COPILOT_ADMIN_TIMEZONE", "COPILOT_ADMIN_TIMEZONE")
+DEFAULT_ADMIN_TIMEZONE = "Asia/Shanghai"
 MAX_LIMIT = 200
 GRAPH_QUALITY_FORBIDDEN_SUBSTRINGS = ("app_secret=", "access_token=", "refresh_token=", "demo-secret")
 
@@ -2317,9 +2320,20 @@ def _ms_to_iso(value: Any) -> str | None:
     try:
         import datetime as _dt
 
-        return _dt.datetime.fromtimestamp(int(value) / 1000, tz=_dt.timezone.utc).isoformat()
+        return _dt.datetime.fromtimestamp(int(value) / 1000, tz=_admin_display_timezone()).isoformat()
     except (TypeError, ValueError, OSError):
         return None
+
+
+def _admin_display_timezone() -> ZoneInfo:
+    for name in ADMIN_TIMEZONE_ENV_NAMES:
+        value = os.environ.get(name)
+        if value:
+            try:
+                return ZoneInfo(value.strip())
+            except ZoneInfoNotFoundError:
+                break
+    return ZoneInfo(DEFAULT_ADMIN_TIMEZONE)
 
 
 def _quote_identifier(identifier: str) -> str:

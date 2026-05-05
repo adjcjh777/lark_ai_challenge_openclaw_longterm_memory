@@ -12,7 +12,13 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from memory_engine.cli import build_parser
-from memory_engine.copilot.admin import AdminQueryService, AdminSsoConfig, create_admin_server, start_embedded_admin
+from memory_engine.copilot.admin import (
+    AdminQueryService,
+    AdminSsoConfig,
+    _ms_to_iso,
+    create_admin_server,
+    start_embedded_admin,
+)
 from memory_engine.db import init_db
 from memory_engine.repository import MemoryRepository, now_ms
 from scripts.check_copilot_admin_readiness import run_admin_readiness
@@ -29,6 +35,9 @@ class CopilotAdminTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.conn.close()
         self.tmp.close()
+
+    def test_admin_timestamp_display_defaults_to_shanghai_timezone(self) -> None:
+        self.assertEqual("1970-01-01T08:00:00+08:00", _ms_to_iso(0))
 
     def _seed_rows(self) -> None:
         active = self.repo.remember("project:admin_demo", "决定：后台服务默认只绑定 127.0.0.1。")
