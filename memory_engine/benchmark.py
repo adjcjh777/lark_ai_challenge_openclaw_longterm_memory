@@ -1984,12 +1984,7 @@ def _metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "evidence_coverage": _ratio(len(evidence_cases), total),
         "layer_case_count": len(layer_cases),
         "layer_accuracy": _ratio(len(layer_passed), len(layer_cases)) if layer_cases else 0.0,
-        "avg_latency_ms": round(
-            sum(result["latency_ms"] for result in results) / total,
-            3,
-        )
-        if total
-        else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
     }
 
 
@@ -2022,7 +2017,7 @@ def _copilot_layer_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "l1_hot_recall_p95_ms": _percentile(l1_latencies, 0.95),
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "evidence_coverage": _ratio(evidence_present, total),
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
         "failure_type_counts": _failure_type_counts(results),
     }
@@ -2045,7 +2040,7 @@ def _copilot_recall_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "recall_at_3": _ratio(recall_at_3, total),
         "evidence_coverage": _ratio(evidence_present, total),
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
         "failure_type_counts": _failure_type_counts(results),
     }
@@ -2068,7 +2063,7 @@ def _copilot_candidate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "false_positive_candidate": false_positive,
         "evidence_missing": evidence_missing,
         "failure_type_counts": _failure_type_counts(results),
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
     }
 
@@ -2095,7 +2090,7 @@ def _copilot_conflict_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "superseded_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
         "evidence_coverage": _ratio(explain_evidence, total),
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
         "failure_type_counts": _failure_type_counts(results),
     }
@@ -2117,7 +2112,7 @@ def _copilot_prefetch_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "agent_task_context_use_rate": _ratio(used_context, len(context_required_cases)),
         "evidence_coverage": _ratio(evidence_present, len(context_required_cases)),
         "stale_leakage_rate": _ratio(len(forbidden_leaks), len(forbidden_cases)),
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
         "failure_type_counts": _failure_type_counts(results),
     }
@@ -2142,7 +2137,7 @@ def _copilot_heartbeat_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         "duplicate_reminder_rate": _ratio(duplicate_cases, total),
         "user_confirmation_burden": round(total_actions / total_candidates, 3) if total_candidates else 0.0,
         "avg_candidate_count": round(sum(result["candidate_count"] for result in results) / total, 3) if total else 0.0,
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
         "failure_type_counts": _failure_type_counts(results),
     }
@@ -2208,7 +2203,7 @@ def _copilot_realistic_recall_metrics(results: list[dict[str, Any]]) -> dict[str
             sum(1 for result in forbidden_cases if result["distractor_leak"]), len(forbidden_cases)
         ),
         "stale_leakage_rate": _ratio(sum(1 for result in stale_cases if result["stale_leak"]), len(stale_cases)),
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
         "failure_type_counts": _failure_type_counts(results),
     }
@@ -2241,7 +2236,7 @@ def _anti_interference_metrics(
         "recall_at_1": _ratio(recall_at_1, total),
         "recall_at_3": _ratio(recall_at_3, total),
         "mrr": round(sum(result["mrr"] for result in results) / total, 4) if total else 0.0,
-        "avg_latency_ms": round(sum(result["latency_ms"] for result in results) / total, 3) if total else 0.0,
+        "avg_latency_ms": _avg_latency_ms(results),
         "p95_latency_ms": _percentile(latencies, 0.95),
     }
 
@@ -2333,6 +2328,10 @@ def _percentile(values: list[float], percentile: float) -> float:
         return 0.0
     index = min(int(round((len(values) - 1) * percentile)), len(values) - 1)
     return round(values[index], 3)
+
+
+def _avg_latency_ms(results: list[dict[str, Any]]) -> float:
+    return round(sum(result["latency_ms"] for result in results) / len(results), 3) if results else 0.0
 
 
 def _metric_rows(groups: dict[str, Any]) -> list[str]:
