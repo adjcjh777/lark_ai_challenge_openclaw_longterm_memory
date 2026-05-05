@@ -101,6 +101,8 @@ OpenClaw 版本固定为：
 
 下面是一台新机器从零跑通演示 / 预生产链路的完整步骤。它不是生产部署流程。
 
+Agent 自动部署 prompt：请在仓库根目录读取 `docs/productization/agent-auto-deploy-checklist.md`，按“只读检查 -> 隔离部署 -> 验收报告”的顺序执行；未经用户明确授权，不要升级 OpenClaw、不要修改本机 OpenClaw 插件状态、不要启动真实飞书 listener。
+
 ### 1. 安装前置依赖
 
 建议使用 Python 3.11+。如果要验证 OpenClaw staging 链路，还需要安装 Node.js/npm，并安装固定版本 OpenClaw：
