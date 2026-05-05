@@ -652,22 +652,9 @@ scripts/start_copilot_feishu_live.sh
 
 ## 8. 答辩和提交材料
 
-答辩材料放在这里：
+答辩优先看四份材料：`docs/judge-10-minute-experience.md`、`docs/demo-runbook.md`、`docs/benchmark-report.md`、`docs/memory-definition-and-architecture-whitepaper.md`。
 
-| 材料 | 路径 | 用途 |
-|---|---|---|
-| Demo runbook | `docs/demo-runbook.md` | 5 分钟演示脚本 |
-| 10 分钟评委体验包 | `docs/judge-10-minute-experience.md` | 评委现场第一入口、模板落位、fallback 和 no-overclaim 边界 |
-| Benchmark report | `docs/benchmark-report.md` | 指标和评测证据 |
-| Memory 白皮书 | `docs/memory-definition-and-architecture-whitepaper.md` | Define it / Build it / Prove it |
-| PRD 完成度审计 | `docs/productization/prd-completion-audit-and-gap-tasks.md` | 当前完成度和未完成边界 |
-| Workspace ingestion 目标审计 | `docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md` | 用户全量 workspace 接入目标的证据映射和缺口 |
-| 产品化执行文档 | `docs/productization/full-copilot-next-execution-doc.md` | 后续执行主线 |
-| OpenClaw runtime evidence | `docs/productization/handoffs/openclaw-runtime-evidence.md` | OpenClaw Agent 受控验收证据 |
-| Feishu websocket handoff | `docs/productization/handoffs/openclaw-feishu-websocket-handoff.md` | Feishu websocket staging 证据 |
-| Storage migration handoff | `docs/productization/handoffs/storage-migration-productization-handoff.md` | 存储迁移和生产存储试点方案 |
-| Review surface handoff | `docs/productization/handoffs/review-surface-operability-handoff.md` | Bitable review 写回幂等和读回确认 |
-| Audit ops handoff | `docs/productization/handoffs/audit-ops-observability-handoff.md` | 审计查询、告警和运维 healthcheck 补齐 |
+如果要核对完成度和边界，再看 `docs/productization/prd-completion-audit-and-gap-tasks.md`、`docs/productization/workspace-ingestion-goal-completion-audit-2026-05-04.md` 和 `docs/productization/full-copilot-next-execution-doc.md`。更细的运行证据放在 `docs/productization/handoffs/`。
 
 答辩时可以用这句话概括：
 
@@ -692,6 +679,7 @@ scripts/start_copilot_feishu_live.sh
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
 git diff --check
 ```
 
@@ -699,9 +687,9 @@ Python / Copilot 代码改动：
 
 ```bash
 python3 scripts/check_openclaw_version.py
+python3 scripts/check_agent_harness.py
 git diff --check
 python3 -m compileall memory_engine scripts
-python3 -m unittest discover tests
 ```
 
 Copilot 核心专项：
@@ -719,39 +707,12 @@ python3 scripts/check_copilot_health.py --json
 python3 scripts/check_demo_readiness.py --json
 ```
 
-Cognee 相关验证：
+Cognee 相关验证按任务选择，不要默认全跑：
 
 ```bash
-# 检查 Cognee SDK 可用性
-python3 -c "import cognee; print('Cognee SDK available')"
-
-# 运行 Cognee dry-run 测试
-python3 scripts/spike_cognee_local.py --dry-run
-
-# 运行真实 Cognee spike 测试
-python3 scripts/spike_cognee_local.py --scope project:feishu_ai_challenge --query "生产部署参数"
-
-# 真实 Cognee SDK + CopilotService.confirm 隔离 gate；按 env/.env.local 解析 provider/model
 python3 scripts/check_cognee_curated_sync_gate.py --json
-
-# 规范长期 Cognee / embedding 证据；需要真实 curated-sync JSON 和周期 embedding sample log
-python3 scripts/check_cognee_embedding_sampler_status.py \
-  --embedding-sample-log /path/to/embedding-samples.ndjson \
-  --pid-file /path/to/sampler.pid \
-  --json
-
-python3 scripts/collect_cognee_embedding_long_run_evidence.py \
-  --curated-sync-report /path/to/cognee-curated-sync.json \
-  --embedding-sample-log /path/to/embedding-samples.ndjson \
-  --store-reopened --reopened-search-ok \
-  --service-unit cognee-embedding.service \
-  --oncall-owner memory-copilot-oncall \
-  --evidence-ref ops/cognee-embedding-long-run-20260502 \
-  --output /tmp/cognee-embedding-long-run-evidence.json \
-  --json
-
-# 检查 embedding 服务状态
-python3 scripts/check_embedding_provider.py
+python3 scripts/check_cognee_embedding_sampler_status.py --embedding-sample-log <samples.ndjson> --pid-file <sampler.pid> --json
+python3 scripts/collect_cognee_embedding_long_run_evidence.py --help
 ```
 
 Benchmark：
