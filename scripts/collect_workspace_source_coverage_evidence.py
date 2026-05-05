@@ -21,6 +21,7 @@ from scripts.check_workspace_productized_ingestion_readiness import (
     REQUIRED_SOURCE_TYPES,
     SECRET_VALUE_MARKERS,
 )
+from scripts.evidence_patch_merge import contains_any  # noqa: E402
 
 BOUNDARY = (
     "workspace_source_coverage_evidence_collector_only; normalizes existing redacted evidence reports "
@@ -426,7 +427,7 @@ def _load_reports(paths: list[Path], globs: list[str]) -> list[dict[str, Any]]:
 
 def _valid_evidence_refs(refs: list[str]) -> bool:
     unsafe_markers = (*PLACEHOLDER_MARKERS, *SECRET_VALUE_MARKERS)
-    return bool(refs) and all(isinstance(ref, str) and ref.strip() and not _contains_any(ref, unsafe_markers) for ref in refs)
+    return bool(refs) and all(isinstance(ref, str) and ref.strip() and not contains_any(ref, unsafe_markers) for ref in refs)
 
 
 def _merge_counts(count_sets: Any) -> dict[str, int]:
@@ -442,10 +443,6 @@ def _merge_counts(count_sets: Any) -> dict[str, int]:
 
 def _check(ok: bool, description: str, **details: Any) -> dict[str, Any]:
     return {"status": "pass" if ok else "fail", "description": description, **details}
-
-
-def _contains_any(value: str, markers: tuple[str, ...]) -> bool:
-    return any(marker in value for marker in markers)
 
 
 if __name__ == "__main__":

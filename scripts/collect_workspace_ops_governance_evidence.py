@@ -18,6 +18,7 @@ from scripts.check_workspace_productized_ingestion_readiness import (  # noqa: E
     PLACEHOLDER_MARKERS,
     SECRET_VALUE_MARKERS,
 )
+from scripts.evidence_patch_merge import contains_any  # noqa: E402
 
 BOUNDARY = (
     "workspace_ops_governance_evidence_collector_only; normalizes operator-provided external evidence refs "
@@ -260,27 +261,23 @@ def _section_result(description: str, checks: dict[str, bool]) -> dict[str, Any]
 
 def _valid_evidence_refs(refs: list[str]) -> bool:
     unsafe_markers = (*PLACEHOLDER_MARKERS, *SECRET_VALUE_MARKERS)
-    return bool(refs) and all(isinstance(ref, str) and ref.strip() and not _contains_any(ref, unsafe_markers) for ref in refs)
+    return bool(refs) and all(isinstance(ref, str) and ref.strip() and not contains_any(ref, unsafe_markers) for ref in refs)
 
 
 def _real_value(value: Any) -> bool:
-    return isinstance(value, str) and bool(value.strip()) and not _contains_any(value, (*PLACEHOLDER_MARKERS, *SECRET_VALUE_MARKERS))
+    return isinstance(value, str) and bool(value.strip()) and not contains_any(value, (*PLACEHOLDER_MARKERS, *SECRET_VALUE_MARKERS))
 
 
 def _is_iso_datetime(value: Any) -> bool:
     if not isinstance(value, str) or not value:
         return False
-    if _contains_any(value, (*PLACEHOLDER_MARKERS, *SECRET_VALUE_MARKERS)):
+    if contains_any(value, (*PLACEHOLDER_MARKERS, *SECRET_VALUE_MARKERS)):
         return False
     try:
         datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return False
     return True
-
-
-def _contains_any(value: str, markers: tuple[str, ...]) -> bool:
-    return any(marker in value for marker in markers)
 
 
 if __name__ == "__main__":
