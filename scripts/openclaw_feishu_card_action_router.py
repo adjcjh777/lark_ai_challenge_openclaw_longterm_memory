@@ -137,7 +137,7 @@ def route_card_action(
         "reason": "Feishu card action",
         "current_context": context,
     }
-    service = CopilotService(repository=repo)
+    service = CopilotService(repository=repo, auto_init_cognee=False)
     tool_result = handle_tool_request(tool_name, payload, service=service)
     if not tool_result.get("ok"):
         idempotent_result = _already_reviewed_result(
@@ -219,7 +219,7 @@ def _route_version_action(
         "include_archived": True,
         "current_context": context,
     }
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.explain_versions", payload, service=service)
     if not tool_result.get("ok"):
         error = tool_result.get("error") if isinstance(tool_result.get("error"), dict) else {}

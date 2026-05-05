@@ -4,10 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from memory_engine.db import connect, init_db
 from scripts.openclaw_feishu_remember_router import (
+    _infer_bot_mentioned_from_lark_message,
     build_remember_payload,
     route_gateway_natural_interaction,
     route_gateway_group_policy,
@@ -212,6 +214,33 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("openclaw_gateway_live", bridge["permission_decision"]["source_entrypoint"])
         self.assertNotIn("intent_resolution", result)
 
+    def test_gateway_tool_helpers_disable_cognee_auto_init_for_fast_replies(self) -> None:
+        tool_result = {
+            "ok": True,
+            "query": "部署参数",
+            "results": [],
+            "bridge": {
+                "tool": "fmc_memory_search",
+                "request_id": "req_fast_gateway_reply",
+                "trace_id": "trace_fast_gateway_reply",
+                "permission_decision": {"decision": "allow", "reason_code": "scope_access_granted"},
+            },
+        }
+        with patch("scripts.openclaw_feishu_remember_router.CopilotService") as service_cls, patch(
+            "scripts.openclaw_feishu_remember_router.handle_tool_request", return_value=tool_result
+        ):
+            result = route_gateway_memory_search(
+                text="/recall 部署参数",
+                message_id="om_router_fast_reply",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                query="部署参数",
+            )
+
+        self.assertTrue(result["ok"])
+        service_cls.assert_called_once()
+        self.assertIs(service_cls.call_args.kwargs["auto_init_cognee"], False)
+
     def test_gateway_bot_mentioned_natural_question_routes_to_search_reply(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
@@ -326,6 +355,32 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertFalse(result["publish"]["suppressed"])
         self.assertTrue(result["intent_resolution"]["visible_reply_required"])
 
+    def test_mention_lookup_honors_lark_cli_profile_env(self) -> None:
+        payload = {
+            "data": {
+                "messages": [
+                    {
+                        "content": "hello",
+                        "mentions": [{"name": "Feishu Memory Engine bot", "id": "ou_bot"}],
+                    }
+                ]
+            }
+        }
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+        with patch.dict("os.environ", {"LARK_CLI_PROFILE": "feishu-ai-challenge"}, clear=False), patch(
+            "scripts.openclaw_feishu_remember_router.subprocess.run",
+            side_effect=fake_run,
+        ):
+            self.assertTrue(_infer_bot_mentioned_from_lark_message("om_x_profile_lookup"))
+
+        self.assertIn("--profile", calls[0])
+        self.assertIn("feishu-ai-challenge", calls[0])
+
     def test_gateway_direct_message_natural_question_routes_to_search_reply(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
@@ -348,6 +403,27 @@ class OpenClawFeishuRememberRouterTest(unittest.TestCase):
         self.assertEqual("memory.search", result["tool"])
         self.assertEqual("openclaw_gateway_natural_search", result["routing_reason"])
         self.assertFalse(result["publish"]["suppressed"])
+
+    def test_gateway_health_command_with_suffix_does_not_fall_through_to_search(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            result = route_gateway_message(
+                text="/health 赛前总检 run",
+                message_id="om_router_health_suffix",
+                chat_id=CHAT_ID,
+                sender_open_id=SENDER_OPEN_ID,
+                chat_type="p2p",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("copilot.health", result["tool"])
+        self.assertEqual("openclaw_gateway_health", result["routing_reason"])
+        self.assertIn("Copilot 健康状态", json.dumps(result["card"], ensure_ascii=False))
 
     def test_gateway_bot_mentioned_natural_candidate_returns_visible_review_card(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

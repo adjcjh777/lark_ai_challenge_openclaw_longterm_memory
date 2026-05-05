@@ -837,7 +837,7 @@ class CopilotFeishuLiveTest(unittest.TestCase):
         ):
             result = handle_copilot_message_event(
                 self.conn,
-                message_event_from_payload(payload("om_live_health", "/health")),
+                message_event_from_payload(payload("om_live_health", "/health 赛前总检")),
                 DryRunPublisher(),
                 self.config,
                 dry_run=True,

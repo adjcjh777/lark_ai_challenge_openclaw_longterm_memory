@@ -110,14 +110,24 @@ def start_embedded_admin(
 ) -> EmbeddedAdminRuntime:
     if not enabled:
         return EmbeddedAdminRuntime(enabled=False, reason="disabled")
+    resolved_auth_token = auth_token if auth_token is not None else _admin_token_from_env()
+    resolved_viewer_token = viewer_token if viewer_token is not None else _admin_viewer_token_from_env()
+    resolved_sso_config = sso_config or admin_sso_config_from_env()
+    if _remote_bind_requires_token(host) and not (
+        resolved_auth_token or resolved_viewer_token or resolved_sso_config.enabled
+    ):
+        return EmbeddedAdminRuntime(
+            enabled=False,
+            reason="remote_bind_requires_admin_or_viewer_token",
+        )
     try:
         server = create_admin_server(
             host,
             port,
             db_path,
-            auth_token=auth_token,
-            viewer_token=viewer_token,
-            sso_config=sso_config,
+            auth_token=resolved_auth_token,
+            viewer_token=resolved_viewer_token,
+            sso_config=resolved_sso_config,
             production_evidence_manifest=production_evidence_manifest,
         )
     except OSError as exc:
@@ -1950,13 +1960,6 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
                 return "admin"
             if self.viewer_token and hmac.compare_digest(token, self.viewer_token):
                 return "viewer"
-        params = parse_qs(query_string)
-        query_token = _param(params, "admin_token")
-        if query_token and self.auth_token and hmac.compare_digest(query_token, self.auth_token):
-            return "admin"
-        viewer_query_token = _param(params, "viewer_token")
-        if viewer_query_token and self.viewer_token and hmac.compare_digest(viewer_query_token, self.viewer_token):
-            return "viewer"
         sso_role = self._sso_auth_role()
         if sso_role is not None:
             return sso_role
@@ -1972,6 +1975,13 @@ class CopilotAdminHandler(BaseHTTPRequestHandler):
         return self.sso_config.role_for(user=user, email=email)
 
     def _auth_actor_id(self) -> str:
+        header = self.headers.get("Authorization", "")
+        if header.lower().startswith("bearer "):
+            token = header[7:].strip()
+            if self.auth_token and hmac.compare_digest(token, self.auth_token):
+                return "copilot_admin"
+            if self.viewer_token and hmac.compare_digest(token, self.viewer_token):
+                return "copilot_viewer"
         if self.sso_config.enabled and _is_loopback_client(self.client_address[0]):
             email = self.headers.get(self.sso_config.email_header)
             user = self.headers.get(self.sso_config.user_header)
@@ -2010,6 +2020,10 @@ def _admin_viewer_token_from_env() -> str | None:
         if value:
             return value
     return None
+
+
+def _remote_bind_requires_token(host: str) -> bool:
+    return host not in {"127.0.0.1", "localhost", "::1"}
 
 
 def _admin_production_evidence_manifest_from_env() -> Path:
@@ -3103,7 +3117,7 @@ def _index_html() -> str:
       main {{ padding: 12px; }}
       .toolbar {{ grid-template-columns: 1fr 1fr; position: static; }}
       .summary {{ grid-template-columns: repeat(2, minmax(110px, 1fr)); }}
-      .home-grid {{ grid-template-columns: 1fr; }}
+      .home-grid {{ grid-template-columns: 1fr; min-width: 0; }}
       .split-view {{ grid-template-columns: 1fr; min-width: 0; }}
       .graph-board {{ min-height: 620px; grid-template-columns: 1fr; }}
       .edge-item {{ grid-template-columns: 1fr; gap: 3px; }}
@@ -3181,20 +3195,30 @@ def _index_html() -> str:
         return payload.data;
       }}
 
-    async function postJson(path, body) {{
+      async function retryWithAdminToken(message, fetcher) {{
+        const entered = window.prompt(message);
+        if (!entered) throw new Error("admin auth required");
+        sessionStorage.setItem("copilotAdminToken", entered);
+        return fetcher(entered);
+      }}
+
+      async function postJson(path, body) {{
       const token = sessionStorage.getItem("copilotAdminToken") || "";
       const headers = {{ "Accept": "application/json", "Content-Type": "application/json" }};
       if (token) headers.Authorization = `Bearer ${{token}}`;
       let response = await fetch(path, {{ method: "POST", headers, body: JSON.stringify(body) }});
       if (response.status === 401) {{
-        const entered = window.prompt("Admin token required");
-        if (!entered) throw new Error("admin auth required");
-        sessionStorage.setItem("copilotAdminToken", entered);
-        response = await fetch(path, {{
+        response = await retryWithAdminToken("Admin token required", (entered) => fetch(path, {{
           method: "POST",
           headers: {{ "Accept": "application/json", "Content-Type": "application/json", "Authorization": `Bearer ${{entered}}` }},
           body: JSON.stringify(body)
-        }});
+        }}));
+      }} else if (response.status === 403) {{
+        response = await retryWithAdminToken("Admin token required for this action", (entered) => fetch(path, {{
+          method: "POST",
+          headers: {{ "Accept": "application/json", "Content-Type": "application/json", "Authorization": `Bearer ${{entered}}` }},
+          body: JSON.stringify(body)
+        }}));
       }}
       const payload = await response.json();
       if (!payload.ok) throw new Error(payload.error?.message || payload.error?.code || "request failed");
@@ -3207,10 +3231,13 @@ def _index_html() -> str:
       if (token) headers.Authorization = `Bearer ${{token}}`;
       let response = await fetch(path, {{ headers }});
       if (response.status === 401) {{
-        const entered = window.prompt("Admin token required");
-        if (!entered) throw new Error("admin auth required");
-        sessionStorage.setItem("copilotAdminToken", entered);
-        response = await fetch(path, {{ headers: {{ "Accept": "text/markdown", "Authorization": `Bearer ${{entered}}` }} }});
+        response = await retryWithAdminToken("Admin token required", (entered) =>
+          fetch(path, {{ headers: {{ "Accept": "text/markdown", "Authorization": `Bearer ${{entered}}` }} }})
+        );
+      }} else if (response.status === 403) {{
+        response = await retryWithAdminToken("Admin token required for this action", (entered) =>
+          fetch(path, {{ headers: {{ "Accept": "text/markdown", "Authorization": `Bearer ${{entered}}` }} }})
+        );
       }}
       if (!response.ok) {{
         const text = await response.text();

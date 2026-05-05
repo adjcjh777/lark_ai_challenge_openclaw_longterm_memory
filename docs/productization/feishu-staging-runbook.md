@@ -159,11 +159,11 @@ python3 scripts/check_openclaw_feishu_websocket.py
 python3 scripts/check_feishu_passive_message_event_gate.py --event-log /path/to/feishu-events.ndjson --json
 
 # 重启 websocket
-# 方式 1: 通过 start 脚本
-bash scripts/start_copilot_feishu_live.sh
-
-# 方式 2: 手动启动
-lark-cli event +subscribe --as bot --event-types "im.message.receive_v1,card.action.trigger" --quiet
+# 当前 OpenClaw-native 主线只重启 OpenClaw gateway；不要再启动 repo 内
+# start_copilot_feishu_live.sh 或直接 lark-cli event +subscribe，
+# 否则会和 OpenClaw websocket 形成双 listener。
+openclaw channels restart feishu
+python3 scripts/check_feishu_listener_singleton.py --planned-listener openclaw-websocket
 
 # 验证恢复
 # 在飞书测试群发送 @Bot /health

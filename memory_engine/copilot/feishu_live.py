@@ -356,7 +356,7 @@ def handle_copilot_message_event(
             message_graph,
         )
 
-    service = CopilotService(repository=repo)
+    service = CopilotService(repository=repo, auto_init_cognee=False)
     invocation = _resolve_contextual_invocation(invocation, event, repo, scope)
     tool_result = handle_tool_request(invocation.tool_name, invocation.payload, service=service)
     if invocation.tool_name == "memory.review_inbox":
@@ -390,6 +390,8 @@ def invocation_from_event(event: FeishuMessageEvent, *, scope: str) -> CopilotFe
         return CopilotFeishuInvocation("copilot.health", {}, text, "health")
 
     command_name, argument = _slash_command(text)
+    if command_name in {"health", "copilot_health", "status"}:
+        return CopilotFeishuInvocation("copilot.health", {}, text, "health")
     if command_name in {"search", "recall"}:
         return _search_invocation(event, scope, argument or text, reason="explicit_search")
     if command_name in {"remember", "candidate", "create_candidate"}:
@@ -918,12 +920,19 @@ def _grant_owner_role_if_applicable(
 
 
 def _candidate_owner_id(repo: MemoryRepository, candidate_id: str) -> str | None:
-    row = repo.conn.execute("SELECT owner_id FROM memories WHERE id = ?", (candidate_id,)).fetchone()
+    row = repo.conn.execute(
+        "SELECT owner_id, created_by, updated_by FROM memories WHERE id = ?",
+        (candidate_id,),
+    ).fetchone()
     if row and isinstance(row["owner_id"], str) and row["owner_id"]:
         return str(row["owner_id"])
+    if row and isinstance(row["created_by"], str) and row["created_by"]:
+        return str(row["created_by"])
+    if row and isinstance(row["updated_by"], str) and row["updated_by"]:
+        return str(row["updated_by"])
     version_row = repo.conn.execute(
         """
-        SELECT m.owner_id, mv.created_by
+        SELECT m.owner_id, m.created_by AS memory_created_by, m.updated_by, mv.created_by
         FROM memory_versions mv
         JOIN memories m ON m.id = mv.memory_id
         WHERE mv.id = ?
@@ -932,6 +941,10 @@ def _candidate_owner_id(repo: MemoryRepository, candidate_id: str) -> str | None
     ).fetchone()
     if version_row and isinstance(version_row["owner_id"], str) and version_row["owner_id"]:
         return str(version_row["owner_id"])
+    if version_row and isinstance(version_row["memory_created_by"], str) and version_row["memory_created_by"]:
+        return str(version_row["memory_created_by"])
+    if version_row and isinstance(version_row["updated_by"], str) and version_row["updated_by"]:
+        return str(version_row["updated_by"])
     if version_row and isinstance(version_row["created_by"], str) and version_row["created_by"]:
         return str(version_row["created_by"])
     return None

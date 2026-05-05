@@ -375,7 +375,7 @@ def _handle_review_tool_action(
         "reason": value.get("reason") if isinstance(value.get("reason"), str) else "Feishu review surface action",
         "current_context": current_context,
     }
-    service = CopilotService(repository=repo)
+    service = CopilotService(repository=repo, auto_init_cognee=False)
     return handle_tool_request(tool_name, payload, service=service)
 
 

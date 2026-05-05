@@ -184,7 +184,7 @@ def route_remember_message(
         chat_id=chat_id,
         sender_open_id=sender_open_id,
     )
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.create_candidate", payload, service=service)
     if not tool_result.get("ok"):
         return {"ok": False, "tool_result": tool_result}
@@ -242,6 +242,15 @@ def route_gateway_message(
         )
 
     command_name, _argument = _slash_command(normalized_text)
+    if command_name in {"health", "copilot_health", "status"}:
+        return route_gateway_health(
+            text=normalized_text,
+            message_id=message_id,
+            chat_id=chat_id,
+            sender_open_id=sender_open_id,
+            allowlist_chat_ids=allowlist_chat_ids,
+            db_path=db_path,
+        )
     if command_name in {"settings", "group_settings"} or _looks_like_group_settings_query(normalized_text):
         return route_gateway_group_settings(
             text=normalized_text,
@@ -356,7 +365,7 @@ def route_gateway_message(
     context["permission"]["requested_action"] = "memory.create_candidate"
     context["permission"]["source_context"]["entrypoint"] = "openclaw_gateway_live"
 
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.create_candidate", payload, service=service)
     action = str(tool_result.get("action") or "")
     return {
@@ -531,7 +540,7 @@ def route_gateway_version_action(
             metadata={"entrypoint": "openclaw_gateway_card_action_text"},
         ),
     }
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.explain_versions", payload, service=service)
     reply = _format_version_action_result(tool_result, memory_id=memory_id)
     card = build_version_chain_card(tool_result, expanded=expanded) if tool_result.get("ok", True) else build_card_from_text(reply)
@@ -600,6 +609,72 @@ def route_gateway_group_settings(
             "memory_path": "group_settings",
             "candidate_path": "read_only",
             "reason_code": "openclaw_gateway_group_settings",
+        },
+        "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
+        "input_text": text,
+    }
+
+
+def route_gateway_health(
+    *,
+    text: str,
+    message_id: str,
+    chat_id: str,
+    sender_open_id: str,
+    allowlist_chat_ids: Sequence[str] | None = None,
+    db_path: str | None = None,
+    scope: str = SCOPE,
+) -> dict[str, Any]:
+    load_local_env_files(root=ROOT, override=True)
+    tenant_id, organization_id, visibility = _feishu_identity()
+    with _open_conn(db_path) as conn:
+        policy = ensure_group_policy(
+            conn,
+            chat_id=chat_id,
+            tenant_id=tenant_id,
+            organization_id=organization_id,
+            scope=scope,
+            visibility_policy=visibility,
+            actor_id=sender_open_id,
+        )
+        chat_allowed = _chat_allowed(chat_id, allowlist_chat_ids) or group_policy_allows_passive_memory(policy)
+        memory_count = conn.execute("SELECT COUNT(*) AS count FROM memories").fetchone()["count"]
+        candidate_count = conn.execute("SELECT COUNT(*) AS count FROM memories WHERE status = 'candidate'").fetchone()[
+            "count"
+        ]
+    tool_result = {
+        "ok": True,
+        "tool": "copilot.health",
+        "listener": "openclaw-websocket",
+        "single_listener_policy": "openclaw_gateway_only",
+        "scope": scope,
+        "tenant_id": tenant_id,
+        "organization_id": organization_id,
+        "visibility_policy": visibility,
+        "memory_count": int(memory_count),
+        "candidate_count": int(candidate_count),
+        "chat_allowed": bool(chat_allowed),
+        "allowlist_summary": _allowlist_summary(),
+        "chat_id_redacted": _redacted_id(chat_id),
+        "actor_redacted": _redacted_id(sender_open_id),
+        "production_boundary": "受控 OpenClaw gateway staging；不是生产长期运行。",
+    }
+    reply = _format_gateway_health(tool_result)
+    card = build_card_from_text(reply)
+    return {
+        "ok": True,
+        "tool": "copilot.health",
+        "message_id": message_id,
+        "chat_id": chat_id,
+        "routing_reason": "openclaw_gateway_health",
+        "source_entrypoint": "openclaw_gateway_live",
+        "tool_result": tool_result,
+        "card": card,
+        "disposition": "reply",
+        "message_disposition": {
+            "memory_path": "health",
+            "candidate_path": "read_only",
+            "reason_code": "openclaw_gateway_health",
         },
         "publish": _reply_publish_result(message_id=message_id, chat_id=chat_id, text=reply, card=card),
         "input_text": text,
@@ -735,7 +810,7 @@ def route_gateway_memory_search(
             scope=scope,
         ),
     }
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.search", payload, service=service)
     if compact_answer:
         _enrich_search_evidence_context(tool_result, fallback_chat_id=chat_id)
@@ -799,7 +874,7 @@ def route_gateway_memory_prefetch(
             metadata={"current_message": normalized_task},
         ),
     }
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.prefetch", payload, service=service)
     reply = _format_memory_prefetch_result(tool_result)
     card = build_prefetch_context_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
@@ -988,7 +1063,7 @@ def route_gateway_review_inbox(
             scope=scope,
         ),
     }
-    service = CopilotService(db_path=db_path)
+    service = CopilotService(db_path=db_path, auto_init_cognee=False)
     tool_result = handle_tool_request("memory.review_inbox", payload, service=service)
     reply = _format_review_inbox_result(tool_result)
     card = build_review_inbox_card(tool_result) if tool_result.get("ok", True) else build_card_from_text(reply)
@@ -1346,7 +1421,7 @@ def _infer_bot_mentioned_from_lark_message(message_id: str) -> bool:
         "--as",
         os.environ.get("OPENCLAW_FEISHU_MENTION_LOOKUP_AS", "bot"),
     ]
-    profile = os.environ.get("OPENCLAW_FEISHU_MENTION_LOOKUP_PROFILE") or os.environ.get("LARK_PROFILE")
+    profile = _lark_lookup_profile("OPENCLAW_FEISHU_MENTION_LOOKUP_PROFILE")
     if profile:
         command[1:1] = ["--profile", profile]
     try:
@@ -1417,7 +1492,7 @@ def _lookup_lark_chat_name(chat_id: str) -> str | None:
         "--as",
         os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_AS", "bot"),
     ]
-    profile = os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_PROFILE") or os.environ.get("LARK_PROFILE")
+    profile = _lark_lookup_profile("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_PROFILE")
     if profile:
         command[1:1] = ["--profile", profile]
     payload = _run_lark_json(command)
@@ -1442,7 +1517,7 @@ def _lookup_lark_message_time(message_id: str) -> str | None:
         "--as",
         os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_AS", "bot"),
     ]
-    profile = os.environ.get("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_PROFILE") or os.environ.get("LARK_PROFILE")
+    profile = _lark_lookup_profile("OPENCLAW_FEISHU_EVIDENCE_LOOKUP_PROFILE")
     if profile:
         command[1:1] = ["--profile", profile]
     payload = _run_lark_json(command)
@@ -1465,6 +1540,15 @@ def _run_lark_json(command: list[str]) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _lark_lookup_profile(override_env: str) -> str | None:
+    return (
+        os.environ.get(override_env)
+        or os.environ.get("LARK_CLI_PROFILE")
+        or os.environ.get("LARK_PROFILE")
+        or None
+    )
 
 
 def _display_time(value: str) -> str:
@@ -1726,6 +1810,22 @@ def _format_group_settings(result: dict[str, Any]) -> str:
             f"visibility：{result.get('visibility_policy')}",
             f"运行边界：{result.get('production_boundary')}",
             "写入动作：/enable_memory 启用当前群静默筛选；/disable_memory 关闭。写入需要 reviewer/admin 授权。",
+        ]
+    )
+
+
+def _format_gateway_health(result: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            "Copilot 健康状态",
+            "状态：正常",
+            f"结论：{result.get('listener')} 已接管 Feishu live 入口，single listener policy={result.get('single_listener_policy')}。",
+            f"理由：scope={result.get('scope')}；chat_allowed={str(bool(result.get('chat_allowed'))).lower()}；allowlist={result.get('allowlist_summary')}。",
+            f"来源：chat={result.get('chat_id_redacted')}；actor={result.get('actor_redacted')}。",
+            f"版本：memory_count={result.get('memory_count')}；candidate_count={result.get('candidate_count')}。",
+            f"scope：{result.get('scope')}",
+            f"visibility：{result.get('visibility_policy')}",
+            f"运行边界：{result.get('production_boundary')}",
         ]
     )
 

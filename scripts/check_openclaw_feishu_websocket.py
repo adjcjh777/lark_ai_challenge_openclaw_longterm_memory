@@ -54,6 +54,12 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=30, help="Command timeout in seconds.")
     parser.add_argument("--log-lines", type=int, default=120, help="Feishu channel log lines to inspect.")
     parser.add_argument(
+        "--gateway-log",
+        type=Path,
+        default=None,
+        help="Fallback OpenClaw gateway log path when `openclaw channels logs` is empty.",
+    )
+    parser.add_argument(
         "--allow-missing-dispatch",
         action="store_true",
         help="Pass without recent inbound/dispatch log evidence. Use only for config-only debugging.",
@@ -64,6 +70,7 @@ def main() -> int:
         timeout=args.timeout,
         log_lines=args.log_lines,
         require_dispatch=not args.allow_missing_dispatch,
+        gateway_log_path=args.gateway_log,
     )
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
@@ -82,6 +89,7 @@ def run_openclaw_feishu_websocket_check(
     command_runner: CommandRunner | None = None,
     process_rows: list[str] | None = None,
     current_pid: int | None = None,
+    gateway_log_path: Path | None = None,
 ) -> dict[str, Any]:
     runner = command_runner or _run_command
     checks: dict[str, dict[str, Any]] = {}
@@ -89,7 +97,13 @@ def run_openclaw_feishu_websocket_check(
     checks["listener_singleton"] = _listener_singleton_check(process_rows=process_rows, current_pid=current_pid)
     checks["channels_status"] = _channels_status_check(runner, timeout)
     checks["health_summary"] = _health_summary_check(runner, timeout)
-    checks["feishu_logs"] = _feishu_logs_check(runner, timeout, log_lines, require_dispatch=require_dispatch)
+    checks["feishu_logs"] = _feishu_logs_check(
+        runner,
+        timeout,
+        log_lines,
+        require_dispatch=require_dispatch,
+        gateway_log_path=gateway_log_path,
+    )
     checks["health_consistency"] = _health_consistency_check(checks["channels_status"], checks["health_summary"])
 
     status_counts = _status_counts(checks)
@@ -228,7 +242,12 @@ def _health_consistency_check(channels: dict[str, Any], health: dict[str, Any]) 
 
 
 def _feishu_logs_check(
-    runner: CommandRunner, timeout: int, log_lines: int, *, require_dispatch: bool
+    runner: CommandRunner,
+    timeout: int,
+    log_lines: int,
+    *,
+    require_dispatch: bool,
+    gateway_log_path: Path | None = None,
 ) -> dict[str, Any]:
     result = runner(
         ["openclaw", "channels", "logs", "--channel", "feishu", "--json", "--lines", str(log_lines)], timeout
@@ -245,18 +264,49 @@ def _feishu_logs_check(
     if require_dispatch:
         required.extend(["inbound_message_seen", "dispatching_to_agent", "dispatch_complete"])
     missing = [name for name in required if not evidence.get(name)]
+    fallback = _gateway_log_evidence(gateway_log_path or Path.home() / ".openclaw/logs/gateway.log", max(log_lines, 5000))
+    fallback_evidence = fallback.get("evidence_times") if isinstance(fallback.get("evidence_times"), dict) else {}
+    combined_evidence = dict(evidence)
+    if missing and fallback.get("status") != "unavailable":
+        for name, value in fallback_evidence.items():
+            if value and not combined_evidence.get(name):
+                combined_evidence[name] = value
+        missing = [name for name in required if not combined_evidence.get(name)]
     status = "pass" if not missing else "fail"
     return {
         "status": status,
         "command": f"openclaw channels logs --channel feishu --json --lines {log_lines}",
         "log_file": str(data.get("file") or ""),
         "log_lines_checked": len(lines),
+        "gateway_log_fallback": fallback,
         "required_events": required,
         "missing_required_events": missing,
-        "evidence_times": evidence,
-        "network_disconnect_seen": bool(evidence.get("network_disconnect_seen")),
+        "evidence_times": combined_evidence,
+        "network_disconnect_seen": bool(
+            combined_evidence.get("network_disconnect_seen") or fallback_evidence.get("network_disconnect_seen")
+        ),
         "next_step": "" if status == "pass" else "发送一条真实飞书消息给 bot，等待 dispatch complete 后重跑本脚本。",
     }
+
+
+def _gateway_log_evidence(path: Path, log_lines: int) -> dict[str, Any]:
+    try:
+        raw_lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        return {"status": "unavailable", "log_file": str(path), "reason": str(exc)}
+    lines = [{"time": _log_line_time(line), "message": redact_text(line)} for line in raw_lines[-log_lines:]]
+    evidence = {name: _latest_log_time(lines, pattern) for name, pattern in LOG_PATTERNS.items()}
+    return {
+        "status": "available",
+        "log_file": str(path),
+        "log_lines_checked": len(lines),
+        "evidence_times": evidence,
+    }
+
+
+def _log_line_time(line: str) -> str:
+    match = re.search(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})\b", line)
+    return match.group(0) if match else ""
 
 
 def _latest_log_time(lines: list[Any], pattern: str) -> str | None:

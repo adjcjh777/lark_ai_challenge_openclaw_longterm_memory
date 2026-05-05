@@ -481,6 +481,8 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertIn("Relationship Focus", html)
             self.assertIn("Evidence paths", html)
             self.assertIn("Related edges", html)
+            self.assertIn(".home-grid { grid-template-columns: 1fr; min-width: 0; }", html)
+            self.assertIn("Admin token required for this action", html)
 
             request = Request(f"{base_url}/api/memories", method="POST")
             with self.assertRaises(HTTPError) as raised:
@@ -510,6 +512,14 @@ class CopilotAdminTest(unittest.TestCase):
 
             with self.assertRaises(HTTPError) as raised:
                 urlopen(f"{base_url}/api/summary", timeout=5)
+            self.assertEqual(401, raised.exception.code)
+
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(f"{base_url}/api/summary?admin_token=test-token", timeout=5)
+            self.assertEqual(401, raised.exception.code)
+
+            with self.assertRaises(HTTPError) as raised:
+                urlopen(f"{base_url}/api/summary?viewer_token=viewer-token", timeout=5)
             self.assertEqual(401, raised.exception.code)
 
             with self.assertRaises(HTTPError) as raised:
@@ -577,6 +587,7 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertTrue(policy_payload["ok"])
             self.assertTrue(policy_payload["data"]["created"])
             self.assertEqual(["owner", "reviewer"], sorted(policy_payload["data"]["policy"]["reviewer_roles"]))
+            self.assertEqual("copilot_admin", policy_payload["data"]["policy"]["updated_by"])
 
             request = Request(
                 f"{base_url}/api/wiki/export?scope=project%3Aadmin_demo",
@@ -670,6 +681,65 @@ class CopilotAdminTest(unittest.TestCase):
             self.assertEqual(3, payload["data"]["memory_total"])
         finally:
             runtime.stop()
+
+    def test_embedded_admin_rejects_remote_bind_without_token(self) -> None:
+        runtime = start_embedded_admin(host="0.0.0.0", port=0, db_path=self.tmp.name, enabled=True)
+
+        self.assertFalse(runtime.enabled)
+        self.assertEqual("remote_bind_requires_admin_or_viewer_token", runtime.reason)
+
+    def test_bearer_admin_write_actor_ignores_spoofed_sso_header(self) -> None:
+        self._seed_rows()
+        sso_config = AdminSsoConfig(
+            enabled=True,
+            admin_users=frozenset({"admin@example.com"}),
+            allowed_domains=frozenset({"example.com"}),
+        )
+        server = create_admin_server(
+            "127.0.0.1",
+            0,
+            self.tmp.name,
+            auth_token="test-token",
+            sso_config=sso_config,
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            body = json.dumps(
+                {
+                    "tenant_id": "tenant:demo",
+                    "organization_id": "org:demo",
+                    "status": "active",
+                    "default_visibility_policy": "team",
+                    "reviewer_roles": ["reviewer"],
+                    "admin_users": ["admin@example.com"],
+                    "sso_allowed_domains": ["example.com"],
+                    "auto_confirm_low_risk": True,
+                    "require_review_for_conflicts": True,
+                    "notes": "bearer actor wins over spoofed SSO header",
+                }
+            ).encode("utf-8")
+            request = Request(
+                f"{base_url}/api/tenant-policies",
+                data=body,
+                headers={
+                    "Authorization": "Bearer test-token",
+                    "Content-Type": "application/json",
+                    "X-Forwarded-Email": "reader@example.com",
+                },
+                method="POST",
+            )
+            with urlopen(request, timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            self.assertTrue(payload["ok"])
+            self.assertEqual("copilot_admin", payload["data"]["policy"]["updated_by"])
+            self.assertNotEqual("sso:reader@example.com", payload["data"]["policy"]["updated_by"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
     def test_copilot_feishu_listen_defaults_to_embedded_admin(self) -> None:
         parser = build_parser()

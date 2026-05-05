@@ -104,6 +104,48 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         actions = [element for element in confirmed["card"]["elements"] if element.get("tag") == "action"]
         self.assertEqual(["撤销这次处理"], [action["text"]["content"] for action in actions[0]["actions"]])
 
+    def test_card_action_helper_disables_cognee_auto_init_for_fast_card_updates(self) -> None:
+        tool_result = {
+            "ok": True,
+            "tool": "memory.confirm",
+            "candidate_id": "mem_fast_card_update",
+            "memory_id": "mem_fast_card_update",
+            "review_status": "confirmed",
+            "status": "active",
+            "action": "confirmed",
+            "memory": {
+                "memory_id": "mem_fast_card_update",
+                "type": "decision",
+                "subject": "卡片更新速度",
+                "current_value": "卡片点击必须先快速落本地账本并更新可见状态。",
+                "status": "active",
+                "evidence": {"source_type": "feishu_message", "source_id": "om_fast", "quote": "卡片点击要快。"},
+            },
+            "evidence": {"source_type": "feishu_message", "source_id": "om_fast", "quote": "卡片点击要快。"},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "scripts.openclaw_feishu_card_action_router.CopilotService"
+        ) as service_cls:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+            service_cls.return_value.confirm.return_value = tool_result
+
+            result = route_card_action(
+                action="confirm",
+                candidate_id="mem_fast_card_update",
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_fast_update",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual("confirmed", result["tool_result"]["review_status"])
+        service_cls.assert_called_once()
+        self.assertIs(service_cls.call_args.kwargs["auto_init_cognee"], False)
+
     def test_non_owner_confirm_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "memory.sqlite"
@@ -462,6 +504,53 @@ class OpenClawFeishuCardActionRouterTest(unittest.TestCase):
         self.assertEqual("candidate", undone["tool_result"]["memory"]["status"])
         actions = [element for element in undone["card"]["elements"] if element.get("tag") == "action"]
         self.assertEqual(1, len(actions))
+
+    def test_legacy_updated_by_owner_can_undo_auto_confirmed_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "memory.sqlite"
+            conn = connect(db_path)
+            init_db(conn)
+            conn.close()
+
+            created = route_remember_message(
+                text="/remember 决定：低风险自动确认后仍允许原操作者撤销。",
+                message_id="om_legacy_updated_by_owner_001",
+                chat_id=CHAT_ID,
+                sender_open_id=OWNER_OPEN_ID,
+                db_path=str(db_path),
+            )
+            candidate_id = created["tool_result"]["candidate_id"]
+            route_card_action(
+                action="confirm",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_legacy_updated_by_confirm",
+                db_path=str(db_path),
+            )
+            with connect(db_path) as conn:
+                conn.execute(
+                    """
+                    UPDATE memories
+                    SET owner_id = NULL, created_by = NULL, updated_by = ?
+                    WHERE id = ?
+                    """,
+                    (OWNER_OPEN_ID, candidate_id),
+                )
+                conn.commit()
+
+            undone = route_card_action(
+                action="undo",
+                candidate_id=candidate_id,
+                chat_id=CHAT_ID,
+                operator_open_id=OWNER_OPEN_ID,
+                token="card_action_legacy_updated_by_undo",
+                db_path=str(db_path),
+            )
+
+        self.assertTrue(undone["ok"])
+        self.assertEqual("memory.undo_review", undone["tool_result"]["bridge"]["tool"])
+        self.assertEqual("candidate", undone["tool_result"]["memory"]["status"])
 
     def test_replayed_confirm_token_after_undo_does_not_confirm_again(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
