@@ -603,8 +603,11 @@ function startAdminDashboard() {
 }
 
 function adminDashboardEnabled() {
-  const raw = process.env.FEISHU_MEMORY_COPILOT_ADMIN_ENABLED || process.env.COPILOT_ADMIN_ENABLED;
-  return raw && ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+  const raw = process.env.FEISHU_MEMORY_COPILOT_ADMIN_ENABLED ?? process.env.COPILOT_ADMIN_ENABLED;
+  if (raw === undefined) {
+    return true;
+  }
+  return !["0", "false", "no", "off"].includes(raw.trim().toLowerCase());
 }
 
 export default definePluginEntry({
